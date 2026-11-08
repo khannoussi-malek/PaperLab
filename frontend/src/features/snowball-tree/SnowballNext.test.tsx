@@ -42,3 +42,10 @@ test('an empty list renders nothing', async () => {
   await waitFor(() => expect(api.snowballNext).toHaveBeenCalled())
   expect(screen.queryByRole('button', { name: 'Run all' })).toBeNull()
 })
+
+test('after a batch, says how many are left', async () => {
+  setup()
+  vi.spyOn(api, 'runSnowballNext').mockResolvedValue({ new_hits: 3, skipped_seeds: [], errors: {}, remaining: 5 })
+  fireEvent.click(await screen.findByRole('button', { name: 'Run all' }))
+  expect(await screen.findByText('5 more left: Run all again')).toBeTruthy()
+})

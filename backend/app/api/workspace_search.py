@@ -35,6 +35,7 @@ from app.schemas.workspace_search import (
     SearchRunCreate,
     SearchRunOut,
     SearchRunSummary,
+    SnowballNextOut,
     SnowballOut,
     SnowballRequest,
     Stage1Status,
@@ -243,7 +244,7 @@ async def snowball_next_route(workspace_id: uuid.UUID, session: SessionDep) -> l
 
 
 @router.post("/snowball-next/run")
-async def run_snowball_next_route(workspace_id: uuid.UUID, session: SessionDep, providers: DiscoveryDep) -> SnowballOut:
+async def run_snowball_next_route(workspace_id: uuid.UUID, session: SessionDep, providers: DiscoveryDep) -> SnowballNextOut:
     return await snowball_next.run_snowball_next(session, providers, workspace_id)
 
 

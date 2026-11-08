@@ -293,3 +293,18 @@ async def test_paths_route_404_for_another_workspaces_hit(client, session):
     await session.commit()
     res = await client.get(f"/api/workspaces/{ws.id}/search/hits/{foreign.id}/paths")
     assert res.status_code == 404
+
+
+async def test_skipped_seed_shows_why_it_found_nothing(session):
+    ws = await _workspace(session)
+    run = await _run(session, ws)
+    seed = await _hit(session, ws, run, "Seed")
+    await _link(session, ws, run, seed)
+    stats = {"snowball": {"directions": ["cites"], "seeds": [{
+        "id": str(seed.id), "kind": "hit", "title": "Seed", "hit_id": str(seed.id),
+        "found": {"cites": 0, "cited_by": 0}, "new": {"cites": 0, "cited_by": 0},
+        "skipped": "not found in Semantic Scholar", "error": None, "errors": {"cites": None, "cited_by": None}, "done": [],
+    }]}}
+    await _run(session, ws, minutes=2, stats=stats)
+    node = _by_id(await provenance(session, ws.id))[str(seed.id)]
+    assert node.zero_found_error == "not found in Semantic Scholar"

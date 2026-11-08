@@ -38,7 +38,7 @@ test('Go further shows both direction boxes, checked, and saves both directions'
 
 test('unchecking one direction saves the other', async () => {
   const setBranch = setup({ state: 'go_further', directions: ['cites', 'cited_by'], reason: null })
-  fireEvent.click(screen.getByRole('checkbox', { name: /citing it/ }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Papers citing it' }))
   await waitFor(() => expect(setBranch).toHaveBeenCalledWith('w1', {
     hit_id: 'h1', state: 'go_further', directions: ['cites'], reason: null,
   }))
@@ -60,4 +60,19 @@ test('Undecided clears the decision', async () => {
   const setBranch = setup({ state: 'stopped', directions: [], reason: 'x' })
   fireEvent.click(screen.getByRole('button', { name: 'Undecided' }))
   await waitFor(() => expect(setBranch).toHaveBeenCalledWith('w1', { hit_id: 'h1', state: null, directions: [], reason: null }))
+})
+
+test('a failed save shows the message and puts the buttons back', async () => {
+  const setBranch = setup()
+  setBranch.mockRejectedValue(new Error('Server said no'))
+  fireEvent.click(screen.getByRole('button', { name: 'Go further' }))
+  expect(await screen.findByText('Server said no')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Undecided' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.queryByRole('checkbox')).toBeNull()
+})
+
+test('the direction labels are Its references and Papers citing it', () => {
+  setup({ state: 'go_further', directions: ['cites', 'cited_by'], reason: null })
+  expect(screen.getByLabelText('Its references')).toBeTruthy()
+  expect(screen.getByLabelText('Papers citing it')).toBeTruthy()
 })

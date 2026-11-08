@@ -28,6 +28,7 @@ export const WORKSPACE_TABS: readonly TabMeta[] = [
 const COUNT_NOUN: Partial<Record<WorkspaceTab, string>> = {
   papers: 'papers',
   notes: 'notes',
+  tree: 'to snowball',
   acquisition: 'to fetch',
   screening: 'to review',
 }

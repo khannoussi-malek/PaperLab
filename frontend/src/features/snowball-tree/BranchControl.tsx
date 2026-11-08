@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 
 export type BranchTarget = { hit_id: string } | { paper_id: string }
 const BOTH = ['cites', 'cited_by']
-const DIRECTION_LABEL: Record<string, string> = { cites: 'Papers it cites', cited_by: 'Papers citing it' }
+const DIRECTION_LABEL: Record<string, string> = { cites: 'Its references', cited_by: 'Papers citing it' }
 
 /** Go further / Stop here / Undecided for one node. Each click saves at once. */
 export function BranchControl({ workspaceId, target, branch }: { workspaceId: string; target: BranchTarget; branch?: ProvBranch | null }) {
@@ -13,13 +13,16 @@ export function BranchControl({ workspaceId, target, branch }: { workspaceId: st
   const [state, setState] = useState<string | null>(branch?.state ?? null)
   const [directions, setDirections] = useState<string[]>(branch?.state === 'go_further' ? branch.directions : BOTH)
   const [reason, setReason] = useState(branch?.reason ?? '')
-  useEffect(() => {
+  const fromServer = () => {
     setState(branch?.state ?? null)
-    if (branch?.state === 'go_further') setDirections(branch.directions)
+    setDirections(branch?.state === 'go_further' ? branch.directions : BOTH)
     setReason(branch?.reason ?? '')
-  }, [branch?.state, branch?.directions, branch?.reason])
+  }
+  useEffect(fromServer, [branch?.state, branch?.directions, branch?.reason]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const save = (body: Pick<BranchIn, 'state' | 'directions' | 'reason'>) => set.mutate({ ...target, ...body })
+  // A failed save puts the buttons back to what the server holds.
+  const save = (body: Pick<BranchIn, 'state' | 'directions' | 'reason'>) =>
+    set.mutate({ ...target, ...body }, { onError: fromServer })
   const goFurther = (next: string[]) => {
     setDirections(next)
     save({ state: 'go_further', directions: next, reason: null })
@@ -68,7 +71,7 @@ export function BranchControl({ workspaceId, target, branch }: { workspaceId: st
           </label>
         </form>
       )}
-      {set.isError && <p role="alert" className="text-xs text-destructive">Could not save that choice.</p>}
+      {set.isError && <p role="alert" className="text-xs text-destructive">{set.error.message}</p>}
     </div>
   )
 }

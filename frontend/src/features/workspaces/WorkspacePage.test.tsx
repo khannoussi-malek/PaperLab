@@ -11,6 +11,7 @@ const hits = vi.hoisted(() => ({
   byKey: {} as Record<string, { rows: { stage2_status?: string | null }[]; more?: boolean }>,
 }))
 vi.mock('@/api/queries', () => ({
+  useSnowballNext: () => ({ data: [{}, {}, {}] }),
   useWorkspace: () => ({ data: { name: 'W', ...counts }, error: null }),
   useSearchHits: (_w: string, stage1?: string, acq?: string) => {
     const entry = hits.byKey[`${stage1 ?? ''}/${acq ?? ''}`] ?? { rows: [] }
@@ -71,6 +72,7 @@ test('the tabs read as two labelled groups in the new order', () => {
 
 test('step tabs are named for their step', () => {
   page()
+  expect(screen.getByRole('tab', { name: 'Snowball tree, 3 to snowball' })).toBeTruthy()
   expect(screen.getByRole('tab', { name: /^Get PDFs, step 2 of 5/ })).toBeTruthy()
 })
 

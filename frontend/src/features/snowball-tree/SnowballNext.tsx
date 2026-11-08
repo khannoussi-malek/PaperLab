@@ -24,6 +24,9 @@ export function SnowballNext({ workspaceId }: { workspaceId: string }) {
           </li>
         ))}
       </ul>
+      {(run.data?.remaining ?? 0) > 0 && (
+        <p className="mt-2 text-xs text-muted-foreground">{run.data!.remaining} more left: Run all again</p>
+      )}
       {run.isError && <p role="alert" className="mt-2 text-xs text-destructive">{run.error.message}</p>}
     </section>
   )

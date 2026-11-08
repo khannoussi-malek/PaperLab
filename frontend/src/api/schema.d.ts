@@ -6930,6 +6930,19 @@ export interface components {
              */
             created_at: string;
         };
+        /** SnowballNextOut */
+        SnowballNextOut: {
+            /** New Hits */
+            new_hits: number;
+            /** Skipped Seeds */
+            skipped_seeds: string[];
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            /** Remaining */
+            remaining: number;
+        };
         /** SnowballOut */
         SnowballOut: {
             /** New Hits */
@@ -10340,7 +10353,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SnowballOut"];
+                    "application/json": components["schemas"]["SnowballNextOut"];
                 };
             };
             /** @description Validation Error */

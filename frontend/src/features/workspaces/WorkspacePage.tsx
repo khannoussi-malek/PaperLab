@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useWorkspace } from '@/api/queries'
+import { useSnowballNext, useWorkspace } from '@/api/queries'
 import { AppShell, shellTitle } from '@/components/AppShell'
 import { glass } from '@/components/glass'
 import { delayedIn, fadeIn } from '@/components/motion'
@@ -34,6 +34,7 @@ type PageProps = { workspaceId: string; tab: WorkspaceTab; runId: string | null;
 export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProps) {
   const workspace = useWorkspace(workspaceId)
   const stepCounts = useStepCounts(workspaceId)
+  const toSnowball = useSnowballNext(workspaceId).data?.length
   // A tab switch is a history entry (assign), so Back returns to the previous tab; tag and run changes replace, so
   // they don't flood history. Carries the current runId along so switching tabs and back (or a reload from another
   // tab) doesn't drop it.
@@ -84,7 +85,7 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
       )}
       {workspace.data && (
         <Tabs value={tab} onValueChange={(value) => showTab(value as WorkspaceTab)} className="min-h-0 min-w-0 flex-1 gap-4">
-          <WorkspaceTabBar active={tab} counts={{ ...stepCounts, papers: workspace.data.paper_count, notes: workspace.data.note_count }} />
+          <WorkspaceTabBar active={tab} counts={{ ...stepCounts, tree: toSnowball, papers: workspace.data.paper_count, notes: workspace.data.note_count }} />
           <TabsContent value="papers" forceMount className={panel}>
             <WorkspacePapers workspaceId={workspaceId} tags={tags} match={match} onTagsChange={onTagsChange} />
           </TabsContent>

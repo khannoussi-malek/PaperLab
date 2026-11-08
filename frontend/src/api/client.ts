@@ -172,6 +172,7 @@ export type SnowballOut = components['schemas']['SnowballOut']
 export type ProvenanceOut = components['schemas']['ProvenanceOut']
 export type BranchIn = components['schemas']['BranchIn']
 export type BranchOut = components['schemas']['BranchOut']
+export type SnowballNextOut = components['schemas']['SnowballNextOut']
 export type NextItem = components['schemas']['NextItem']
 export type ProvBranch = components['schemas']['ProvBranch']
 export type ProvNode = components['schemas']['ProvNode']
@@ -703,7 +704,7 @@ export const api = {
     request<BranchOut>(`/api/workspaces/${workspaceId}/search/branch`, sendJson('PUT', body)),
   snowballNext: (workspaceId: string) => request<NextItem[]>(`/api/workspaces/${workspaceId}/search/snowball-next`),
   runSnowballNext: (workspaceId: string) =>
-    request<SnowballOut>(`/api/workspaces/${workspaceId}/search/snowball-next/run`, { method: 'POST' }),
+    request<SnowballNextOut>(`/api/workspaces/${workspaceId}/search/snowball-next/run`, { method: 'POST' }),
   getSearchHit: (workspaceId: string, hitId: string) =>
     request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}`),
   hitPaths: (workspaceId: string, hitId: string) =>

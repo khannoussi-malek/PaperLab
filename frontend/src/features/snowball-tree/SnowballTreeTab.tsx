@@ -55,7 +55,7 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <TreeFilters data={data} value={filters} onChange={setFilters} />
         {stopped.size > 0 && (
-          <Button type="button" size="sm" variant="outline" onClick={() => setShowStopped((v) => !v)}>
+          <Button type="button" size="sm" variant="outline" aria-pressed={showStopped} onClick={() => setShowStopped((v) => !v)}>
             {showStopped ? 'Hide stopped' : 'Show stopped'}
           </Button>
         )}

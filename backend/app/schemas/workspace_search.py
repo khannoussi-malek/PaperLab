@@ -318,6 +318,10 @@ class SnowballOut(BaseModel):
     errors: dict[str, str]
 
 
+class SnowballNextOut(SnowballOut):
+    remaining: int  # go-further items still listed after this batch
+
+
 class EligibilityUpdate(BaseModel):
     status: Literal["include", "exclude"]
     # Free-text, unlike stage1's CHECK'd ExcludeReason enum — SearchRunEligibility.stage2_exclude_reason is a

@@ -119,6 +119,7 @@ test('boxes carry a branch mark: open arrow for go further, bar for stopped', ()
 test('stopped subtrees are folded until Show stopped is on', () => {
   setup(branched)
   expect(screen.queryByRole('button', { name: /^Below the stop/ })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Show stopped' }).getAttribute('aria-pressed')).toBe('false')
   fireEvent.click(screen.getByRole('button', { name: 'Show stopped' }))
   expect(screen.getByRole('button', { name: /^Below the stop/ })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Hide stopped' }))

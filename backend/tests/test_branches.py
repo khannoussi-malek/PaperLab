@@ -204,3 +204,24 @@ async def test_run_snowball_next_empties_the_list(session, edge_providers):
     out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
     assert out.new_hits > 0
     assert await snowball_next.snowball_next(session, workspace.id) == []
+
+
+async def test_snowball_next_leaves_out_a_seed_not_found_in_semantic_scholar(session):
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
+    await branches.set_branch(session, workspace.id, hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
+    entry = workspace_search._seed_entry(seed.id, "hit", "Seed Alpha", skipped=workspace_search.NOT_IN_S2, hit_id=seed.id)
+    run.stats_json = {"snowball": {"seeds": [entry], "directions": BOTH}}
+    await session.commit()
+    assert await snowball_next.snowball_next(session, workspace.id) == []
+
+
+async def test_run_snowball_next_takes_a_batch_and_reports_the_rest(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    for i in range(30):
+        hit = await _seed_hit(session, workspace, run, title=f"Seed {i:02d}")
+        await branches.set_branch(session, workspace.id, hit_id=hit.id, state="go_further", directions=["cites"], reason=None)
+
+    out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
+    assert out.remaining == 30 - snowball_next.SNOWBALL_NEXT_BATCH == 5
+    assert len(await snowball_next.snowball_next(session, workspace.id)) == 5

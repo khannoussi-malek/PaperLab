@@ -310,7 +310,7 @@ async def provenance(
     for seed, hit_id in seeds:
         key = str(hit_id) if hit_id else f"paper:{seed.get('id')}"
         done[key].update(seed.get("done") or [])
-        zero[key] = seed.get("error") if not sum((seed.get("found") or {}).values()) else None
+        zero[key] = (seed.get("error") or seed.get("skipped")) if not sum((seed.get("found") or {}).values()) else None
     incoming: dict[str, int] = defaultdict(int)
     for e in edges:
         incoming[e.child] += 1
