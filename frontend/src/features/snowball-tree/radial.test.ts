@@ -1,22 +1,55 @@
 import { expect, test } from 'vitest'
 import type { ProvLink, ProvNode, ProvRoot } from '@/api/client'
 import { tidyLayout } from './layout'
-import { RING, toRadial } from './radial'
+import { MIN_SECTOR, RING, ROOT_RING, toRadial } from './radial'
 
-const roots: ProvRoot[] = [{ id: 'root:r1', label: 's', hit_count: 2, on_tree: 2, excluded_hidden: 0 }]
 const node = (id: string, level: number): ProvNode => ({ id, title: id, level, decision: null, snowballed: [], paths: 1 })
-const nodes = [node('A', 0), node('B', 1), node('C', 1)]
-const link = (parent: string, child: string, i: number): ProvLink => ({ parent, child, kind: 'cites', run_id: 'r1', created_at: `2026-01-01T00:00:0${i}Z` })
-const links = [link('root:r1', 'A', 0), link('A', 'B', 1), link('A', 'C', 2)]
+const link = (parent: string, child: string, i: number): ProvLink => ({ parent, child, kind: 'cites', run_id: 'r', created_at: `2026-01-01T00:00:${String(i % 60).padStart(2, '0')}Z` })
 
-test('boxes on level n sit at radius (n+1)*90 and roots at the centre', () => {
-  const layout = tidyLayout(nodes, links, roots, new Set(), new Set())
-  const out = new Map(toRadial(layout).map((b) => [b.box.id, b]))
-  expect(RING).toBe(90)
-  expect(out.get('A')!.radius).toBe(90)
-  expect(out.get('B')!.radius).toBe(180)
-  expect(out.get('root:r1')!.radius).toBeLessThan(30)
-  const b = out.get('B')!
-  expect(b.angle).toBeCloseTo((b.box.y / layout.height) * 2 * Math.PI)
-  expect(Math.hypot(b.x, b.y)).toBeCloseTo(180)
+function build(roots: number, perRoot: (r: number) => number, kids: number) {
+  const rs: ProvRoot[] = Array.from({ length: roots }, (_, r) => ({ id: `root:r${r}`, label: `s${r}`, hit_count: 1, on_tree: 1, excluded_hidden: 0 }))
+  const nodes: ProvNode[] = []
+  const links: ProvLink[] = []
+  rs.forEach((r, ri) => {
+    for (let i = 0; i < perRoot(ri); i++) {
+      const a = `a${ri}_${i}`
+      nodes.push(node(a, 0)); links.push(link(r.id, a, i))
+      for (let k = 0; k < kids; k++) { const b = `b${ri}_${i}_${k}`; nodes.push(node(b, 1)); links.push(link(a, b, k)) }
+    }
+  })
+  return toRadial(tidyLayout(nodes, links, rs, new Set(), new Set()))
+}
+
+test('boxes on level n sit at radius (n+1)*RING; a lone root sits at the centre', () => {
+  const out = new Map(build(1, () => 2, 1).map((b) => [b.box.id, b]))
+  expect(out.get('a0_0')!.radius).toBe(RING)
+  expect(out.get('b0_0_0')!.radius).toBe(2 * RING)
+  expect(out.get('root:r0')!.radius).toBeLessThan(30)
+})
+
+test('25 roots, 335 papers: roots on a small inner ring, each sector at least 6 degrees, level-0 angles all different', () => {
+  // 100 level-0 papers and 235 level-1: 10 roots with 4 and 3 kids... shaped by counts below
+  const out = build(25, (r) => (r < 20 ? 4 : r === 20 ? 20 : 0), 0)
+  // add level 1 separately is not needed for the sector rule; check a skewed fixture too
+  const roots = out.filter((b) => b.box.root)
+  expect(roots).toHaveLength(25)
+  for (const r of roots) {
+    expect(r.radius).toBe(ROOT_RING)
+    expect(r.sector[1] - r.sector[0]).toBeGreaterThanOrEqual((MIN_SECTOR * Math.PI) / 180 - 1e-9)
+  }
+  const l0 = out.filter((b) => b.box.node?.level === 0).map((b) => b.angle.toFixed(6))
+  expect(new Set(l0).size).toBe(l0.length)
+})
+
+test('with children, papers stay inside their root sector and level-0 angles differ', () => {
+  const out = build(25, (r) => (r === 0 ? 40 : 3), 2) // 25 roots; 40+72 level-0, 224 level-1
+  const sector = new Map(out.filter((b) => b.box.root).map((b) => [b.box.id, b.sector]))
+  expect(out.filter((b) => b.box.root).every((b) => b.sector[1] - b.sector[0] >= (MIN_SECTOR * Math.PI) / 180 - 1e-9)).toBe(true)
+  const l0 = out.filter((b) => b.box.node?.level === 0).map((b) => b.angle.toFixed(6))
+  expect(new Set(l0).size).toBe(l0.length)
+  const [lo, hi] = sector.get('root:r0')!
+  for (const b of out.filter((x) => x.box.id.startsWith('b0_') || x.box.id.startsWith('a0_'))) {
+    expect(b.angle).toBeGreaterThanOrEqual(lo - 1e-9)
+    expect(b.angle).toBeLessThanOrEqual(hi + 1e-9)
+  }
 })

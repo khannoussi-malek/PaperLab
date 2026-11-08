@@ -1,41 +1,41 @@
 import type { ProvNode } from '@/api/client'
 
-export const YEAR_W = 40
-export const LEVEL_H = 90
-export const STACK = 14
-export const NO_YEAR_X = -YEAR_W * 3 // the "No year" lane, left of every year
+export const YEAR_W = 60
+export const LEVEL_H = 160
+export const NO_YEAR_X = -YEAR_W * 2 // the narrow "No year" column, left of every year
+
+/** A stable 0..1 from an id (the same id always lands in the same place). */
+export function unit(id: string, salt = ''): number {
+  let h = 5381
+  for (const c of id + salt) h = (h * 33 + c.charCodeAt(0)) >>> 0
+  return (h % 10007) / 10007
+}
 
 /** The papers with the most incoming paths (ties by id): the "key papers". */
 export function keyPaperIds(nodes: ProvNode[], n = 10): Set<string> {
   return new Set([...nodes].sort((a, b) => b.paths - a.paths || a.id.localeCompare(b.id)).slice(0, n).map((p) => p.id))
 }
 
-/** Fixed places, the same for the same data: x by year, y by level, papers sharing a year and level stacked by id. */
+/** Fixed places, the same for the same data: x by year, y in the paper's level band, both jittered by a hash of the id. */
 export function mapPositions(nodes: ProvNode[]): Map<string, { x: number; y: number }> {
   const years = nodes.flatMap((p) => (p.year ? [p.year] : []))
   const minYear = Math.min(...years)
-  const cells = new Map<string, ProvNode[]>()
-  for (const p of nodes) {
-    const key = `${p.year ?? ''}|${p.level}`
-    cells.set(key, [...(cells.get(key) ?? []), p])
-  }
-  const out = new Map<string, { x: number; y: number }>()
-  for (const group of cells.values()) {
-    group.sort((a, b) => a.id.localeCompare(b.id)).forEach((p, i) => {
-      out.set(p.id, {
-        x: p.year ? (p.year - minYear) * YEAR_W : NO_YEAR_X,
-        y: p.level * LEVEL_H + (i - (group.length - 1) / 2) * STACK,
-      })
-    })
-  }
-  return out
+  return new Map(
+    nodes.map((p) => [
+      p.id,
+      {
+        x: (p.year ? (p.year - minYear) * YEAR_W : NO_YEAR_X) + (unit(p.id, 'x') - 0.5) * YEAR_W * 0.7,
+        y: p.level * LEVEL_H + (unit(p.id, 'y') - 0.5) * LEVEL_H * 0.8,
+      },
+    ]),
+  )
 }
 
-/** Year ticks for the axis: every year for a short span, else every 5th. */
+/** Year ticks for the axis: every 5th year in the span. */
 export function yearTicks(nodes: ProvNode[]): number[] {
   const years = nodes.flatMap((p) => (p.year ? [p.year] : []))
   if (!years.length) return []
   const [lo, hi] = [Math.min(...years), Math.max(...years)]
-  const step = hi - lo > 15 ? 5 : 1
-  return Array.from({ length: Math.floor((hi - lo) / step) + 1 }, (_, i) => lo + i * step)
+  const first = Math.ceil(lo / 5) * 5
+  return first > hi ? [lo] : Array.from({ length: Math.floor((hi - first) / 5) + 1 }, (_, i) => first + i * 5)
 }

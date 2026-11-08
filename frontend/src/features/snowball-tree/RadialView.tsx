@@ -8,7 +8,7 @@ import { Legend } from './TreeView'
 import { decisionKey, paperLabel, SVG_TONE } from './viewShared'
 
 type Props = { data: ProvenanceOut; selected: string | null; onSelect: (id: string | null) => void; hidden: Set<string> }
-const NODE_R = 7
+const NODE_R = 5
 
 /** How big is the search, and where does it spread: search roots in the centre, one ring per level. */
 export function RadialView({ data, selected, onSelect, hidden }: Props) {
@@ -19,10 +19,18 @@ export function RadialView({ data, selected, onSelect, hidden }: Props) {
   const [view, setView] = useState({ x: 0, y: 0, k: 1 })
   const [tip, setTip] = useState<string | null>(null)
   const drag = useRef<{ x: number; y: number } | null>(null)
-  const outer = Math.max(RING, ...boxes.map((b) => b.radius))
-  const fit = size.width ? Math.min(1, (Math.min(size.width, size.height) / 2 - 24) / (outer + NODE_R)) : 1
+  const rings = useMemo(() => [...new Set(data.levels.map((l) => l.level))].sort((a, b) => a - b), [data.levels])
+  const outer = Math.max(RING, ...boxes.map((b) => b.radius), ...rings.map((l) => (l + 1) * RING))
+  const fit = size.width ? Math.min(2, (Math.min(size.width, size.height) / 2 - 24) / (outer + NODE_R)) : 1
   const scale = fit * view.k
   const tipBox = tip ? at.get(tip) : undefined
+  // The hovered (else selected) paper's own way back to its search: every node on it, so the edge into each lights up.
+  const path = useMemo(() => {
+    const up = new Map(layout.edges.map((e) => [e.to, e.from]))
+    const out = new Set<string>()
+    for (let id = tip ?? selected; id; id = up.get(id) ?? null) out.add(id)
+    return out
+  }, [layout, tip, selected])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -38,15 +46,22 @@ export function RadialView({ data, selected, onSelect, hidden }: Props) {
       >
         <svg width="100%" height="100%" role="group" aria-label="Radial view of the snowball tree">
           <g transform={`translate(${size.width / 2 + view.x} ${size.height / 2 + view.y}) scale(${scale})`}>
-            {data.levels.map((l) => (
-              <g key={l.level}>
-                <circle r={(l.level + 1) * RING} fill="none" className="stroke-border" strokeDasharray="2 4" />
-                <text y={-(l.level + 1) * RING - 3} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>{`Level ${l.level}`}</text>
+            {rings.map((l) => (
+              <g key={l}>
+                <circle r={(l + 1) * RING} fill="none" className="stroke-border" strokeDasharray="2 4" />
+                <text y={-(l + 1) * RING - 4} textAnchor="middle" className="fill-muted-foreground" fontSize={12 / scale}>{`Level ${l}`}</text>
               </g>
             ))}
             {layout.edges.map((e) => {
               const a = at.get(e.from)!, b = at.get(e.to)!
-              return <line key={`${e.from}>${e.to}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="stroke-muted-foreground" strokeOpacity={b.box.faded ? 0.2 : 0.6} strokeDasharray={e.dashed ? '4 3' : undefined} />
+              const on = path.has(e.to)
+              return (
+                <line
+                  key={`${e.from}>${e.to}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="stroke-muted-foreground"
+                  strokeOpacity={on ? 0.9 : b.box.faded ? 0.05 : 0.15} strokeWidth={on ? 1.8 : 1} strokeDasharray={e.dashed ? '4 3' : undefined}
+                  vectorEffect="non-scaling-stroke"
+                />
+              )
             })}
             {boxes.map(({ box, x, y }) => {
               const { node } = box
@@ -60,14 +75,14 @@ export function RadialView({ data, selected, onSelect, hidden }: Props) {
                   onClick={pick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick() } }}
                   onMouseEnter={() => setTip(box.id)} onMouseLeave={() => setTip(null)} onFocus={() => setTip(box.id)} onBlur={() => setTip(null)}
                 >
-                  <circle r={node ? NODE_R : 10} className={SVG_TONE[node ? decisionKey(node) : 'root']} strokeWidth={selected === box.id ? 3 : 1.5} />
+                  <circle r={node ? NODE_R : 6} className={SVG_TONE[node ? decisionKey(node) : 'root']} strokeWidth={selected === box.id ? 3 : 1.5} vectorEffect="non-scaling-stroke" />
                   {node?.branch?.state === 'go_further' && <circle r={NODE_R + 3} fill="none" data-branch="go_further" className="stroke-included" strokeWidth={1.5} />}
                   {node?.branch?.state === 'stopped' && <circle r={NODE_R + 3} fill="none" data-branch="stopped" className="stroke-destructive" strokeWidth={1.5} strokeDasharray="2 2" />}
                 </g>
               )
             })}
             {tipBox && (
-              <text x={tipBox.x} y={tipBox.y - 16} textAnchor="middle" fontSize={11} className="pointer-events-none fill-foreground" stroke="var(--card)" strokeWidth={3} paintOrder="stroke">
+              <text x={tipBox.x} y={tipBox.y - 12 / scale} textAnchor="middle" fontSize={12 / scale} className="pointer-events-none fill-foreground" stroke="var(--card)" strokeWidth={3} paintOrder="stroke">
                 {tipBox.box.node ? (isUnknown(tipBox.box.id) ? PARENT_NOT_RECORDED : tipBox.box.node.title) : tipBox.box.root!.label}
               </text>
             )}
