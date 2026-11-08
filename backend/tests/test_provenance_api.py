@@ -154,6 +154,7 @@ async def test_legacy_unknown_parent_node(session):
     nodes = _by_id(out)
     unknown = f"run:{run.id}:unknown"
     assert nodes[unknown].level == 0 and nodes[str(legacy.id)].level == 1
+    assert out.levels[0].found == 0  # the synthetic parent is not a find
     assert any(x.parent == unknown and x.child == str(legacy.id) for x in out.links)
 
 

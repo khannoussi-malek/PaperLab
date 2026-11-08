@@ -185,6 +185,7 @@ Defined in `src/index.css` as CSS variables and exposed to Tailwind through `@th
 | `primary` / `primary-foreground` | `#2563eb` / `#ffffff` | `#60a5fa` / `#0f172a` | The one primary action per view, focus ring |
 | `muted` / `muted-foreground` | `#f1f5f9` / `#475569` | `#1e293b` / `#94a3b8` | Reader pane background, secondary text, quotes |
 | `destructive` | `#dc2626` | `#f87171` | Errors, delete |
+| `included` | `#15803d` | `#4ade80` | Status "included" (green) on snowball tree boxes and legend; excluded is `destructive`, not screened is `muted` |
 | `border` / `input` | `#e2e8f0` / `#cbd5e1` | white 10% / white 15% | Dividers, field borders |
 | `provenance-llm` / `-foreground` | `#6d28d9` / `#ffffff` | `#a78bfa` / `#1e1b4b` | AI provenance badge |
 | `provenance-llm-surface` | `#f5f3ff` | `#221d3a` | AI note card and chat answer background (dark: slate with a violet tint, softened 2026-09-14) |

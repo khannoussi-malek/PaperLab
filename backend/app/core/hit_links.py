@@ -372,6 +372,7 @@ def _level_stats(nodes: list[ProvNode], edges: list[_Edge], hits, level, runs, r
     out = []
     for lv in range(deepest + 1):
         here = [n for n in nodes if n.level == lv]
+        found = sum(not n.id.endswith(":unknown") for n in here)  # synthetic parents are not finds
         into = [e for e in edges if level.get(e.child) == lv]
         known = sum(level.get(c) == lv for c in refound)
         go = [n for n in here if n.branch and n.branch.state == "go_further"]
@@ -383,7 +384,7 @@ def _level_stats(nodes: list[ProvNode], edges: list[_Edge], hits, level, runs, r
                 brought = {e.child for e in snow if runs[e.run_id].started_at == last}
                 saturated = not any(n.decision == "relevant" for n in here if n.id in brought)
         out.append(LevelStats(
-            level=lv, found=len(here), already_known=known,
+            level=lv, found=found, already_known=known,
             included=sum(n.decision == "relevant" for n in here), go_further=len(go),
             stopped=sum(bool(n.branch and n.branch.state == "stopped") for n in here),
             done=all(set(n.branch.directions) <= set(n.snowballed) for n in go), saturated=saturated))

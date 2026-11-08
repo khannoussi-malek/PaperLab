@@ -8,7 +8,7 @@ const decisionKey = (d: string | null | undefined) => (d === 'relevant' || d ===
 
 /** Ids of nodes that do not match. The run filter matches on the run of the link that brought the node in. */
 export function hiddenIds(data: ProvenanceOut, f: Filters): Set<string> {
-  const via = primaryParent(data.links, data.roots)
+  const via = primaryParent(data.links, data.roots, data.nodes)
   const out = new Set<string>()
   for (const n of data.nodes) {
     const link = via.get(n.id)

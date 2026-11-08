@@ -45,6 +45,12 @@ test('level headers render', () => {
   expect(screen.getByText('Level 1 · 2 found · 0 already known · 1 included · 0 to go further · 0 stopped · done')).toBeTruthy()
 })
 
+test('a legend names the line styles and the colours', () => {
+  setup()
+  const legend = screen.getByLabelText('Legend')
+  for (const t of ['it cites', 'cited by', 'included', 'excluded', 'not screened']) expect(within(legend).getByText(t)).toBeTruthy()
+})
+
 test('colours follow the decision via data attributes', () => {
   setup()
   expect(screen.getByRole('button', { name: 'Seed paper, level 0, included' }).getAttribute('data-decision')).toBe('relevant')
@@ -72,7 +78,7 @@ test('filtering to included keeps the faded ancestors of C', () => {
   expect(screen.queryByRole('button', { name: /Excluded one/ })).toBeNull()
   expect(screen.queryByRole('button', { name: /Lonely seed/ })).toBeNull()
   expect(screen.getByRole('button', { name: /Included child/ })).toBeTruthy()
-  expect(screen.getByRole('button', { name: /^transformers, search/ }).getAttribute('data-faded')).toBe('true')
+  expect(screen.getByRole('button', { name: /^transformers, search/ }).getAttribute('data-faded')).toBe('false')
 })
 
 test('a faded ancestor keeps C reachable when only level 1 is shown', () => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { usePaths, useProvenance } from '@/api/queries'
 import type { ProvenanceOut } from '@/api/client'
 import { decisionWord } from './levelText'
@@ -38,12 +38,15 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   const [folded, setFolded] = useState<Set<string>>(new Set())
   const [filters, setFilters] = useState(NO_FILTERS)
   const hidden = useMemo(() => (data ? hiddenIds(data, filters) : new Set<string>()), [data, filters])
-  const toggleFold = (id: string) =>
-    setFolded((prev) => {
-      const next = new Set(prev)
-      if (!next.delete(id)) next.add(id)
-      return next
-    })
+  const toggleFold = useCallback(
+    (id: string) =>
+      setFolded((prev) => {
+        const next = new Set(prev)
+        if (!next.delete(id)) next.add(id)
+        return next
+      }),
+    [],
+  )
 
   if (isPending) return <p className="text-sm text-muted-foreground">Loading the tree…</p>
   if (error || !data) return <p role="alert" className="text-sm text-destructive">Could not load the snowball tree.</p>

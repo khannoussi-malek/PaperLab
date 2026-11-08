@@ -61,3 +61,47 @@ test('cited_by edges are dashed', () => {
   const out = tidyLayout([node('A', 0)], [link('root:r1', 'A', undefined, 'cited_by')], roots, new Set(), new Set())
   expect(out.edges[0].dashed).toBe(true)
 })
+
+test('a child hangs under a parent one level up, not just the earliest link', () => {
+  // Y (level 0) links to B first, A (level 0) later; B is level 1 via both, so make Y level 1 to be deeper.
+  const ns = [node('A', 0), node('Y', 1), node('B', 1)]
+  const ls = [link('root:r1', 'A'), link('A', 'Y', '2026-01-02T00:00:00Z'), link('Y', 'B', '2026-01-03T00:00:00Z'), link('A', 'B', '2026-01-04T00:00:00Z')]
+  const out = tidyLayout(ns, ls, roots, new Set(), new Set())
+  expect(out.edges.find((e) => e.to === 'B')!.from).toBe('A')
+  expect(box(out, 'B').x).toBe(2 * COL)
+  expect(box(out, 'B').extraPaths).toBe(1)
+})
+
+test('a deeper node cannot take a child at its own level', () => {
+  const ns = [node('A', 0), node('D', 2), node('B', 1)]
+  const ls = [link('D', 'B', '2026-01-01T00:00:00Z'), link('root:r1', 'A'), link('A', 'B', '2026-02-01T00:00:00Z')]
+  expect(primaryParent(ls, roots, ns).get('B')!.parent).toBe('A')
+})
+
+test('a two-node loop keeps its subtree', () => {
+  const ns = [node('A', 0), node('B', 1), node('C', 2)]
+  const ls = [link('root:r1', 'A'), link('A', 'B'), link('B', 'A', '2026-02-01T00:00:00Z'), link('B', 'C')]
+  const out = tidyLayout(ns, ls, roots, new Set(), new Set())
+  expect(out.boxes.map((b) => b.id).sort()).toEqual(['A', 'B', 'C', 'root:r1'])
+})
+
+test('a "parent not recorded" node is placed as a root in column 0 with its subtree', () => {
+  const u = 'run:r9:unknown'
+  const ns = [node(u, 0), node('L', 1)]
+  const out = tidyLayout(ns, [link(u, 'L')], [], new Set(), new Set())
+  expect(box(out, u).x).toBe(0)
+  expect(box(out, 'L').x).toBe(2 * COL)
+  expect(out.edges).toHaveLength(1)
+})
+
+test('a folded node with a matching descendant stays, faded, with the match count', () => {
+  const out = tidyLayout(nodes, links, roots, new Set(['A']), new Set(['A', 'B']))
+  expect(box(out, 'A').faded).toBe(true)
+  expect(box(out, 'A').foldedMatches).toBe(2)
+  expect(out.boxes.find((b) => b.id === 'C')).toBeUndefined()
+})
+
+test('a root with a matching descendant is not faded', () => {
+  const out = tidyLayout(nodes, links, roots, new Set(), new Set(['B', 'D']))
+  expect(box(out, 'root:r1').faded).toBe(false)
+})
