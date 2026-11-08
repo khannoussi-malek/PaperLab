@@ -21,6 +21,8 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
     const base = data ? defaultFolded(data, hidden.size > 0) : new Set<string>()
     return new Set([...base, ...flipped].filter((id) => base.has(id) !== flipped.has(id)))
   }, [data, hidden, flipped])
+  // Hand-folded boxes are relative to the default, which depends on whether a filter is on; a filter change starts over.
+  const changeFilters = (f: typeof NO_FILTERS) => { setFilters(f); setFlipped(new Set()) }
   const [showStopped, setShowStopped] = useState(false)
   const [opened, setOpened] = useState<Set<string>>(new Set()) // stopped boxes the owner unfolded by hand
   const [busy, setBusy] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <SnowballNext workspaceId={workspaceId} />
       <div className="flex flex-wrap items-center gap-3">
-        <TreeFilters data={data} value={filters} onChange={setFilters} runLabels={runLabels} />
+        <TreeFilters data={data} value={filters} onChange={changeFilters} runLabels={runLabels} />
         {stopped.size > 0 && (
           <Button type="button" size="sm" variant="outline" aria-pressed={showStopped} onClick={() => setShowStopped((v) => !v)}>
             {showStopped ? 'Hide stopped' : 'Show stopped'}

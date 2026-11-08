@@ -267,3 +267,16 @@ test('changing the Level filter pans the canvas to the first visible box', () =>
   expect(y + parseFloat(first.style.top)).toBeLessThan(600)
   expect(y + parseFloat(first.style.top)).toBeGreaterThanOrEqual(0)
 })
+
+test('a hand-unfolded search stays open when a filter is applied', () => {
+  setup(manyPapers(13, 5))
+  fireEvent.click(screen.getByRole('button', { name: '13 papers: show' }))
+  fireEvent.change(screen.getByLabelText('Decision'), { target: { value: 'relevant' } })
+  expect(screen.getByRole('button', { name: /^Paper 5/ })).toBeTruthy()
+})
+
+test('a box with a 0 found line clamps its title to one line', () => {
+  setup()
+  const box = screen.getByRole('button', { name: /^Lonely seed/ })
+  expect(within(box).getByText('Lonely seed').className).toContain('line-clamp-1')
+})

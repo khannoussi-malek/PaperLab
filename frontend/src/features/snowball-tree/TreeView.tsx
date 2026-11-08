@@ -68,7 +68,7 @@ function BoxButton({ box, selected, busy, onSelect }: { box: Box; selected: bool
       )}
     >
       <span className={cn('flex gap-1', root ? 'items-center' : 'items-start')}>
-        <span className={cn('min-w-0 flex-1 font-medium', root ? 'truncate' : 'line-clamp-2 break-words')} title={titleOf(box)}>{titleOf(box)}</span>
+        <span className={cn('min-w-0 flex-1 font-medium', root ? 'truncate' : node?.zero_found_error != null ? 'line-clamp-1 break-words' : 'line-clamp-2 break-words')} title={titleOf(box)}>{titleOf(box)}</span>
         {node?.branch && <BranchMark branch={node.branch} />}
         {busy && <span className="shrink-0 text-[10px] text-muted-foreground">Snowballing…</span>}
         {node?.suggestion && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-provenance-llm" />}
