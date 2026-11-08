@@ -425,3 +425,87 @@ Every recall-at-budget count reproduced (library sealed 2: 68, 93, 97, 105 of 18
 Pinned Gemini 3.1 Flash Lite answered all 400 (router reported that model for every one). Grounded A 83, B 132 of 200: +49 -0, exact McNemar p 3.6e-15, paired bootstrap 95% CI +18 to +30 points. Answer text A 78, B 101: +29 -6, p 1.2e-4, CI +6 to +17. B grounded by kind: fact 52/70, reworded 53/70, table 20/44, two-fact 7/16 (A: 36, 35, 8, 4). B ungrounded 68: passage not sent 61, sent but another cited 7. Median prompt tokens 3,218 vs 6,624. Questions not naming the drug (67): 37 vs 53. Holm across the exploratory contrasts waits for the qwen3:8b run (paused); the cloud p is so small that no Holm factor up to 3 changes it. The confirmatory qwen2.5:14b contrast is unscored until its run finishes. File: out/r2_cloud.jsonl.
 
 - 2026-11-06 11:35 (review round 3): the qwen2.5:14b A->B grounded contrast on sealed set 2 stays confirmatory and, when its run resumes, is reported in the paper whatever its result. The pinned cloud A->B contrast stays exploratory, as declared in R2-2.
+
+## Round R3: adaptive scope and per-paper quotas (written 2026-11-07, before any run, page draw or question)
+
+Why: on the SE library documents-first (D10) gained nothing; ten same-topic papers split the budget, the cap of 3 chunks per paper keeps out key chunks that rank about 6th inside their paper (SE section). Prior work: Adaptive-k (Taguchi et al. 2025) cuts at the largest score gap, which we rejected for passages (K33) but never tried for choosing papers; "Recall is not enough" (Bala 2026) finds a query-focused packing heuristic at parity with a submodular packer.
+
+Candidates (bench6 configs, all fused search inside the chosen papers, 24,000-character budget):
+- DG: documents first, keep papers down to the largest drop in paper score among the top 10 (at least 1 paper).
+- DQ: documents first, 10 papers, chunk cap by paper rank: rank 1 gets cap Q1, ranks 2-10 get cap Q2 (tune Q1 in {6, 10}, Q2 in {2, 3}).
+- DGQ: DG scope with DQ caps.
+Baseline: D10 (shipped). Reference: T, HB.
+
+Tuning: the SE tuning set (secr/q/dev.yaml, already read) and the regulatory library tuning set (q/dev.yaml). One configuration is picked on tuning before the sealed questions exist, by: highest SE tuning count with the regulatory tuning count not below D10's; ties go to the simpler (DG, then DQ, then DGQ).
+
+Sealed set SE3: 100 new SE questions written blind by a fresh agent from pages sampled with seed 20261110 that exclude every page in secr/q/pages_*.txt, same prompt and quotas as the SE writer. All 100 are sealed; none is read before scoring.
+Confirmatory: the picked configuration vs D10 on SE3, recall at the budget, exact McNemar, alpha .05. Pass rule as for a change with no model and no migration: net gain of at least 2.
+Guard: on regulatory library sealed set 2 (already used, so a reuse, reported as such) the picked configuration must not lose more questions than it gains against D10, and search must stay under 1 s median, 3 s max.
+Reported whatever the result.
+
+### R3 tuning, regulatory library (2026-11-07 02:43, restored DB)
+Restored from passrule.dump (6 Nov 02:22; the SE papers postdate it and are being rebuilt). T, HB and D10 match the 5 Nov 20:50 run question for question (16, 24, 24 of 38); the 25 for D10 quoted in the paper came from the 20:32 run under earlier code.
+DG 21, DQ6_2 23, DQ6_3 24, DQ10_2 23, DQ10_3 23, DGQ6_2 23, DGQ10_2 25. DG scopes cut the target paper on 5 of 38. Eligible by the rule (not below D10 24): DQ6_3, DGQ10_2.
+
+### R3 tuning, SE (2026-11-07, rebuilt SE library: 341 papers, 25,354 chunks, joined 26,629, as published)
+Old SE sealed reproduced exactly: T 30, H8 29, HB 29, D10 28 of 57. SE tuning (35 scored): T 20, HB 20, D10 21, DG 27, DQ6_2 22, DQ6_3 22, DQ10_2 25, DQ10_3 25, DGQ6_2 26, DGQ10_2 27.
+Pick by the rule (highest SE tuning with regulatory tuning not below D10 24): DGQ10_2 (SE 27, regulatory 25). DG ties on SE at 27 but its regulatory 21 is below 24. Picked before the SE3 questions were opened or scored.
+
+### Result R3 (2026-11-07)
+SE3 sealed (100 written, 88 scored; 12 keys not in the extracted text): D10 38, DGQ10_2 61 (+24 -1, exact McNemar p 1.6e-6, paired bootstrap 95% CI +17 to +36 points), T 35, HB 39. By kind DGQ10_2: fact 25, reworded 25, table 8, two-fact 3 (D10: 17, 15, 5, 1). Recall@8 49 vs 38. Median 0.05 s, max 0.11 s; papers in scope median 1; target paper in scope 87/88.
+Pass rule: net +23, passes. Confirmatory contrast significant.
+Guard, regulatory library sealed 2 (reuse): D10 105 (reproduced), DGQ10_2 121 of 189 (+30 -14, p 0.023); gains exceed losses, passes. Target paper in scope falls 187 -> 177: the gap cut sometimes drops the right paper. Speed: 0.07 s median, 0.12 s max, passes.
+Files: secr/out/bench6_sealed3_D10_DGQ10_2_T_HB.json, out/bench6_sealed2_D10_DGQ10_2.json. SE3 keys not audited by a second model yet.
+
+## Round SE4: software-engineering and creativity papers only (written 2026-11-08, before the page draw; approved by the reviewer with P1-P7)
+
+Scope, the author's decision of 8 Nov: the study covers only the 341 SE and creativity papers (SE library: 25,354 chunks; SE file: the same papers joined, 7,271 pages, 26,629 chunks). The regulatory results become an earlier pilot in another domain.
+
+Code: commit 1446cd027cf529b1e00d135ccb41fd5bd7fdb278 (backend/evals/longdocs/scripts: bench6.py, se_sample4.py, se_dups.py). bench6.py SHA-256 860313890b27db4e4c74b2c25d8984ba929f8c5326ce587a29e89c0c45e263c8. No method, setting or script changes after the draw.
+
+Pages: se_sample4.py, seed 20261111. It excludes the 230 SE pages already used (115 by the first SE writer, 115 by SE3) and keeps pages of 700 to 5,000 characters; "table" means more than 12% digits. Two disjoint sets of 100 text and 45 table pages.
+Writers: two fresh agents, each blind to the search system, with the SE writer prompt in prompts/question_writers.md. Each writes 125 questions: 44 fact, 44 reworded, 25 table, 12 two-fact. Ids U001-U125 and V001-V125.
+Duplicates (P7): se_dups.py, before sealing. It drops a question if any of these holds against dev, the old sealed set, SE3 or an earlier SE4 question: the same normalised question; word-set Jaccard of at least 0.5 (words of 3 or more letters); or a shared key string from the same paper. It prints ids only.
+Sealed: what se_dups.py keeps, in q/sealed4.yaml. Nobody reads it before scoring. A question is scored when every key string occurs in PaperLab's extracted text; dropped keys are listed. The same questions are scored on the SE file and the SE library, which are therefore not independent.
+Earlier SE sets (dev 40, old sealed 60, SE3 100) are tuning or exploratory only.
+
+Methods, fixed:
+- SE file: (a) dense top 8, no budget; (b) dense at the 24,000-character budget; (c) fused BM25 and dense, RRF k 60, at the budget (shipped); (d) BM25 alone at the budget.
+- SE library: T (before: dense top 8, at most 3 per paper); HB (fused over every paper, at most 3 per paper, budget); D10 (shipped documents-first: 10 papers, then fused, at most 3 per paper, budget); DGQ10_2, defined below.
+
+DGQ10_2, exactly (P1):
+1. Paper ranking, as in D10. Dense-only search (HNSW, ef_search 100) takes the nearest 300 chunks over all 341 papers, in rank order r = 0, 1, 2, and so on. A paper's score is the sum of 1/(60+r) over its best three chunks in that list. Papers are sorted by score, highest first; a tie keeps the paper whose chunk ranks first. The top 10 are kept.
+2. Scope. Take the scores s1 >= ... >= sn of the n <= 10 kept papers, and the drops s_i - s_{i+1} for i = 1 to n-1. Keep papers 1 to i at the largest drop; on a tie the first such drop wins, giving the smaller scope. If the largest drop comes after paper 1, the scope is one paper. If n = 1, the scope is that paper.
+3. Passages, scope of one paper: fused search (BM25 and dense, RRF k 60) inside that paper, no per-paper cap, top 40.
+4. Passages, scope of two or more papers: fused search inside the scope, with a per-paper cap of 10 and the top 80. Walking that fused ranking in order, the rank-1 paper keeps its first 10 chunks and every other paper its first 2. The first 40 kept chunks are the list. If the rank-1 paper has fewer than 10 matching chunks, it contributes what it has and the others fill in their fused order.
+5. Budget: the longest start of that list, in its order, whose text fits 24,000 characters. A chunk is never split, and the first chunk is always kept (cut_to_budget, as shipped).
+DGQ10_2 was chosen on 7 Nov using SE tuning and regulatory tuning. It won once on SE3, 61 against 38 of 88 (+24 -1); that result is exploratory, from a single run. C2 tests a method chosen because it won there.
+
+Key checks, before any scoring:
+- Llama 3.3 70B audits all sealed keys, with the prompt in audit_keys.py.
+- Seed 20261112 draws 50 keys for the author, who checks them before scoring. The author's 6 verdicts on the old SE set and 4 on regulatory keys are dropped.
+- Reported: the raw agreement and Cohen's kappa between the author and Llama, and the author's error rate with a Wilson 95% interval.
+
+Key exclusion (P2): the primary analysis uses every scored key, and it is the confirmatory one whatever the checks find. Two sensitivity analyses repeat it: without the keys the author flags (of the 50), and without the keys Llama flags. C1 and C2 are reported in all three.
+
+Confirmatory contrasts, recall at the budget, exact McNemar, Holm across the two, alpha .05:
+- C1: SE file, (b) to (c).
+- C2: SE library, D10 to DGQ10_2.
+Each is reported with the paired bootstrap 95% CI (10,000 resamples, seed 7) and the scored n. Null wording, fixed now (P4): if a contrast is not significant, the paper says "no difference larger than U points", where U is the larger absolute end of its 95% interval.
+
+Exploratory, with Holm across all of them:
+- SE file: (a) to (c), and (c) to (d).
+- SE library: T to D10, and HB to D10.
+- R@8 for C1 and for C2.
+- Answers, grounded: SE file A to B, and SE library D10 to DGQ10_2.
+Answer-text checks are reported beside them, uncorrected.
+
+Answers: pinned Gemini 3.1 Flash Lite, temperature 0, PaperLab's production prompt, with the model recorded per answer. Stop rule (P3): if the router does not serve that model, or its quota ends, the run stops and what finished is reported as partial. There is no switch to another model. Local models are optional and exploratory.
+
+Shipping (P6): DGQ10_2 replaces D10 in PaperLab only if all of these hold:
+- C2 is significant after Holm;
+- its net gain on SE4 is at least 2;
+- its search takes under 1 s median and under 3 s at most on the SE library.
+
+Designed on regulatory data, so tested out of domain here (R3): BM25 k1 0.9 and b 0.4, the 24,000-character budget, RRF k 60, the 150-chunk threshold, documents-first with 10 papers and 3 per paper, table chunking, and the 1,024-token limit.
+Every result is reported, whatever it is.
