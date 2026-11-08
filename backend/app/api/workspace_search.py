@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, File, Query, Request, UploadFile
 
 from app.api.deps import DiscoveryDep, SessionDep
-from app.core import screening, workspace_search
+from app.core import branches, screening, workspace_search
 from app.core.errors import InvalidInput
 from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.prisma_export import prisma_export
@@ -14,6 +14,8 @@ from app.schemas.workspace_search import (
     AcceptSuggestions,
     AcceptSuggestionsOut,
     AcquisitionStatus,
+    BranchIn,
+    BranchOut,
     BulkHitReviewUpdate,
     BulkUpdateOut,
     ClearHitsOut,
@@ -224,6 +226,14 @@ async def snowball_route(
         payload.backward, payload.forward,
     )
     return SnowballOut(new_hits=result.new_hits, skipped_seeds=result.skipped_seeds, errors=result.errors)
+
+
+@router.put("/branch")
+async def set_branch_route(workspace_id: uuid.UUID, payload: BranchIn, session: SessionDep) -> BranchOut:
+    return await branches.set_branch(
+        session, workspace_id, hit_id=payload.hit_id, paper_id=payload.paper_id, state=payload.state,
+        directions=payload.directions, reason=payload.reason,
+    )
 
 
 @router.get("/prisma")

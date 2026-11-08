@@ -360,6 +360,7 @@ async def _insert_hit(
 
 
 from app.core import papers, workspaces
+from app.core.branches import default_branch_on_decision
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, workspace_papers
 
@@ -910,6 +911,7 @@ async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitRe
     if "stage1_status" in fields:
         # The stop hint's streak reads decisions by this time (M31 spec §3.2); an undone decision has none.
         hit.stage1_decided_at = _now() if hit.stage1_status is not None else None
+        await default_branch_on_decision(session, workspace_id, [hit.id], hit.stage1_status)
     await session.commit()
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
     return _hit_out_dict(hit, ref)
@@ -936,6 +938,7 @@ async def bulk_review_hits(
             hit.stage1_exclude_reason = stage1_exclude_reason
         if priority is not None:
             hit.priority = priority
+    await default_branch_on_decision(session, workspace_id, [h.id for h in hits], stage1_status)
     await session.commit()
     return len(hits)
 

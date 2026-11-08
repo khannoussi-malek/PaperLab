@@ -350,3 +350,19 @@ class PrismaExportOut(BaseModel):
     automation: list[str] = []
     notes: list[str] = []
     screening_criteria: str | None = None
+
+
+class BranchIn(BaseModel):
+    hit_id: uuid.UUID | None = None
+    paper_id: uuid.UUID | None = None
+    state: str | None = None  # checked in core.branches so every caller gets the same InvalidInput
+    directions: list[str] = []
+    reason: str | None = None
+
+
+class BranchOut(BaseModel):
+    hit_id: uuid.UUID | None
+    paper_id: uuid.UUID | None
+    state: str | None
+    directions: list[str]
+    reason: str | None
