@@ -23,7 +23,7 @@ const HEADER_H = 52
 const PAD_X = 16
 const PAD_Y = 8
 const EMPTY = new Set<string>()
-const TONE: Record<string, string> = {
+export const TONE: Record<string, string> = {
   relevant: 'border-included bg-included/10',
   not_relevant: 'border-destructive bg-destructive/10',
   none: 'border-border bg-muted',
@@ -36,7 +36,7 @@ const curve = (x1: number, y1: number, x2: number, y2: number) => {
 const BRANCH_WORD: Record<string, string> = { go_further: 'go further', stopped: 'stopped' }
 
 /** Open arrow = go further (directions on hover), bar = stopped (reason on hover). */
-function BranchMark({ branch }: { branch: NonNullable<ProvNode['branch']> }) {
+export function BranchMark({ branch }: { branch: NonNullable<ProvNode['branch']> }) {
   if (branch.state === 'go_further') {
     const dirs = branch.directions.map((d) => (d === 'cites' ? 'Its references' : 'Papers citing it')).join(', ')
     return <span aria-hidden data-branch="go_further" title={`Go further: ${dirs}`} className="shrink-0 text-included"><ArrowRight className="size-3" /></span>
@@ -172,7 +172,7 @@ function Line({ dashed, label }: { dashed?: boolean; label: string }) {
   )
 }
 
-function Legend() {
+export function Legend() {
   return (
     <div aria-label="Legend" role="group" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <Line label="it cites" />
