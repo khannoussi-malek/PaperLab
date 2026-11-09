@@ -21,6 +21,7 @@ from app.core import (
     graph,
     library,
     manuscript_agent,
+    manuscript_agent_checks,
     manuscript_agent_compile,
     notes,
     pipeline,
@@ -72,7 +73,7 @@ mcp = MCPServer(
         "accept_suggestions record one, so ask the owner first. "
         "Writing studio: list_manuscripts, create_manuscript, list_manuscript_files, read_manuscript_file, then "
         "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
-        "`base` you read), add_manuscript_figure, compile_manuscript then get_compile_result, "
+        "`base` you read), add_manuscript_figure, check_manuscript, compile_manuscript then get_compile_result, "
         "read_manuscript_pdf_text."
     ),
 )
@@ -875,6 +876,19 @@ async def add_manuscript_figure(manuscript_id: uuid.UUID, path: str, data_base64
     existing file. Reference it from a .tex file with \\includegraphics."""
     async with sessions() as session:
         return await manuscript_agent.add_figure(session, manuscript_id, path, data_base64)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def check_manuscript(
+    manuscript_id: uuid.UUID, checks: list[str] | None = None
+) -> manuscript_agent_checks.CheckReport:
+    """Use to run PaperLab's offline checks on a manuscript's source (today: cited keys that match nothing) and read
+    every finding with file, line, message and a text-only fix_hint. Run it before compile_manuscript and after edits.
+    Checks never block a compile and never edit text; fix the source yourself. Pass `checks` to run only those names;
+    unknown names are an error. Findings are capped at 200 (errors first); `truncated` counts the rest."""
+    async with sessions() as session:
+        return await manuscript_agent_checks.check_manuscript(session, manuscript_id, checks)
 
 
 @mcp.tool()

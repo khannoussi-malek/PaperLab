@@ -18,6 +18,7 @@ TOOLS = [
     "add_paper",
     "add_paper_to_workspace",
     "add_papers",
+    "check_manuscript",
     "compile_manuscript",
     "continue_search_run",
     "create_manuscript",

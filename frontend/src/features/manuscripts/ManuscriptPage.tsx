@@ -21,7 +21,7 @@ import { SectionList } from './SectionList'
 import { openRowIndex, sectionRows, sectionText, type SectionRow } from './sections'
 import { DeckColumn } from './deck/DeckColumn'
 import { StudioColumns } from './StudioColumns'
-import { MissingCites } from './MissingCites'
+import { CheckPanel } from './CheckPanel'
 import { PdfPane, type PdfTarget } from './PdfPane'
 import { PdfEditBox } from './PdfEditBox'
 import { findEditable, type Span } from './pdfEdit'
@@ -51,6 +51,13 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const [dialog, setDialog] = useState<'move' | 'delete' | null>(null)
   const kept = useKeptTexts(manuscriptId) // text a closed file could not save; lives outside the page
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({})
+  const [savedTick, setSavedTick] = useState(0) // bumps when a save settles, not when a file is opened
+  const prevStates = useRef<Record<string, SaveState>>({})
+  useEffect(() => {
+    const settled = Object.entries(saveStates).some(([p, s]) => s === 'saved' && prevStates.current[p] !== undefined && prevStates.current[p] !== 'saved')
+    prevStates.current = saveStates
+    if (settled) setSavedTick((t) => t + 1)
+  }, [saveStates])
   const flushRef = useRef<(() => Promise<boolean>) | null>(null)
   useLeaveWarning(Object.values(saveStates).some((s) => s !== 'saved')) // kept texts are warned about in App
   const onText = useCallback(
@@ -346,7 +353,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     onOpenSource={edit.generated ? undefined : () => { jumpTo(edit.file, edit.line); setEdit(null) }}
                   />
                 )}
-              </PdfPane></div><MissingCites manuscriptId={manuscriptId} compiledAt={data?.compiled_at} onJump={jumpTo} /></div> },
+              </PdfPane></div><CheckPanel manuscriptId={manuscriptId} savedTick={savedTick} compiledAt={data?.compiled_at} onJump={jumpTo} /></div> },
               {
                 id: 'papers',
                 label: 'Papers',

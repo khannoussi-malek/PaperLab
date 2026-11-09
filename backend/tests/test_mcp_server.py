@@ -56,7 +56,7 @@ EXPECTED_TOOLS = {
     "list_manuscripts": True, "create_manuscript": None, "list_manuscript_files": True,
     "read_manuscript_file": True, "create_manuscript_file": None, "write_manuscript_file": None,
     "edit_manuscript_file": None, "rename_manuscript_file": None, "delete_manuscript_file": None,
-    "add_manuscript_figure": None, "compile_manuscript": None, "get_compile_result": True,
+    "add_manuscript_figure": None, "check_manuscript": True, "compile_manuscript": None, "get_compile_result": True,
     "read_manuscript_pdf_text": True,
 }
 

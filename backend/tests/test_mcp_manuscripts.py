@@ -1,4 +1,4 @@
-"""The 13 manuscript tools through an in-process client, on the test's rolled-back session."""
+"""The 14 manuscript tools through an in-process client, on the test's rolled-back session."""
 
 import base64
 import uuid
@@ -258,3 +258,44 @@ async def test_an_agent_writes_compiles_reads_and_the_owner_restores(session, cl
         session, uuid.UUID(mid), uuid.UUID(mcp[-1]["id"])
     )  # the oldest: the template's files
     assert await text_files(mid) == template
+
+
+async def test_check_manuscript_lists_findings_and_is_read_only(session):
+    mid = (await created())["id"]
+    info = await section(mid)
+    result(await call("write_manuscript_file", manuscript_id=mid, path=info["path"], text="See \\cite{ghostkey}.\n",
+                      base=info["updated_at"]))
+    before = await section(mid)
+    report = result(await call("check_manuscript", manuscript_id=mid))
+    hit = next(f for f in report["findings"] if "ghostkey" in f["message"])
+    assert hit["check"] == "citations.missing_keys" and hit["file"] == info["path"] and hit["line"] == 1
+    assert hit["severity"] == "error" and hit["fix_hint"]
+    assert report["truncated"] == 0 and "citations.missing_keys" in report["ran"]
+    only = result(await call("check_manuscript", manuscript_id=mid, checks=["citations.missing_keys"]))
+    assert only["ran"] == ["citations.missing_keys"]
+    assert result(await call("check_manuscript", manuscript_id=mid, checks=[]))["ran"] == report["ran"]  # [] = all
+    assert not (session.new or session.dirty or session.deleted)  # nothing pending: it only read
+    assert await section(mid) == before  # same text version, nothing rewritten
+
+
+async def test_check_manuscript_errors():
+    mid = (await created())["id"]
+    error = failed(await call("check_manuscript", manuscript_id=mid, checks=["nope"]), "unknown_check")
+    assert "citations.missing_keys" in error["available"]
+    failed(await call("check_manuscript", manuscript_id=uuid.uuid4()), "unknown_manuscript")
+
+
+async def test_the_server_instructions_point_at_check_manuscript():
+    from mcp_server import server
+    assert "check_manuscript" in server.mcp.instructions
+
+
+async def test_findings_are_capped_with_a_truncated_count(session, monkeypatch):
+    from app.core import manuscript_agent_checks as agent
+    from app.core.manuscript_checks.base import Check, Finding
+    many = Check("x.many", "cheap", "d", lambda c: [Finding("x.many", "warning", "a.tex", i + 1, "m") for i in range(250)])
+    monkeypatch.setattr("app.core.manuscript_checks.service.REGISTRY", (many,))
+    mid = (await created())["id"]
+    report = result(await call("check_manuscript", manuscript_id=mid))
+    assert len(report["findings"]) == agent.MAX_FINDINGS == 200
+    assert report["truncated"] == 50 and report["counts"]["warning"] == 250

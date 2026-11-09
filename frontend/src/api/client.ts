@@ -1,5 +1,8 @@
 import type { components } from './schema'
 
+export type CheckFinding = components['schemas']['CheckFindingOut']
+export type CheckRunResult = components['schemas']['RunChecksOut']
+export type CheckInfo = components['schemas']['CheckInfoOut']
 export type Manuscript = components['schemas']['ManuscriptOut']
 export type ManuscriptDetail = components['schemas']['ManuscriptDetailOut']
 export type ManuscriptImport = components['schemas']['ManuscriptImportOut']
@@ -584,6 +587,9 @@ export const api = {
     request<void>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, { method: 'DELETE' }),
   manuscriptPapers: (id: string) => request<CitablePaper[]>(`/api/manuscripts/${id}/papers`),
   missingKeys: (id: string) => request<MissingKey[]>(`/api/manuscripts/${id}/missing-keys`),
+  listManuscriptChecks: (id: string) => request<CheckInfo[]>(`/api/manuscripts/${id}/checks`),
+  runChecks: (id: string, body: { names?: string[]; cost?: 'cheap' | 'full' }) =>
+    request<CheckRunResult>(`/api/manuscripts/${id}/checks/run`, sendJson('POST', body)),
   startReview: (id: string, body: ReviewStart) =>
     request<ReviewRun>(`/api/manuscripts/${id}/review`, sendJson('POST', body)),
   reviewState: (id: string, file: string) =>

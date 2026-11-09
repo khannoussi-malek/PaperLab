@@ -2168,6 +2168,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Checks */
+        get: operations["list_checks_api_manuscripts__manuscript_id__checks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/checks/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Checks */
+        post: operations["run_checks_api_manuscripts__manuscript_id__checks_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/section-review": {
         parameters: {
             query?: never;
@@ -3693,6 +3727,36 @@ export interface components {
             ][];
             /** From Abstract */
             from_abstract: boolean;
+        };
+        /** CheckFindingOut */
+        CheckFindingOut: {
+            /** Check */
+            check: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning" | "info";
+            /** File */
+            file: string | null;
+            /** Line */
+            line: number | null;
+            /** Message */
+            message: string;
+            /** Fix Hint */
+            fix_hint: string | null;
+        };
+        /** CheckInfoOut */
+        CheckInfoOut: {
+            /** Name */
+            name: string;
+            /**
+             * Cost
+             * @enum {string}
+             */
+            cost: "cheap" | "full";
+            /** Description */
+            description: string;
         };
         /** CheckItemOut */
         CheckItemOut: {
@@ -6284,6 +6348,27 @@ export interface components {
             position: number;
             /** Cells */
             cells: components["schemas"]["CellOut"][];
+        };
+        /**
+         * RunChecksIn
+         * @description `cost: "full"` means no cost filter (all checks); it exists so the body reads clearly.
+         */
+        RunChecksIn: {
+            /** Names */
+            names?: string[] | null;
+            /** Cost */
+            cost?: ("cheap" | "full") | null;
+        };
+        /** RunChecksOut */
+        RunChecksOut: {
+            /** Ran */
+            ran: string[];
+            /** Findings */
+            findings: components["schemas"]["CheckFindingOut"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
         };
         /** SaveSuggestion */
         SaveSuggestion: {
@@ -12219,6 +12304,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_checks_api_manuscripts__manuscript_id__checks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckInfoOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_checks_api_manuscripts__manuscript_id__checks_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunChecksIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunChecksOut"];
+                };
             };
             /** @description Validation Error */
             422: {
