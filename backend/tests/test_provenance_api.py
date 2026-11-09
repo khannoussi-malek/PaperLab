@@ -376,3 +376,13 @@ async def test_skipped_seed_shows_why_it_found_nothing(session):
     await _run(session, ws, minutes=2, stats=stats)
     node = _by_id(await provenance(session, ws.id))[str(seed.id)]
     assert node.zero_found_error == "not found in Semantic Scholar"
+
+
+async def test_node_carries_the_ai_reason_cut_to_160_chars(session):
+    ws, run, _, a, b, c = await _chain(session)
+    a.suggestion_note, b.suggestion_note = "fits the question", "x" * 200
+    await session.flush()
+    nodes = _by_id(await provenance(session, ws.id))
+    assert nodes[str(a.id)].reason == "fits the question"
+    assert nodes[str(b.id)].reason == "x" * 159 + "…"
+    assert nodes[str(c.id)].reason is None

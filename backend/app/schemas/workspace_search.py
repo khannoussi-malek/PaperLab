@@ -407,6 +407,7 @@ class ProvNode(BaseModel):
     decision: str | None = None
     suggestion: str | None = None
     relevance: int | None = None
+    reason: str | None = None  # the AI's one-line reason, cut to 160 characters
     paper_id: uuid.UUID | None = None
     branch: ProvBranch | None = None
     snowballed: list[str] = []  # directions already run from this node

@@ -5800,6 +5800,8 @@ export interface components {
             suggestion?: string | null;
             /** Relevance */
             relevance?: number | null;
+            /** Reason */
+            reason?: string | null;
             /** Paper Id */
             paper_id?: string | null;
             branch?: components["schemas"]["ProvBranch"] | null;
