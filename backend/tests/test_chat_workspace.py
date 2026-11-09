@@ -324,7 +324,12 @@ async def test_workspace_prepare_searches_only_the_likeliest_papers(session, emb
     run = uuid.uuid4().hex
     papers = [await make_paper(session, f"Paper {i}", [f"{run} p{i} {j}" for j in range(4)]) for i in range(3)]
     workspace = await make_workspace(session, papers)
-    embedder.vectors["search_query: Which one?"] = unit_vector(f"{run} p2 1")
+    # Near all of p2's chunks, nearest its chunk 1: aimed at one chunk only, p2's other random chunks sometimes ranked
+    # last and two random papers outscored it (about 1 run in 10).
+    weighted = [[3 * x for x in unit_vector(f"{run} p2 1")]] + [unit_vector(f"{run} p2 {j}") for j in (0, 2, 3)]
+    total = [sum(xs) for xs in zip(*weighted)]
+    norm = sum(x * x for x in total) ** 0.5
+    embedder.vectors["search_query: Which one?"] = [x / norm for x in total]
 
     prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "Which one?", embedder)
 
