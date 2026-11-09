@@ -76,7 +76,7 @@ export function WorkspacePapers({
         papers.isError ? (
           <LoadError message={papers.error.message} onRetry={() => void papers.refetch()} />
         ) : (
-          <TabSkeleton label="Loading papers" />
+          <TabSkeleton label="Loading papers" failureCount={papers.failureCount} />
         )
       ) : all?.length === 0 ? (
         <EmptyState title="No papers yet">Add them from your library, upload PDFs, or find one by DOI or title.</EmptyState>

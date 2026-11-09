@@ -68,7 +68,7 @@ export function WorkspaceNotes({ workspaceId }: { workspaceId: string }) {
   if (error) {
     return <LoadError message={error.message} onRetry={() => void Promise.all([notes.error && notes.refetch(), papers.error && papers.refetch()])} />
   }
-  if (!notes.data || !papers.data) return <TabSkeleton label="Loading notes" />
+  if (!notes.data || !papers.data) return <TabSkeleton label="Loading notes" failureCount={Math.max(notes.failureCount, papers.failureCount)} />
 
   const groups = notesByPaper(notes.data, papers.data)
   if (groups.length === 0) {

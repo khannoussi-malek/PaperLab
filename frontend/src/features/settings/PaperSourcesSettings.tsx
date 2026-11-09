@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { usePaperSources, useUpdatePaperSources, useUpdatePdfRecheck } from '@/api/queries'
 import { glass } from '@/components/glass'
-import { delayedIn } from '@/components/motion'
+import { LoadingState } from '@/components/LoadingState'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
@@ -130,7 +130,7 @@ export function PaperSourcesSettings() {
             </AlertAction>
           </Alert>
         ) : (
-          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
+          <LoadingState failureCount={sources.failureCount} />
         )
       ) : (
         <>
