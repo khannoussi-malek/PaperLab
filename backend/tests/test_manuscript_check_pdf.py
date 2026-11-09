@@ -60,6 +60,7 @@ def test_unreadable_pdf(tmp_path):
     found = pdf.PAGE_LIMIT.run(ctx(path=bad))
     assert [(f.severity, f.message) for f in found] == [("info", "The compiled PDF couldn't be read.")]
     assert pdf.UNRESOLVED.run(ctx(path=bad)) == []
+    assert pdf.OVERFULL.run(ctx(path=bad)) == []  # LOG holds boxes; an unreadable PDF still gives none
 
 
 def test_stale_pdf_adds_one_info(tmp_path):

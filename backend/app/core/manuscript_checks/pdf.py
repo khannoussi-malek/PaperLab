@@ -121,8 +121,17 @@ def _underfull_findings(boxes: list[pdf_log.Box]) -> list[Finding]:
     return shown
 
 
+def _opens(path: Path) -> bool:
+    try:
+        with pymupdf.open(path):
+            return True
+    except _UNREADABLE:
+        return False
+
+
 def _overfull(ctx: CheckContext) -> list[Finding]:
-    if _ready(ctx) is None or not ctx.manuscript.compile_log:
+    path = _ready(ctx)
+    if path is None or not ctx.manuscript.compile_log or not _opens(path):
         return []
     boxes = pdf_log.boxes(ctx.manuscript.compile_log)
     overfull = [b for b in boxes if b.kind == "overfull"]
