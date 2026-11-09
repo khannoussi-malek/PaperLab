@@ -68,3 +68,34 @@ test('clicking Navigate while on Navigate keeps nav in the URL', async () => {
   expect(location.hash).toContain('nav=root:r1,A')
   expect(screen.getByRole('navigation', { name: 'Snowball path' })).toBeTruthy()
 })
+
+const EMPTY = { truncated: false, roots: [], nodes: [], links: [], levels: [] } as never
+function setupEmpty(papers: unknown[]) {
+  history.replaceState(null, '', '#/workspaces/w1?tab=tree')
+  vi.spyOn(api, 'provenance').mockResolvedValue(EMPTY)
+  vi.spyOn(api, 'snowballNext').mockResolvedValue([])
+  vi.spyOn(api, 'listSearchRuns').mockResolvedValue([])
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue(papers as never)
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><SnowballTreeTab workspaceId="w1" /></QueryClientProvider>)
+}
+
+test('no runs, one library paper: Navigate lists it and Step in opens its card', async () => {
+  setupEmpty([{ id: 'p1', title: 'Solo paper', authors: [], year: null, venue: null, abstract: null, has_pdf: false, oa_url: null }])
+  expect(await screen.findByText('Papers in this workspace')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: /Step in/ }))
+  expect(await screen.findByText('Added by hand: no fit score')).toBeTruthy()
+})
+
+test('no runs and no papers: says nothing is here yet, with both links', async () => {
+  setupEmpty([])
+  expect(await screen.findByText(/Nothing here yet/)).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Papers tab' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Search & screen' })).toBeTruthy()
+})
+
+test('Tree view with no runs hints at Navigate and the button switches', async () => {
+  localStorage.setItem('snowball-tree-view:w1', 'tree')
+  setupEmpty([])
+  fireEvent.click(await screen.findByRole('button', { name: 'Switch to Navigate' }))
+  expect(await screen.findByText(/Nothing here yet/)).toBeTruthy()
+})

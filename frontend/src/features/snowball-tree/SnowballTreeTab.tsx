@@ -77,7 +77,17 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
 
   if (isPending) return <p className="text-sm text-muted-foreground">Loading the tree…</p>
   if (error || !data) return <p role="alert" className="text-sm text-destructive">Could not load the snowball tree.</p>
-  if (data.roots.length === 0 && !hasNav) return <p className="text-sm text-muted-foreground">Nothing to draw yet. Run a search first.</p>
+  if (data.roots.length === 0 && view !== 'navigate') {
+    return (
+      <div className="flex flex-col gap-3">
+        <ViewSwitch value={view} onChange={setView} />
+        <p className="text-sm text-muted-foreground">Nothing to draw yet. Run a search first.</p>
+        <p className="text-sm text-muted-foreground">
+          <Button type="button" size="sm" variant="outline" onClick={() => setView('navigate')}>Switch to Navigate</Button> to start from one of your papers.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
