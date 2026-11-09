@@ -45,11 +45,11 @@ test('the snowball navigator walks from a seed to a citing paper and asks the AI
   // 4. Fetch: the rows appear.
   await page.getByRole('button', { name: 'Find citing & cited papers' }).click()
   await page.getByRole('tab', { name: /^Papers citing it \(\d+\)$/ }).click()
-  const stepIn = page.getByRole('button', { name: `Step in to ${SECOND}` })
+  const stepIn = page.getByRole('button', { name: /^Step in/, description: SECOND })
   await expect(stepIn).toBeVisible({ timeout: 15_000 })
 
   // 5. Grab the Second Hop row.
-  await page.getByRole('button', { name: `Grab next papers for ${SECOND}` }).click()
+  await page.getByRole('button', { name: /Grab next papers/, description: SECOND }).click()
   await expect(page.getByText(/✓ grabbed/)).toBeVisible({ timeout: 30_000 })
 
   // 6. Step in: root, seed, Second Hop.
@@ -57,10 +57,11 @@ test('the snowball navigator walks from a seed to a citing paper and asks the AI
   await stepIn.click()
   await expect(crumbs).toHaveCount(before + 1)
   await expect(crumbs).toHaveCount(3)
+  await expect(crumbs.last()).toHaveAttribute('aria-current', /.+/)
 
   // 7. Ask the AI: the paper has no file, so it reads the abstract only.
   const panel = page.getByRole('complementary', { name: 'Ask the AI' })
-  await expect(panel.getByText('Reads: abstract only')).toBeVisible()
+  await expect(panel.getByText(/^Reads: .*\(abstract only\)$/)).toBeVisible()
   const answer = await ask(page, 'What is this paper about?', 30_000)
   await expect(answer.locator('.chat-answer-text')).not.toBeEmpty()
 
