@@ -177,7 +177,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
   }, [])
 
   async function saveAsNote() {
-    if (!promote) return
+    if (!promote || promoteNote.isPending) return
     const { outputId, draft } = promote
     try {
       const note = await promoteNote.mutateAsync({ output_id: outputId, body: draft.body, chunk_ids: draft.chunkIds })

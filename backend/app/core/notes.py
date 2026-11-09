@@ -408,7 +408,8 @@ async def promote_llm_fragment(
     The body must come from the answer, so text a person wrote can never be labelled as AI output.
     One anchor per spot the cited chunks cover (_chunk_anchors, shared with save_suggestion).
     """
-    output = await session.get(LLMOutput, output_id)
+    # Row lock: two requests for the same answer queue here, so the second sees the first's note below.
+    output = await session.get(LLMOutput, output_id, with_for_update=True)
     if output is None:
         raise NotFound(f"answer {output_id} not found")
     if output.kind == "check":
@@ -424,6 +425,16 @@ async def promote_llm_fragment(
     if not set(wanted) <= set(output.source_chunks):
         raise InvalidInput("a chunk is not a source of this answer")
     paper_ids, rows = await _chunk_anchors(session, wanted)
+
+    # Saving the same text twice (a double click, a re-selection) returns the note already made, not a copy.
+    same = select(Note).where(
+        Note.source_id == output.id, Note.source_block.is_(None), Note.provenance == Provenance.LLM, Note.body == text
+    )
+    existing = await session.scalar(same.limit(1))
+    if existing is not None:
+        await session.rollback()  # releases the row lock
+        await session.refresh(existing)
+        return (await _with_anchors(session, [existing]))[0]
 
     note = Note(body=text, provenance=Provenance.LLM, source_id=output.id)
     session.add(note)

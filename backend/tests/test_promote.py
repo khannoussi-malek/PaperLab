@@ -150,3 +150,15 @@ async def test_a_check_can_never_be_promoted(session):
 
     with pytest.raises(InvalidInput, match="^check_not_promotable$"):
         await notes.promote_llm_fragment(session, output.id, "relates every", [chunks[0].id])
+
+
+async def test_promoting_the_same_text_twice_keeps_one_note(session):
+    output, chunks = await make_answer(session)
+    output_id, chunk_id = output.id, chunks[1].id
+
+    first = await notes.promote_llm_fragment(session, output_id, "Layers stack [C2].", [chunk_id])
+    second = await notes.promote_llm_fragment(session, output_id, " Layers stack [C2]. ", [chunk_id])
+
+    assert second.id == first.id
+    assert len(first.anchors) == len(second.anchors)
+    assert len((await session.scalars(select(Note).where(Note.source_id == output_id))).all()) == 1
