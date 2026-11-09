@@ -92,3 +92,10 @@ test('Crossref switched off in Settings: its own text, no toast', async () => {
   expect((await screen.findByRole('alert')).textContent).toBe('Crossref is turned off in Settings → Paper sources.')
   await waitFor(() => expect(toast).not.toHaveBeenCalled())
 })
+
+test('findings and an unchecked count: the count still shows', async () => {
+  vi.spyOn(api, 'runDoiCheck').mockResolvedValue(done({ checked: 2, not_checked: 40, findings: [bad], counts: { error: 1, warning: 0, info: 0 } }))
+  show()
+  press()
+  expect(await screen.findByText('40 not checked (limit reached).')).toBeTruthy()
+})

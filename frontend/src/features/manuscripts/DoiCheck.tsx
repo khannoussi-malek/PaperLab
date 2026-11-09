@@ -50,6 +50,9 @@ export function DoiCheck({ manuscriptId, savedTick, onJump }: Props) {
           <ul className="space-y-0.5">
             {result.findings.map((x, i) => <FindingRow key={`${x.file}-${x.line}-${i}`} finding={x} onJump={onJump} />)}
           </ul>
+          {result.not_checked > 0 && result.findings.length > 0 && (
+            <p className="pt-1 text-xs text-muted-foreground">{`${result.not_checked} not checked (limit reached).`}</p>
+          )}
         </div>
       )}
     </div>
