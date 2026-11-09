@@ -48,6 +48,7 @@ export type NoteSource = components['schemas']['NoteSource']
 export type ChatAnswer = components['schemas']['ChatAnswer']
 export type SavedNote = components['schemas']['SavedNoteOut']
 // Prefixed: the DOM already has a global `ErrorEvent`.
+export type HitMetaEvent = components['schemas']['HitMetaEvent']
 export type ChatSourcesEvent = components['schemas']['SourcesEvent']
 export type ChatTokenEvent = components['schemas']['TokenEvent']
 export type ChatDoneEvent = components['schemas']['DoneEvent']

@@ -57,13 +57,15 @@ type Props = {
   /** Names a source's paper in pills and citations. Given on a workspace, whose answers cite several papers. */
   paperLabel?: (paperId: string) => string
   onCite: (source: ChatSource | NoteSource) => void
+  /** A hit chat's first event says whether it reads the full text or the abstract only. */
+  onSource?: (source: 'abstract' | 'full_text') => void
   /** Called with the new note once it is saved and listed. */
   onPromoted: (note: Note) => void
 }
 
 type Promote = { outputId: string; draft: PromoteDraft; style: CSSProperties }
 
-export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPromoted }: Props) {
+export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSource, onPromoted }: Props) {
   const history = useChatHistory(scope)
   const chatModels = useChatModels()
   const [pick, setPick] = useState<string | null>(null)
@@ -80,6 +82,10 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPr
     setFollowingId((current) => (current === parentId ? next : current)),
   )
   const [question, setQuestion] = useState('')
+  const streamSource = stream.source
+  useEffect(() => {
+    if (streamSource) onSource?.(streamSource)
+  }, [streamSource]) // eslint-disable-line react-hooks/exhaustive-deps -- fires on the event, not on a new callback
   const [promote, setPromote] = useState<Promote | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
   const promoteNote = usePromoteNote()

@@ -1,5 +1,5 @@
 import type { ChatScope } from '@/api/client'
-import { useEmbeddingStatus, useReindexPaper } from '@/api/queries'
+import { useEmbeddingStatus, useReindexPaper, useSearchHit } from '@/api/queries'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'
@@ -10,8 +10,10 @@ import { cn } from '@/lib/utils'
 import type { ChatProblem } from './refusals'
 
 export function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: ChatProblem; onRetry: () => void }) {
-  // Only a paper's `paper_not_indexed` refusal offers Re-index, so `scope` is a paper whenever that button shows.
-  const reindex = useReindexPaper(scope.id)
+  // Only a paper's `paper_not_indexed` refusal offers Re-index. A hit has a paper of its own once it has a file; none, no button.
+  const hit = useSearchHit(scope.kind === 'hit' ? scope.workspaceId : '', scope.kind === 'hit' ? scope.id : null).data
+  const paperId = scope.kind === 'hit' ? (hit?.paper_id ?? null) : scope.id
+  const reindex = useReindexPaper(paperId ?? '')
   const embedding = useEmbeddingStatus()
   // search_rebuilding (P1): the rebuild's line and bar while it runs, the status polling meanwhile. `undefined` while
   // the status loads counts as still running. Once it is done, say so and offer Retry.
@@ -32,7 +34,7 @@ export function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; pr
               Retry
             </Button>
           )}
-          {problem.reindex && !reindex.isSuccess && (
+          {problem.reindex && paperId !== null && !reindex.isSuccess && (
             <Button variant="outline" size="xs" disabled={reindex.isPending} onClick={() => reindex.mutate()}>
               Re-index
             </Button>

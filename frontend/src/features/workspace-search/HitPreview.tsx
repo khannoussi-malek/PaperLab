@@ -74,7 +74,7 @@ export function HitPreview({ hit, workspaceId, inTree, onReview, onAddPdf, addPd
     >
       <h2 className="font-heading text-lg leading-snug font-semibold wrap-anywhere">{title}</h2>
       {workspaceId && <WhyTrail workspaceId={workspaceId} hitId={hit.id} />}
-      {workspaceId && !inTree && <HitSnowball workspaceId={workspaceId} hitId={hit.id} />}
+      {workspaceId && !inTree && <HitSnowball key={hit.id} workspaceId={workspaceId} hitId={hit.id} />}
       {byline && <p className="text-sm text-muted-foreground">{byline}</p>}
       {hit.sources.length > 0 && (
         <p className="text-xs text-muted-foreground">Found via {hit.sources.map(sourceLabel).join(', ')}</p>

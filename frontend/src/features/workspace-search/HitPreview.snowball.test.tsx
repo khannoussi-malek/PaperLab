@@ -8,14 +8,17 @@ import { HitPreview } from './HitPreview'
 const hit = { id: 'h1', title: 'Paper', normalized_title: 'paper', sources: [], acquisition_status: 'imported' } as unknown as Hit
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
-function mount() {
+function mount(h: Hit = hit) {
   vi.spyOn(api, 'hitPaths').mockResolvedValue([])
   vi.spyOn(api, 'provenance').mockResolvedValue({ roots: [], nodes: [], links: [], levels: [], truncated: false } as never)
-  render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <HitPreview hit={hit} workspaceId="w1" onReview={() => {}} onAddPdf={() => {}} addPdfPending={false} onUpload={() => {}} uploadPending={false} />
-    </QueryClientProvider>,
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const ui = (x: Hit) => (
+    <QueryClientProvider client={client}>
+      <HitPreview hit={x} workspaceId="w1" onReview={() => {}} onAddPdf={() => {}} addPdfPending={false} onUpload={() => {}} uploadPending={false} />
+    </QueryClientProvider>
   )
+  const view = render(ui(h))
+  return (x: Hit) => view.rerender(ui(x))
 }
 
 test('Find citing & cited papers snowballs only this hit, both ways, and says what it found', async () => {
@@ -37,4 +40,13 @@ test('Navigate from here opens the Snowball tree on this hit', () => {
   history.replaceState(null, '', '#/workspaces/w1?tab=search')
   mount()
   expect(screen.getByRole('link', { name: 'Navigate from here' }).getAttribute('href')).toBe('#/workspaces/w1?tab=tree&navPaper=h1')
+})
+
+test('selecting another hit does not carry the first hit\'s snowball result over', async () => {
+  vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 3, skipped_seeds: [], errors: {} } as never)
+  const show = mount()
+  fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
+  expect(await screen.findByText('Found 3 new papers.')).toBeTruthy()
+  show({ ...hit, id: 'h2', title: 'Other' } as Hit)
+  expect(screen.queryByText('Found 3 new papers.')).toBeNull()
 })

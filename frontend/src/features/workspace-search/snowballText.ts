@@ -9,6 +9,8 @@ const REFUSED = /\bHTTP (429|401)\b|\b(429 Too Many Requests|401 Unauthorized)\b
 /** Plain words for a Semantic Scholar 429/401; anything else is shown as-is. */
 export const friendlySnowballError = (raw: string) => (REFUSED.test(raw) ? S2_REFUSED : raw)
 
+export const skippedSeedsText = (n: number) => `Skipped ${n} seed(s) with no Semantic Scholar match.`
+
 /** The Runs-list summary of a snowball run: counts over all seeds, and the first seed error if any. */
 export function snowballLine(s: SnowballStats): { counts: string; error: string | null } {
   const sum = (k: 'cites' | 'cited_by') => s.seeds.reduce((n, x) => n + x.found[k], 0)
