@@ -7147,6 +7147,14 @@ export interface components {
             /** Notes Total */
             notes_total: number | null;
         };
+        /** SuggestHitRequest */
+        SuggestHitRequest: {
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
+        };
         /** SuggestStart */
         SuggestStart: {
             /**
@@ -10236,7 +10244,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SuggestHitRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

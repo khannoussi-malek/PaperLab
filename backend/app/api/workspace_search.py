@@ -12,6 +12,7 @@ from app.core.prisma_export import prisma_export
 from app.core.queue import INGEST_QUEUE
 from app.core.screening import RANKED_LIMIT_MAX
 from app.schemas.workspace_search import (
+    SuggestHitRequest,
     AcceptSuggestions,
     AcceptSuggestionsOut,
     AcquisitionStatus,
@@ -202,8 +203,11 @@ async def get_hit_route(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: Ses
 
 
 @router.post("/hits/{hit_id}/suggest")
-async def suggest_hit(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep) -> HitOut:
-    return await hit_suggest.suggest_one(session, workspace_id, hit_id, allow_remote=False)
+async def suggest_hit(
+    workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep, payload: SuggestHitRequest | None = None
+) -> HitOut:
+    allow_remote = payload.confirm_remote if payload else False
+    return await hit_suggest.suggest_one(session, workspace_id, hit_id, allow_remote=allow_remote)
 
 
 @router.post("/hits/import")

@@ -447,3 +447,7 @@ class ProvenanceOut(BaseModel):
     roots: list[ProvRoot]
     levels: list[LevelStats]
     truncated: bool = False
+
+
+class SuggestHitRequest(BaseModel):
+    confirm_remote: bool = False  # the owner agreed to send the abstract to a remote default model

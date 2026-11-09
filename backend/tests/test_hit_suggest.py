@@ -2,10 +2,12 @@ import asyncio
 import json
 
 import pytest
+from sqlalchemy import update
 
 from app.core import hit_suggest
 from app.core.errors import Conflict, NotFound
 from app.core.screening_suggest import SCREENING_PROMPT_VERSION
+from app.models import LLMConnection, LLMModel
 from app.providers.llm import FakeLLM
 from tests.screening_pool import make_pool
 
@@ -84,3 +86,19 @@ async def test_suggest_one_timeout_keeps_old_suggestion(session, use_llm, monkey
         await hit_suggest.suggest_one(session, workspace.id, hit.id, allow_remote=False)
     await session.refresh(hit)
     assert hit.suggestion == "exclude"
+
+
+async def test_suggest_one_remote_needs_confirm(session, use_llm, client):
+    use_llm(OneReply())
+    await session.execute(update(LLMModel).values(is_default=False))
+    cloud = LLMConnection(kind="openai_compatible", label="Cloud", base_url="https://api.example.com/v1")
+    session.add(cloud)
+    await session.flush()
+    session.add(LLMModel(connection_id=cloud.id, name="big", is_default=True))
+    await session.flush()
+    workspace, hit = await _pool(session)
+    url = f"/api/workspaces/{workspace.id}/search/hits/{hit.id}/suggest"
+    refused = await client.post(url, json={"confirm_remote": False})
+    assert (refused.status_code, refused.json()["error"]["code"]) == (409, "remote_model_needs_confirm")
+    ok = await client.post(url, json={"confirm_remote": True})
+    assert (ok.status_code, ok.json()["suggestion"]) == (200, "include")
