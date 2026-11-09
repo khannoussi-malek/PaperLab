@@ -757,8 +757,9 @@ export const api = {
   prismaExport: (workspaceId: string, runs: string) =>
     request<PrismaExportOut>(`/api/workspaces/${workspaceId}/search/prisma?runs=${runs}`),
   readingContext: (paperId: string) => request<ReadingContextList>(`/api/papers/${paperId}/reading-context`),
+  /** `runId`: a single run id, or `'all'` for every run in the workspace (one row per paper). */
   readingQueue: (workspaceId: string, runId: string) =>
-    request<ReadingQueue>(`/api/workspaces/${workspaceId}/search/reading-queue?run=${runId}`),
+    request<ReadingQueue>(`/api/workspaces/${workspaceId}/search/reading-queue${runId === 'all' ? '' : `?run=${runId}`}`),
   screeningState: (workspaceId: string) => request<ScreeningState>(`/api/workspaces/${workspaceId}/search/screening`),
   /** Any subset of the criteria and settings. */
   saveScreening: (workspaceId: string, body: ScreeningUpdate) =>

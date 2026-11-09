@@ -8493,8 +8493,8 @@ export interface operations {
     };
     get_reading_queue_api_workspaces__workspace_id__search_reading_queue_get: {
         parameters: {
-            query: {
-                run: string;
+            query?: {
+                run?: string | null;
             };
             header?: never;
             path: {
