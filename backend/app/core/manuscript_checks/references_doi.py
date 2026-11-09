@@ -1,5 +1,6 @@
 """P01: does each .bib DOI exist at Crossref? Pure given an injected async lookup; never registered (S2P B2)."""
 
+import re
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -30,13 +31,24 @@ class DoiCheckResult:
     findings: list[Finding]
 
 
+LATEX_ESCAPE = re.compile(r"\\([_%&#])")  # doi = {10.1000/abc\_def}: the backslash is not part of the DOI
+
+
+def _doi(raw: str) -> str | None:
+    """The DOI in a .bib field, with LaTeX escapes and braces removed; None when it has no path segment to look up."""
+    doi = normalize_doi(re.sub(r"[{}]", "", LATEX_ESCAPE.sub(r"\1", raw)))
+    if doi and any(seg in (".", "..") for seg in doi.split("/")):  # httpx would resolve them to another endpoint
+        return None
+    return doi
+
+
 def doi_entries(files: Mapping[str, str]) -> list[DoiEntry]:
     # bib_entries reads only ctx.files
     ctx = CheckContext(files, frozenset(), ManuscriptInfo("", "", "never", None, None, None))
     return [
         DoiEntry(e.key, doi, path, e.line)
         for path, e in bib_entries(ctx)
-        if (doi := normalize_doi(e.fields.get("doi", "")))
+        if (doi := _doi(e.fields.get("doi", "")))
     ]
 
 

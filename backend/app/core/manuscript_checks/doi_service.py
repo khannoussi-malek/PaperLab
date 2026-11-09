@@ -23,6 +23,7 @@ async def run_doi_check(session: AsyncSession, mid: uuid.UUID) -> DoiCheckResult
     entries = doi_entries(ctx.files)
     if not entries:
         return DoiCheckResult(0, 0, [])
+    await session.rollback()  # the reads above began a transaction; nothing is written, so end it before the loop
     async with new_client(email=None) as http:  # DOIs only: no contact email, so the public (slower) Crossref pool
         return await check_dois(entries, lambda doi: crossref.get_work(http, doi),
                                 deadline=time.monotonic() + DEADLINE_SECONDS)

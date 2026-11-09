@@ -129,3 +129,35 @@ async def test_unknown_manuscript(session, monkeypatch, crossref_fake):
     wire(monkeypatch, crossref_fake)
     with pytest.raises(NotFound):
         await doi_service.run_doi_check(session, uuid.uuid4())
+
+
+def test_latex_escapes_in_a_doi_are_removed_before_the_lookup():
+    # Mendeley writes {\_} and other tools \_: both are the plain DOI, not a made-up one (a false error before)
+    bib = ("@incollection{a, doi={10.1007/978-3-030-58452-8{\\_}13}}\n"
+           "@article{b, doi={10.1000/abc\\_def}}\n@article{c, doi={10.1000/{abc}}}\n")
+    got = doi_entries(MappingProxyType({"r.bib": bib}))
+    assert [e.doi for e in got] == ["10.1007/978-3-030-58452-8_13", "10.1000/abc_def", "10.1000/abc"]
+
+
+def test_a_doi_with_dot_segments_is_not_sent_to_crossref():
+    # httpx would turn /works/10.1000/../../members into /members: such a DOI is never checked
+    got = doi_entries(MappingProxyType({"r.bib": "@article{a, doi={10.1000/../../members}}\n"}))
+    assert got == []
+
+
+@pytest.mark.anyio
+@pytest.mark.xdist_group("manuscript_rows")
+async def test_no_transaction_is_open_while_crossref_is_asked(session, monkeypatch, crossref_fake):
+    # The reads autobegin a transaction; holding it through a 60 s Crossref loop sits "idle in transaction"
+    _, _, m = await setup(session, "Deep learning")
+    await manuscripts.upsert_text(session, m.id, "refs.bib", "@article{a, doi={10.1000/abc}}\n")
+    crossref_fake.reply("/works/10.1000/abc", 200, json={"message": {"DOI": "10.1000/abc"}})
+    wire(monkeypatch, crossref_fake)
+    real, seen = doi_service.new_client, []
+
+    def spy(email):
+        seen.append(session.in_transaction())
+        return real(email)
+    monkeypatch.setattr(doi_service, "new_client", spy)
+    res = await doi_service.run_doi_check(session, m.id)
+    assert seen == [False] and res.checked == 1
