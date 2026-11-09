@@ -231,6 +231,7 @@ class HitPrepared:
     source: str
     paper_id: uuid.UUID | None  # read before _prepare commits, which expires the ORM objects
     prepared: chat.Prepared
+    parent_id: uuid.UUID | None  # the answer a follow-up follows; None when it starts a thread
 
 
 async def prepare_hit_answer(
@@ -240,7 +241,7 @@ async def prepare_hit_answer(
     if context.source == "abstract":
         prepared = hit_chat.prepare_abstract(context, payload.question, payload.parent_id)
         await session.commit()  # the stream can take minutes; don't hold a pooled connection
-        return HitPrepared("abstract", None, prepared)
+        return HitPrepared("abstract", None, prepared, payload.parent_id)
     paper_id = context.paper.id
     # An abstract answer's id (the hit gained full text mid-thread) isn't a paper answer: start a new thread.
     parent_id = payload.parent_id
@@ -248,7 +249,7 @@ async def prepare_hit_answer(
         parent_id = None
     thread = None if parent_id is None else await chat.load_thread(session, paper_id, parent_id)
     prepared = await _prepare(session, chat.Scope(paper_id=paper_id), payload.question, thread)
-    return HitPrepared("full_text", paper_id, prepared)
+    return HitPrepared("full_text", paper_id, prepared, parent_id)
 
 
 HitPreparedDep = Annotated[HitPrepared, Depends(prepare_hit_answer)]
@@ -263,12 +264,11 @@ async def ask_hit(
     yield ServerSentEvent(event="meta", data=HitMetaEvent(source=ready.source))
     if ready.paper_id is not None:
         scope = chat.Scope(paper_id=ready.paper_id)
-        parent_id = None if payload.parent_id in {a.id for a in hit_chat.HISTORY.get(hit_id, [])} else payload.parent_id
-        events = answer_events(scope, payload.question, ready.prepared, llm, parent_id)
+        events = answer_events(scope, payload.question, ready.prepared, llm, ready.parent_id)
     else:
 
         async def save(_: AsyncSession, content: str) -> uuid.UUID:
-            return hit_chat.remember(hit_id, payload.question, content, llm.model, llm.connection_name, payload.parent_id)
+            return hit_chat.remember(hit_id, payload.question, content, llm.model, llm.connection_name, ready.parent_id)
 
         events = stream_output(ready.prepared, llm, save, "answer", "hit chat answer", hit_id)
     async for event in events:

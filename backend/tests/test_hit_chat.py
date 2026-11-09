@@ -11,6 +11,13 @@ from tests.screening_pool import make_pool
 pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("local_default_model")]
 
 
+@pytest.fixture(autouse=True)
+def clean_history():
+    hit_chat.HISTORY.clear()
+    yield
+    hit_chat.HISTORY.clear()
+
+
 def url(workspace, hit):
     return f"/api/workspaces/{workspace.id}/search/hits/{hit.id}/chat"
 
@@ -25,12 +32,13 @@ async def test_hit_chat_abstract_only_marks_source(client, session, fake_llm):
     assert response.status_code == 200
     assert events[0] == ("meta", {"source": "abstract"})
     assert events[-1][0] == "done"
+    assert events[1][0] == "sources" and events[1][1]["whole_paper"] is False
     assert "".join(d["text"] for n, d in events if n == "token") == FAKE_ANSWER
     system, prompt = fake_llm.calls[0]
     assert "[abstract]" in system and "page" in system.lower()
     assert "Sleep helps memory." in prompt and "paper 0" in prompt
     [answer] = (await client.get(url(workspace, hit))).json()
-    assert (answer["question"], answer["content"]) == ("What helps memory?", FAKE_ANSWER)
+    assert (answer["question"], answer["content"], answer["whole_paper"]) == ("What helps memory?", FAKE_ANSWER, False)
     assert hit_chat.HISTORY.pop(hit.id)
 
 
@@ -82,7 +90,6 @@ async def test_abstract_follow_up_carries_the_earlier_question(client, session, 
     assert "abstract only" in fake_llm.calls[0][0] and "abstract only" not in system
     bad = await client.post(url(workspace, hit), json={"question": "x", "parent_id": str(uuid.uuid4())})
     assert (bad.status_code, bad.json()) == (404, {"detail": "parent_not_found"})
-    hit_chat.HISTORY.pop(hit.id)
 
 
 async def test_history_is_capped_per_hit_and_in_hits():
@@ -94,7 +101,6 @@ async def test_history_is_capped_per_hit_and_in_hits():
     for _ in range(hit_chat.MAX_HITS):
         hit_chat.remember(uuid.uuid4(), "q", "a", "m", "c", None)
     assert hit_id not in hit_chat.HISTORY and len(hit_chat.HISTORY) == hit_chat.MAX_HITS
-    hit_chat.HISTORY.clear()
 
 
 async def test_abstract_parent_is_ignored_once_the_hit_has_full_text(client, session, fake_llm):
@@ -111,7 +117,6 @@ async def test_abstract_parent_is_ignored_once_the_hit_has_full_text(client, ses
 
     assert response.status_code == 200
     assert parse_sse(response.text)[0] == ("meta", {"source": "full_text"})
-    hit_chat.HISTORY.clear()
 
 
 async def test_hit_chat_without_a_default_model_is_409(client, session):

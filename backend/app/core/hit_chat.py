@@ -86,7 +86,7 @@ def prepare_abstract(context: HitContext, question: str, parent_id: uuid.UUID | 
         earlier=_earlier_block(thread) if thread else "", question=question,
     )
     system = SYSTEM_PROMPT + ("" if thread else FIRST_ANSWER_NOTE)
-    return chat.Prepared(sources=[], system=system, prompt=prompt, whole_paper=True, prompt_version=HIT_PROMPT_VERSION)
+    return chat.Prepared(sources=[], system=system, prompt=prompt, whole_paper=False, prompt_version=HIT_PROMPT_VERSION)
 
 
 def remember(
@@ -94,7 +94,7 @@ def remember(
 ) -> uuid.UUID:
     answer = ChatAnswer(
         id=uuid.uuid4(), question=question, content=content, model=model, connection_name=connection_name,
-        prompt_version=HIT_PROMPT_VERSION, created_at=datetime.now(timezone.utc), whole_paper=True, sources=[],
+        prompt_version=HIT_PROMPT_VERSION, created_at=datetime.now(timezone.utc), whole_paper=False, sources=[],
         notes=[], notes_used=None, notes_total=None, parent_id=parent_id, saved_notes=[],
     )
     answers = HISTORY.setdefault(hit_id, [])
