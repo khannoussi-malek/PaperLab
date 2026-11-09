@@ -293,7 +293,8 @@ async def test_the_server_instructions_point_at_check_manuscript():
 async def test_findings_are_capped_with_a_truncated_count(session, monkeypatch):
     from app.core import manuscript_agent_checks as agent
     from app.core.manuscript_checks.base import Check, Finding
-    many = Check("x.many", "cheap", "d", lambda c: [Finding("x.many", "warning", "a.tex", i + 1, "m") for i in range(250)])
+    many = Check("x.many", "cheap", "d",
+                 lambda c: [Finding("x.many", "warning", "a.tex", i + 1, "m") for i in range(250)])
     monkeypatch.setattr("app.core.manuscript_checks.service.REGISTRY", (many,))
     mid = (await created())["id"]
     report = result(await call("check_manuscript", manuscript_id=mid))

@@ -62,7 +62,8 @@ def _stubs(ctx: CheckContext) -> list[Finding]:
         if m := _missing(e):  # a real stub: warning
             found.append(Finding("references.stub_entry", "warning", path, e.line,
                                  f"Entry {e.key} is missing: {', '.join(m)}.",
-                                 "Fill the missing fields, or replace the entry with one added from your library (it has full metadata)."))
+                                 "Fill the missing fields, or replace the entry with one added from your library "
+                                 "(it has full metadata)."))
         if _lacks_identifier(e):  # common in real .bib files, so info only (never in the badge)
             found.append(Finding("references.stub_entry", "info", path, e.line, f"Entry {e.key} has no DOI or URL.",
                                  "Add the DOI or URL so readers (and Check DOIs online) can find it."))
@@ -106,13 +107,16 @@ def _zero_cite(ctx: CheckContext) -> list[Finding]:
             found.append(Finding(
                 "references.zero_cite_section", "warning", path, text.count("\n", 0, h.start()) + 1,
                 f'Section "{title}" cites nothing.',
-                "Related work and introductions normally cite the work they build on; add citations or confirm this is intended."))
+                "Related work and introductions normally cite the work they build on; "
+                "add citations or confirm this is intended."))
     return found
 
 
 CHECKS = (
     Check("references.duplicate_key", "cheap", "Bib keys defined more than once", _duplicates),
-    Check("references.stub_entry", "cheap", "Bib entries missing title, author, year or venue (and a DOI or URL, as info)", _stubs),
+    Check("references.stub_entry", "cheap",
+          "Bib entries missing title, author, year or venue (and a DOI or URL, as info)", _stubs),
     Check("references.unused_entry", "cheap", "Bib entries that no .tex file cites", _unused),
-    Check("references.zero_cite_section", "cheap", "Introduction and related-work sections that cite nothing", _zero_cite),
+    Check("references.zero_cite_section", "cheap",
+          "Introduction and related-work sections that cite nothing", _zero_cite),
 )

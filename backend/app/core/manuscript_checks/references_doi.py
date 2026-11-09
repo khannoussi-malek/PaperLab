@@ -31,7 +31,8 @@ class DoiCheckResult:
 
 
 def doi_entries(files: Mapping[str, str]) -> list[DoiEntry]:
-    ctx = CheckContext(files, frozenset(), ManuscriptInfo("", "", "never", None, None, None))  # bib_entries reads only ctx.files
+    # bib_entries reads only ctx.files
+    ctx = CheckContext(files, frozenset(), ManuscriptInfo("", "", "never", None, None, None))
     return [
         DoiEntry(e.key, doi, path, e.line)
         for path, e in bib_entries(ctx)
@@ -61,7 +62,8 @@ async def check_dois(
         if e.doi not in answers or answers[e.doi] is True:
             continue
         if answers[e.doi] is False:
-            findings.append(Finding(NAME, "error", e.file, e.line, f"DOI {e.doi} (entry {e.key}) was not found at Crossref.",
+            findings.append(Finding(NAME, "error", e.file, e.line,
+                                    f"DOI {e.doi} (entry {e.key}) was not found at Crossref.",
                                     "Check the DOI for typos, or replace the entry with one from your library. "
                                     "A made-up reference often shows up this way."))
         else:

@@ -138,5 +138,6 @@ def test_a_p_value_in_the_next_sentence_does_not_excuse_significant():
 
 
 def test_proofs_headings_and_captions_are_not_scanned():
-    text = "\\begin{proof}\nThis proves it is robust.\n\\end{proof}\n\\caption{A robust model.}\n\\section{A robust method}\n"
+    text = ("\\begin{proof}\nThis proves it is robust.\n\\end{proof}\n\\caption{A robust model.}\n"
+            "\\section{A robust method}\n")
     assert run("wording.overclaim", text) == []

@@ -94,7 +94,8 @@ async def test_service_sends_only_dois_and_reports(session, monkeypatch, crossre
     crossref_fake.reply("/works/10.1000/gone", 404)
     wire(monkeypatch, crossref_fake)
     res = await doi_service.run_doi_check(session, m.id)
-    assert (res.checked, [f.message for f in res.findings]) == (2, ["DOI 10.1000/gone (entry d) was not found at Crossref."])
+    assert (res.checked, [f.message for f in res.findings]) == (
+        2, ["DOI 10.1000/gone (entry d) was not found at Crossref."])
     for r in crossref_fake.requests:
         assert r.url.path.startswith("/works/") and not r.url.params and r.content == b""
 

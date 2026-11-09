@@ -57,5 +57,7 @@ async def test_errors(client, session):
     assert (await client.post(url, json={"names": []})).status_code == 422
     assert (await client.post(url, json={"cost": "huge"})).status_code == 422
     ghost = uuid.uuid4()
-    for r in (await client.post(f"/api/manuscripts/{ghost}/checks/run", json={}), await client.get(f"/api/manuscripts/{ghost}/checks")):
+    responses = (await client.post(f"/api/manuscripts/{ghost}/checks/run", json={}),
+                 await client.get(f"/api/manuscripts/{ghost}/checks"))
+    for r in responses:
         assert r.status_code == 404 and r.json()["detail"] == "unknown_manuscript"

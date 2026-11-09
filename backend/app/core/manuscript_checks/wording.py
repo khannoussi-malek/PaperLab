@@ -30,7 +30,10 @@ def load_rules() -> dict[str, tuple[Rule, ...]]:
     data = tomllib.loads(LISTS.read_text(encoding="utf-8"))
     return {
         "ai_phrase": tuple(
-            Rule(e["id"], re.compile(e["pattern"], re.I), e["why"], e.get("severity", "warning"), e.get("hint", DEFAULT_HINT))
+            Rule(
+                e["id"], re.compile(e["pattern"], re.I), e["why"],
+                e.get("severity", "warning"), e.get("hint", DEFAULT_HINT),
+            )
             for e in data["ai_phrase"]
         ),
         "overclaim": tuple(

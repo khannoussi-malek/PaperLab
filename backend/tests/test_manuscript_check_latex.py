@@ -43,7 +43,8 @@ def test_placeholder_lookalikes_are_silent():
 
 
 def test_numbered_headings():
-    found = run("latex.numbered_heading", "\\section{1. Introduction}\n\\subsection{2.1 Setup}\n\\subsection{3) Results}\n"
+    found = run("latex.numbered_heading",
+                "\\section{1. Introduction}\n\\subsection{2.1 Setup}\n\\subsection{3) Results}\n"
                 "\\section{2 Method}\n")
     assert [f.line for f in found] == [1, 2, 3, 4]
     assert found[0].message == 'Heading "1. Introduction" starts with a number; LaTeX numbers headings itself.'
@@ -72,7 +73,8 @@ def test_typography_characters_are_listed_once_per_line():
     [f] = run("latex.non_ascii", "He said \u201chi\u201d \u2013 then left.\n")
     assert (f.line, f.severity) == (1, "warning")
     assert f.message == "Non-ASCII characters outside math: \u201c \u201d \u2013 (U+201C, U+201D, U+2013)."
-    assert f.fix_hint == ("Replace with the LaTeX form (\u201c -> ``; \u201d -> ''; \u2013 -> --) or put it in math mode. "
+    assert f.fix_hint == ("Replace with the LaTeX form (\u201c -> ``; \u201d -> ''; \u2013 -> --) "
+                          "or put it in math mode. "
                           "Tectonic reads UTF-8, so this only breaks the PDF if the font lacks the glyph.")
 
 
@@ -88,14 +90,16 @@ def test_accents_math_comments_and_verbatim_are_silent():
     assert run("latex.non_ascii", text) == []
 
 
-EQ = "\\begin{equation}\ny = \\alpha x + \\beta + \\pi + \\sigma(x) + \\Theta(n)\n\\end{equation}\nHere $\\alpha$ is the slope.\n"
+EQ = ("\\begin{equation}\ny = \\alpha x + \\beta + \\pi + \\sigma(x) + \\Theta(n)\n\\end{equation}\n"
+      "Here $\\alpha$ is the slope.\n")
 
 
 def test_undefined_symbol_flagged_at_its_first_display_use():
     [f] = run("latex.notation_undefined", EQ)
     assert (f.file, f.line, f.severity) == ("main.tex", 2, "warning")
     assert f.message == "\\beta appears in an equation but is never introduced in running text or a table."
-    assert f.fix_hint == 'Say what it stands for where it first appears ("where \\beta is ...") or add a notation table.'
+    assert f.fix_hint == ('Say what it stands for where it first appears ("where \\beta is ...") '
+                          'or add a notation table.')
 
 
 def test_a_row_break_with_a_length_is_not_a_display_start():
@@ -149,4 +153,6 @@ def test_tables_that_fit_or_are_wrapped_are_silent():
     assert run("latex.table_width", wide("l@{\\hspace{1em}}ccc")) == []
     assert run("latex.table_width", wide("lp{3cm}p{3cm}p{3cm}")) == []
     assert run("latex.table_width", "\\begin{tabular}{lcccccccc}\na\\\\\n\\end{tabular}\n") == []
-    assert run("latex.table_width", "\\begin{table}\n\\begin{tabularx}{\\textwidth}{XXXXXXXXX}\na\\\\\n\\end{tabularx}\n\\end{table}\n") == []
+    assert run("latex.table_width",
+               "\\begin{table}\n\\begin{tabularx}{\\textwidth}{XXXXXXXXX}\na\\\\\n\\end{tabularx}\n"
+               "\\end{table}\n") == []

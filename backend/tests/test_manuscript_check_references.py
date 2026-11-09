@@ -37,7 +37,8 @@ def test_parse_bib_reads_bare_numbers_quotes_nesting_and_an_indented_close():
 
 
 def test_duplicate_keys_within_and_across_files_ignoring_case():
-    files = {"a.bib": "@article{Smith20, title={T}}\n@article{smith20, title={U}}\n", "b.bib": "@misc{SMITH20, title={V}}\n"}
+    files = {"a.bib": "@article{Smith20, title={T}}\n@article{smith20, title={U}}\n",
+             "b.bib": "@misc{SMITH20, title={V}}\n"}
     found = run("references.duplicate_key", files)
     assert [(f.file, f.line, f.severity) for f in found] == [("a.bib", 2, "warning"), ("b.bib", 1, "warning")]
     assert found[0].message == "Key smith20 is defined twice (first at a.bib:1); BibTeX uses the first."
@@ -54,8 +55,10 @@ def test_stub_entry_lists_what_is_missing():
     [f, g] = run("references.stub_entry", {"r.bib": "@misc{k, title={Only a title}}\n"})
     assert (f.file, f.line, f.severity) == ("r.bib", 1, "warning")
     assert f.message == "Entry k is missing: author, year."
-    assert f.fix_hint == "Fill the missing fields, or replace the entry with one added from your library (it has full metadata)."
-    assert (g.severity, g.message) == ("info", "Entry k has no DOI or URL.")  # never a warning: it must not feed the badge
+    assert f.fix_hint == ("Fill the missing fields, or replace the entry with one added from your library "
+                          "(it has full metadata).")
+    # never a warning: it must not feed the badge
+    assert (g.severity, g.message) == ("info", "Entry k has no DOI or URL.")
     assert g.fix_hint == "Add the DOI or URL so readers (and Check DOIs online) can find it."
     [h] = run("references.stub_entry", {"r.bib": "@article{a, author={A}, year={2020}, journal={J}, doi={10.1/x}}\n"})
     assert h.message == "Entry a is missing: title."

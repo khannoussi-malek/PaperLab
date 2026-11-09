@@ -27,7 +27,8 @@ def wire_fake(monkeypatch, enabled=True):
     fake = FakeProvider()
     fake.reply("/works/10.1000/abc", 200, json={"message": {"DOI": "10.1000/abc"}})
     fake.reply("/works/10.1000/gone", 404)
-    monkeypatch.setattr(doi_service, "new_client", lambda email: crossref.new_client(email=email, transport=fake.transport))
+    monkeypatch.setattr(doi_service, "new_client",
+                        lambda email: crossref.new_client(email=email, transport=fake.transport))
 
     async def get(_session):
         return SimpleNamespace(enabled={"crossref": enabled}, contact_email="me@x.org")

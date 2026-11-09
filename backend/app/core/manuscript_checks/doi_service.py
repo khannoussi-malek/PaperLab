@@ -1,4 +1,5 @@
-"""Glue for "Check DOIs online": read the manuscript, ask Crossref about each .bib DOI (S2P B2). Only the DOIs go out."""
+"""Glue for "Check DOIs online": read the manuscript, ask Crossref about each .bib DOI (S2P B2).
+Only the DOIs go out."""
 
 import time
 import uuid

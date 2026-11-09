@@ -24,11 +24,16 @@ class CheckRun:
     counts: dict[str, int]
 
 
-def select(names: list[str] | None = None, cost: Cost | None = None, registry: tuple[Check, ...] = REGISTRY) -> list[Check]:
+def select(
+    names: list[str] | None = None,
+    cost: Cost | None = None,
+    registry: tuple[Check, ...] = REGISTRY,
+) -> list[Check]:
     known = {c.name for c in registry}
     unknown = sorted(set(names or []) - known)
     if unknown:
-        raise InvalidInput("unknown_check", unknown=unknown, available=[c.name for c in registry])  # DomainError(message, **details)
+        # DomainError(message, **details)
+        raise InvalidInput("unknown_check", unknown=unknown, available=[c.name for c in registry])
     return [c for c in registry if (names is None or c.name in names) and (cost in (None, "full") or c.cost == cost)]
 
 

@@ -51,7 +51,8 @@ MD_BOLD = re.compile(r"\*\*([^*\n]+?)\*\*")
 
 def _markdown(_blanked: str, text: str):
     for m in MD_HEADING.finditer(text):
-        yield ("error", m.start(), f'Markdown heading "{m.group().strip()}" left in the source; LaTeX stops on a bare #.',
+        yield ("error", m.start(),
+               f'Markdown heading "{m.group().strip()}" left in the source; LaTeX stops on a bare #.',
                "Use \\section{...} or \\subsection{...}.")
     for m in MD_BOLD.finditer(text):
         yield ("warning", m.start(), f'Markdown bold "{m.group()}" left in the source.',
@@ -62,7 +63,8 @@ def _markdown(_blanked: str, text: str):
 
 
 PLACEHOLDER = re.compile(
-    r"\[\s*(?i:TBD|TODO|citation needed|cite)\s*\]|\bTODO\b|\bFIXME\b|\bTBD\b|\bXXX\b|\bX{2,}\.X+\b|(?<!\\)\?\?|\\todo\b"
+    r"\[\s*(?i:TBD|TODO|citation needed|cite)\s*\]|\bTODO\b|\bFIXME\b|\bTBD\b|\bXXX\b|\bX{2,}\.X+\b|"
+    r"(?<!\\)\?\?|\\todo\b"
 )
 
 
@@ -73,13 +75,16 @@ def _placeholder(_blanked: str, text: str):
 
 
 NUMBERED = re.compile(
-    r"\\(?:sub)*section\s*(?:\[[^\]]*\])?\s*\{\s*(\d{1,2}(?:\.\d{1,2})*[.)]?\s+[A-Za-z][^}]*)\}"  # \d{1,2} per part keeps 802.11 and 2023 silent; known noisy: `5 Whys`, `10.5 Hz sensing`. No \*? : starred headings are unnumbered, so a number there is the author's
+    # \d{1,2} per part keeps 802.11 and 2023 silent; known noisy: `5 Whys`, `10.5 Hz sensing`.
+    # No \*? : starred headings are unnumbered, so a number there is the author's
+    r"\\(?:sub)*section\s*(?:\[[^\]]*\])?\s*\{\s*(\d{1,2}(?:\.\d{1,2})*[.)]?\s+[A-Za-z][^}]*)\}"
 )
 
 
 def _numbered(blanked: str, _text: str):
     for m in NUMBERED.finditer(blanked):
-        yield ("warning", m.start(), f'Heading "{m.group(1).strip()}" starts with a number; LaTeX numbers headings itself.',
+        yield ("warning", m.start(),
+               f'Heading "{m.group(1).strip()}" starts with a number; LaTeX numbers headings itself.',
                "Delete the number from the heading.")
 
 
@@ -128,7 +133,8 @@ def _non_ascii(_blanked: str, text: str):
 
 
 
-GREEK = ("alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi rho varrho sigma "
+GREEK = ("alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi rho varrho "
+         "sigma "
          "varsigma tau upsilon phi varphi chi psi omega Gamma Theta Lambda Xi Sigma Upsilon Phi Psi Omega").split()
 FUNCTION_LIKE = {"sigma", "Gamma", "Theta", "Omega"}  # \sigma(x), \Theta(n): a function or big-O, not a symbol
 SYMBOL = re.compile(r"\\(" + "|".join(sorted(GREEK, key=len, reverse=True)) + r")(?![A-Za-z])")
@@ -180,7 +186,10 @@ def _adjacent(blanked: str, _text: str):
 TABLE_WIDE_COLUMNS = 8  # calibration knob: a tabular this wide with no wrapper is worth a look
 FLOAT_TABLE = re.compile(r"\\begin\{(table\*?)\}(.*?)\\end\{\1\}", re.S)
 TABULAR = re.compile(r"\\begin\{tabular\}\s*(?:\[[^\]]*\])?\s*\{((?:[^{}]|\{[^{}]*\})*)\}")
-FITS = re.compile(r"\\(?:resizebox|adjustbox|scalebox|small|footnotesize|scriptsize|tiny|tabcolsep)\b|\\begin\{adjustbox\}")
+FITS = re.compile(
+    r"\\(?:resizebox|adjustbox|scalebox|small|footnotesize|scriptsize|tiny|tabcolsep)\b"
+    r"|\\begin\{adjustbox\}"
+)
 
 
 def _columns(spec: str) -> int:
@@ -203,12 +212,19 @@ def _table_width(blanked: str, _text: str):
 
 
 CHECKS = (
-    Check("latex.markdown_leak", "cheap", "Markdown headings, bold and fences left in the source", per_file("latex.markdown_leak", _markdown)),
-    Check("latex.placeholder", "cheap", "TODO, XX.X, [TBD] and ?? left in the source", per_file("latex.placeholder", _placeholder)),
-    Check("latex.numbered_heading", "cheap", "Section headings that start with a number", per_file("latex.numbered_heading", _numbered)),
-    Check("latex.stray_preamble", "cheap", "A second \\documentclass or document start in a body file", _stray_preamble),
-    Check("latex.non_ascii", "cheap", "Typographic and symbol characters outside math", per_file("latex.non_ascii", _non_ascii)),
+    Check("latex.markdown_leak", "cheap", "Markdown headings, bold and fences left in the source",
+          per_file("latex.markdown_leak", _markdown)),
+    Check("latex.placeholder", "cheap", "TODO, XX.X, [TBD] and ?? left in the source",
+          per_file("latex.placeholder", _placeholder)),
+    Check("latex.numbered_heading", "cheap", "Section headings that start with a number",
+          per_file("latex.numbered_heading", _numbered)),
+    Check("latex.stray_preamble", "cheap", "A second \\documentclass or document start in a body file",
+          _stray_preamble),
+    Check("latex.non_ascii", "cheap", "Typographic and symbol characters outside math",
+          per_file("latex.non_ascii", _non_ascii)),
     Check("latex.notation_undefined", "cheap", "Greek symbols used in equations but never introduced", _notation),
-    Check("latex.adjacent_cites", "cheap", "Back-to-back cite commands that could be one", per_file("latex.adjacent_cites", _adjacent)),
-    Check("latex.table_width", "cheap", "Wide tables with no width wrapper", per_file("latex.table_width", _table_width)),
+    Check("latex.adjacent_cites", "cheap", "Back-to-back cite commands that could be one",
+          per_file("latex.adjacent_cites", _adjacent)),
+    Check("latex.table_width", "cheap", "Wide tables with no width wrapper",
+          per_file("latex.table_width", _table_width)),
 )
