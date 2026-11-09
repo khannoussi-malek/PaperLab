@@ -34,6 +34,7 @@ from app.api import (
 )
 from app.api import citations as citations_api
 from app.api import evidence_cards as evidence_cards_api
+from app.api import manuscript_checks as manuscript_checks_api
 from app.api import manuscript_diagrams as manuscript_diagrams_api
 from app.api import manuscript_review as manuscript_review_api
 from app.api import manuscript_section_review as manuscript_section_review_api
@@ -124,6 +125,7 @@ def create_app() -> FastAPI:
     app.include_router(evidence_cards_api.router)
     app.include_router(manuscripts_api.router)
     app.include_router(manuscript_review_api.router)
+    app.include_router(manuscript_checks_api.router)
     app.include_router(manuscript_section_review_api.router)
     app.include_router(manuscript_diagrams_api.router)
     app.include_router(datasets.router)
