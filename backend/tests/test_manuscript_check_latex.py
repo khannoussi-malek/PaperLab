@@ -60,7 +60,7 @@ def test_headings_that_only_look_numbered_are_silent():
 
 
 def test_stray_preamble_in_a_non_main_file_only():
-    files = {"main.tex": "\\documentclass{article}\n\\begin{document}x\\end{document}\n",
+    files = {"main.tex": "\\documentclass{article}\n\\begin{document}\\input{sections/a}\\end{document}\n",
              "sections/a.tex": "\\documentclass{article}\nText.\n",
              "sections/code.tex": "\\begin{lstlisting}\n\\documentclass{article}\n\\end{lstlisting}\n",
              "refs.bib": "@misc{a, title={\\documentclass}}"}
@@ -165,3 +165,54 @@ def test_non_ascii_scan_is_linear_on_a_long_clean_text():
     start = time.perf_counter()
     assert run("latex.non_ascii", "\n".join([line[:1500]] * 390)) == []
     assert time.perf_counter() - start < 0.1
+
+
+def test_stray_preamble_only_in_files_an_input_pulls_in():
+    files = {"main.tex": "\\documentclass{article}\n\\begin{document}\n\\input{sections/a}\n\\end{document}\n",
+             "supplement.tex": "\\documentclass{article}\n\\begin{document}\nS\n\\end{document}\n",
+             "chapters/bg.tex": "\\documentclass[../main.tex]{subfiles}\n\\begin{document}\nB\n\\end{document}\n",
+             "sections/a.tex": "\\documentclass{article}\nText.\n"}
+    [f] = run("latex.stray_preamble", files)
+    assert f.file == "sections/a.tex"
+
+
+def test_todo_definitions_are_silent_and_uses_are_flagged():
+    files = {"main.tex": "\\newcommand{\\todo}[1]{}  % disabled for submission\n"
+                         "\\newcommand{\\TODO}[1]{\\textcolor{red}{#1}}\nSee \\todo{fix}.\n",
+             "macros.tex": "\\newcommand{\\todo}[1]{\\textcolor{red}{TODO: #1}}\n"}
+    assert [(f.file, f.line) for f in run("latex.placeholder", files)] == [("main.tex", 3)]
+
+
+def test_a_row_break_does_not_hide_the_prose_after_it():
+    text = "\\begin{tabular}{cc}\na & b \\\\[2pt]\n\\end{tabular}\nTODO here.\n\\[ x \\]\n"
+    [f] = run("latex.placeholder", text)
+    assert f.line == 4
+
+
+def test_a_display_after_a_row_break_is_still_read_for_notation():
+    [f] = run("latex.notation_undefined", "a & b \\\\[2pt]\n\\[ \\delta > 0 \\]\n")
+    assert (f.line, f.message.split()[0]) == (2, "\\delta")
+
+
+def test_repeated_column_specs_count_each_column():
+    [f] = run("latex.table_width", wide("l*{9}{c}"))
+    assert f.message == "A table with 10 columns may run past the margin."
+    assert run("latex.table_width", wide("l*{3}{p{1cm}}")) == []
+    [g] = run("latex.table_width", wide("*{999999999}{c}"))  # the repeat count is capped, so this stays fast
+    assert g.message == "A table with 50 columns may run past the margin."
+
+
+def test_adjacent_cites_across_a_paragraph_break_are_silent():
+    assert run("latex.adjacent_cites", "A \\citep{a}\n\n\\citep{b}.\n") == []
+    assert [f.line for f in run("latex.adjacent_cites", "A \\citep{a}\n\\citep{b}.\n")] == [1]
+
+
+def test_a_latex_quote_at_a_line_start_is_not_a_code_fence():
+    assert run("latex.markdown_leak", "```nested' quote'' here.\n") == []
+    assert [f.line for f in run("latex.markdown_leak", "```python\nx\n```\n")] == [1, 3]
+
+
+def test_significance_stars_are_not_markdown_bold():
+    assert run("latex.markdown_leak", "Gains of 0.85** & 0.91** are reported.\n") == []
+    [f] = run("latex.markdown_leak", "This is **bold** text.\n")
+    assert f.message == 'Markdown bold "**bold**" left in the source.'

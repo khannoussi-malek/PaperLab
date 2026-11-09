@@ -1,6 +1,7 @@
 """P06: LaTeX hygiene checks over the source: markdown leaks, placeholders, numbered headings, stray preamble, odd
 characters, undefined notation, adjacent cites, wide tables. Text-only hints; nothing is rewritten (S2P B2)."""
 
+import posixpath
 import re
 from collections.abc import Callable, Iterator
 
@@ -8,6 +9,8 @@ from app.core.manuscript_checks.base import Check, CheckContext, Finding
 from app.core.manuscript_sentences import DISPLAY_MATH, INLINE_MATH, _blank_comments
 
 VERBATIM = re.compile(r"\\begin\{(verbatim|lstlisting|minted)\*?\}.*?\\end\{\1\*?\}", re.S)
+# A display that starts at `\\[` (a row break in a tabular) is not a display: the lookbehind keeps it out.
+DISPLAY = (DISPLAY_MATH[0], DISPLAY_MATH[1], re.compile(r"(?<!\\)\\\[.*?\\\]", re.S))
 
 
 def _spaces(m: re.Match) -> str:
@@ -16,7 +19,7 @@ def _spaces(m: re.Match) -> str:
 
 def blank_math(text: str) -> str:
     """Verbatim and math overwritten with spaces; same length, newlines kept. Comments must already be blanked."""
-    for pattern in (VERBATIM, *DISPLAY_MATH, *INLINE_MATH):
+    for pattern in (VERBATIM, *DISPLAY, *INLINE_MATH):
         text = pattern.sub(_spaces, text)
     return text
 
@@ -46,7 +49,7 @@ def per_file(name: str, scan: Callable[[str, str], Iterator[tuple[str, int, str,
 
 
 MD_HEADING = re.compile(r"^ {0,3}#{1,6}[ \t]+\S[^\n]*", re.M)
-MD_BOLD = re.compile(r"\*\*([^*\n]+?)\*\*")
+MD_BOLD = re.compile(r"\*\*(?=\S)([^*\n]+?)(?<=\S)\*\*")  # CommonMark flanking: 0.85** is not bold
 
 
 def _markdown(_blanked: str, text: str):
@@ -57,7 +60,7 @@ def _markdown(_blanked: str, text: str):
     for m in MD_BOLD.finditer(text):
         yield ("warning", m.start(), f'Markdown bold "{m.group()}" left in the source.',
                "Use \\textbf{...} or, better, no emphasis in running prose.")
-    for m in re.finditer(r"^[ \t]*```", text, re.M):
+    for m in re.finditer(r"^[ \t]*```[\w+-]*[ \t]*$", text, re.M):  # a fence alone on its line, not ```word''
         yield ("warning", m.start(), "Markdown code fence left in the source.",
                "Delete the fence; use a verbatim or lstlisting environment for code.")
 
@@ -68,7 +71,13 @@ PLACEHOLDER = re.compile(
 )
 
 
+DEFINITION = re.compile(
+    r"(?m)^[ \t]*\\(?:(?:re|provide)?newcommand|def|DeclareRobustCommand|(?:New|Renew|Provide)DocumentCommand)\b[^\n]*"
+)
+
+
 def _placeholder(_blanked: str, text: str):
+    text = DEFINITION.sub(_spaces, text)  # \newcommand{\todo}... switches todos off; its uses are still flagged
     for m in PLACEHOLDER.finditer(text):
         yield ("warning", m.start(), f'Placeholder "{m.group()}" is still in the source.',
                "Fill it in or remove it before you submit.")
@@ -91,10 +100,24 @@ def _numbered(blanked: str, _text: str):
 STRAY = re.compile(r"\\documentclass\b|\\begin\{document\}")
 
 
+INCLUDE = re.compile(r"\\(?:input|include)\{([^}]+)\}")
+
+
+def _included(ctx: CheckContext) -> set[str]:
+    """Project paths that some .tex file pulls in with \\input or \\include (they resolve from the project root)."""
+    found = set()
+    for _, text in tex_files(ctx):
+        for m in INCLUDE.finditer(_blank_comments(text)):
+            target = posixpath.normpath(m.group(1).strip())
+            found.add(target if target.endswith(".tex") else f"{target}.tex")
+    return found
+
+
 def _stray_preamble(ctx: CheckContext) -> list[Finding]:
     found = []
+    included = _included(ctx)  # supplements, cover letters and subfiles chapters are standalone documents: silent
     for path, text in tex_files(ctx):
-        if path == ctx.manuscript.main_file:
+        if path == ctx.manuscript.main_file or path not in included:
             continue
         blanked = VERBATIM.sub(_spaces, _blank_comments(text))
         for m in STRAY.finditer(blanked):
@@ -152,14 +175,13 @@ def _notation(ctx: CheckContext) -> list[Finding]:
     first: dict[str, tuple[str, int]] = {}
     for path, text in tex_files(ctx):
         blanked = _blank_comments(text)
-        displays = [m for p in DISPLAY_MATH for m in p.finditer(blanked)
-                    if m.start() == 0 or blanked[m.start() - 1] != "\\"]  # `\\[2pt]` (a row break) is not a display
+        displays = [m for p in DISPLAY for m in p.finditer(blanked)]
         for m in sorted(displays, key=lambda m: m.start()):
             for name, pos in _symbols(m.group()):
                 first.setdefault(name, (path, line_of(blanked, m.start() + pos)))
         rest = blanked
-        for m in displays:
-            rest = rest[: m.start()] + re.sub(r"[^\n]", " ", m.group()) + rest[m.end():]
+        for p in DISPLAY:
+            rest = p.sub(_spaces, rest)
         inline |= {name for p in INLINE_MATH for m in p.finditer(rest) for name, _ in _symbols(m.group())}
     return [
         Finding("latex.notation_undefined", "warning", path, line,
@@ -172,7 +194,7 @@ def _notation(ctx: CheckContext) -> list[Finding]:
 
 # Only plain pairs: a cite with an optional argument (\citep[p.~3]{a}) would lose its note in a merge.
 ADJACENT = re.compile(
-    r"\\(cite|citep|citet|citealp|citealt|parencite|textcite)\*?\{([^}]*)\}(?:\s|~)*\\\1\*?\{([^}]*)\}"
+    r"\\(cite|citep|citet|citealp|citealt|parencite|textcite)\*?\{([^}]*)\}[ \t~]*(?:\n[ \t~]*)?\\\1\*?\{([^}]*)\}"
 )
 
 
@@ -192,8 +214,14 @@ FITS = re.compile(
 )
 
 
+REPEAT = re.compile(r"\*\{(\d+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")  # l*{9}{c}: nine c columns
+MAX_REPEAT = 50  # a huge count would otherwise build a huge string
+
+
 def _columns(spec: str) -> int:
     spec = re.sub(r"\[[^\]]*\]", "", spec)  # S[table-format=1.2]
+    while (expanded := REPEAT.sub(lambda m: m.group(2) * min(int(m.group(1)), MAX_REPEAT), spec)) != spec:
+        spec = expanded
     while (inner := re.sub(r"\{[^{}]*\}", "", spec)) != spec:  # p{3cm}, @{\hspace{1em}}, >{\bfseries}
         spec = inner
     return len(re.findall(r"[lcrpmbXS]", spec))
