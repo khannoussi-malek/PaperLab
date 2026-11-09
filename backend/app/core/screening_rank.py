@@ -3,12 +3,13 @@
 ASReview's default model: TF-IDF features and multinomial naive Bayes, retrained from scratch on every call. Pure
 and I/O-free; core/screening.py loads the rows and calls rank() and stop_hint().
 
-ponytail: retrains per request (~0.45 s for 3,000 abstracts); cache the fitted model per workspace only if a measured
-request goes over 1 s.
+Retrains per request (~0.45 s for 3,000 abstracts). The TF-IDF features are the slow part on a big pool (~10 s for
+276k hits), so rank() takes them prebuilt from core/screening.py's per-workspace cache.
 """
 
 import re
 import uuid
+from array import array
 from collections import Counter
 from dataclasses import dataclass
 
@@ -45,35 +46,47 @@ def tokens(text: str) -> list[str]:
     return [word for word in _WORD.findall(text.lower()) if word not in STOP_WORDS]
 
 
-def _features(docs: list[Doc]) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+@dataclass(frozen=True)
+class Features:
     """Sparse L2-normalised TF-IDF as three flat arrays (doc index, word index, weight) and the vocabulary size:
-    3,000 abstracts over ~20k words would be a 60M-cell dense matrix, and each doc only has a few hundred words."""
+    3,000 abstracts over ~20k words would be a 60M-cell dense matrix, and each doc only has a few hundred words.
+    int32/float32 keep a 276k-hit pool (~18M nonzeros) near 220 MB."""
+
+    rows: np.ndarray
+    cols: np.ndarray
+    weights: np.ndarray
+    vocabulary: int
+
+
+def features(texts: list[str]) -> Features:
     vocabulary: dict[str, int] = {}
-    rows, cols, tfs = [], [], []
-    for row, doc in enumerate(docs):
-        for word, tf in Counter(tokens(doc.text)).items():
+    rows, cols, tfs = array("i"), array("i"), array("f")  # compact while building: Python int lists cost ~36 B each
+    for row, text in enumerate(texts):
+        for word, tf in Counter(tokens(text)).items():
             rows.append(row)
             cols.append(vocabulary.setdefault(word, len(vocabulary)))
             tfs.append(tf)
-    rows, cols = np.array(rows, dtype=np.int64), np.array(cols, dtype=np.int64)
-    df = np.bincount(cols, minlength=len(vocabulary))
-    weights = np.array(tfs, dtype=np.float64) * (np.log((1 + len(docs)) / (1 + df)) + 1)[cols]
-    norms = np.sqrt(np.bincount(rows, weights=weights * weights, minlength=len(docs)))
-    weights /= np.where(norms > 0, norms, 1.0)[rows]
-    return rows, cols, weights, len(vocabulary)
+    rows_a, cols_a = np.frombuffer(rows, dtype=np.int32), np.frombuffer(cols, dtype=np.int32)
+    df = np.bincount(cols_a, minlength=len(vocabulary))
+    weights = np.frombuffer(tfs, dtype=np.float32) * (np.log((1 + len(texts)) / (1 + df)) + 1)[cols_a]
+    norms = np.sqrt(np.bincount(rows_a, weights=weights * weights, minlength=len(texts)))
+    weights /= np.where(norms > 0, norms, 1.0)[rows_a]
+    return Features(rows_a, cols_a, weights.astype(np.float32), len(vocabulary))
 
 
-def rank(docs: list[Doc]) -> tuple[list[uuid.UUID], bool]:
+def rank(docs: list[Doc], prebuilt: Features | None = None) -> tuple[list[uuid.UUID], bool]:
     """The unscreened docs' ids, most likely relevant first, and whether a model was trained.
 
     `docs` come in found order ((first_seen_at, id)); ties and the untrained case keep it. Untrained until there is
-    at least one positive and one negative decision.
+    at least one positive and one negative decision. `prebuilt` is features() of the docs' texts in that same order;
+    with it the docs' text is not read.
     """
     unscreened = [index for index, doc in enumerate(docs) if doc.label is None]
     labels = {doc.label for doc in docs}
     if True not in labels or False not in labels:
         return [docs[index].id for index in unscreened], False
-    rows, cols, weights, vocabulary = _features(docs)
+    feats = prebuilt or features([doc.text for doc in docs])
+    rows, cols, weights, vocabulary = feats.rows, feats.cols, feats.weights, feats.vocabulary
     delta = np.zeros(vocabulary)
     for label, sign in ((True, 1.0), (False, -1.0)):
         in_class = np.array([doc.label is label for doc in docs])[rows]
@@ -81,8 +94,9 @@ def rank(docs: list[Doc]) -> tuple[list[uuid.UUID], bool]:
         # Multinomial naive Bayes, Laplace-smoothed with ASReview's alpha: log P(word | class).
         delta += sign * np.log((totals + ALPHA) / (totals.sum() + ALPHA * vocabulary))
     scores = np.bincount(rows, weights=weights * delta[cols], minlength=len(docs))
-    # sorted() is stable, so equal scores keep found order.
-    return [docs[index].id for index in sorted(unscreened, key=lambda index: -scores[index])], True
+    # A stable sort, so equal scores keep found order.
+    picked = np.array(unscreened, dtype=np.int64)
+    return [docs[index].id for index in picked[np.argsort(-scores[picked], kind="stable")]], True
 
 
 def stop_hint(recent_statuses: list[str], pool_size: int, trained: bool) -> StopHint:

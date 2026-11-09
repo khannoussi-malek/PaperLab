@@ -262,7 +262,8 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     }) ||
     null
 
-  const listState = (sort === 'ranked' ? ranked.isPending : isPending) ? (
+  const listLoading = sort === 'ranked' ? ranked.isPending : isPending
+  const listState = listLoading ? (
     <TabSkeleton label="Loading search results" />
   ) : (
     !(sort === 'ranked' ? ranked.isError : isError) &&
@@ -312,8 +313,15 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         </label>
         <span className="text-muted-foreground">
           {rawFound !== undefined && `${rawFound} found so far · `}
-          {filter ? `${visibleRows.length} of ${rows.length}` : rows.length} <Term term="results">results</Term> (after
-          filters) <Term term="identified">How this differs from PRISMA</Term>
+          {listLoading ? (
+            'Loading results…' // not "0 results": a big ranked pool takes seconds
+          ) : (
+            <>
+              {filter ? `${visibleRows.length} of ${rows.length}` : rows.length} <Term term="results">results</Term>{' '}
+              (after filters)
+            </>
+          )}{' '}
+          <Term term="identified">How this differs from PRISMA</Term>
         </span>
         <Button
           type="button"
