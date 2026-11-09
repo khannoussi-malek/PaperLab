@@ -7,7 +7,7 @@ import { PdfPane } from './PdfPane'
 vi.mock('../reader/usePdfDocument', () => ({ usePdfDocument: () => ({ doc: { numPages: 3 }, error: null }) }))
 vi.mock('../reader/PdfPage', () => ({ PdfPage: () => null }))
 
-const m = { id: 'm1', compile_status: 'ok', compiled_at: '2026-10-03T00:00:00Z', compile_errors: [], compile_friendly: null, compile_log: null } as unknown as ManuscriptDetail
+const m = { id: 'm1', template: 'article', compile_status: 'ok', compiled_at: '2026-10-03T00:00:00Z', compile_errors: [], compile_friendly: null, compile_log: null } as unknown as ManuscriptDetail
 const SCALE = (612 + 24 - 24) / 612 // width 636 -> scale 1
 
 test('a target scrolls its point into the pane', () => {

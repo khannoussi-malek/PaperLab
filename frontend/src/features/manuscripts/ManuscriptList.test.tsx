@@ -6,7 +6,7 @@ import { api, type Manuscript } from '@/api/client'
 import { ManuscriptList } from './ManuscriptList'
 
 const ms = (over: Partial<Manuscript>): Manuscript => ({
-  id: 'm1', workspace_id: 'w1', title: 'My thesis', main_file: 'main.tex', checklist: {}, compile_status: 'ok',
+  id: 'm1', workspace_id: 'w1', title: 'My thesis', main_file: 'main.tex', template: 'article', checklist: {}, compile_status: 'ok',
   compile_requested: false, compiled_at: null, compile_log: null, compile_friendly: null, compile_errors: [], has_pdf: false,
   created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-02T00:00:00Z', ...over,
 })
@@ -19,7 +19,10 @@ function renderList() {
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   vi.spyOn(api, 'listManuscripts').mockResolvedValue([ms({}), ms({ id: 'm2', title: 'Draft two', compile_status: 'failed' })])
-  vi.spyOn(api, 'listManuscriptTemplates').mockResolvedValue([{ name: 'article', label: 'Article' }, { name: 'ieee', label: 'IEEE' }])
+  vi.spyOn(api, 'listManuscriptTemplates').mockResolvedValue([
+    { name: 'article', label: 'Article', official: false, provenance: '', page_limit: null, references_count: false },
+    { name: 'ieee', label: 'IEEE', official: true, provenance: '', page_limit: 6, references_count: true },
+  ])
 })
 afterEach(() => {
   vi.restoreAllMocks()
