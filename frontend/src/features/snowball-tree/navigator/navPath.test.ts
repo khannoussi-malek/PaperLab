@@ -61,13 +61,29 @@ test('parseNav must start at a search, not a paper', () => {
 })
 
 test('parseNav keeps the primary link kind when two links join the same pair', () => {
+  // The later cited_by link comes first in the array, so a plain find() would pick it; the primary one is the earlier cites.
   const d = {
     ...prov,
-    links: [
-      ...prov.links,
-      { parent: 'A', child: 'B', kind: 'cited_by', run_id: 'r1', created_at: '2026-02-01T00:00:00Z' },
-    ],
+    links: [{ parent: 'A', child: 'B', kind: 'cited_by', run_id: 'r1', created_at: '2026-02-01T00:00:00Z' }, ...prov.links],
   } as typeof prov
   const path = primaryPath(d, 'B')
+  expect(path[path.length - 1].via).toBe('cites')
   expect(parseNav(toParam(path), d).path).toEqual(path)
+})
+
+test('a hand paper with no link round-trips through the URL', () => {
+  const d = { ...prov, nodes: [...prov.nodes, { id: 'paper:y', title: 'Y', level: 0, snowballed: [], paths: 1 }] } as typeof prov
+  const path = primaryPath(d, 'paper:y')
+  expect(path).toEqual([e('root:hand', 'hand'), e('paper:y', 'search')])
+  expect(parseNav(toParam(path), d)).toEqual({ path, cut: false })
+})
+
+test('root:hand and an unknown node are accepted as first entries', () => {
+  const d = {
+    ...prov,
+    nodes: [...prov.nodes, { id: 'run:x:unknown', title: '?', level: 0, snowballed: [], paths: 1 }],
+    links: [...prov.links, { parent: 'root:hand', child: 'paper:x', kind: 'hand', run_id: null, created_at: null }],
+  } as typeof prov
+  expect(parseNav('root:hand', d)).toEqual({ path: [e('root:hand', 'hand')], cut: false })
+  expect(parseNav('run:x:unknown', d)).toEqual({ path: [e('run:x:unknown', 'search')], cut: false })
 })

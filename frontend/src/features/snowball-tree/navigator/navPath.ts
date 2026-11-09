@@ -16,7 +16,11 @@ export function primaryPath(data: ProvenanceOut, nodeId: string): NavEntry[] {
     out.unshift({ id, via: viaOf(link.kind) })
     id = link.parent
   }
-  if (out.length === 0) return data.nodes.some((n) => n.id === nodeId) ? [{ id: nodeId, via: 'search' }] : []
+  if (out.length === 0) {
+    if (!data.nodes.some((n) => n.id === nodeId)) return []
+    const self: NavEntry = { id: nodeId, via: 'search' }
+    return nodeId.startsWith('paper:') ? [{ id: 'root:hand', via: 'hand' }, self] : [self]
+  }
   const rootId = parents.get(out[0].id)!.parent
   return [{ id: rootId, via: rootId === 'root:hand' ? 'hand' : 'search' }, ...out]
 }
@@ -31,15 +35,16 @@ export function parseNav(param: string, data: ProvenanceOut): { path: NavEntry[]
   for (const id of ids) {
     const prev = path[path.length - 1]
     if (!prev) {
-      const isRoot = id.startsWith('root:') && (data.roots.some((r) => r.id === id) || data.links.some((l) => l.parent === id))
+      const isRoot = id === 'root:hand' || (id.startsWith('root:') && (data.roots.some((r) => r.id === id) || data.links.some((l) => l.parent === id)))
       if (!isRoot && !(isUnknown(id) && data.nodes.some((n) => n.id === id))) break
       path.push({ id, via: id === 'root:hand' ? 'hand' : 'search' })
       continue
     }
     const main = parents.get(id)
     const link = main?.parent === prev.id ? main : data.links.find((l) => l.parent === prev.id && l.child === id)
-    if (!link) break
-    path.push({ id, via: viaOf(link.kind) })
+    const handPaper = prev.id === 'root:hand' && id.startsWith('paper:') && data.nodes.some((n) => n.id === id)
+    if (!link && !handPaper) break
+    path.push({ id, via: link ? viaOf(link.kind) : 'search' })
   }
   return { path, cut: path.length < ids.length }
 }
