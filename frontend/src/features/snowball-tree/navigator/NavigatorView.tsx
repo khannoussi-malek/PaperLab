@@ -3,6 +3,7 @@ import { sileo } from 'sileo'
 import type { ProvenanceOut, ProvNode } from '@/api/client'
 import { useWorkspacePapers } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { AskPanel } from './AskPanel'
 import { Breadcrumb } from './Breadcrumb'
 import { NextPapers } from './NextPapers'
 import { parseNav, primaryPath, viaOf, type NavEntry } from './navPath'
@@ -13,6 +14,8 @@ import { useGrab } from './useGrab'
 
 /** The walk to a library paper: its tree node's primary path, else the hand-added root. */
 export function pathToPaper(data: ProvenanceOut, paperId: string): NavEntry[] {
+  const hitPath = primaryPath(data, paperId) // the param may also name a hit (Search & screen's "Navigate from here")
+  if (hitPath.length) return hitPath
   const node = data.nodes.find((n) => n.paper_id === paperId && !n.id.startsWith('paper:')) ?? data.nodes.find((n) => n.id === `paper:${paperId}`)
   const found = node ? primaryPath(data, node.id) : []
   return found.length ? found : [{ id: 'root:hand', via: 'hand' }, { id: `paper:${paperId}`, via: 'hand' }]
@@ -75,7 +78,7 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
         {node && <PaperCard key={node.id} workspaceId={workspaceId} data={data} node={node} grab={grab} grabs={grabs} />}
         {currentId && (isRoot || node) && <NextPapers {...lists} parentId={currentId} dimmed={node?.branch?.state === 'stopped'} />}
       </div>
-      {/* The Ask the AI panel docks here (Task 5). */}
+      {node && <AskPanel workspaceId={workspaceId} node={node} />}
     </div>
   )
 }

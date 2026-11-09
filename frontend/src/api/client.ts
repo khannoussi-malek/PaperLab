@@ -188,9 +188,12 @@ export type ScreeningState = components['schemas']['ScreeningStateOut']
 export type ScreeningUpdate = components['schemas']['ScreeningCriteriaUpdate']
 export type AcceptSuggestionsOut = components['schemas']['AcceptSuggestionsOut']
 
-/** Where a chat lives: the reader's paper, or a workspace. */
-export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
-const chatUrl = (scope: ChatScope) => `/api/${scope.kind === 'paper' ? 'papers' : 'workspaces'}/${scope.id}/chat`
+/** Where a chat lives: the reader's paper, a workspace, or a search hit (abstract-only until it has full text). */
+export type ChatScope = { kind: 'paper' | 'workspace'; id: string } | { kind: 'hit'; workspaceId: string; id: string }
+const chatUrl = (scope: ChatScope) =>
+  scope.kind === 'hit'
+    ? `/api/workspaces/${scope.workspaceId}/search/hits/${scope.id}/chat`
+    : `/api/${scope.kind === 'paper' ? 'papers' : 'workspaces'}/${scope.id}/chat`
 
 /** The last `loc` segment of each FastAPI validation error that has one, deduplicated and in order. */
 function invalidFields(errors: unknown[]): string[] {

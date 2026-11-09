@@ -91,7 +91,10 @@ export const keys = {
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
   chunks: (paperId: string, page: number) => ['papers', paperId, 'chunks', page] as const,
   embeddingProgress: (paperId: string) => ['papers', paperId, 'embedding-progress'] as const,
-  chat: (scope: ChatScope) => [scope.kind === 'paper' ? 'papers' : 'workspaces', scope.id, 'chat'] as const,
+  chat: (scope: ChatScope) =>
+    scope.kind === 'hit'
+      ? (['workspaces', scope.workspaceId, 'hits', scope.id, 'chat'] as const)
+      : ([scope.kind === 'paper' ? 'papers' : 'workspaces', scope.id, 'chat'] as const),
   // Every workspace query starts with this, so one invalidation refreshes the list, its counts and each home's tabs.
   workspaces: ['workspaces'] as const,
   workspacePapers: (id: string) => ['workspaces', id, 'papers'] as const,

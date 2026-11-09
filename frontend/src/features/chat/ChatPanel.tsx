@@ -37,6 +37,11 @@ const EMPTY_CHAT = {
     help: 'Answers cite passages from its papers and your notes. Click a citation to open it in the paper.',
     starters: ['Compare their main contributions', 'How do their methods differ?', 'What do my notes say about them?'],
   },
+  hit: {
+    heading: 'Ask about this paper',
+    help: 'Answers use its abstract, or the full text once the paper has a file.',
+    starters: ['Summarize the main contribution', 'What method do they use?', 'Is this relevant to my question?'],
+  },
 }
 
 /** Labels whose chunk or note still exists; markers for any other label render as plain text. */
@@ -255,7 +260,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPr
               footer={{ model: answer.model, connectionName: answer.connection_name, promptVersion: answer.prompt_version }}
               paperLabel={paperLabel}
               onCite={onCite}
-              followUp={scope.kind === 'paper' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
+              followUp={scope.kind !== 'workspace' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
               suggestions={{ scope, saved: answer.saved_notes }}
             />
           </Fragment>
@@ -306,7 +311,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPr
             ref={textareaRef}
             aria-label="Question"
             aria-describedby="chat-question-hint"
-            placeholder={`Ask about this ${scope.kind}…`}
+            placeholder={`Ask about this ${scope.kind === 'hit' ? 'paper' : scope.kind}…`}
             rows={1}
             maxLength={MAX_QUESTION}
             value={question}

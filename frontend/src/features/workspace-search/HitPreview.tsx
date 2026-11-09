@@ -8,6 +8,7 @@ import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { EXCLUDE_REASONS, reasonLabel, sourceLabel } from './hitReview'
 import { WhyTrail } from '@/features/snowball-tree/WhyTrail'
+import { HitSnowball } from './HitSnowball'
 import { SuggestionChip, SuggestionWhy } from './SuggestionChip'
 
 type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
@@ -16,6 +17,8 @@ type Props = {
   hit: Hit
   /** With it, a "Why is this here?" trail shows under the title. */
   workspaceId?: string
+  /** Inside the Snowball tree's side panel, which has its own snowball and Navigate buttons. */
+  inTree?: boolean
   onReview: (hitId: string, body: HitReviewUpdate) => void
   onAddPdf: (hitId: string) => void
   addPdfPending: boolean
@@ -34,7 +37,7 @@ type Props = {
  * PDF acquisition is deliberately per-hit, not bulk: adding a PDF is what starts ingestion (chunking, embedding)
  * for that paper, and there is no "import everything in this filter" action anywhere in this feature — the user
  * decides, one paper at a time, when that cost is worth paying. */
-export function HitPreview({ hit, workspaceId, onReview, onAddPdf, addPdfPending, onUpload, uploadPending }: Props) {
+export function HitPreview({ hit, workspaceId, inTree, onReview, onAddPdf, addPdfPending, onUpload, uploadPending }: Props) {
   const title = hit.title || hit.normalized_title
   const byline = [hit.authors?.join(', ') || null, hit.year, hit.venue].filter(Boolean).join(' · ')
   const [reason, setReason] = useState<ExcludeReason | ''>('')
@@ -71,6 +74,7 @@ export function HitPreview({ hit, workspaceId, onReview, onAddPdf, addPdfPending
     >
       <h2 className="font-heading text-lg leading-snug font-semibold wrap-anywhere">{title}</h2>
       {workspaceId && <WhyTrail workspaceId={workspaceId} hitId={hit.id} />}
+      {workspaceId && !inTree && <HitSnowball workspaceId={workspaceId} hitId={hit.id} />}
       {byline && <p className="text-sm text-muted-foreground">{byline}</p>}
       {hit.sources.length > 0 && (
         <p className="text-xs text-muted-foreground">Found via {hit.sources.map(sourceLabel).join(', ')}</p>

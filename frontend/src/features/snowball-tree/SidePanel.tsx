@@ -14,11 +14,13 @@ type Props = {
   id: string
   busy: boolean
   onFind: (target: { hit_id: string } | { paper_id: string }) => void
+  /** Absent inside the Navigator, which is already navigating. */
+  onNavigate?: (id: string) => void
 }
 
 /** The tree's side panel: a hit opens the Search tab's panel (screening included); a hand-added paper or a
  * "parent not recorded" box shows its title and level. Branch control and the snowball button sit above. */
-export function SidePanel({ workspaceId, data, id, busy, onFind }: Props) {
+export function SidePanel({ workspaceId, data, id, busy, onFind, onNavigate }: Props) {
   const node = data.nodes.find((n) => n.id === id)
   const root = data.roots.find((r) => r.id === id)
   const isHit = node !== undefined && !id.startsWith('paper:') && !isUnknown(id)
@@ -50,12 +52,18 @@ export function SidePanel({ workspaceId, data, id, busy, onFind }: Props) {
           <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onFind(target)}>
             {busy ? 'Snowballing…' : 'Find citing & cited papers'}
           </Button>
+          {onNavigate && (
+            <Button type="button" size="sm" variant="outline" onClick={() => onNavigate(id)}>
+              Navigate from here
+            </Button>
+          )}
         </>
       )}
       {hit ? (
         <HitPreview
           hit={hit}
           workspaceId={workspaceId}
+          inTree
           onReview={(hitId, body) => review.mutate({ hitId, body }, refresh)}
           onAddPdf={(hitId) => importHits.mutate([hitId], refresh)}
           addPdfPending={importHits.isPending}
