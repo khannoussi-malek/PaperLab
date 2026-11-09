@@ -4,6 +4,7 @@ import type { CheckFinding, CheckRunResult } from '@/api/client'
 import { useCheckBadge, useCheckList, useRunChecks } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { DoiCheck } from './DoiCheck'
 import { badgeOf, groupByCheck, rowsOf, summary, type Severity } from './checks/model'
 
 type Props = { manuscriptId: string; savedTick: number; compiledAt: string | null | undefined; onJump: (file: string, line: number) => void }
@@ -91,6 +92,7 @@ export function CheckPanel({ manuscriptId, savedTick, compiledAt, onJump }: Prop
           })}
         </div>
       )}
+      <DoiCheck manuscriptId={manuscriptId} savedTick={savedTick} onJump={onJump} />
     </section>
   )
 }
