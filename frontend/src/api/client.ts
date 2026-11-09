@@ -1,10 +1,9 @@
 import type { components } from './schema'
 
-// matches FindingOut / RunChecksOut / CheckInfoOut; Task 10 swaps these for the generated schema types
 export type Severity = 'error' | 'warning' | 'info'
-export type CheckFinding = { check: string; severity: Severity; file: string | null; line: number | null; message: string; fix_hint: string | null }
-export type CheckRunResult = { ran: string[]; findings: CheckFinding[]; counts: Record<Severity, number> }
-export type CheckInfo = { name: string; cost: 'cheap' | 'full'; description: string }
+export type CheckFinding = components['schemas']['app__schemas__manuscript_checks__FindingOut']
+export type CheckRunResult = components['schemas']['RunChecksOut']
+export type CheckInfo = components['schemas']['CheckInfoOut']
 export type Manuscript = components['schemas']['ManuscriptOut']
 export type ManuscriptDetail = components['schemas']['ManuscriptDetailOut']
 export type ManuscriptImport = components['schemas']['ManuscriptImportOut']
@@ -22,7 +21,7 @@ export type ReviewState = components['schemas']['ReviewOut']
 export type ReviewSentence = components['schemas']['SentenceOut']
 export type ReviewStart = { file: string; base: string; from?: number | null; to?: number | null; include_uncited?: boolean; confirm_remote?: boolean }
 export type SectionReview = components['schemas']['SectionReviewOut']
-export type SectionFinding = components['schemas']['FindingOut']
+export type SectionFinding = components['schemas']['app__schemas__manuscript_section_review__FindingOut']
 export type SectionRef = components['schemas']['RefOut']
 export type SectionSpan = components['schemas']['SectionSpanOut']
 export type SectionReviewStart = components['schemas']['SectionReviewIn']
