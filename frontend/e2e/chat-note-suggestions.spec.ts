@@ -79,7 +79,8 @@ test('a suggested note saves with a click, leaves its paper through Papers, and 
   await expect(page.locator(`.highlight[data-note-id="${saved.note_id}"]`).first()).toBeAttached()
 
   // 3. Papers: untick this paper. The dialog warns about the highlight; saving takes the card off the panel.
-  await card.getByRole('button', { name: 'Papers' }).click()
+  await card.getByRole('button', { name: 'Note actions' }).click()
+  await page.getByRole('menuitem', { name: 'Papers' }).click()
   const dialog = page.getByRole('dialog', { name: 'Papers' })
   const option = dialog.locator(`[data-paper-id="${paperId}"]`)
   await expect(option).toHaveAttribute('aria-checked', 'true')

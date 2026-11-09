@@ -33,12 +33,23 @@ test('recolouring a note from the notes panel, including a custom colour, persis
   const highlight = page.locator('.highlight:not(.draft)').first()
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(250, 204, 21, 0.4)')
 
-  await card.getByRole('button', { name: 'Blue' }).click()
+  // Close any open menu first (up to 3 Escapes), then open Note actions > Colour so every call starts clean.
+  const recolour = async () => {
+    for (let i = 0; i < 3 && (await page.locator('[role="menu"]').first().isVisible()); i++) {
+      await page.keyboard.press('Escape')
+    }
+    await card.getByRole('button', { name: 'Note actions' }).click()
+    await page.getByRole('menuitem', { name: 'Colour' }).click()
+  }
+  await recolour()
+  await page.getByRole('button', { name: 'Blue' }).click()
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(96, 165, 250, 0.4)')
 
-  await card.getByLabel('Custom colour').fill('#ff00aa')
+  await recolour()
+  await page.getByLabel('Custom colour').fill('#ff00aa')
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(255, 0, 170, 0.4)')
-  await expect(card.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'false')
+  await recolour()
+  await expect(page.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'false')
 
   await page.reload()
   await expect.poll(() => backgroundOf(page.locator('.highlight:not(.draft)').first())).toBe('rgba(255, 0, 170, 0.4)')

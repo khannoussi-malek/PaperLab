@@ -1,4 +1,4 @@
-import { Check, ChartColumn, Copy, Files } from 'lucide-react'
+import { Check, ChartColumn, Copy, EllipsisVertical, Files, Palette, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Note, NoteKind } from '@/api/client'
 import { usePapers } from '@/api/queries'
@@ -7,6 +7,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { glass } from '@/components/glass'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import { noteHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
@@ -168,7 +178,6 @@ export function NoteCard({
             )
           )}
           {!compact && <NoteCharts note={note} />}
-          <HighlightColorPicker value={note.color} onChange={(hex) => void onColorChange(hex)} />
         </CardContent>
 
         <CardFooter className="flex-wrap justify-end gap-2">
@@ -201,24 +210,43 @@ export function NoteCard({
                   {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
                 </Button>
               )}
-              {!compact && (
-                <Button variant="ghost" size="sm" onClick={() => setAttachingChart(true)}>
-                  <ChartColumn aria-hidden />
-                  Attach chart
-                </Button>
-              )}
-              {!compact && (
-                <Button variant="ghost" size="sm" onClick={() => setEditingPapers(true)}>
-                  <Files aria-hidden />
-                  Papers
-                </Button>
-              )}
               <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
                 Edit
               </Button>
-              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void onDelete()}>
-                Delete
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label="Note actions">
+                    <EllipsisVertical aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className={cn(glass, 'bg-glass-strong ring-glass-border')}>
+                  {!compact && (
+                    <DropdownMenuItem onSelect={() => setAttachingChart(true)}>
+                      <ChartColumn aria-hidden />
+                      Attach chart
+                    </DropdownMenuItem>
+                  )}
+                  {!compact && (
+                    <DropdownMenuItem onSelect={() => setEditingPapers(true)}>
+                      <Files aria-hidden />
+                      Papers
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Palette aria-hidden />
+                      Colour
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className={cn(glass, 'bg-glass-strong p-2 ring-glass-border')}>
+                      <HighlightColorPicker value={note.color} onChange={(hex) => void onColorChange(hex)} />
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuItem variant="destructive" onSelect={() => void onDelete()}>
+                    <Trash2 aria-hidden />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
         </CardFooter>
