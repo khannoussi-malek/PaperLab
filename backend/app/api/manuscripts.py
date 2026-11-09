@@ -82,7 +82,9 @@ async def _read_capped(file: UploadFile, cap: int, code: str = "file_too_large")
 
 @router.get("/api/templates/manuscripts")
 async def list_templates() -> list[TemplateOut]:
-    return [TemplateOut(name=name, label=label) for name, label in manuscript_templates.TEMPLATES.items()]
+    return [TemplateOut(name=t.name, label=t.label, official=t.official, provenance=t.provenance,
+                        page_limit=t.page_limit, references_count=t.references_count)
+            for t in manuscript_templates.specs().values()]
 
 
 @router.get("/api/workspaces/{workspace_id}/manuscripts")

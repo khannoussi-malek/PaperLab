@@ -8,6 +8,10 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, computed_field
 class TemplateOut(BaseModel):
     name: str
     label: str
+    official: bool
+    provenance: str
+    page_limit: int | None
+    references_count: bool
 
 
 class FileOut(BaseModel):
@@ -31,6 +35,7 @@ class ManuscriptOut(BaseModel):
     workspace_id: uuid.UUID | None
     title: str
     main_file: str
+    template: str
     checklist: dict[str, Any]
     compile_status: str
     compile_requested: bool
