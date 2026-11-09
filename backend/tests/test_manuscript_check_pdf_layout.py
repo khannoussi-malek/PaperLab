@@ -104,3 +104,19 @@ def test_single_running_head_after_a_mid_page_heading_does_not_beat_it(tmp_path)
         {"heading": "References", "heading_y": 30, "extra": "[2] B"},
     ])
     assert pl.stats(p).body_pages == 2
+
+
+def test_references_at_the_top_of_the_right_column_counts_the_left_column_as_body(tmp_path):
+    # Two-column layout: page 1 is full body; page 2's left column is full body and its right column opens with
+    # the References heading. The body runs to page 2, so the count is 2, not 1.
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_textbox(pymupdf.Rect(72, 60, 290, 700), BODY, fontsize=11)
+    page.insert_textbox(pymupdf.Rect(320, 60, 540, 700), BODY, fontsize=11)
+    page = doc.new_page(width=612, height=792)
+    page.insert_textbox(pymupdf.Rect(72, 60, 290, 700), BODY, fontsize=11)
+    page.insert_text((320, 100), "References", fontsize=11)
+    page.insert_text((320, 120), "[1] A. Author", fontsize=11)
+    path = tmp_path / "k.pdf"
+    doc.save(path)
+    assert pl.stats(path) == pl.PdfStats(2, 2)
