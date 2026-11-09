@@ -1,7 +1,8 @@
-import { BookOpenCheck, EllipsisVertical, FolderMinus, FolderPlus } from 'lucide-react'
+import { BookOpenCheck, Compass, EllipsisVertical, FolderMinus, FolderPlus, Snowflake } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { sileo } from 'sileo'
 import type { Paper, ReadingIn } from '@/api/client'
-import { useWorkspaces } from '@/api/queries'
+import { useSnowball, useWorkspaces } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import {
@@ -33,6 +34,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { LEVELS, TRIAGES, UNDECIDED_LABEL, type Triage } from '@/features/reading/passes'
+import { snowballMessage } from '@/features/workspace-search/ScreeningTab'
+import { friendlySnowballError } from '@/features/workspace-search/snowballText'
+import { workspaceHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 
 // Wide enough for "Add to workspace…" and a typical workspace name on one line.
@@ -72,6 +76,15 @@ type Props = {
 
 function MenuItems({ parts: M, paper, workspaceId, onMembershipChange, onReadingChange }: Props & { parts: typeof dropdownParts | typeof contextParts }) {
   const workspaces = useWorkspaces()
+  const snowball = useSnowball(workspaceId ?? '')
+  const findCiting = () =>
+    sileo
+      .promise(snowball.mutateAsync({ seed_paper_ids: [paper.id], backward: true, forward: true }), {
+        loading: { title: 'Snowballing…' },
+        success: (result) => ({ title: snowballMessage(result) }),
+        error: (e) => ({ title: friendlySnowballError(e instanceof Error ? e.message : 'Snowball failed.') }),
+      })
+      .catch(() => undefined) // the error toast already says it
   // The API already orders workspaces by name (Postgres collation); no client re-sort.
   const sorted = workspaces.data ?? []
   return (
@@ -127,6 +140,18 @@ function MenuItems({ parts: M, paper, workspaceId, onMembershipChange, onReading
           </M.RadioGroup>
         </M.SubContent>
       </M.Sub>
+      {workspaceId && (
+        <>
+          <M.Item onSelect={findCiting}>
+            <Snowflake aria-hidden />
+            Find citing &amp; cited papers
+          </M.Item>
+          <M.Item onSelect={() => { window.location.hash = `${workspaceHref(workspaceId, 'tree')}&navPaper=${paper.id}` }}>
+            <Compass aria-hidden />
+            Navigate from here
+          </M.Item>
+        </>
+      )}
       {workspaceId && (
         <M.Item onSelect={() => onMembershipChange(workspaceId, false)}>
           <FolderMinus aria-hidden />
