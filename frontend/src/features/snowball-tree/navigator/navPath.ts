@@ -1,0 +1,48 @@
+import type { ProvenanceOut } from '@/api/client'
+import { primaryParent } from '../layout'
+
+export type NavEntry = { id: string; via: 'search' | 'cites' | 'cited_by' | 'hand' }
+
+const viaOf = (kind: string): NavEntry['via'] => (kind === 'cites' || kind === 'cited_by' ? kind : 'search')
+const SEP = ','
+
+/** The walk from a search down to `nodeId`, by the tree's own primary-parent rule. Empty when the paper isn't in the data. */
+export function primaryPath(data: ProvenanceOut, nodeId: string): NavEntry[] {
+  const parents = primaryParent(data.links, data.roots, data.nodes)
+  const out: NavEntry[] = []
+  const seen = new Set<string>()
+  for (let id = nodeId, link = parents.get(id); link && !seen.has(id); link = parents.get(id)) {
+    seen.add(id)
+    out.unshift({ id, via: viaOf(link.kind) })
+    id = link.parent
+  }
+  if (out.length === 0) return []
+  const rootId = parents.get(out[0].id)!.parent
+  return [{ id: rootId, via: rootId === 'root:hand' ? 'hand' : 'search' }, ...out]
+}
+
+export const toParam = (path: NavEntry[]): string => path.map((e) => e.id).join(SEP)
+
+/** Reads `nav=` back into a path, cutting at the first id that is gone or no longer a child of the one before. */
+export function parseNav(param: string, data: ProvenanceOut): { path: NavEntry[]; cut: boolean } {
+  const ids = param.split(SEP).filter(Boolean)
+  const path: NavEntry[] = []
+  for (const id of ids) {
+    const prev = path[path.length - 1]
+    if (!prev) {
+      const known = data.roots.some((r) => r.id === id) || data.nodes.some((n) => n.id === id) || data.links.some((l) => l.parent === id)
+      if (!known) break
+      path.push({ id, via: id === 'root:hand' ? 'hand' : 'search' })
+      continue
+    }
+    const link = data.links.find((l) => l.parent === prev.id && l.child === id)
+    if (!link) break
+    path.push({ id, via: viaOf(link.kind) })
+  }
+  return { path, cut: path.length < ids.length }
+}
+
+/** What the breadcrumb draws: the whole path up to `max` entries, else the first, a gap, and the last two. */
+export function collapse(path: NavEntry[], max = 4): Array<NavEntry | 'more'> {
+  return path.length <= max ? path : [path[0], 'more', ...path.slice(-2)]
+}
