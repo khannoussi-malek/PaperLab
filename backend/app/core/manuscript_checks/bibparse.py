@@ -1,7 +1,9 @@
 """A regex-level BibTeX reader: enough to gate structure. Bare numbers (year = 2016), quoted values, nested braces and
 an indented or same-line closing brace all parse (the source tool missed all three). Reuses the key finder from
-manuscript_missing_keys (S2P B2)."""
+manuscript_missing_keys (S2P B2). Linear in the file size: an entry never runs past the next entry's start, and the
+parse is cached so the three reference checks share one pass."""
 
+import functools
 import re
 from dataclasses import dataclass, field
 
@@ -9,6 +11,7 @@ from app.core.manuscript_missing_keys import ENTRY, NOT_ENTRIES
 
 FIELD = re.compile(r"(\w[\w-]*)\s*=\s*")
 BARE = re.compile(r"[^,\n]*")
+CACHE_SIZE = 8  # the checks read one .bib text each; a few are kept for the next save
 
 
 @dataclass(frozen=True)
@@ -16,13 +19,13 @@ class BibEntry:
     key: str
     kind: str
     line: int
-    fields: dict[str, str] = field(default_factory=dict)
+    fields: dict[str, str] = field(default_factory=dict)  # shared by the cache: read it, never mutate it
 
 
-def _brace_end(text: str, open_at: int) -> int:
-    """Index just past the brace group opening at `open_at` (end of text when it never closes)."""
+def _close(text: str, open_at: int, limit: int) -> int | None:
+    """Index of the brace closing the group opened at `open_at`, or None when it does not close before `limit`."""
     depth, i = 0, open_at
-    while i < len(text):
+    while i < limit:
         if text[i] == "\\":
             i += 1
         elif text[i] == "{":
@@ -30,9 +33,9 @@ def _brace_end(text: str, open_at: int) -> int:
         elif text[i] == "}":
             depth -= 1
             if depth == 0:
-                return i + 1
+                return i
         i += 1
-    return len(text)
+    return None
 
 
 def _fields(body: str) -> dict[str, str]:
@@ -41,8 +44,9 @@ def _fields(body: str) -> dict[str, str]:
     while (m := FIELD.search(body, pos)) is not None:
         i = m.end()
         if body[i : i + 1] == "{":
-            end = _brace_end(body, i)
-            value, pos = body[i + 1 : end - 1], end
+            close = _close(body, i, len(body))
+            end = len(body) if close is None else close
+            value, pos = body[i + 1 : end], end + 1
         elif body[i : i + 1] == '"':
             end = i + 1
             while end < len(body) and not (body[end] == '"' and body[end - 1] != "\\"):
@@ -55,14 +59,20 @@ def _fields(body: str) -> dict[str, str]:
     return out
 
 
-def parse_bib(text: str) -> list[BibEntry]:
+@functools.lru_cache(maxsize=CACHE_SIZE)
+def parse_bib(text: str) -> tuple[BibEntry, ...]:
+    matches = list(ENTRY.finditer(text))
     entries = []
-    for m in ENTRY.finditer(text):
+    line, counted = 1, 0  # running line count: the entries are in file order
+    for i, m in enumerate(matches):
         kind = m.group(1).lower()
         if kind in NOT_ENTRIES:
             continue
         at = text.index("@", m.start())
-        open_at = text.index("{", at)
-        body = text[m.end() : _brace_end(text, open_at) - 1]
-        entries.append(BibEntry(m.group(2), kind, text.count("\n", 0, at) + 1, _fields(body)))
-    return entries
+        line += text.count("\n", counted, at)
+        counted = at
+        limit = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        close = _close(text, text.index("{", at), limit)
+        body = text[m.end() : limit if close is None else close]
+        entries.append(BibEntry(m.group(2), kind, line, _fields(body)))
+    return tuple(entries)

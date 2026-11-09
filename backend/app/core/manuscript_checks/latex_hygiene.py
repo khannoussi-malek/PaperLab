@@ -121,7 +121,7 @@ def _odd(ch: str) -> bool:
 
 
 def _non_ascii(_blanked: str, text: str):
-    for m in re.finditer(r"[^\n]*[^\x00-\x7f][^\n]*", text):
+    for m in re.finditer(r"^[^\n]*[^\x00-\x7f][^\n]*", text, re.M):  # anchored: unanchored was quadratic
         chars = list(dict.fromkeys(c for c in m.group() if ord(c) > 127 and _odd(c)))
         if not chars:
             continue

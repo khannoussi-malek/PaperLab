@@ -1,3 +1,4 @@
+import time
 from types import MappingProxyType
 
 from app.core.manuscript_checks import references
@@ -120,3 +121,28 @@ def test_cited_short_input_and_own_method_sections_are_silent():
     assert run("references.zero_cite_section", f"\\section{{Background}}\n{WORDS}\n\\input{{sections/bg}}\n") == []
     assert run("references.zero_cite_section", f"\\section{{Method}}\n{WORDS}.\n") == []
     assert run("references.zero_cite_section", f"\\section{{Introduction}}\n{WORDS}\n% \\cite{{a}}\n") != []
+
+
+def test_parse_bib_is_linear_in_the_file_size():
+    # 5,000 entries (870 KB): the per-entry line count rescanned from 0 (1.1 s before the fix)
+    bib = "".join(f"@article{{k{i},\n  title = {{Paper {i}}},\n  year = {{2016}}\n}}\n" for i in range(5000))
+    start = time.perf_counter()
+    assert len(parse_bib(bib)) == 5000
+    assert time.perf_counter() - start < 0.3
+
+
+def test_a_malformed_bib_with_unclosed_entries_parses_fast():
+    # Every entry is unclosed: each brace scan ran to the end of the file (1.8 s for 22 KB, minutes at 100 KB)
+    bad = "@article{k,\n title={x\n" * 1000
+    start = time.perf_counter()
+    entries = parse_bib(bad)
+    assert time.perf_counter() - start < 0.5
+    assert len(entries) == 1000 and entries[0].fields["title"] == "x"
+
+
+def test_the_three_reference_checks_parse_each_bib_once():
+    parse_bib.cache_clear()
+    files = {"main.tex": "\\cite{a}\n", "r.bib": "@misc{a, title={A}}\n@misc{a, title={B}}\n"}
+    for name in ("references.duplicate_key", "references.stub_entry", "references.unused_entry"):
+        run(name, files)
+    assert parse_bib.cache_info().misses == 1

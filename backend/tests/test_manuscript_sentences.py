@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from app.core import manuscript_sentences
 from app.core.manuscript_sentences import cite_spans, claim_hash, in_range, split_sentences, to_plain
 
 TEX = (Path(__file__).parent / "fixtures" / "review_sample.tex").read_text()
@@ -125,3 +126,12 @@ def test_crlf_text_gives_the_same_sentences_once_normalised():
         (s.start, s.end, s.hash) for s in split_sentences(TEX)
     ]
     assert normalize_newlines("a\rb\r\nc") == "a\nb\nc"
+
+
+def test_split_sentences_is_the_span_list_after_the_plain_word_filter():
+    text = ("First sentence here.\n\nA short one. The a~b~c~d~e case stays. \\cite{x} tiny.\n"
+            "A longer sentence with $x+y$ and \\textbf{bold} words in it.\n")
+    spans = manuscript_sentences.sentence_spans(text)
+    expected = [raw for _, _, raw in spans if len(manuscript_sentences.to_plain(raw).split()) >= 4]
+    assert [s.raw for s in manuscript_sentences.split_sentences(text)] == expected
+    assert expected and len(spans) > len(expected)  # the filter really drops some

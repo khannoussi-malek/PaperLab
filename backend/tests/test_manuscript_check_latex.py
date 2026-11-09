@@ -1,3 +1,4 @@
+import time
 from types import MappingProxyType
 
 from app.core.manuscript_checks import latex_hygiene
@@ -156,3 +157,11 @@ def test_tables_that_fit_or_are_wrapped_are_silent():
     assert run("latex.table_width",
                "\\begin{table}\n\\begin{tabularx}{\\textwidth}{XXXXXXXXX}\na\\\\\n\\end{tabularx}\n"
                "\\end{table}\n") == []
+
+
+def test_non_ascii_scan_is_linear_on_a_long_clean_text():
+    # A thesis-sized file with no non-ASCII: the unanchored line regex was quadratic (2.6 s here).
+    line = "We train the model on the corpus and report the mean over five seeds in the table " * 18
+    start = time.perf_counter()
+    assert run("latex.non_ascii", "\n".join([line[:1500]] * 390)) == []
+    assert time.perf_counter() - start < 0.1
