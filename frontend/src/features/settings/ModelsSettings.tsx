@@ -1,10 +1,9 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useConnections } from '@/api/queries'
-import { delayedIn } from '@/components/motion'
+import { LoadingState } from '@/components/LoadingState'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { ConnectionCard } from './ConnectionCard'
 import { ConnectionDialog } from './ConnectionDialog'
 
@@ -37,7 +36,7 @@ export function ModelsSettings() {
             </AlertAction>
           </Alert>
         ) : (
-          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
+          <LoadingState failureCount={connections.failureCount} />
         )
       ) : list.length === 0 ? (
         <div className="rounded-xl border border-dashed border-glass-border px-6 py-10 text-center text-muted-foreground">

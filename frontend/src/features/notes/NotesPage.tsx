@@ -2,13 +2,12 @@ import { useState } from 'react'
 import type { Note } from '@/api/client'
 import { useAllNotes, useNoteMutations, usePapers } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
-import { delayedIn } from '@/components/motion'
+import { LoadingState } from '@/components/LoadingState'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { plural } from '@/features/charts/chartMeta'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { notesHref } from '@/lib/route'
-import { cn } from '@/lib/utils'
 import { ImportMarkdownButton } from './ImportMarkdownButton'
 import { NoteCard } from './NoteCard'
 import { emptyNotesText, filterOptions, filterValue, routeFilter } from './notesPage'
@@ -72,7 +71,7 @@ export function NotesPage({ paper }: { paper: string | null }) {
           notes.isError ? (
             <LoadError message={notes.error.message} onRetry={() => void notes.refetch()} />
           ) : (
-            <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
+            <LoadingState failureCount={notes.failureCount} />
           )
         ) : notes.data.length === 0 ? (
           <p className="notes-empty text-muted-foreground">{emptyNotesText(paper)}</p>
