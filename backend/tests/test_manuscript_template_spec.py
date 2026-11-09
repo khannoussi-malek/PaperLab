@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -11,9 +13,18 @@ GOOD = {
 }
 
 
-def test_every_shipped_folder_lints_clean():
-    for name in mt.TEMPLATES:
-        assert spec.lint(mt.DIR / name) == [], name
+def test_every_folder_on_disk_lints_clean_and_names_are_unique():
+    folders = sorted(p for p in mt.DIR.iterdir() if p.is_dir())
+    assert folders, "no template folders found"
+    names = []
+    for folder in folders:
+        assert spec.lint(folder) == [], folder.name
+        names.append(json.loads((folder / "template.json").read_text())["name"])
+    assert len(names) == len(set(names)), names
+
+
+def test_elsevier_provenance_says_the_bands_are_not_any_journals_rule():
+    assert "not any journal's rule" in mt.get("elsevier").provenance
 
 
 def test_templates_dict_is_unchanged_and_ordered():

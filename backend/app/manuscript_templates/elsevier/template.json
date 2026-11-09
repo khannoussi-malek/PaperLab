@@ -3,7 +3,7 @@
   "label": "Elsevier",
   "order": 4,
   "official": true,
-  "provenance": "elsarticle class from the TeX bundle. No page limit is set.",
+  "provenance": "elsarticle class from the TeX bundle. No page limit is set; the word bands are common values, not any journal's rule.",
   "page_limit": null,
   "references_count": false,
   "abstract_words": [
