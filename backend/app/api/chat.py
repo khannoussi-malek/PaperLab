@@ -1,7 +1,7 @@
 import logging
 import uuid
-from dataclasses import dataclass
 from collections.abc import AsyncIterable, Awaitable, Callable
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -238,9 +238,15 @@ async def prepare_hit_answer(
 ) -> HitPrepared:
     context = await hit_chat.load(session, workspace_id, hit_id)
     if context.source == "abstract":
-        return HitPrepared("abstract", None, hit_chat.prepare_abstract(context, payload.question))
+        prepared = hit_chat.prepare_abstract(context, payload.question, payload.parent_id)
+        await session.commit()  # the stream can take minutes; don't hold a pooled connection
+        return HitPrepared("abstract", None, prepared)
     paper_id = context.paper.id
-    thread = None if payload.parent_id is None else await chat.load_thread(session, paper_id, payload.parent_id)
+    # An abstract answer's id (the hit gained full text mid-thread) isn't a paper answer: start a new thread.
+    parent_id = payload.parent_id
+    if parent_id is not None and any(a.id == parent_id for a in hit_chat.HISTORY.get(hit_id, [])):
+        parent_id = None
+    thread = None if parent_id is None else await chat.load_thread(session, paper_id, parent_id)
     prepared = await _prepare(session, chat.Scope(paper_id=paper_id), payload.question, thread)
     return HitPrepared("full_text", paper_id, prepared)
 
@@ -257,7 +263,8 @@ async def ask_hit(
     yield ServerSentEvent(event="meta", data=HitMetaEvent(source=ready.source))
     if ready.paper_id is not None:
         scope = chat.Scope(paper_id=ready.paper_id)
-        events = answer_events(scope, payload.question, ready.prepared, llm, payload.parent_id)
+        parent_id = None if payload.parent_id in {a.id for a in hit_chat.HISTORY.get(hit_id, [])} else payload.parent_id
+        events = answer_events(scope, payload.question, ready.prepared, llm, parent_id)
     else:
 
         async def save(_: AsyncSession, content: str) -> uuid.UUID:
