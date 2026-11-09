@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ReadingQueueTab } from './ReadingQueueTab'
 import { api } from '@/api/client'
 import * as queries from '@/api/queries'
+import * as stepCounts from '@/features/workspaces/useStepCounts'
 import type { PrismaExportOut } from '@/api/client'
 
 function renderWithClient(ui: React.ReactElement) {
@@ -56,6 +57,7 @@ function mockQueue(data: { rows: object[] } | undefined, extra: Partial<ReturnTy
 
 // Every run has included papers unless a test says otherwise (the default-run probes go through api.readingQueue).
 beforeEach(() => {
+  vi.spyOn(stepCounts, 'useStepCounts').mockReturnValue({})
   vi.spyOn(api, 'readingQueue').mockResolvedValue({ rows: [row] } as any)
 })
 
@@ -136,14 +138,25 @@ test('shows the error and a Retry that refetches when the queue request fails', 
   expect(refetch).toHaveBeenCalled()
 })
 
-test('shows an empty-state message when nothing included has been imported yet', async () => {
+test('with nothing included and nothing waiting, the empty state says how to fill the list and has no button', async () => {
   mockRuns(runsData)
   mockQueue({ rows: [] })
   renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId="run-1" />)
   await screen.findByRole('combobox')
 
-  expect(screen.getByRole('heading', { name: 'No included papers yet' })).toBeInTheDocument()
-  expect(screen.getByText(/no included papers have been imported/i)).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Nothing to read yet' })).toBeInTheDocument()
+  expect(screen.getByText('Papers you include in Full-text review appear here, in reading order.')).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /Full-text review/ })).not.toBeInTheDocument()
+})
+
+test('with papers waiting for full-text review, the empty state links to that tab with the count', async () => {
+  vi.spyOn(stepCounts, 'useStepCounts').mockReturnValue({ screening: 6 })
+  mockRuns(runsData)
+  mockQueue({ rows: [] })
+  renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId={null} />)
+  await screen.findByRole('combobox')
+
+  expect(screen.getByRole('link', { name: 'Go to Full-text review (6 waiting)' })).toHaveAttribute('href', expect.stringContaining('tab=screening'))
 })
 
 test('renders a populated row with its title, priority, reading chip and note count', async () => {
@@ -184,7 +197,7 @@ test('while loading it shows a skeleton, not the empty copy', () => {
   mockQueue(undefined)
   renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId="run-1" />)
   expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
-  expect(screen.queryByText('No included papers yet')).not.toBeInTheDocument()
+  expect(screen.queryByText('Nothing to read yet')).not.toBeInTheDocument()
 })
 
 test('a failed runs query shows the error and Retry, not "No search runs yet"', () => {

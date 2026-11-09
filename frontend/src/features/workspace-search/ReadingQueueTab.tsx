@@ -6,7 +6,9 @@ import { readingChip } from '@/features/reading/passes'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { counted } from '@/features/workspaces/workspaceMeta'
-import { readerHref } from '@/lib/route'
+import { Button } from '@/components/ui/button'
+import { useStepCounts } from '@/features/workspaces/useStepCounts'
+import { readerHref, workspaceHref } from '@/lib/route'
 import { asPrismaRunMeta } from './prismaRunMeta'
 
 const ALL_RUNS = 'all'
@@ -20,6 +22,7 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
   const { data: allRunsData, isPending: runsPending, isError: runsError, error: runsErr, refetch: refetchRuns } = usePrismaExport(workspaceId, 'all')
   const allRuns = allRunsData ? asPrismaRunMeta(allRunsData.runs) : []
 
+  const waiting = useStepCounts(workspaceId).screening ?? 0
   const queue = useReadingQueue(workspaceId, selectedRunId)
   // The queue's rows carry no PDF flag: read it off the workspace's papers (already cached by the Papers tab).
   const noPdfIds = new Set(useWorkspacePapers(workspaceId).data?.filter((p) => p.has_pdf === false).map((p) => p.id))
@@ -61,7 +64,18 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
       )}
       {!queue.isError && queue.data === undefined && <TabSkeleton label="Loading reading list" />}
       {queue.data?.rows.length === 0 && (
-        <EmptyState title="No included papers yet">No included papers have been imported into the library yet.</EmptyState>
+        <EmptyState
+          title="Nothing to read yet"
+          action={
+            waiting > 0 ? (
+              <Button asChild variant="outline" size="sm">
+                <a href={workspaceHref(workspaceId, 'screening', runId)}>{`Go to Full-text review (${waiting} waiting)`}</a>
+              </Button>
+            ) : undefined
+          }
+        >
+          Papers you include in Full-text review appear here, in reading order.
+        </EmptyState>
       )}
       {queue.data && queue.data.rows.length > 0 && (
         <ul className="reading-queue divide-y divide-glass-border rounded-lg border">
