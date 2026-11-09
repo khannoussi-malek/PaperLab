@@ -1550,6 +1550,9 @@ export const useCheckBadge = (id: string, compiledAt: string | null | undefined)
 /** Run every check; the result lives in the panel, so nothing is invalidated. */
 export const useRunChecks = () => useMutation({ mutationFn: (id: string) => api.runChecks(id, {}) })
 
+/** The online DOI check; sends DOIs only, and only when asked. */
+export const useDoiCheck = () => useMutation({ mutationFn: (id: string) => api.runDoiCheck(id) })
+
 /** A compile pins the keys it cited, so each new compiled_at (not the first one seen) refetches the papers. */
 export function usePapersFollowCompile(id: string, compiledAt: string | null | undefined) {
   const client = useQueryClient()

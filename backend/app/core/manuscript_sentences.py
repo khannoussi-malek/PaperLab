@@ -152,10 +152,11 @@ def _chunk_ends(chunk: str):
     yield len(chunk)
 
 
-def split_sentences(text: str) -> list[Sentence]:
+def sentence_spans(text: str) -> list[tuple[int, int, str]]:
+    """(start, end, raw) of every sentence, before the plain-text filter. Cheap: no LaTeX-to-text conversion."""
     blanked = _blank_comments(text)
     masked = _mask(blanked)
-    found: list[Sentence] = []
+    spans: list[tuple[int, int, str]] = []
     for segment in re.finditer(r"[^\0]+", masked):
         base = segment.start()
         cuts = [(0, 0)] + [(m.start(), m.end()) for m in BLANK_LINE.finditer(segment.group())]
@@ -167,18 +168,22 @@ def split_sentences(text: str) -> list[Sentence]:
                 lead = len(piece) - len(piece.lstrip(WS))
                 start, end = base + a + pos + lead, base + a + pos + len(piece.rstrip(WS))
                 pos = stop
-                raw = text[start:end]
-                if not raw.strip():
-                    continue
-                plain = to_plain(raw)
-                if len(plain.split()) < MIN_WORDS:
-                    continue
-                keys = tuple(
-                    dict.fromkeys(
-                        k.strip() for g in CITE.findall(blanked[start:end]) for k in g.split(",") if k.strip()
-                    )
-                )
-                found.append(Sentence(start, end, raw, " ".join(raw.split()), claim_hash(raw), plain, keys))
+                if text[start:end].strip():
+                    spans.append((start, end, text[start:end]))
+    return spans
+
+
+def split_sentences(text: str) -> list[Sentence]:
+    blanked = _blank_comments(text)
+    found: list[Sentence] = []
+    for start, end, raw in sentence_spans(text):
+        plain = to_plain(raw)
+        if len(plain.split()) < MIN_WORDS:
+            continue
+        keys = tuple(
+            dict.fromkeys(k.strip() for g in CITE.findall(blanked[start:end]) for k in g.split(",") if k.strip())
+        )
+        found.append(Sentence(start, end, raw, " ".join(raw.split()), claim_hash(raw), plain, keys))
     return found
 
 

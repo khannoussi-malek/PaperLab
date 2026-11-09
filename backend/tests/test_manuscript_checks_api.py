@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 from app.core import manuscripts, queue
+from app.core.manuscript_checks.registry import REGISTRY
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
 FINDING_KEYS = {"check", "severity", "file", "line", "message", "fix_hint"}
@@ -40,8 +41,10 @@ async def test_run_all_returns_findings_counts_and_ran(client, session):
 async def test_names_and_cost_narrow_the_run(client, session):
     mid = await made(client, session)
     url = f"/api/manuscripts/{mid}/checks/run"
-    assert (await client.post(url, json={"names": ["citations.missing_keys"]})).json()["ran"] == ["citations.missing_keys"]
-    assert (await client.post(url, json={"cost": "cheap"})).json()["ran"] == ["citations.missing_keys"]
+    named = (await client.post(url, json={"names": ["citations.missing_keys"]})).json()["ran"]
+    assert "citations.missing_keys" in named and set(named) <= {"citations.missing_keys"}
+    cheap = (await client.post(url, json={"cost": "cheap"})).json()["ran"]
+    assert {"citations.missing_keys"} <= set(cheap) and set(cheap) <= {c.name for c in REGISTRY if c.cost == "cheap"}
 
 
 async def test_errors(client, session):
@@ -54,5 +57,7 @@ async def test_errors(client, session):
     assert (await client.post(url, json={"names": []})).status_code == 422
     assert (await client.post(url, json={"cost": "huge"})).status_code == 422
     ghost = uuid.uuid4()
-    for r in (await client.post(f"/api/manuscripts/{ghost}/checks/run", json={}), await client.get(f"/api/manuscripts/{ghost}/checks")):
+    responses = (await client.post(f"/api/manuscripts/{ghost}/checks/run", json={}),
+                 await client.get(f"/api/manuscripts/{ghost}/checks"))
+    for r in responses:
         assert r.status_code == 404 and r.json()["detail"] == "unknown_manuscript"

@@ -1,0 +1,139 @@
+# P15 wording lists. Edit here only; wording.py has no phrase of its own.
+# [[ai_phrase]]: pattern, why, optional severity (default "warning"), optional hint.
+
+[[ai_phrase]]
+id = "worth_noting"
+pattern = '\bit\s+is\s+worth\s+(?:noting|mentioning|emphasi[sz]ing)\b'
+why = "a stock opener; state the point directly."
+
+[[ai_phrase]]
+id = "should_be_noted"
+pattern = '\bit\s+should\s+be\s+noted\b'
+why = "a stock opener; state the point directly."
+
+[[ai_phrase]]
+id = "crucial_role"
+pattern = '\bplays?\s+an?\s+(?:crucial|key|vital|pivotal|critical|central|significant)\s+role\b'
+why = "vague; say what it does."
+
+[[ai_phrase]]
+id = "testament"
+pattern = '\ba\s+testament\s+to\b'
+why = "inflated; say what the result shows."
+
+[[ai_phrase]]
+id = "tapestry"
+pattern = '\b(?:(?:rich|intricate)\s+tapestry|tapestry\s+of)\b'
+why = "inflated imagery."
+
+[[ai_phrase]]
+id = "delve"
+pattern = '\bdelv(?:e|es|ing)\s+into\b'
+why = "a stock verb; say examine, study or analyse."
+
+[[ai_phrase]]
+id = "realm"
+pattern = '\b(?:in|within)\s+the\s+realm\s+of\b'
+why = "filler; say in <field>."
+
+[[ai_phrase]]
+id = "ever"
+pattern = '\bever-(?:evolving|changing|growing)\b'
+why = "filler; say what changed."
+
+[[ai_phrase]]
+id = "today"
+pattern = '\bin\s+today\W?s\s+(?:world|era|landscape)\b'
+why = "a stock opener; start with the problem."
+
+[[ai_phrase]]
+id = "navigate"
+pattern = '\bnavigat(?:e|es|ing)\s+the\s+(?:landscape|complexit|intricac)'
+why = "inflated imagery."
+
+[[ai_phrase]]
+id = "paradigm"
+pattern = '\bparadigm\s+shift\b'
+why = "hype; say what changed."
+
+[[ai_phrase]]
+id = "game_changer"
+pattern = '\bgame[- ]?chang(?:er|ing)\b'
+why = "hype; say what changed."
+
+[[ai_phrase]]
+id = "in_order_to"
+pattern = '\bin\s+order\s+to\b'
+why = "wordy."
+severity = "info"
+hint = 'Use "to".'
+
+[guards]
+anchored = '\\[A-Za-z]*[Cc]ite[A-Za-z]*|\\(?:[cC]|auto)?ref\b'
+statistics = '''(?<![A-Za-z\\])p\s*(?:[<=>]|\\l(?:e|eq|t|l)|\\geq?)\s*(?:0?\.\d|\\?10\^)|\bp[\s-]?values?\b|\b(?:t-?test|z-?test|wilcoxon|mann[\s-]?whitney|anova|chi[\s-]?squared?|kruskal|friedman|mcnemar|bootstrap(?:ped)?|permutation\s+test|confidence\s+interval|bonferroni|tukey|welch|cohen|effect\s+size|fisher)\b|\\chi\b|\bCIs?\b'''
+theory = '\b(?:theorem|lemma|proposition|corollary|conjecture|claim|inequality|bound|convergence|NP-hard|NP-complete)\b|\\(?:[cC])?ref\{(?:thm|lem|prop|cor)'
+definitional = '\b(?:definition|formulation|theorem|lemma|notation|equation)\b'
+digit = '\d'
+table_ref = '\\(?:[cC]|auto)?ref\{tab|\bTables?\b'
+
+[[overclaim]]
+id = "significant"
+pattern = '\bsignificant(?:ly)?\b'
+skip_sentence_if = ["statistics", "table_ref"]
+skip_after = '\s+(?:digits?|figures?|bits?)\b'
+severity = "info"  # ambiguous word sense: info, never in the badge (lead ruling)
+why = "no p-value or test name in this sentence."
+hint = 'Name the test and report the p-value or an interval, or write "improves by <delta> (no significance test performed)". If you mean "important", say so.'
+
+[[overclaim]]
+id = "prove"
+pattern = '\bprov(?:e|es|ed|en)\b'
+skip_sentence_if = ["theory", "anchored"]
+skip_after = '\s+(?:useful|difficult|hard|challenging|helpful|valuable|impractical|costly|unnecessary)\b'
+why = "experiments cannot prove; only a proof does."
+hint = 'Experiments support or suggest; only a proof proves. Write "suggests" or "is consistent with".'
+
+[[overclaim]]
+id = "robust"
+pattern = '\brobust(?:ly|ness)?\b'
+skip_sentence_if = ["anchored"]
+skip_after = '\s+(?:standard\s+errors?|statistics?|optimi[sz]ation|regression|PCA|control|estimat\w*|loss|covariance|inference|checks?|tests?|analys[ei]s|experiments?|evaluation|study|studies)\b'
+severity = "info"  # ambiguous word sense: info, never in the badge (lead ruling)
+why = "no table or figure in this sentence shows it."
+hint = "Say what it is robust to and point to the table or figure that shows it."
+
+[[overclaim]]
+id = "generalize"
+pattern = '\bgenerali[sz]es?\b'
+skip_sentence_if = ["anchored", "definitional"]
+severity = "info"  # ambiguous word sense: info, never in the badge (lead ruling)
+why = "it claims settings that were not tested."
+hint = 'Say which settings it was tested on; "generalizes" claims untested ones too.'
+
+[[overclaim]]
+id = "state_of_the_art"
+pattern = '\bstate[\s-]of[\s-]the[\s-]art\b'
+skip_sentence_if = ["anchored"]
+why = "no cited baseline or table in this sentence."
+hint = "Name the baselines and the metric the comparison holds under."
+
+[[overclaim]]
+id = "universally"
+pattern = '\buniversally\b'
+skip_after = '\s+(?:quantified|valid)\b'
+why = "an absolute claim."
+hint = 'Drop "universally" or state the conditions it holds under.'
+
+[[overclaim]]
+id = "extensive"
+pattern = '\bextensive\s+(?:experiment(?:s|ation)?|evaluations?|empirical)\b'
+skip_sentence_if = ["digit"]
+why = "no count of datasets, runs or settings in this sentence."
+hint = "Give the number of datasets, runs or settings instead."
+
+[[overclaim]]
+id = "first_to"
+pattern = '\bwe\s+are\s+the\s+first\b|\b(?:were|was|is|are)\s+the\s+first(?:\s+(?:work|paper|study|method|approach|framework|system|model|algorithm|attempt|one))?\s+to\b|\bto\s+our\s+knowledge,?\s+(?:this\s+is\s+)?the\s+first\b'
+skip_sentence_if = ["anchored"]
+why = "a priority claim with no cited literature check."
+hint = "Priority claims need a cited literature check; say what is new instead."

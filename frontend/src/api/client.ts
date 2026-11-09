@@ -2,6 +2,7 @@ import type { components } from './schema'
 
 export type CheckFinding = components['schemas']['CheckFindingOut']
 export type CheckRunResult = components['schemas']['RunChecksOut']
+export type DoiCheckResult = components['schemas']['DoiCheckOut']
 export type CheckInfo = components['schemas']['CheckInfoOut']
 export type Manuscript = components['schemas']['ManuscriptOut']
 export type ManuscriptDetail = components['schemas']['ManuscriptDetailOut']
@@ -590,6 +591,7 @@ export const api = {
   listManuscriptChecks: (id: string) => request<CheckInfo[]>(`/api/manuscripts/${id}/checks`),
   runChecks: (id: string, body: { names?: string[]; cost?: 'cheap' | 'full' }) =>
     request<CheckRunResult>(`/api/manuscripts/${id}/checks/run`, sendJson('POST', body)),
+  runDoiCheck: (id: string) => request<DoiCheckResult>(`/api/manuscripts/${id}/checks/dois`, { method: 'POST' }),
   startReview: (id: string, body: ReviewStart) =>
     request<ReviewRun>(`/api/manuscripts/${id}/review`, sendJson('POST', body)),
   reviewState: (id: string, file: string) =>

@@ -160,3 +160,9 @@ test('Nothing found only appears after a press, never from the quick run alone',
   await screen.findByText('No quick problems')
   expect(screen.queryByText(/Nothing found/)).toBeNull()
 })
+
+test('the Check DOIs online button is always in the strip', async () => {
+  mockApi(none)
+  show()
+  expect(await screen.findByRole('button', { name: 'Check DOIs online' })).toBeTruthy()
+})

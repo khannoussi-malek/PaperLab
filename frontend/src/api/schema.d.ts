@@ -2202,6 +2202,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/checks/dois": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check Dois Online */
+        post: operations["check_dois_online_api_manuscripts__manuscript_id__checks_dois_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/section-review": {
         parameters: {
             query?: never;
@@ -4228,6 +4245,19 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** DoiCheckOut */
+        DoiCheckOut: {
+            /** Checked */
+            checked: number;
+            /** Not Checked */
+            not_checked: number;
+            /** Findings */
+            findings: components["schemas"]["CheckFindingOut"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
         };
         /** DoneEvent */
         DoneEvent: {
@@ -12369,6 +12399,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunChecksOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_dois_online_api_manuscripts__manuscript_id__checks_dois_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoiCheckOut"];
                 };
             };
             /** @description Validation Error */
