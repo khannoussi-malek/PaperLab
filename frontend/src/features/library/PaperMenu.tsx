@@ -1,4 +1,4 @@
-import { BookOpenCheck, Compass, EllipsisVertical, FolderMinus, FolderPlus, Snowflake } from 'lucide-react'
+import { BookOpenCheck, EllipsisVertical, FolderMinus, FolderPlus, Snowflake } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { sileo } from 'sileo'
 import type { Paper, ReadingIn } from '@/api/client'
@@ -36,7 +36,6 @@ import {
 import { LEVELS, TRIAGES, UNDECIDED_LABEL, type Triage } from '@/features/reading/passes'
 import { snowballMessage } from '@/features/workspace-search/ScreeningTab'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
-import { workspaceHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 
 // Wide enough for "Add to workspace…" and a typical workspace name on one line.
@@ -141,16 +140,10 @@ function MenuItems({ parts: M, paper, workspaceId, onMembershipChange, onReading
         </M.SubContent>
       </M.Sub>
       {workspaceId && (
-        <>
-          <M.Item onSelect={findCiting}>
-            <Snowflake aria-hidden />
-            Find citing &amp; cited papers
-          </M.Item>
-          <M.Item onSelect={() => { window.location.hash = `${workspaceHref(workspaceId, 'tree')}&navPaper=${paper.id}` }}>
-            <Compass aria-hidden />
-            Navigate from here
-          </M.Item>
-        </>
+        <M.Item onSelect={findCiting}>
+          <Snowflake aria-hidden />
+          Find citing &amp; cited papers
+        </M.Item>
       )}
       {workspaceId && (
         <M.Item onSelect={() => onMembershipChange(workspaceId, false)}>

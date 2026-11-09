@@ -22,13 +22,11 @@ async function open(workspaceId?: string) {
 it('offers both snowball items inside a workspace only', async () => {
   await open('w1')
   expect(screen.getByRole('menuitem', { name: 'Find citing & cited papers' })).toBeTruthy()
-  expect(screen.getByRole('menuitem', { name: 'Navigate from here' })).toBeTruthy()
 })
 
 it('hides them outside a workspace', async () => {
   await open()
   expect(screen.queryByRole('menuitem', { name: 'Find citing & cited papers' })).toBeNull()
-  expect(screen.queryByRole('menuitem', { name: 'Navigate from here' })).toBeNull()
 })
 
 it('Find citing & cited papers snowballs from only this paper', async () => {
@@ -38,10 +36,3 @@ it('Find citing & cited papers snowballs from only this paper', async () => {
   await waitFor(() => expect(run).toHaveBeenCalledWith('w1', { seed_paper_ids: ['p1'], backward: true, forward: true }))
 })
 
-it('Navigate from here opens the tree tab with navPaper', async () => {
-  window.location.hash = ''
-  await open('w1')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Navigate from here' }))
-  expect(window.location.hash).toContain('tab=tree')
-  expect(window.location.hash).toContain('navPaper=p1')
-})
