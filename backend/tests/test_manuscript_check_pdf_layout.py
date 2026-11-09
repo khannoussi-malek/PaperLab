@@ -83,3 +83,12 @@ def test_fresh_page_threshold_is_fifteen_words(tmp_path, words_above, expected_b
         {"heading": "References", "heading_y": 600, "extra": " ".join(["w"] * words_above)},
     ])
     assert pl.stats(p).body_pages == expected_body
+
+
+def test_references_heading_in_the_top_band_of_a_letter_page_still_counts(tmp_path):
+    # Heading at y0 ~ 51 on a letter page (inside the top 10%) with no body above it: a real heading, not a running head.
+    p = make(tmp_path / "i.pdf", [
+        {"body": True}, {"body": True},
+        {"heading": "References", "heading_y": 60, "extra": "[1] A"},
+    ])
+    assert pl.stats(p).body_pages == 2

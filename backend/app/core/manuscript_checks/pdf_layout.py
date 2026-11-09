@@ -10,6 +10,7 @@ _HEADING = re.compile(r"^\s*(?:\d+(?:\.\d+)*\.?\s+)?(?:references|bibliography)\
 _UNRESOLVED = re.compile(r"\?\?|\[\?\]")
 _FRESH_PAGE_WORDS = 15  # fewer words than this above the heading: the body ended on the page before
 _HEADER_BAND = 0.10  # top fraction of a page skipped when counting words (running headers)
+_REPEAT_TOLERANCE = 3.0  # pt: a heading-like line repeated on another page at this y is a running head
 
 
 @dataclass(frozen=True)
@@ -30,26 +31,36 @@ def _lines(page: pymupdf.Page) -> list[tuple[float, float, str]]:
     return out
 
 
+def _is_running_head(match: tuple[int, float], matches: list[tuple[int, float]]) -> bool:
+    """A match repeated at about the same y on another page is a running head, not a heading."""
+    page, y0 = match
+    return any(
+        other != page and abs(y0 - other_y0) <= _REPEAT_TOLERANCE
+        for other, other_y0 in matches
+    )
+
+
 def stats(path: Path) -> PdfStats:
     with pymupdf.open(path) as doc:
-        # Keep the last heading match outside the top band: running heads are ignored,
-        # and a contents page may list "References" early.
-        last = None  # (page_no, heading y0, lines, top band y)
-        for page_no, page in enumerate(doc, start=1):
+        pages: list[tuple[list[tuple[float, float, str]], float]] = []  # (lines, top band y) per page
+        matches: list[tuple[int, float]] = []  # (0-based page, y0) of every heading-like line
+        for index, page in enumerate(doc):
             lines = _lines(page)
-            top = _HEADER_BAND * page.rect.height
-            for y0, _, text in lines:
-                if y0 > top and _HEADING.match(text):
-                    last = (page_no, y0, lines, top)
-        if last is None:
+            pages.append((lines, _HEADER_BAND * page.rect.height))
+            matches += [(index, y0) for y0, _, text in lines if _HEADING.match(text)]
+        headings = [m for m in matches if not _is_running_head(m, matches)]
+        if not headings:
             return PdfStats(doc.page_count, None)
-        last_page, heading_y, lines, top = last
+        # The last real heading is the References heading; a contents page may list it earlier.
+        index, heading_y = headings[-1]
+        lines, top = pages[index]
         words = sum(
             len(text.split())
             for y0, y1, text in lines
             if y1 < heading_y and y0 > top
         )
-        body = last_page if words >= _FRESH_PAGE_WORDS else last_page - 1
+        page_no = index + 1
+        body = page_no if words >= _FRESH_PAGE_WORDS else page_no - 1
         return PdfStats(doc.page_count, body or None)
 
 
