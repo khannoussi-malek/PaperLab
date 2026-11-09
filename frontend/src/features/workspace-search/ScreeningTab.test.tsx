@@ -439,7 +439,7 @@ test('the awaiting hits come from the one query step 2 and the counts share (no 
   void spy
 })
 
-test('an unassessed row has no pressed button; an included row has Include pressed', () => {
+test('an unassessed row has unpressed buttons; an included row has only Include pressed', () => {
   mockHits({ imported: { items: [importedHit] }, manual: { items: [{ ...manualHit, stage2_status: 'include' }] } })
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
   const [include1, include2] = screen.getAllByRole('button', { name: 'Include' })
@@ -448,4 +448,19 @@ test('an unassessed row has no pressed button; an included row has Include press
   expect(exclude1).toHaveAttribute('aria-pressed', 'false')
   expect(include2).toHaveAttribute('aria-pressed', 'true')
   expect(exclude2).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('an excluded row has Exclude pressed, and clicking a pressed Include or Exclude does nothing', () => {
+  const spy = vi.spyOn(api, 'setEligibility')
+  mockHits({ imported: { items: [{ ...importedHit, stage2_status: 'exclude' }] }, manual: { items: [{ ...manualHit, stage2_status: 'include' }] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  const [exclude1, exclude2] = screen.getAllByRole('button', { name: 'Exclude' })
+  const [include1, include2] = screen.getAllByRole('button', { name: 'Include' })
+  expect(exclude1).toHaveAttribute('aria-pressed', 'true')
+  expect(include1).toHaveAttribute('aria-pressed', 'false')
+  fireEvent.click(exclude1)
+  fireEvent.click(include2)
+  expect(spy).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: 'Confirm exclude' })).toBeNull()
+  void exclude2
 })

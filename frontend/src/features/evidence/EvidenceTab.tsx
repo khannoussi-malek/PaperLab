@@ -13,6 +13,10 @@ import { Making, NeedsFullText } from './EvidenceBits'
 import { EvidenceCell } from './EvidenceCell'
 import { FIELDS, errorWords, failureReason } from './evidenceFields'
 
+/** One rule for "Needs the full text": no card to read, none being made, and no PDF to make one from. */
+const needsFullText = (row: EvidenceCardRow, noPdf: boolean) =>
+  row.card?.status !== 'ready' && row.card?.status !== 'generating' && noPdf
+
 /** The workspace Evidence tab: one row per paper, one column per card field. */
 export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
   const rows = useEvidenceCards(workspaceId)
@@ -23,7 +27,7 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
   const papers = useWorkspacePapers(workspaceId)
   const withoutPdf = new Set(papers.data?.filter((p) => p.has_pdf === false).map((p) => p.id))
   // Rows that show "Needs the full text": no card to read yet and no PDF to make one from.
-  const needPdf = rows.data?.filter((r) => r.card?.status !== 'ready' && r.card?.status !== 'generating' && withoutPdf.has(r.paper_id)).length ?? 0
+  const needPdf = rows.data?.filter((r) => needsFullText(r, withoutPdf.has(r.paper_id))).length ?? 0
   const error = generateMissing.error ?? generateOne.error
   const generating = rows.data?.filter((r) => r.card?.status === 'generating').length ?? 0
 
@@ -136,7 +140,7 @@ function PaperRow({ row, workspaceId, hasPdf, onGenerate }: RowProps) {
         <TableCell colSpan={FIELDS.length} className="align-top">
           {card?.status === 'generating' ? (
             <Making title={title} />
-          ) : !hasPdf ? (
+          ) : needsFullText(row, !hasPdf) ? (
             <NeedsFullText />
           ) : (
             <div className="flex flex-wrap items-center gap-3 text-sm">

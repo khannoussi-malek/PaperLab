@@ -182,6 +182,16 @@ test('a header uses singular wording when one paper needs a PDF', async () => {
   expect(await screen.findByText('1 paper needs its PDF before AI can read it.')).toBeInTheDocument()
 })
 
+test('a failed card whose paper has a PDF is not counted as needing a PDF', async () => {
+  const failed = { ...ready(), status: 'failed', error: 'model_error' } as EvidenceCard
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(failed, 'p1', 'A'), row(null, 'p2', 'B')])
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([
+    { id: 'p1', has_pdf: true }, { id: 'p2', has_pdf: false },
+  ] as Awaited<ReturnType<typeof api.listWorkspacePapers>>)
+  renderTab()
+  expect(await screen.findByText('1 paper needs its PDF before AI can read it.')).toBeInTheDocument()
+})
+
 test('no header line when every paper has its PDF', async () => {
   vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(null, 'p1', 'A')])
   vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([{ id: 'p1', has_pdf: true }] as Awaited<ReturnType<typeof api.listWorkspacePapers>>)

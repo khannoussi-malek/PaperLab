@@ -60,7 +60,8 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
           {byline && <p className="truncate text-xs text-muted-foreground">{byline}</p>}
         </div>
         {/* Four fixed slots, so the actions line up down the list; an unavailable action leaves its slot empty. */}
-        <div className="grid grid-cols-[7rem_5rem_5.5rem_auto] items-center gap-2">
+        {/* Below sm the slots wrap in a flex row with Upload PDF first; from sm up they form the aligned grid. */}
+        <div className="flex flex-wrap items-center gap-2 sm:grid sm:grid-cols-[7rem_5rem_5.5rem_auto]">
           <div data-slot="action" className="whitespace-nowrap">
             <a
               href={`https://scholar.google.com/scholar?q=${encodeURIComponent(title)}`}
@@ -70,21 +71,21 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
               Search by title
             </a>
           </div>
-          <div data-slot="action" className="whitespace-nowrap">
+          <div data-slot="action" aria-hidden={openPage ? undefined : true} className="whitespace-nowrap empty:hidden sm:empty:block">
             {openPage && (
               <a href={openPage} target="_blank" rel="noreferrer">
                 Open page
               </a>
             )}
           </div>
-          <div data-slot="action">
+          <div data-slot="action" aria-hidden={hit.doi ? undefined : true} className="empty:hidden sm:empty:block">
             {hit.doi && (
               <Button type="button" variant="ghost" size="sm" onClick={() => copyDoi(hit.doi!)}>
                 Copy DOI
               </Button>
             )}
           </div>
-          <div data-slot="action">
+          <div data-slot="action" className="order-first sm:order-none">
             <UploadPdfButton
               title={title}
               disabled={upload.isPending}

@@ -307,4 +307,16 @@ test('a row without a DOI keeps four action slots, with Upload PDF in the last o
   expect(slots[1]).toBeEmptyDOMElement()
   expect(slots[2]).toBeEmptyDOMElement()
   expect(slots[3]).toContainElement(screen.getByLabelText('Upload PDF for unreachable paper'))
+  expect(slots[1]).toHaveAttribute('aria-hidden', 'true')
+  expect(slots[2]).toHaveAttribute('aria-hidden', 'true')
+  expect(slots[0]).not.toHaveAttribute('aria-hidden')
+})
+
+test('the action slots wrap on a phone, Upload PDF first, and form a grid from sm up', () => {
+  const { container } = renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  const slots = container.querySelectorAll('[data-slot="action"]')
+  const wrapper = slots[0].parentElement!
+  expect(wrapper.className).toContain('flex-wrap')
+  expect(wrapper.className).toContain('sm:grid-cols-[7rem_5rem_5.5rem_auto]')
+  expect(slots[3].className).toContain('order-first')
 })
