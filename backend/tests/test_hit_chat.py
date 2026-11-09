@@ -37,7 +37,9 @@ async def test_hit_chat_abstract_only_marks_source(client, session, fake_llm):
 async def test_hit_chat_delegates_to_paper_chat_when_full_text(client, session, fake_llm):
     workspace, [hit] = await make_pool(session, [("Abstract text.", None)])
     paper, _ = await make_paper(session, ["Intro text.", "Method text."])
-    hit.paper_id = paper.id
+    await session.refresh(paper)
+    paper_id = paper.id
+    hit.paper_id = paper_id
     await session.commit()
 
     response = await client.post(url(workspace, hit), json={"question": "What is the method?"})
@@ -48,7 +50,7 @@ async def test_hit_chat_delegates_to_paper_chat_when_full_text(client, session, 
     assert "Method text." in fake_llm.calls[0][1]
     [answer] = (await client.get(url(workspace, hit))).json()
     assert answer["question"] == "What is the method?"
-    assert (await client.get(f"/api/papers/{paper.id}/chat")).json()[0]["id"] == answer["id"]
+    assert (await client.get(f"/api/papers/{paper_id}/chat")).json()[0]["id"] == answer["id"]
 
 
 async def test_hit_chat_foreign_hit_404(client, session, fake_llm):
