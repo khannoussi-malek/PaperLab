@@ -76,7 +76,7 @@ export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading, 
         </div>
       </div>
       {byline && <p className="text-xs text-muted-foreground">{byline}</p>}
-      <p className="text-xs text-muted-foreground">Level {node.level} · {node.paths === 0 ? 'added by hand' : `reached by ${node.paths} ${node.paths === 1 ? 'route' : 'routes'}`} · {hasPdf ? 'PDF available' : 'no PDF yet'}</p>
+      <p className="text-xs text-muted-foreground">Level {node.level} · {node.paths === 0 && !isHit ? 'added by hand' : `reached by ${node.paths} ${node.paths === 1 ? 'route' : 'routes'}`} · {hasPdf ? 'PDF available' : 'no PDF yet'}</p>
       {isHit ? <Fit hit={hit} workspaceId={workspaceId} /> : <p className="text-sm text-muted-foreground">Added by hand: no fit score</p>}
       <Abstract text={hit?.abstract ?? library?.abstract} />
       {grabs[node.id]?.status === 'done' && <p role="status" className="text-xs text-muted-foreground">{grabLine(node, data, grabs[node.id])}</p>}
