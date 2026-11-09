@@ -16,12 +16,29 @@ const show = () =>
     </QueryClientProvider>,
   )
 
-it('lists the finds as reader links in a polite status region', async () => {
+it('summarises several finds in a polite status region, titles hidden until Show', async () => {
   vi.spyOn(api, 'foundPdfs').mockResolvedValue([find('a', 'Alpha'), find('b', 'Beta')])
   show()
   const region = await screen.findByRole('status')
-  expect(region).toHaveTextContent('Found free PDFs for 2 papers saved without one:')
+  expect(region).toHaveTextContent('Found free PDFs for 2 papers saved without one.')
+  expect(screen.queryByRole('link', { name: 'Alpha' })).toBeNull()
+  const toggle = screen.getByRole('button', { name: 'Show' })
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(toggle)
+  expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-expanded', 'true')
   expect(screen.getByRole('link', { name: 'Alpha' })).toHaveAttribute('href', expect.stringContaining('a'))
+  expect(screen.getByRole('link', { name: 'Beta' })).toBeInTheDocument()
+  expect(screen.getAllByRole('listitem')).toHaveLength(2)
+})
+
+it('a single find gets its own wording and no Show toggle', async () => {
+  vi.spyOn(api, 'foundPdfs').mockResolvedValue([find('a', 'Alpha')])
+  show()
+  const region = await screen.findByRole('status')
+  expect(region).toHaveTextContent('Found a free PDF for "Alpha".')
+  expect(screen.getByRole('link', { name: 'Alpha' })).toHaveAttribute('href', expect.stringContaining('a'))
+  expect(screen.queryByRole('button', { name: 'Show' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument()
 })
 
 it('Dismiss posts exactly the shown ids, then asks again', async () => {
@@ -51,6 +68,7 @@ it('refreshes the library when more finds arrive, so their "No PDF yet" badges g
   await screen.findByRole('link', { name: 'Alpha' })
   expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.papers }) // the first list is not news
   await client.refetchQueries({ queryKey: keys.foundPdfs })
+  fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
   await screen.findByRole('link', { name: 'Beta' })
   expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.papers })
 })
