@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, ApiError, type ManuscriptDetail } from '@/api/client'
+import { api, ApiError, type CheckFinding, type ManuscriptDetail } from '@/api/client'
 import { keptTexts } from './keptTexts'
 import { ManuscriptPage } from './ManuscriptPage'
 
@@ -71,6 +71,8 @@ beforeEach(() => {
   vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
   vi.spyOn(api, 'getManuscriptFile').mockImplementation(async (_id, path) => ({ path, text: server[path].text, updated_at: server[path].at }))
   vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's1', reason: 'compile', created_at: T2 }])
+  vi.spyOn(api, 'listChecks').mockResolvedValue([])
+  vi.spyOn(api, 'runChecks').mockResolvedValue({ ran: [], findings: [], counts: { error: 0, warning: 0, info: 0 } })
 })
 afterEach(() => {
   vi.restoreAllMocks()
@@ -1082,4 +1084,44 @@ test('stops polling once unmounted', async () => {
   vi.mocked(api.getManuscriptFile).mockClear()
   await tick(20000)
   expect(api.getManuscriptFile).not.toHaveBeenCalled()
+})
+
+const ran = (findings: CheckFinding[]) => ({ ran: ['citations.missing_keys'], findings, counts: { error: findings.length, warning: 0, info: 0 } })
+const missing: CheckFinding = { check: 'citations.missing_keys', severity: 'error', file: 'main.tex', line: 1, message: 'Cited key k0 matches no paper', fix_hint: null }
+
+test('the PDF column carries the Checks strip, not the old Cited-but-not-found strip', async () => {
+  renderPage()
+  expect(await screen.findByRole('region', { name: 'Checks' })).toBeTruthy()
+  expect(screen.queryByText('Cited but not found')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Check' })).toBeTruthy()
+})
+
+test('Ctrl+S saves, the editor settles, and the quick checks refresh', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  const spy = vi.mocked(api.runChecks)
+  renderPage()
+  await screen.findByRole('region', { name: 'Checks' })
+  const quick = () => spy.mock.calls.filter(([, b]) => b.cost === 'cheap').length
+  const before = quick()
+  ctrlS(await type('hello world'))
+  await waitFor(() => expect(quick()).toBeGreaterThan(before))
+})
+
+test('opening a file is not an edit: the stale line stays off after a Check', async () => {
+  vi.mocked(api.runChecks).mockResolvedValue(ran([missing]))
+  const page = renderPage('main.tex')
+  fireEvent.click(await screen.findByRole('button', { name: 'Check' }))
+  await screen.findByRole('region', { name: 'Checks' })
+  page.open('b.tex')
+  await screen.findByLabelText('LaTeX source')
+  expect(screen.queryByText("You've edited since this check. Press Check again.")).toBeNull()
+})
+
+test('a save that settles after a Check makes the result stale', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  vi.mocked(api.runChecks).mockResolvedValue(ran([missing]))
+  renderPage()
+  fireEvent.click(await screen.findByRole('button', { name: 'Check' }))
+  ctrlS(await type('hello world'))
+  expect(await screen.findByText("You've edited since this check. Press Check again.")).toBeTruthy()
 })
