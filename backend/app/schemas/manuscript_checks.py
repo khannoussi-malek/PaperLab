@@ -18,7 +18,7 @@ class RunChecksIn(BaseModel):
     cost: Literal["cheap", "full"] | None = None  # "cheap" = only cheap checks; None/"full" = all
 
 
-class FindingOut(BaseModel):
+class CheckFindingOut(BaseModel):
     check: str
     severity: Literal["error", "warning", "info"]
     file: str | None
@@ -29,5 +29,5 @@ class FindingOut(BaseModel):
 
 class RunChecksOut(BaseModel):
     ran: list[str]
-    findings: list[FindingOut]
+    findings: list[CheckFindingOut]
     counts: dict[str, int]

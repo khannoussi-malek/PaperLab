@@ -47,10 +47,12 @@ async def test_names_and_cost_narrow_the_run(client, session):
 async def test_errors(client, session):
     mid = await made(client, session)
     url = f"/api/manuscripts/{mid}/checks/run"
-    assert (await client.post(url, json={"names": ["nope"]})).status_code == 422
+    r = await client.post(url, json={"names": ["nope"]})
+    assert r.status_code == 422 and r.json()["detail"] == "unknown_check"
+    assert "citations.missing_keys" in r.json()["available"]
     assert (await client.post(url, json={"extra": 1})).status_code == 422
     assert (await client.post(url, json={"names": []})).status_code == 422
     assert (await client.post(url, json={"cost": "huge"})).status_code == 422
     ghost = uuid.uuid4()
-    assert (await client.post(f"/api/manuscripts/{ghost}/checks/run", json={})).status_code == 404
-    assert (await client.get(f"/api/manuscripts/{ghost}/checks")).status_code == 404
+    for r in (await client.post(f"/api/manuscripts/{ghost}/checks/run", json={}), await client.get(f"/api/manuscripts/{ghost}/checks")):
+        assert r.status_code == 404 and r.json()["detail"] == "unknown_manuscript"

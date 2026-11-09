@@ -140,6 +140,20 @@ test('a failed run shows an alert and a Sileo toast, keeps the button as the ret
   await waitFor(() => expect((screen.getByRole('button', { name: 'Check' }) as HTMLButtonElement).disabled).toBe(false))
 })
 
+test('a failed re-run after an edit keeps the stale line with the old result', async () => {
+  const spy = mockApi(none, result([f(0)]))
+  const { again } = show()
+  fireEvent.click(await screen.findByRole('button', { name: 'Check' }))
+  await screen.findByText(/k0/)
+  again(1)
+  expect(await screen.findByText("You've edited since this check. Press Check again.")).toBeTruthy()
+  spy.mockImplementation(async (_id, body) => { if (body.cost === 'cheap') return none; throw new ApiError('boom', 500, {}) })
+  fireEvent.click(screen.getByRole('button', { name: 'Check' }))
+  await screen.findByRole('alert')
+  expect(screen.getByText("You've edited since this check. Press Check again.")).toBeTruthy()
+  expect(screen.getByText(/k0/)).toBeTruthy()
+})
+
 test('Nothing found only appears after a press, never from the quick run alone', async () => {
   mockApi(none)
   show()

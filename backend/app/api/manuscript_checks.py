@@ -6,7 +6,7 @@ from app.api.deps import SessionDep
 from app.core import manuscripts
 from app.core.manuscript_checks import service
 from app.core.manuscript_checks.registry import REGISTRY
-from app.schemas.manuscript_checks import CheckInfoOut, FindingOut, RunChecksIn, RunChecksOut
+from app.schemas.manuscript_checks import CheckInfoOut, CheckFindingOut, RunChecksIn, RunChecksOut
 
 router = APIRouter(tags=["manuscripts"])
 BASE = "/api/manuscripts/{manuscript_id}/checks"
@@ -21,4 +21,4 @@ async def list_checks(manuscript_id: uuid.UUID, session: SessionDep) -> list[Che
 @router.post(BASE + "/run")
 async def run_checks(manuscript_id: uuid.UUID, body: RunChecksIn, session: SessionDep) -> RunChecksOut:
     run = await service.run_checks(session, manuscript_id, body.names, body.cost)
-    return RunChecksOut(ran=run.ran, counts=run.counts, findings=[FindingOut(**vars(f)) for f in run.findings])
+    return RunChecksOut(ran=run.ran, counts=run.counts, findings=[CheckFindingOut(**vars(f)) for f in run.findings])

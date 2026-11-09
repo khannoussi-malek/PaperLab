@@ -71,7 +71,7 @@ beforeEach(() => {
   vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
   vi.spyOn(api, 'getManuscriptFile').mockImplementation(async (_id, path) => ({ path, text: server[path].text, updated_at: server[path].at }))
   vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's1', reason: 'compile', created_at: T2 }])
-  vi.spyOn(api, 'listChecks').mockResolvedValue([])
+  vi.spyOn(api, 'listManuscriptChecks').mockResolvedValue([])
   vi.spyOn(api, 'runChecks').mockResolvedValue({ ran: [], findings: [], counts: { error: 0, warning: 0, info: 0 } })
 })
 afterEach(() => {
@@ -1111,7 +1111,7 @@ test('opening a file is not an edit: the stale line stays off after a Check', as
   vi.mocked(api.runChecks).mockResolvedValue(ran([missing]))
   const page = renderPage('main.tex')
   fireEvent.click(await screen.findByRole('button', { name: 'Check' }))
-  await screen.findByRole('region', { name: 'Checks' })
+  await screen.findByText(/Cited key k0/)
   page.open('b.tex')
   await screen.findByLabelText('LaTeX source')
   expect(screen.queryByText("You've edited since this check. Press Check again.")).toBeNull()

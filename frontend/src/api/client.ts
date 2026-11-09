@@ -1,7 +1,6 @@
 import type { components } from './schema'
 
-export type Severity = 'error' | 'warning' | 'info'
-export type CheckFinding = components['schemas']['app__schemas__manuscript_checks__FindingOut']
+export type CheckFinding = components['schemas']['CheckFindingOut']
 export type CheckRunResult = components['schemas']['RunChecksOut']
 export type CheckInfo = components['schemas']['CheckInfoOut']
 export type Manuscript = components['schemas']['ManuscriptOut']
@@ -21,7 +20,7 @@ export type ReviewState = components['schemas']['ReviewOut']
 export type ReviewSentence = components['schemas']['SentenceOut']
 export type ReviewStart = { file: string; base: string; from?: number | null; to?: number | null; include_uncited?: boolean; confirm_remote?: boolean }
 export type SectionReview = components['schemas']['SectionReviewOut']
-export type SectionFinding = components['schemas']['app__schemas__manuscript_section_review__FindingOut']
+export type SectionFinding = components['schemas']['FindingOut']
 export type SectionRef = components['schemas']['RefOut']
 export type SectionSpan = components['schemas']['SectionSpanOut']
 export type SectionReviewStart = components['schemas']['SectionReviewIn']

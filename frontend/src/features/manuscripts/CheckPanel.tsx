@@ -42,9 +42,9 @@ export function CheckPanel({ manuscriptId, savedTick, compiledAt, onJump }: Prop
   const [lastTick, setLastTick] = useState<number | null>(null)
 
   const onCheck = () => {
-    setLastTick(savedTick)
+    const tick = savedTick
     run.mutate(manuscriptId, {
-      onSuccess: setFull,
+      onSuccess: (r) => { setFull(r); setLastTick(tick) },
       onError: () => sileo.error({ title: "Couldn't run the checks" }),
     })
   }

@@ -3728,6 +3728,24 @@ export interface components {
             /** From Abstract */
             from_abstract: boolean;
         };
+        /** CheckFindingOut */
+        CheckFindingOut: {
+            /** Check */
+            check: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning" | "info";
+            /** File */
+            file: string | null;
+            /** Line */
+            line: number | null;
+            /** Message */
+            message: string;
+            /** Fix Hint */
+            fix_hint: string | null;
+        };
         /** CheckInfoOut */
         CheckInfoOut: {
             /** Name */
@@ -4469,6 +4487,18 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** FindingOut */
+        FindingOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "missing" | "unsupported" | "supported";
+            /** Point */
+            point: string;
+            /** Refs */
+            refs: components["schemas"]["RefOut"][];
         };
         /**
          * FoundPdfOut
@@ -6334,7 +6364,7 @@ export interface components {
             /** Ran */
             ran: string[];
             /** Findings */
-            findings: components["schemas"]["app__schemas__manuscript_checks__FindingOut"][];
+            findings: components["schemas"]["CheckFindingOut"][];
             /** Counts */
             counts: {
                 [key: string]: number;
@@ -6881,7 +6911,7 @@ export interface components {
             /** Reason */
             reason: string | null;
             /** Findings */
-            findings: components["schemas"]["app__schemas__manuscript_section_review__FindingOut"][];
+            findings: components["schemas"]["FindingOut"][];
             /** Dropped */
             dropped: number;
             /** Model */
@@ -7571,36 +7601,6 @@ export interface components {
         WorkspaceRename: {
             /** Name */
             name: string;
-        };
-        /** FindingOut */
-        app__schemas__manuscript_checks__FindingOut: {
-            /** Check */
-            check: string;
-            /**
-             * Severity
-             * @enum {string}
-             */
-            severity: "error" | "warning" | "info";
-            /** File */
-            file: string | null;
-            /** Line */
-            line: number | null;
-            /** Message */
-            message: string;
-            /** Fix Hint */
-            fix_hint: string | null;
-        };
-        /** FindingOut */
-        app__schemas__manuscript_section_review__FindingOut: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "missing" | "unsupported" | "supported";
-            /** Point */
-            point: string;
-            /** Refs */
-            refs: components["schemas"]["RefOut"][];
         };
     };
     responses: never;
