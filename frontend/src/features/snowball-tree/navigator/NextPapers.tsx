@@ -36,6 +36,7 @@ function Row({ node, kind, workspaceId, data, onStep, grab, grabs, parentId }: {
         <span className="min-w-0 flex-1 truncate font-medium" title={node.title}>{node.title}</span>
         {node.year ? <span className="shrink-0 text-xs text-muted-foreground">{node.year}</span> : null}
       </div>
+      {node.reason && <p className="line-clamp-1 text-xs text-muted-foreground">{node.reason}</p>}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {!isHit ? <span>no fit score</span> : fit != null ? <span className="rounded-full bg-muted px-2 py-0.5">{`fits ${fit}/5`}</span> : (
           <>
