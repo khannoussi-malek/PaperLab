@@ -21,7 +21,7 @@ export function Breadcrumb({ path, data, onGo }: Props) {
   const hiddenFrom = 1
   const hiddenTo = path.length - 2
   const entryButton = (index: number) => (
-    <button type="button" onClick={() => onGo(index)} className="max-w-[16rem] truncate rounded px-1 hover:bg-muted" title={labelOf(path[index].id, data)}>
+    <button type="button" onClick={() => onGo(index)} className={`min-w-0 truncate rounded px-1 hover:bg-muted ${index === path.length - 1 ? 'shrink' : 'shrink-[4]'}`} title={labelOf(path[index].id, data)}>
       {labelOf(path[index].id, data)}
     </button>
   )
@@ -33,12 +33,12 @@ export function Breadcrumb({ path, data, onGo }: Props) {
         const via = item === 'more' ? undefined : path[index].via
         return (
           <Fragment key={item === 'more' ? 'more' : item.id}>
-            {i > 0 && <span aria-hidden className="text-muted-foreground">›</span>}
-            {via && SEPARATOR[via] && i > 0 && <span className="text-xs italic text-muted-foreground">{SEPARATOR[via]}</span>}
+            {i > 0 && <span aria-hidden className="shrink-0 text-muted-foreground">›</span>}
+            {via && SEPARATOR[via] && i > 0 && <span className="shrink-0 text-xs italic text-muted-foreground">{SEPARATOR[via]}</span>}
             {item === 'more' ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="…" className="rounded px-1 hover:bg-muted">…</button>
+                  <button type="button" aria-label={`Show ${hiddenTo - hiddenFrom} earlier steps`} className="shrink-0 rounded px-1 hover:bg-muted">…</button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   {path.slice(hiddenFrom, hiddenTo).map((e, k) => (

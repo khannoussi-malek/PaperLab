@@ -1,5 +1,5 @@
 import type { ProvenanceOut } from '@/api/client'
-import { primaryParent } from '../layout'
+import { isUnknown, primaryParent } from '../layout'
 
 export type NavEntry = { id: string; via: 'search' | 'cites' | 'cited_by' | 'hand' }
 
@@ -16,7 +16,7 @@ export function primaryPath(data: ProvenanceOut, nodeId: string): NavEntry[] {
     out.unshift({ id, via: viaOf(link.kind) })
     id = link.parent
   }
-  if (out.length === 0) return []
+  if (out.length === 0) return data.nodes.some((n) => n.id === nodeId) ? [{ id: nodeId, via: 'search' }] : []
   const rootId = parents.get(out[0].id)!.parent
   return [{ id: rootId, via: rootId === 'root:hand' ? 'hand' : 'search' }, ...out]
 }
@@ -26,16 +26,18 @@ export const toParam = (path: NavEntry[]): string => path.map((e) => e.id).join(
 /** Reads `nav=` back into a path, cutting at the first id that is gone or no longer a child of the one before. */
 export function parseNav(param: string, data: ProvenanceOut): { path: NavEntry[]; cut: boolean } {
   const ids = param.split(SEP).filter(Boolean)
+  const parents = primaryParent(data.links, data.roots, data.nodes)
   const path: NavEntry[] = []
   for (const id of ids) {
     const prev = path[path.length - 1]
     if (!prev) {
-      const known = data.roots.some((r) => r.id === id) || data.nodes.some((n) => n.id === id) || data.links.some((l) => l.parent === id)
-      if (!known) break
+      const isRoot = id.startsWith('root:') && (data.roots.some((r) => r.id === id) || data.links.some((l) => l.parent === id))
+      if (!isRoot && !(isUnknown(id) && data.nodes.some((n) => n.id === id))) break
       path.push({ id, via: id === 'root:hand' ? 'hand' : 'search' })
       continue
     }
-    const link = data.links.find((l) => l.parent === prev.id && l.child === id)
+    const main = parents.get(id)
+    const link = main?.parent === prev.id ? main : data.links.find((l) => l.parent === prev.id && l.child === id)
     if (!link) break
     path.push({ id, via: viaOf(link.kind) })
   }

@@ -23,7 +23,7 @@ test('a long path shows first, … and the last two; the menu lists the hidden o
   const onGo = vi.fn()
   render(<Breadcrumb path={primaryPath(prov, 'F')} data={prov} onGo={onGo} />)
   expect(screen.queryByRole('button', { name: 'Paper B' })).toBeNull()
-  fireEvent.keyDown(screen.getByRole('button', { name: '…' }), { key: 'Enter' })
+  fireEvent.keyDown(screen.getByRole('button', { name: /earlier steps/ }), { key: 'Enter' })
   const items = await screen.findAllByRole('menuitem')
   expect(items.map((i) => i.textContent)).toEqual(['Paper A', 'Paper B', 'Paper C', 'Paper D'])
   fireEvent.click(screen.getByRole('menuitem', { name: 'Paper B' }))
