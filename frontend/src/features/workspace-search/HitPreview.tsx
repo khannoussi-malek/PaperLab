@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { sileo } from 'sileo'
 import type { Hit, HitReviewUpdate } from '@/api/client'
 import { glass } from '@/components/glass'
@@ -19,6 +19,10 @@ type Props = {
   workspaceId?: string
   /** Inside the Snowball tree's side panel, which has its own snowball and Navigate buttons. */
   inTree?: boolean
+  /** Inside the Full details dialog: one plain column (the dialog is the frame and shows the title), DOI link, styled PDF picker. */
+  wide?: boolean
+  /** Wide only: rendered between the facts and the abstract (the AI fit). */
+  extra?: ReactNode
   onReview: (hitId: string, body: HitReviewUpdate) => void
   onAddPdf: (hitId: string) => void
   addPdfPending: boolean
@@ -37,7 +41,7 @@ type Props = {
  * PDF acquisition is deliberately per-hit, not bulk: adding a PDF is what starts ingestion (chunking, embedding)
  * for that paper, and there is no "import everything in this filter" action anywhere in this feature — the user
  * decides, one paper at a time, when that cost is worth paying. */
-export function HitPreview({ hit, workspaceId, inTree, onReview, onAddPdf, addPdfPending, onUpload, uploadPending }: Props) {
+export function HitPreview({ hit, workspaceId, inTree, wide, extra, onReview, onAddPdf, addPdfPending, onUpload, uploadPending }: Props) {
   const title = hit.title || hit.normalized_title
   const byline = [hit.authors?.join(', ') || null, hit.year, hit.venue].filter(Boolean).join(' · ')
   const [reason, setReason] = useState<ExcludeReason | ''>('')
@@ -45,6 +49,7 @@ export function HitPreview({ hit, workspaceId, inTree, onReview, onAddPdf, addPd
   // Only doi ever reaches HitOut, so pageLink's other identifiers are always null here — same as
   // ManualAcquisitionTab, just fed less to work with.
   const openPage = pageLink({ doi: hit.doi ?? null, external_ids: {} })
+  const fileInput = useRef<HTMLInputElement>(null)
   const needsAcquisition = hit.acquisition_status !== 'imported' && hit.acquisition_status !== 'manual'
 
   const markNotRelevant = () => {
@@ -70,26 +75,34 @@ export function HitPreview({ hit, workspaceId, inTree, onReview, onAddPdf, addPd
       // available height) instead of respecting the bounded height its parent already has — its own
       // overflow-y-auto then has nothing left to actually clip, and content spills past the panel instead of
       // scrolling inside it.
-      className={cn('hit-preview flex h-full flex-col gap-2 overflow-x-hidden overflow-y-auto rounded-xl p-4 ring-1 ring-glass-border', glass)}
+      className={cn('hit-preview flex flex-col gap-2', wide ? 'wrap-anywhere' : cn('h-full overflow-x-hidden overflow-y-auto rounded-xl p-4 ring-1 ring-glass-border', glass))}
     >
-      <h2 className="font-heading text-lg leading-snug font-semibold wrap-anywhere">{title}</h2>
+      {!wide && <h2 className="font-heading text-lg leading-snug font-semibold wrap-anywhere">{title}</h2>}
       {workspaceId && <WhyTrail workspaceId={workspaceId} hitId={hit.id} />}
-      {workspaceId && !inTree && <HitSnowball key={hit.id} workspaceId={workspaceId} hitId={hit.id} />}
+      {workspaceId && !inTree && !wide && <HitSnowball key={hit.id} workspaceId={workspaceId} hitId={hit.id} />}
       {byline && <p className="text-sm text-muted-foreground">{byline}</p>}
+      {wide && hit.doi && (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">DOI</span>
+          <a href={`https://doi.org/${hit.doi}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">{hit.doi}</a>
+          <Button type="button" variant="ghost" size="sm" className="h-auto p-0 text-xs" onClick={() => copyDoi(hit.doi!)}>Copy</Button>
+        </p>
+      )}
       {hit.sources.length > 0 && (
         <p className="text-xs text-muted-foreground">Found via {hit.sources.map(sourceLabel).join(', ')}</p>
       )}
+      {wide && extra}
       {hit.abstract ? (
         <p className="mt-2 text-sm whitespace-pre-line">{hit.abstract}</p>
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">No abstract available for this result.</p>
       )}
-      {hit.suggestion && (
+      {!wide && hit.suggestion && (
         <p className="text-xs text-muted-foreground">
           <SuggestionChip hit={hit} /> {hit.suggestion_note}
         </p>
       )}
-      <SuggestionWhy hit={hit} />
+      {!wide && <SuggestionWhy hit={hit} />}
 
       <div className="mt-2 flex flex-col gap-2 border-t border-glass-border pt-3">
         <div className="flex gap-2">
@@ -144,13 +157,20 @@ export function HitPreview({ hit, workspaceId, inTree, onReview, onAddPdf, addPd
                 Open page
               </a>
             )}
-            {hit.doi && (
+            {!wide && hit.doi && (
               <Button type="button" variant="ghost" size="sm" className="h-auto p-0 text-xs" onClick={() => copyDoi(hit.doi!)}>
                 Copy DOI
               </Button>
             )}
           </div>
-          {/* A native file input has a fixed intrinsic width (~250px) that overflows a narrow panel; w-full lets it shrink. */}
+          {wide ? (
+            <>
+              <input ref={fileInput} type="file" accept="application/pdf" className="sr-only" tabIndex={-1} aria-label={`Upload PDF for ${title}`} disabled={uploadPending}
+                onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) onUpload(hit.id, file) }} />
+              <Button type="button" variant="outline" size="sm" className="self-start" disabled={uploadPending} onClick={() => fileInput.current?.click()}>Upload PDF</Button>
+            </>
+          ) : (
+          // A native file input has a fixed intrinsic width (~250px) that overflows a narrow panel; w-full lets it shrink. */}
           <label className="min-w-0">
             <span className="sr-only">{`Upload PDF for ${title}`}</span>
             <input
@@ -165,6 +185,7 @@ export function HitPreview({ hit, workspaceId, inTree, onReview, onAddPdf, addPd
               }}
             />
           </label>
+          )}
           {copyError && (
             <p role="alert" className="text-xs text-destructive">
               {copyError}

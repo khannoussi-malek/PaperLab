@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Hit, Paper, ProvenanceOut, ProvNode } from '@/api/client'
-import { useSearchHit, useWorkspacePapers } from '@/api/queries'
+import { refreshTree, useImportSearchHits, usePatchSearchHit, useSearchHit, useUploadHitPdf, useWorkspacePapers } from '@/api/queries'
+import { useQueryClient } from '@tanstack/react-query'
+import { HitPreview } from '@/features/workspace-search/HitPreview'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { readerHref } from '@/lib/route'
-import { SidePanel } from '../SidePanel'
 import { branchTarget } from '../viewShared'
 import { Decisions } from './Decisions'
 import { grabLine } from './NextPapers'
@@ -27,7 +28,7 @@ function Abstract({ text }: { text: string | null | undefined }) {
   )
 }
 
-function Fit({ hit, workspaceId }: { hit: Hit | undefined; workspaceId: string }) {
+function Fit({ hit, workspaceId, all }: { hit: Hit | undefined; workspaceId: string; all?: boolean }) {
   const fit = hit?.suggestion_relevance ?? null
   return (
     <section className="rounded-md bg-muted/50 p-2 text-sm">
@@ -38,7 +39,7 @@ function Fit({ hit, workspaceId }: { hit: Hit | undefined; workspaceId: string }
         <>
           <p className="mt-1 font-medium">{`fits ${fit}/5`}</p>
           {hit?.suggestion_note && <p>{hit.suggestion_note}</p>}
-          {(hit?.suggestion_quotes ?? []).slice(0, 2).map((q) => <p key={q} className="mt-1 text-xs italic text-muted-foreground">“{q}”</p>)}
+          {(hit?.suggestion_quotes ?? []).slice(0, all ? undefined : 2).map((q) => <p key={q} className="mt-1 text-xs italic text-muted-foreground">“{q}”</p>)}
           {hit && <div className="mt-1"><SummariseNow workspaceId={workspaceId} hitId={hit.id} /></div>}
         </>
       )}
@@ -54,6 +55,7 @@ export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading, 
   const hit = useSearchHit(workspaceId, isHit ? node.id : null).data
   const library: Paper | undefined = useWorkspacePapers(workspaceId).data?.find((p) => p.id === (node.paper_id ?? hit?.paper_id))
   const [details, setDetails] = useState(false)
+  const detailsButton = useRef<HTMLButtonElement>(null)
   const target = branchTarget(node)
   const title = hit?.title ?? library?.title ?? node.title
   const byline = [(hit?.authors ?? library?.authors)?.join(', ') || null, hit?.year ?? library?.year ?? node.year, hit?.venue ?? library?.venue].filter(Boolean).join(' · ')
@@ -71,7 +73,7 @@ export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading, 
       <Abstract text={hit?.abstract ?? library?.abstract} />
       <div className="flex flex-wrap gap-1.5">
         {pdfHref && <Button asChild size="sm" variant="outline"><a href={pdfHref} {...(pdfHref === freeCopy && { target: '_blank', rel: 'noreferrer' })}>Open PDF</a></Button>}
-        {isHit ? <Button type="button" size="sm" variant="outline" onClick={() => setDetails(true)}>Full details</Button>
+        {isHit ? <Button ref={detailsButton} type="button" size="sm" variant="outline" onClick={() => setDetails(true)}>Full details</Button>
           : paperId && <Button asChild size="sm" variant="outline"><a href={readerHref(paperId)}>Full details</a></Button>}
         {target && node.snowballed.length === 0 && (
           <Button type="button" size="sm" disabled={grabs[node.id]?.status === 'pending'} onClick={() => grab(node.id, target)}>{grabs[node.id]?.status === 'pending' ? 'Snowballing…' : 'Find citing & cited papers'}</Button>
@@ -80,14 +82,35 @@ export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading, 
       {grabs[node.id]?.status === 'done' && <p role="status" className="text-xs text-muted-foreground">{grabLine(node, data, grabs[node.id])}</p>}
       <Decisions key={node.id} workspaceId={workspaceId} node={node} target={target} isHit={isHit} grab={grab} pending={grabs[node.id]?.status === 'pending'} onReveal={onReveal} />
       {grabs[node.id]?.status === 'error' && <p role="alert" className="text-xs text-destructive">{(grabs[node.id] as { text: string }).text}</p>}
-      {isHit && (
-        <Dialog open={details} onOpenChange={setDetails}>
-          <DialogContent className="max-h-[85vh] overflow-auto sm:max-w-xl">
-            <DialogTitle className="sr-only">Full details</DialogTitle>
-            <SidePanel workspaceId={workspaceId} data={data} id={node.id} busy={false} onFind={(t) => target && grab(node.id, t)} />
-          </DialogContent>
-        </Dialog>
-      )}
+      {hit && <DetailsDialog returnFocus={detailsButton} workspaceId={workspaceId} hit={hit} open={details} onOpenChange={setDetails} />}
     </article>
+  )
+}
+
+/** Everything about a search hit in one wide, single-frame dialog; the card behind it keeps the branch and snowball controls. */
+function DetailsDialog({ returnFocus, workspaceId, hit, open, onOpenChange }: { returnFocus: React.RefObject<HTMLButtonElement | null>; workspaceId: string; hit: Hit; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const client = useQueryClient()
+  const review = usePatchSearchHit(workspaceId)
+  const importHits = useImportSearchHits(workspaceId)
+  const upload = useUploadHitPdf(workspaceId)
+  // Screening changes the hit and the tree; re-read them.
+  const refresh = { onSuccess: () => refreshTree(client, workspaceId) }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); returnFocus.current?.focus() }} className="max-h-[90vh] gap-3 overflow-y-auto p-6 sm:max-w-3xl">
+        <DialogHeader><DialogTitle className="pr-8 text-lg leading-snug">{hit.title || hit.normalized_title}</DialogTitle></DialogHeader>
+        <HitPreview
+          hit={hit}
+          workspaceId={workspaceId}
+          wide
+          extra={<Fit hit={hit} workspaceId={workspaceId} all />}
+          onReview={(hitId, body) => review.mutate({ hitId, body }, refresh)}
+          onAddPdf={(hitId) => importHits.mutate([hitId], refresh)}
+          addPdfPending={importHits.isPending}
+          onUpload={(hitId, file) => upload.mutate({ hitId, file }, refresh)}
+          uploadPending={upload.isPending}
+        />
+      </DialogContent>
+    </Dialog>
   )
 }
