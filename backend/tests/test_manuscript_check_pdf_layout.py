@@ -51,3 +51,12 @@ def test_unresolved_marks_per_page(tmp_path):
 
 def test_no_unresolved_marks(tmp_path):
     assert pl.unresolved(make(tmp_path / "e.pdf", [{"body": True}])) == []
+
+
+def test_contents_page_references_line_does_not_end_the_body(tmp_path):
+    p = make(tmp_path / "f.pdf", [
+        {"body": True, "extra": "References"},  # contents page: a "References" line, body text above it
+        {"body": True}, {"body": True},
+        {"heading": "References", "heading_y": 100, "extra": "[1] A"},
+    ])
+    assert pl.stats(p).body_pages == 3
