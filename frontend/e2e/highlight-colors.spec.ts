@@ -33,9 +33,11 @@ test('recolouring a note from the notes panel, including a custom colour, persis
   const highlight = page.locator('.highlight:not(.draft)').first()
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(250, 204, 21, 0.4)')
 
-  // The menu closes after a pick, so open Note actions > Colour whenever the swatches aren't showing.
+  // Close any open menu first (up to 3 Escapes), then open Note actions > Colour so every call starts clean.
   const recolour = async () => {
-    if (await page.getByRole('button', { name: 'Blue' }).isVisible()) return
+    for (let i = 0; i < 3 && (await page.locator('[role="menu"]').first().isVisible()); i++) {
+      await page.keyboard.press('Escape')
+    }
     await card.getByRole('button', { name: 'Note actions' }).click()
     await page.getByRole('menuitem', { name: 'Colour' }).click()
   }
