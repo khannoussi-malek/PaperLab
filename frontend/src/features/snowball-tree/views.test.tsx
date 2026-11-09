@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import * as queries from '@/api/queries'
 import { api, type ProvenanceOut } from '@/api/client'
 import { SnowballTreeTab } from './SnowballTreeTab'
@@ -35,7 +35,7 @@ const data: ProvenanceOut = {
   ],
 }
 function setup(d: ProvenanceOut = data) {
-  localStorage.clear()
+  localStorage.setItem('snowball-tree-view:w1', 'tree')
   vi.spyOn(queries, 'useProvenance').mockReturnValue({ data: d, isPending: false, error: null } as any)
   vi.spyOn(queries, 'usePaths').mockReturnValue({ data: undefined } as any)
   vi.spyOn(queries, 'useSearchHit').mockReturnValue({ data: undefined } as any)
@@ -44,7 +44,8 @@ function setup(d: ProvenanceOut = data) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><SnowballTreeTab workspaceId="w1" /></QueryClientProvider>)
 }
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+beforeEach(() => localStorage.setItem('snowball-tree-view:w1', 'tree')) // these tests are about the Tree view
+afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear() })
 const panel = () => within(screen.getByRole('complementary'))
 const view = (name: string) => fireEvent.click(screen.getByRole('button', { name }))
 

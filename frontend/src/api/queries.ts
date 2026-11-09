@@ -614,6 +614,15 @@ export function useSetBranch(workspaceId: string) {
   })
 }
 
+/** "Summarise now": the AI reads one hit against the review question. Overwrites its suggestion; the tree re-reads it. */
+export function useSuggestHit(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ hitId, confirmRemote }: { hitId: string; confirmRemote?: boolean }) => api.suggestHit(workspaceId, hitId, confirmRemote),
+    onSuccess: () => refreshTree(client, workspaceId),
+  })
+}
+
 /** Go-further branches with a direction not snowballed yet. */
 export const useSnowballNext = (workspaceId: string) =>
   useQuery({ queryKey: keys.snowballNext(workspaceId), queryFn: () => api.snowballNext(workspaceId) })

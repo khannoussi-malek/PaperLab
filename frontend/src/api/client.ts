@@ -707,6 +707,9 @@ export const api = {
     request<SnowballNextOut>(`/api/workspaces/${workspaceId}/search/snowball-next/run`, { method: 'POST' }),
   getSearchHit: (workspaceId: string, hitId: string) =>
     request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}`),
+  /** Reads one hit against the review question and writes its suggestion fields. A 409's `detail` is the code. */
+  suggestHit: (workspaceId: string, hitId: string, confirmRemote = false) =>
+    request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}/suggest`, sendJson('POST', { confirm_remote: confirmRemote })),
   hitPaths: (workspaceId: string, hitId: string) =>
     request<ProvLink[][]>(`/api/workspaces/${workspaceId}/search/hits/${hitId}/paths`),
   setEligibility: (workspaceId: string, paperId: string, runId: string, body: EligibilityUpdate) =>

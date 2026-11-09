@@ -1,20 +1,20 @@
 import { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 
-export type ViewKind = 'tree' | 'radial' | 'map' | 'outline'
-const VIEWS: [ViewKind, string][] = [['tree', 'Tree'], ['radial', 'Radial'], ['map', 'Map'], ['outline', 'Outline']]
+export type ViewKind = 'navigate' | 'tree' | 'radial' | 'map' | 'outline'
+const VIEWS: [ViewKind, string][] = [['navigate', 'Navigate'], ['tree', 'Tree'], ['radial', 'Radial'], ['map', 'Map'], ['outline', 'Outline']]
 const keyFor = (workspaceId: string) => `snowball-tree-view:${workspaceId}`
 
 function read(workspaceId: string): ViewKind {
   try {
     const v = localStorage.getItem(keyFor(workspaceId))
-    return VIEWS.some(([k]) => k === v) ? (v as ViewKind) : 'tree'
+    return VIEWS.some(([k]) => k === v) ? (v as ViewKind) : 'navigate'
   } catch {
-    return 'tree'
+    return 'navigate'
   }
 }
 
-/** The chosen view, remembered per workspace; storage that fails just means Tree next time. */
+/** The chosen view, remembered per workspace; storage that fails just means Navigate next time. */
 export function useStoredView(workspaceId: string) {
   const [view, setView] = useState(() => read(workspaceId))
   const choose = useCallback((next: ViewKind) => {

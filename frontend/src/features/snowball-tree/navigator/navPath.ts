@@ -3,7 +3,7 @@ import { isUnknown, primaryParent } from '../layout'
 
 export type NavEntry = { id: string; via: 'search' | 'cites' | 'cited_by' | 'hand' }
 
-const viaOf = (kind: string): NavEntry['via'] => (kind === 'cites' || kind === 'cited_by' ? kind : 'search')
+export const viaOf = (kind: string): NavEntry['via'] => (kind === 'cites' || kind === 'cited_by' ? kind : 'search')
 const SEP = ','
 
 /** The walk from a search down to `nodeId`, by the tree's own primary-parent rule. Empty when the paper isn't in the data. */
