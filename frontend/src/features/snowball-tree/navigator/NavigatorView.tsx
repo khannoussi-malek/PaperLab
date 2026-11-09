@@ -5,22 +5,33 @@ import { useWorkspacePapers } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Breadcrumb } from './Breadcrumb'
 import { NextPapers } from './NextPapers'
-import { parseNav, viaOf, type NavEntry } from './navPath'
-import { readNav, writeNav } from './navUrl'
+import { parseNav, primaryPath, viaOf, type NavEntry } from './navPath'
+import { readNav, readNavPaper, writeNav } from './navUrl'
 import { PaperCard } from './PaperCard'
 import { StartFromPaper } from './StartFromPaper'
 import { useGrab } from './useGrab'
+
+/** The walk to a library paper: its tree node's primary path, else the hand-added root. */
+export function pathToPaper(data: ProvenanceOut, paperId: string): NavEntry[] {
+  const node = data.nodes.find((n) => n.paper_id === paperId && !n.id.startsWith('paper:')) ?? data.nodes.find((n) => n.id === `paper:${paperId}`)
+  const found = node ? primaryPath(data, node.id) : []
+  return found.length ? found : [{ id: 'root:hand', via: 'hand' }, { id: `paper:${paperId}`, via: 'hand' }]
+}
 
 const STALE = 'This path changed; showing the part that still exists.'
 
 /** Walks the snowball one paper at a time. The path is the only thing that moves the walk; data refetches never touch it. */
 export function NavigatorView({ workspaceId, data }: { workspaceId: string; data: ProvenanceOut }) {
-  const initial = useRef<ReturnType<typeof parseNav>>(undefined)
-  if (!initial.current) initial.current = parseNav(readNav(), data)
+  const initial = useRef<ReturnType<typeof parseNav> & { fromPaper?: boolean }>(undefined)
+  if (!initial.current) {
+    const paperId = readNavPaper()
+    initial.current = paperId ? { path: pathToPaper(data, paperId), cut: false, fromPaper: true } : parseNav(readNav(), data)
+  }
   const [path, setPath] = useState<NavEntry[]>(initial.current.path)
   const { grabs, grab } = useGrab(workspaceId)
   const library = useWorkspacePapers(workspaceId).data
   useEffect(() => {
+    if (initial.current?.fromPaper) writeNav(initial.current.path)
     if (!initial.current?.cut) return
     sileo.info({ title: STALE })
     writeNav(initial.current.path)

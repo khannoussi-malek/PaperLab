@@ -23,7 +23,7 @@ const hit = (id: string, over: object = {}) => ({
 }) as unknown as Hit
 
 function setup(data = prov(), nav = '') {
-  history.replaceState(null, '', nav ? `#/workspaces/w1?tab=tree&nav=${nav}` : '#/workspaces/w1?tab=tree')
+  if (!location.hash.includes('navPaper')) history.replaceState(null, '', nav ? `#/workspaces/w1?tab=tree&nav=${nav}` : '#/workspaces/w1?tab=tree')
   vi.spyOn(api, 'getSearchHit').mockImplementation(async (_w, id) => hit(id, id === 'A' ? { suggestion: 'include', suggestion_relevance: 4, suggestion_reason: 'It tests the point.', suggestion_quotes: ['we show X'] } : {}))
   vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([{ id: 'p9', title: 'Library only paper', authors: [], year: 2019, venue: null, abstract: null, has_pdf: false, oa_url: null }] as never)
   vi.spyOn(api, 'provenance').mockResolvedValue(data)
@@ -50,7 +50,7 @@ test('Start from a paper lists matches from the tree and the library, and pickin
   setup()
   fireEvent.change(screen.getByLabelText('Start from a paper'), { target: { value: 'library' } })
   fireEvent.click(await screen.findByRole('button', { name: /Library only paper/ }))
-  expect(crumbs().getByText('Library only paper')).toBeTruthy()
+  expect(await within(screen.getByRole('navigation', { name: 'Snowball path' })).findByText('Library only paper')).toBeTruthy()
   expect(screen.getByText('Added by hand: no fit score')).toBeTruthy()
 })
 
@@ -183,4 +183,14 @@ test('a stale path is cut at the first missing entry with a notice', () => {
   expect(crumbs().getByText('Paper A')).toBeTruthy()
   expect(location.hash).toContain('nav=root:r1,A')
   expect(location.hash).not.toContain('ZZ')
+})
+
+test('navPaper opens on that library paper and is replaced by nav', async () => {
+  history.replaceState(null, '', '#/workspaces/w1?tab=tree&navPaper=p9')
+  setup(prov())
+  expect(await within(screen.getByRole('navigation', { name: 'Snowball path' })).findByText('Library only paper')).toBeTruthy()
+  expect(screen.getByText('Added by hand: no fit score')).toBeTruthy()
+  expect(screen.getAllByRole('button', { name: 'Find citing & cited papers' }).length).toBeGreaterThan(0)
+  expect(location.hash).toContain('nav=root:hand,paper:p9')
+  expect(location.hash).not.toContain('navPaper')
 })

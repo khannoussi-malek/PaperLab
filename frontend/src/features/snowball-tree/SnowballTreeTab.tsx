@@ -11,14 +11,14 @@ import { MapView } from './MapView'
 import { OutlineView } from './OutlineView'
 import { RadialView } from './RadialView'
 import { NavigatorView } from './navigator/NavigatorView'
-import { readNav } from './navigator/navUrl'
+import { readNav, readNavPaper } from './navigator/navUrl'
 import { TreeView } from './TreeView'
 import { useStoredView, ViewSwitch } from './ViewSwitch'
 
 export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   const { data, isPending, error } = useProvenance(workspaceId)
   const [stored, setView] = useStoredView(workspaceId)
-  const [hasNav, setHasNav] = useState(() => readNav() !== '') // a shared walk opens in Navigate whatever is stored
+  const [hasNav, setHasNav] = useState(() => readNav() !== '' || readNavPaper() !== '') // a shared walk opens in Navigate whatever is stored
   const view = hasNav ? 'navigate' : stored
   const [selected, setSelected] = useState<string | null>(null)
   const runs = useSearchRuns(workspaceId).data
