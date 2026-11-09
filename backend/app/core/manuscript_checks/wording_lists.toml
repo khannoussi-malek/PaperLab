@@ -1,0 +1,69 @@
+# P15 wording lists. Edit here only; wording.py has no phrase of its own.
+# [[ai_phrase]]: pattern, why, optional severity (default "warning"), optional hint.
+
+[[ai_phrase]]
+id = "worth_noting"
+pattern = '\bit\s+is\s+worth\s+(?:noting|mentioning|emphasi[sz]ing)\b'
+why = "a stock opener; state the point directly."
+
+[[ai_phrase]]
+id = "should_be_noted"
+pattern = '\bit\s+should\s+be\s+noted\b'
+why = "a stock opener; state the point directly."
+
+[[ai_phrase]]
+id = "crucial_role"
+pattern = '\bplays?\s+an?\s+(?:crucial|key|vital|pivotal|critical|central|significant)\s+role\b'
+why = "vague; say what it does."
+
+[[ai_phrase]]
+id = "testament"
+pattern = '\ba\s+testament\s+to\b'
+why = "inflated; say what the result shows."
+
+[[ai_phrase]]
+id = "tapestry"
+pattern = '\b(?:(?:rich|intricate)\s+tapestry|tapestry\s+of)\b'
+why = "inflated imagery."
+
+[[ai_phrase]]
+id = "delve"
+pattern = '\bdelv(?:e|es|ing)\s+into\b'
+why = "a stock verb; say examine, study or analyse."
+
+[[ai_phrase]]
+id = "realm"
+pattern = '\b(?:in|within)\s+the\s+realm\s+of\b'
+why = "filler; say in <field>."
+
+[[ai_phrase]]
+id = "ever"
+pattern = '\bever-(?:evolving|changing|growing)\b'
+why = "filler; say what changed."
+
+[[ai_phrase]]
+id = "today"
+pattern = '\bin\s+today\W?s\s+(?:world|era|landscape)\b'
+why = "a stock opener; start with the problem."
+
+[[ai_phrase]]
+id = "navigate"
+pattern = '\bnavigat(?:e|es|ing)\s+the\s+(?:landscape|complexit|intricac)'
+why = "inflated imagery."
+
+[[ai_phrase]]
+id = "paradigm"
+pattern = '\bparadigm\s+shift\b'
+why = "hype; say what changed."
+
+[[ai_phrase]]
+id = "game_changer"
+pattern = '\bgame[- ]?chang(?:er|ing)\b'
+why = "hype; say what changed."
+
+[[ai_phrase]]
+id = "in_order_to"
+pattern = '\bin\s+order\s+to\b'
+why = "wordy."
+severity = "info"
+hint = 'Use "to".'
