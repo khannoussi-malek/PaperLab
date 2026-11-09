@@ -298,3 +298,13 @@ test('an upload through the hit route also refreshes the library and the paper',
     expect(keys).toEqual(expect.arrayContaining(['["papers"]', '["papers","p9"]']))
   })
 })
+
+test('a row without a DOI keeps four action slots, with Upload PDF in the last one', () => {
+  const { container } = renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+
+  const slots = container.querySelectorAll('[data-slot="action"]')
+  expect(slots).toHaveLength(4)
+  expect(slots[1]).toBeEmptyDOMElement()
+  expect(slots[2]).toBeEmptyDOMElement()
+  expect(slots[3]).toContainElement(screen.getByLabelText('Upload PDF for unreachable paper'))
+})
