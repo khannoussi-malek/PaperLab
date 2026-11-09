@@ -25,6 +25,6 @@ workspace_router = APIRouter(prefix="/api/workspaces", tags=["reading-bridge"])
 
 
 @workspace_router.get("/{workspace_id}/search/reading-queue")
-async def get_reading_queue(workspace_id: uuid.UUID, run: uuid.UUID, session: SessionDep) -> ReadingQueueOut:
+async def get_reading_queue(workspace_id: uuid.UUID, session: SessionDep, run: uuid.UUID | None = None) -> ReadingQueueOut:
     rows = await reading_bridge.reading_queue(session, workspace_id, run)
     return ReadingQueueOut(rows=[ReadingQueueRowOut(**vars(r)) for r in rows])

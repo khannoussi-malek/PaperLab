@@ -310,3 +310,29 @@ async def test_reading_queue_is_empty_for_a_run_with_no_included_papers(session)
     run = await add_run(session, workspace.id)
 
     assert await reading_bridge.reading_queue(session, workspace.id, run.id) == []
+
+
+async def test_reading_queue_without_a_run_combines_every_run_and_dedupes(session, client):
+    workspace = await workspaces.create(session, f"All {RUN}")
+    run_a = await add_run(session, workspace.id)
+    run_b = await add_run(session, workspace.id)
+    shared = await add_paper(session, title=f"Shared {RUN}")
+    only_b = await add_paper(session, title=f"Only B {RUN}")
+    for paper in (shared, only_b):
+        await workspaces.add_paper(session, workspace.id, paper.id)
+    await add_hit(session, workspace.id, run_a.id, shared.id, priority=4)
+    await add_hit(session, workspace.id, run_b.id, shared.id, priority=1)
+    await add_hit(session, workspace.id, run_b.id, only_b.id, priority=3)
+    await workspace_search.set_eligibility(session, workspace.id, shared.id, run_a.id, "include", None)
+    await workspace_search.set_eligibility(session, workspace.id, shared.id, run_b.id, "include", None)
+    await workspace_search.set_eligibility(session, workspace.id, only_b.id, run_b.id, "include", None)
+
+    rows = await reading_bridge.reading_queue(session, workspace.id)
+    assert [(r.paper_id, r.priority) for r in rows] == [(shared.id, 1), (only_b.id, 3)]
+
+    per_run = await reading_bridge.reading_queue(session, workspace.id, run_a.id)
+    assert [(r.paper_id, r.priority) for r in per_run] == [(shared.id, 4)]
+
+    response = await client.get(f"/api/workspaces/{workspace.id}/search/reading-queue")
+    assert response.status_code == 200
+    assert len(response.json()["rows"]) == 2

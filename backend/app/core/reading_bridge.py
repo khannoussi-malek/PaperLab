@@ -78,7 +78,8 @@ class ReadingQueueRow:
     note_count: int
 
 
-async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID) -> list[ReadingQueueRow]:
+async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID | None = None
+) -> list[ReadingQueueRow]:
     """Every stage-2-included, already-imported paper for this run (Review Focus #2: excludes an included hit with
     no paper_id yet — that's still acquisition, not reading), with its reading progress and note count.
 
@@ -87,7 +88,8 @@ async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
     there's no DB constraint preventing that (unlike (workspace_id, external_ref_id), (workspace_id, run_id,
     paper_id) isn't unique). Grouped down to one row per paper, keeping the most urgent (lowest) priority across
     its hits — matching this app's "1 = highest priority" convention and the .asc().nulls_last() ordering below."""
-    await get_run(session, run_id, workspace_id)
+    if run_id is not None:  # None = every run in the workspace, one row per paper
+        await get_run(session, run_id, workspace_id)
     note_count = (
         select(func.count(func.distinct(note_papers.c.note_id)))
         .where(note_papers.c.paper_id == Paper.id)
@@ -113,7 +115,7 @@ async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
             )
             .join(Paper, Paper.id == SearchRunEligibility.paper_id)
             .where(
-                SearchRunEligibility.search_run_id == run_id,
+                *([SearchRunEligibility.search_run_id == run_id] if run_id is not None else []),
                 WorkspaceSearchHit.workspace_id == workspace_id,
                 SearchRunEligibility.stage2_status == "include",
                 WorkspaceSearchHit.paper_id.is_not(None),
