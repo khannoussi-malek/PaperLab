@@ -60,3 +60,11 @@ test('switching away from Navigate clears nav so a reload does not force it back
   fireEvent.click(screen.getByRole('button', { name: 'Outline' }))
   expect(location.hash).not.toContain('nav=')
 })
+
+test('clicking Navigate while on Navigate keeps nav in the URL', async () => {
+  setup('#/workspaces/w1?tab=tree&nav=root:r1,A')
+  await screen.findByRole('navigation', { name: 'Snowball path' })
+  fireEvent.click(screen.getByRole('button', { name: 'Navigate' }))
+  expect(location.hash).toContain('nav=root:r1,A')
+  expect(screen.getByRole('navigation', { name: 'Snowball path' })).toBeTruthy()
+})

@@ -41,14 +41,16 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
     writeNav(initial.current.path)
   }, [])
 
-  useEffect(() => { // a navPaper that is no library paper and no tree node (a hit that left the tree) is stale
-    const last = initial.current?.fromPaper ? initial.current.path[initial.current.path.length - 1]?.id : undefined
+  useEffect(() => { // a paper entry that is no library paper and no tree node (a hit that left the tree) is stale, from navPaper or from nav
+    const last = path[path.length - 1]?.id
     if (moved || !last?.startsWith('paper:') || !library || data.nodes.some((n) => n.id === last) || library.some((p) => `paper:${p.id}` === last)) return
+    const fromPaper = initial.current?.fromPaper ?? false
     initial.current = { ...initial.current!, fromPaper: false }
+    const kept: NavEntry[] = fromPaper ? [] : [{ id: 'root:hand', via: 'hand' }]
     sileo.info({ title: STALE })
-    setPath([])
-    writeNav([])
-  }, [library, data, moved])
+    setPath(kept)
+    writeNav(kept)
+  }, [library, data, moved, path])
 
   const go = (next: NavEntry[]) => { setPath(next); setMoved(true); writeNav(next) }
   const stepIn = (parentId: string, childId: string, kind: string) => {

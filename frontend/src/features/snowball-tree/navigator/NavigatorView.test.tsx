@@ -242,6 +242,14 @@ test('a reload of nav=root:hand,paper:x with no tree node keeps both entries, no
   expect(location.hash).toContain('nav=root:hand,paper:p9')
 })
 
+test('a reload of nav=root:hand,paper:gone where gone is not in the library shows the stale notice and keeps root:hand', async () => {
+  setup(prov(), 'root:hand,paper:gone')
+  await waitFor(() => expect(sileo.info).toHaveBeenCalledWith(expect.objectContaining({ title: 'This path changed; showing the part that still exists.' })))
+  expect(screen.queryByText('Paper gone')).toBeNull()
+  expect(location.hash).toContain('nav=root:hand')
+  expect(location.hash).not.toContain('gone')
+})
+
 test('a navPaper that is neither in the tree nor in the library shows the stale notice', async () => {
   history.replaceState(null, '', '#/workspaces/w1?tab=tree&navPaper=zzz')
   setup(prov())
