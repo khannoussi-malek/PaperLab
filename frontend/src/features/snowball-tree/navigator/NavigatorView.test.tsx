@@ -91,6 +91,12 @@ test('the card shows Find citing & cited papers as a button when never snowballe
   await waitFor(() => expect(snow).toHaveBeenCalledWith('w1', { seed_hit_ids: ['B'], seed_paper_ids: [], backward: true, forward: true }))
 })
 
+test('a paper with no route says it was added by hand, not reached by 0 routes', async () => {
+  setup(prov({ nodes: [node('A', 0, { paths: 0, snowballed: ['cites', 'cited_by'], relevance: 4 }), node('B', 1), node('C', 1), node('D', 0)] }), 'root:r1,A')
+  expect(await screen.findByText(/Level 0 · added by hand · /)).toBeTruthy()
+  expect(screen.queryByText(/reached by 0/)).toBeNull()
+})
+
 test('the card shows the fit, the reason, a quote and the abstract', async () => {
   setup(prov(), 'root:r1,A')
   expect(await screen.findByText('It tests the point.')).toBeTruthy()
