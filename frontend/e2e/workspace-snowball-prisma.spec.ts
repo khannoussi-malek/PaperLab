@@ -94,7 +94,9 @@ test('snowball from an imported paper, screen it stage-2, see it in the PRISMA e
   await page.getByRole('tab', { name: /^Full-text review/ }).click()
   const [snowballResponse] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/search/snowball') && r.request().method() === 'POST'),
-    page.getByRole('button', { name: 'Find citing & cited papers' }).click(),
+    // Scoped: the force-mounted Search tab's hit preview has a button of the same name (HitSnowball), and right
+    // after the tab switch Playwright can resolve that one before its panel hides, then wait on it forever.
+    page.getByRole('tabpanel', { name: /^Full-text review/ }).getByRole('button', { name: 'Find citing & cited papers' }).click(),
   ])
   const snowballResult = await snowballResponse.json()
   expect(snowballResult.skipped_seeds).toEqual([])
