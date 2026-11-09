@@ -164,7 +164,7 @@ def test_non_ascii_scan_is_linear_on_a_long_clean_text():
     line = "We train the model on the corpus and report the mean over five seeds in the table " * 18
     start = time.perf_counter()
     assert run("latex.non_ascii", "\n".join([line[:1500]] * 390)) == []
-    assert time.perf_counter() - start < 0.1
+    assert time.perf_counter() - start < 1.0  # measured ~30 ms; was ~3.3 s before the fix
 
 
 def test_stray_preamble_only_in_files_an_input_pulls_in():

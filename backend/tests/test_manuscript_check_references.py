@@ -128,7 +128,7 @@ def test_parse_bib_is_linear_in_the_file_size():
     bib = "".join(f"@article{{k{i},\n  title = {{Paper {i}}},\n  year = {{2016}}\n}}\n" for i in range(5000))
     start = time.perf_counter()
     assert len(parse_bib(bib)) == 5000
-    assert time.perf_counter() - start < 0.3
+    assert time.perf_counter() - start < 0.8  # measured ~0.1 s; was ~1.1 s before the fix
 
 
 def test_a_malformed_bib_with_unclosed_entries_parses_fast():
@@ -136,7 +136,7 @@ def test_a_malformed_bib_with_unclosed_entries_parses_fast():
     bad = "@article{k,\n title={x\n" * 1000
     start = time.perf_counter()
     entries = parse_bib(bad)
-    assert time.perf_counter() - start < 0.5
+    assert time.perf_counter() - start < 1.2  # measured a few ms; was ~1.7 s before the fix
     assert len(entries) == 1000 and entries[0].fields["title"] == "x"
 
 

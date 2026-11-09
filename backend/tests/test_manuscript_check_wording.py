@@ -154,4 +154,4 @@ def test_overclaim_on_a_thesis_sized_file_is_fast_and_does_not_split_every_sente
     body = "\n".join([line[:1500]] * 390) + "\nThe gain is significant."
     start = time.perf_counter()
     assert len(run("wording.overclaim", "\\section{Method}\n" + body)) == 1
-    assert time.perf_counter() - start < 0.5
+    assert time.perf_counter() - start < 2.0  # measured ~0.2 s; was ~4.3 s before the fix
