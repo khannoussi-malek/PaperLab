@@ -1,5 +1,10 @@
 import type { components } from './schema'
 
+// matches FindingOut / RunChecksOut / CheckInfoOut; Task 10 swaps these for the generated schema types
+export type Severity = 'error' | 'warning' | 'info'
+export type CheckFinding = { check: string; severity: Severity; file: string | null; line: number | null; message: string; fix_hint: string | null }
+export type CheckRunResult = { ran: string[]; findings: CheckFinding[]; counts: Record<Severity, number> }
+export type CheckInfo = { name: string; cost: 'cheap' | 'full'; description: string }
 export type Manuscript = components['schemas']['ManuscriptOut']
 export type ManuscriptDetail = components['schemas']['ManuscriptDetailOut']
 export type ManuscriptImport = components['schemas']['ManuscriptImportOut']
@@ -584,6 +589,9 @@ export const api = {
     request<void>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, { method: 'DELETE' }),
   manuscriptPapers: (id: string) => request<CitablePaper[]>(`/api/manuscripts/${id}/papers`),
   missingKeys: (id: string) => request<MissingKey[]>(`/api/manuscripts/${id}/missing-keys`),
+  listManuscriptChecks: (id: string) => request<CheckInfo[]>(`/api/manuscripts/${id}/checks`),
+  runChecks: (id: string, body: { names?: string[]; cost?: 'cheap' | 'full' }) =>
+    request<CheckRunResult>(`/api/manuscripts/${id}/checks/run`, sendJson('POST', body)),
   startReview: (id: string, body: ReviewStart) =>
     request<ReviewRun>(`/api/manuscripts/${id}/review`, sendJson('POST', body)),
   reviewState: (id: string, file: string) =>

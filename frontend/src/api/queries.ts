@@ -85,6 +85,8 @@ export const keys = {
   noteCounts: (sortedIds: string[]) => ['noteCounts', sortedIds] as const,
   // Keyed by compiledAt: a new compile refetches. Under ['manuscripts', id] so an autosave refreshes it too.
   missingKeys: (id: string, compiledAt: string | null | undefined) => ['manuscripts', id, 'missingKeys', compiledAt ?? null] as const,
+  checkBadge: (id: string, compiledAt: string | null | undefined) => ['manuscripts', id, 'checkBadge', compiledAt ?? null] as const,
+  checkList: (id: string) => ['manuscriptChecks', id, 'list'] as const,
   manuscriptSnapshots: (id: string) => ['manuscripts', id, 'snapshots'] as const,
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
@@ -1531,6 +1533,22 @@ export const useMissingKeys = (id: string, compiledAt: string | null | undefined
     queryFn: () => api.missingKeys(id),
     refetchOnWindowFocus: 'always',
   })
+
+/** The registry of checks (names, costs, descriptions); fixed per server run, so a save does not refetch it. */
+export const useCheckList = (id: string) =>
+  useQuery({ queryKey: keys.checkList(id), queryFn: () => api.listManuscriptChecks(id), staleTime: Infinity })
+
+/** The cheap checks, for the toolbar badge; refetched on save (manuscript invalidation), compile and focus, old data kept meanwhile. */
+export const useCheckBadge = (id: string, compiledAt: string | null | undefined) =>
+  useQuery({
+    queryKey: keys.checkBadge(id, compiledAt),
+    queryFn: () => api.runChecks(id, { cost: 'cheap' }),
+    refetchOnWindowFocus: 'always',
+    placeholderData: (previous) => previous,
+  })
+
+/** Run every check; the result lives in the panel, so nothing is invalidated. */
+export const useRunChecks = () => useMutation({ mutationFn: (id: string) => api.runChecks(id, {}) })
 
 /** A compile pins the keys it cited, so each new compiled_at (not the first one seen) refetches the papers. */
 export function usePapersFollowCompile(id: string, compiledAt: string | null | undefined) {
