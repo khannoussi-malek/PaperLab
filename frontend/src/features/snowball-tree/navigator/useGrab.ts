@@ -24,7 +24,7 @@ export function useGrab(workspaceId: string): { grabs: Record<string, GrabState>
       const seed = 'hit_id' in target ? target.hit_id : target.paper_id
       const failed = Object.values(out.errors)[0] ?? (out.skipped_seeds.includes(seed) ? skippedSeedsText(1) : undefined)
       put(id, failed ? { status: 'error', text: friendlySnowballError(failed) } : { status: 'done' })
-      await refreshTree(client, workspaceId)
+      try { await refreshTree(client, workspaceId) } catch (e) { console.warn('refreshing the tree after a snowball failed', e) } // the snowball itself worked
       return !failed
     } catch (e) {
       put(id, { status: 'error', text: friendlySnowballError(e instanceof Error ? e.message : 'Could not fetch the next papers.') })

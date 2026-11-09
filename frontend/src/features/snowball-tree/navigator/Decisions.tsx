@@ -33,8 +33,8 @@ export function Decisions({ workspaceId, node, hit, target, isHit, grab, pending
   const stop = (text: string | null) => target && setBranch.mutate({ ...target, state: 'stopped', directions: [], reason: text })
   const pressed = (on: boolean) => ({ 'aria-pressed': on, variant: on ? ('default' as const) : ('outline' as const) })
 
-  const needsReason = !excludeReason && node.decision !== 'not_relevant'
   const status = hit?.stage1_status ?? node.decision
+  const needsReason = !excludeReason && status !== 'not_relevant'
   const screening = status === 'relevant' ? 'Included' : status === 'not_relevant' ? `Excluded${hit?.stage1_exclude_reason ? `: ${reasonLabel(hit.stage1_exclude_reason)}` : ''}` : status === 'maybe' ? 'Maybe' : 'Not screened'
   const dirs = (node.branch?.directions ?? []).map((d) => (d === 'cites' ? 'references' : 'citing papers')).join(' + ')
   const snowball = state === 'go_further' ? `Going further${dirs ? `: ${dirs}` : ''}` : state === 'stopped' ? `Stopped${node.branch?.reason ? `: ${node.branch.reason}` : ''}` : 'Undecided'
@@ -45,12 +45,12 @@ export function Decisions({ workspaceId, node, hit, target, isHit, grab, pending
       {isHit && (
         <div role="group" aria-label="Screening" className="flex flex-wrap items-center gap-1.5">
           <span className="w-16 text-xs font-medium text-muted-foreground">Screening</span>
-          <Button type="button" size="sm" {...pressed(node.decision === 'relevant')} onClick={() => patch.mutate({ hitId: node.id, body: { stage1_status: 'relevant' } }, refresh)}>Include</Button>
+          <Button type="button" size="sm" {...pressed(status === 'relevant')} onClick={() => patch.mutate({ hitId: node.id, body: { stage1_status: 'relevant' } }, refresh)}>Include</Button>
           <select aria-label="Exclusion reason" value={excludeReason} onChange={(e) => setExcludeReason(e.target.value)} className="h-7 rounded-lg border bg-background px-2 text-xs">
             <option value="">Reason…</option>
             {EXCLUDE_REASONS.map((r) => <option key={r} value={r}>{reasonLabel(r)}</option>)}
           </select>
-          <Button type="button" size="sm" {...pressed(node.decision === 'not_relevant')} disabled={needsReason} title={needsReason ? 'Pick a reason to exclude.' : undefined}
+          <Button type="button" size="sm" {...pressed(status === 'not_relevant')} disabled={needsReason} title={needsReason ? 'Pick a reason to exclude.' : undefined}
             onClick={() => excludeReason && patch.mutate({ hitId: node.id, body: { stage1_status: 'not_relevant', stage1_exclude_reason: excludeReason as (typeof EXCLUDE_REASONS)[number] } }, refresh)}>
             Exclude
           </Button>

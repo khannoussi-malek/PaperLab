@@ -34,8 +34,11 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
   const [moved, setMoved] = useState(false) // the card takes focus after the owner moves, not when the page loads
   const { grabs, grab } = useGrab(workspaceId)
   const nextRef = useRef<HTMLDivElement>(null)
-  const reveal = () => { // after a click only: bring the next-papers tabs into view and focus the first tab
-    nextRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const currentRef = useRef<string | undefined>(undefined)
+  const reveal = (forId: string) => { // after a click only, and only while that paper is still the one on the card
+    if (forId !== currentRef.current) return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    nextRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
     nextRef.current?.querySelector<HTMLElement>('[role="tab"]')?.focus({ preventScroll: true })
   }
   const library = useWorkspacePapers(workspaceId).data
@@ -64,6 +67,7 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
   }
 
   const currentId = path[path.length - 1]?.id
+  currentRef.current = currentId
   const isRoot = currentId?.startsWith('root:') ?? false
   const libraryPaper = currentId?.startsWith('paper:') ? library?.find((p) => `paper:${p.id}` === currentId) : undefined
   const node: ProvNode | null = !currentId || isRoot ? null
@@ -92,7 +96,7 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
             ))}
           </>
         )}
-        {node && <PaperCard key={node.id} focusHeading={moved} workspaceId={workspaceId} data={data} node={node} grab={grab} grabs={grabs} onReveal={reveal} />}
+        {node && <PaperCard key={node.id} focusHeading={moved} workspaceId={workspaceId} data={data} node={node} grab={grab} grabs={grabs} onReveal={() => reveal(node.id)} />}
         {currentId && (isRoot || node) && <div ref={nextRef}><NextPapers {...lists} parentId={currentId} dimmed={node?.branch?.state === 'stopped'} /></div>}
       </div>
       {node && <AskPanel workspaceId={workspaceId} node={node} />}

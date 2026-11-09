@@ -165,12 +165,12 @@ export function HitPreview({ hit, workspaceId, inTree, wide, extra, onReview, on
           </div>
           {wide ? (
             <>
-              <input ref={fileInput} type="file" accept="application/pdf" className="sr-only" tabIndex={-1} aria-label={`Upload PDF for ${title}`} disabled={uploadPending}
+              <input ref={fileInput} type="file" accept="application/pdf" className="sr-only" tabIndex={-1} aria-hidden="true" aria-label={`Upload PDF for ${title}`} disabled={uploadPending}
                 onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) onUpload(hit.id, file) }} />
               <Button type="button" variant="outline" size="sm" className="self-start" disabled={uploadPending} onClick={() => fileInput.current?.click()}>Upload PDF</Button>
             </>
           ) : (
-          // A native file input has a fixed intrinsic width (~250px) that overflows a narrow panel; w-full lets it shrink. */}
+          // A native file input has a fixed intrinsic width (~250px) that overflows a narrow panel; w-full lets it shrink.
           <label className="min-w-0">
             <span className="sr-only">{`Upload PDF for ${title}`}</span>
             <input

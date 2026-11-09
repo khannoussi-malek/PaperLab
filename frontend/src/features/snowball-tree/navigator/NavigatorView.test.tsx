@@ -379,3 +379,25 @@ test('an unfetched tab explains itself, a fetched empty one says None found.', (
   expect(screen.getByText('Not fetched yet.')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Find its references' })).toBeTruthy()
 })
+
+test('Go further ignores a grab that finishes after the owner moved to another paper', async () => {
+  setup(prov(), 'root:r1,A,B')
+  vi.spyOn(api, 'setBranch').mockResolvedValue({} as never)
+  let finish!: (v: never) => void
+  vi.spyOn(api, 'snowball').mockImplementation(() => new Promise((r) => { finish = r as never }))
+  const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+  fireEvent.click(screen.getByRole('button', { name: 'Go further' }))
+  await waitFor(() => expect(screen.getAllByText('Snowballing…').length).toBeGreaterThan(0))
+  fireEvent.click(crumbs().getByRole('button', { name: 'Paper A' }))
+  finish({ new_hits: 0, skipped_seeds: [], errors: {} } as never)
+  await new Promise((r) => setTimeout(r, 50))
+  expect(scroll).not.toHaveBeenCalled()
+})
+
+test('Full details opens at once with a loading line while the hit loads', async () => {
+  setup(prov(), 'root:r1,A')
+  vi.spyOn(api, 'getSearchHit').mockImplementation(() => new Promise(() => {}))
+  fireEvent.click(screen.getByRole('button', { name: 'Full details' }))
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByText('Loading the paper…')).toBeTruthy()
+})

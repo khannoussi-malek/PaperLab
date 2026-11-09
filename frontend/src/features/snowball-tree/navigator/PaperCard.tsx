@@ -4,7 +4,7 @@ import { refreshTree, useImportSearchHits, usePatchSearchHit, useSearchHit, useU
 import { useQueryClient } from '@tanstack/react-query'
 import { HitPreview } from '@/features/workspace-search/HitPreview'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { readerHref } from '@/lib/route'
 import { branchTarget } from '../viewShared'
 import { Decisions } from './Decisions'
@@ -52,7 +52,8 @@ export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading, 
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { if (focusHeading) heading.current?.focus() }, []) // eslint-disable-line react-hooks/exhaustive-deps -- once per card; the card is keyed by paper
   const isHit = !node.id.startsWith('paper:')
-  const hit = useSearchHit(workspaceId, isHit ? node.id : null).data
+  const hitQuery = useSearchHit(workspaceId, isHit ? node.id : null)
+  const hit = hitQuery.data
   const library: Paper | undefined = useWorkspacePapers(workspaceId).data?.find((p) => p.id === (node.paper_id ?? hit?.paper_id))
   const [details, setDetails] = useState(false)
   const detailsButton = useRef<HTMLButtonElement>(null)
@@ -81,13 +82,13 @@ export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading, 
       {grabs[node.id]?.status === 'done' && <p role="status" className="text-xs text-muted-foreground">{grabLine(node, data, grabs[node.id])}</p>}
       <Decisions key={node.id} workspaceId={workspaceId} node={node} hit={hit} target={target} isHit={isHit} grab={grab} pending={grabs[node.id]?.status === 'pending'} onReveal={onReveal} />
       {grabs[node.id]?.status === 'error' && <p role="alert" className="text-xs text-destructive">{(grabs[node.id] as { text: string }).text}</p>}
-      {hit && <DetailsDialog returnFocus={detailsButton} workspaceId={workspaceId} hit={hit} open={details} onOpenChange={setDetails} />}
+      {isHit && <DetailsDialog returnFocus={detailsButton} workspaceId={workspaceId} hit={hit} title={node.title} error={hitQuery.error} open={details} onOpenChange={setDetails} />}
     </article>
   )
 }
 
 /** Everything about a search hit in one wide, single-frame dialog; the card behind it keeps the branch and snowball controls. */
-function DetailsDialog({ returnFocus, workspaceId, hit, open, onOpenChange }: { returnFocus: React.RefObject<HTMLButtonElement | null>; workspaceId: string; hit: Hit; open: boolean; onOpenChange: (o: boolean) => void }) {
+function DetailsDialog({ returnFocus, workspaceId, hit, title, error, open, onOpenChange }: { returnFocus: React.RefObject<HTMLButtonElement | null>; workspaceId: string; hit: Hit | undefined; title: string; error: Error | null; open: boolean; onOpenChange: (o: boolean) => void }) {
   const client = useQueryClient()
   const review = usePatchSearchHit(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
@@ -97,8 +98,9 @@ function DetailsDialog({ returnFocus, workspaceId, hit, open, onOpenChange }: { 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); returnFocus.current?.focus() }} className="max-h-[90vh] gap-3 overflow-y-auto p-6 sm:max-w-3xl">
-        <DialogHeader><DialogTitle className="pr-8 text-lg leading-snug">{hit.title || hit.normalized_title}</DialogTitle></DialogHeader>
-        <HitPreview
+        <DialogHeader><DialogTitle className="pr-8 text-lg leading-snug">{hit ? hit.title || hit.normalized_title : title}</DialogTitle>
+          <DialogDescription>Everything PaperLab knows about this paper</DialogDescription></DialogHeader>
+        {!hit ? (error ? <p role="alert" className="text-sm text-destructive">{error.message}</p> : <p role="status" className="text-sm text-muted-foreground">Loading the paper…</p>) : <HitPreview
           hit={hit}
           workspaceId={workspaceId}
           wide
@@ -108,7 +110,7 @@ function DetailsDialog({ returnFocus, workspaceId, hit, open, onOpenChange }: { 
           addPdfPending={importHits.isPending}
           onUpload={(hitId, file) => upload.mutate({ hitId, file }, refresh)}
           uploadPending={upload.isPending}
-        />
+        />}
       </DialogContent>
     </Dialog>
   )
