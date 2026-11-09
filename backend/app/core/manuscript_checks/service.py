@@ -1,4 +1,6 @@
-"""Loads what the checks may read, once, and runs them off the event loop. Read-only: nothing is written or committed."""
+"""Loads what the checks may read, once, and runs them off the event loop.
+
+Read-only: nothing is written or committed."""
 
 import asyncio
 import uuid
@@ -19,7 +21,8 @@ async def load_context(session: AsyncSession, mid: uuid.UUID) -> CheckContext:
     pdf = manuscripts.pdf_path(mid)
     status, _, _ = manuscripts.read_state(manuscript, datetime.now(timezone.utc))  # a dead `running` reads as failed
     info = ManuscriptInfo(str(mid), manuscript.main_file, status, manuscript.compiled_at, manuscript.compile_log,
-                          pdf if pdf.exists() else None, manuscript.updated_at)
+                          pdf if pdf.exists() else None, manuscript.updated_at,
+                          manuscript.template)
     return CheckContext(MappingProxyType(dict(files)), frozenset(await known_keys(session, manuscript, files)), info)
 
 

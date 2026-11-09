@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ManuscriptTemplate } from '@/api/client'
 import { useCreateManuscript, useManuscriptTemplates } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,14 @@ import { manuscriptHref } from '@/lib/route'
 import { manuscriptFailure } from './errors'
 
 type Props = { workspaceId: string | null; open: boolean; onOpenChange: (open: boolean) => void }
+
+/** What a template says about its page limit; the venue's official style is noted only when there is no limit. */
+export function limitNote(t: ManuscriptTemplate): string {
+  if (t.page_limit != null) {
+    return `Page limit ${t.page_limit} pages, ${t.references_count ? 'references included' : 'references not counted'}`
+  }
+  return t.official ? 'No page limit' : "No page limit. Generic layout, not a venue's official style."
+}
 
 /** Title plus a template; creating opens the new manuscript's editor. */
 export function NewManuscriptDialog({ workspaceId, open, onOpenChange }: Props) {
@@ -41,9 +50,12 @@ export function NewManuscriptDialog({ workspaceId, open, onOpenChange }: Props) 
           </div>
           <RadioGroup value={template} onValueChange={setPicked} aria-label="Template" className="gap-2">
             {templates.data?.map((t) => (
-              <div key={t.name} className="flex items-center gap-2">
-                <RadioGroupItem value={t.name} id={`template-${t.name}`} />
-                <Label htmlFor={`template-${t.name}`}>{t.label}</Label>
+              <div key={t.name} className="flex items-start gap-2">
+                <RadioGroupItem value={t.name} id={`template-${t.name}`} aria-describedby={`template-${t.name}-limit`} />
+                <div className="flex flex-col gap-0.5">
+                  <Label htmlFor={`template-${t.name}`}>{t.label}</Label>
+                  <p id={`template-${t.name}-limit`} className="text-xs text-muted-foreground">{limitNote(t)}</p>
+                </div>
               </div>
             ))}
           </RadioGroup>

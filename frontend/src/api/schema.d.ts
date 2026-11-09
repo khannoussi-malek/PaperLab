@@ -5048,6 +5048,8 @@ export interface components {
             title: string;
             /** Main File */
             main_file: string;
+            /** Template */
+            template: string;
             /** Checklist */
             checklist: {
                 [key: string]: unknown;
@@ -5095,6 +5097,8 @@ export interface components {
             title: string;
             /** Main File */
             main_file: string;
+            /** Template */
+            template: string;
             /** Checklist */
             checklist: {
                 [key: string]: unknown;
@@ -5144,6 +5148,8 @@ export interface components {
             title: string;
             /** Main File */
             main_file: string;
+            /** Template */
+            template: string;
             /** Checklist */
             checklist: {
                 [key: string]: unknown;
@@ -7458,6 +7464,14 @@ export interface components {
             name: string;
             /** Label */
             label: string;
+            /** Official */
+            official: boolean;
+            /** Provenance */
+            provenance: string;
+            /** Page Limit */
+            page_limit: number | null;
+            /** References Count */
+            references_count: boolean;
         };
         /** TokenEvent */
         TokenEvent: {

@@ -25,7 +25,12 @@ async def make(client, **body):
 
 async def test_templates_listed(client):
     body = (await client.get("/api/templates/manuscripts")).json()
-    assert {"name": "article", "label": "Plain article"} in body
+    assert [t["name"] for t in body] == ["article", "ieee", "acm", "lncs", "elsevier"]
+    ieee = next(t for t in body if t["name"] == "ieee")
+    assert ieee == {"name": "ieee", "label": "IEEE conference", "official": True, "page_limit": 6,
+                    "references_count": True, "provenance": ieee["provenance"]}
+    article = body[0]
+    assert article["page_limit"] is None and article["official"] is False
 
 
 async def test_create_get_patch_delete(client, session):

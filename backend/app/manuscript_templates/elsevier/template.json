@@ -1,0 +1,64 @@
+{
+  "name": "elsevier",
+  "label": "Elsevier",
+  "order": 4,
+  "official": true,
+  "provenance": "elsarticle class from the TeX bundle. No page limit is set; the word bands are common values, not any journal's rule.",
+  "page_limit": null,
+  "references_count": false,
+  "abstract_words": [
+    100,
+    300
+  ],
+  "citation_style": "numeric",
+  "sections": [
+    {
+      "id": "introduction",
+      "title": "Introduction",
+      "words": [
+        400,
+        900
+      ]
+    },
+    {
+      "id": "related-work",
+      "title": "Related work",
+      "words": [
+        300,
+        800
+      ]
+    },
+    {
+      "id": "method",
+      "title": "Method",
+      "words": [
+        500,
+        1500
+      ]
+    },
+    {
+      "id": "results",
+      "title": "Results",
+      "words": [
+        500,
+        1500
+      ]
+    },
+    {
+      "id": "discussion",
+      "title": "Discussion",
+      "words": [
+        300,
+        900
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "Conclusion",
+      "words": [
+        100,
+        300
+      ]
+    }
+  ]
+}

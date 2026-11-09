@@ -1,0 +1,64 @@
+{
+  "name": "lncs",
+  "label": "Springer LNCS",
+  "order": 3,
+  "official": true,
+  "provenance": "llncs class from the TeX bundle. Page limit is a common value, not any conference's rule.",
+  "page_limit": 12,
+  "references_count": true,
+  "abstract_words": [
+    70,
+    150
+  ],
+  "citation_style": "numeric",
+  "sections": [
+    {
+      "id": "introduction",
+      "title": "Introduction",
+      "words": [
+        400,
+        900
+      ]
+    },
+    {
+      "id": "related-work",
+      "title": "Related work",
+      "words": [
+        300,
+        800
+      ]
+    },
+    {
+      "id": "method",
+      "title": "Method",
+      "words": [
+        500,
+        1500
+      ]
+    },
+    {
+      "id": "results",
+      "title": "Results",
+      "words": [
+        500,
+        1500
+      ]
+    },
+    {
+      "id": "discussion",
+      "title": "Discussion",
+      "words": [
+        300,
+        900
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "Conclusion",
+      "words": [
+        100,
+        300
+      ]
+    }
+  ]
+}

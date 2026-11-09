@@ -33,15 +33,15 @@ async def _check_workspace(session: AsyncSession, workspace_id: uuid.UUID | None
 async def create(session: AsyncSession, *, title: str, template: str, workspace_id: uuid.UUID | None) -> Manuscript:
     contents = manuscript_templates.files(template)
     return await create_from_files(session, title=title, workspace_id=workspace_id, files=contents,
-                                   main_file="main.tex")
+                                   main_file="main.tex", template=template)
 
 
 async def create_from_files(session: AsyncSession, *, title: str, workspace_id: uuid.UUID | None,
-                            files: dict[str, str | bytes], main_file: str) -> Manuscript:
+                            files: dict[str, str | bytes], main_file: str, template: str = "custom") -> Manuscript:
     """A manuscript holding exactly `files` (text as str, binaries as bytes). The caller commits, or rolls back when a
     cap or a path refuses a file midway, so an import is all or nothing."""
     await _check_workspace(session, workspace_id)
-    manuscript = Manuscript(title=title, workspace_id=workspace_id)
+    manuscript = Manuscript(title=title, workspace_id=workspace_id, template=template)
     session.add(manuscript)
     await session.flush()
     for path, content in files.items():
