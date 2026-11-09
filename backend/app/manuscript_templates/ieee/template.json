@@ -1,0 +1,64 @@
+{
+  "name": "ieee",
+  "label": "IEEE conference",
+  "order": 1,
+  "official": true,
+  "provenance": "IEEEtran class from the TeX bundle, option conference. Page limit is a common value, not any conference's rule.",
+  "page_limit": 6,
+  "references_count": true,
+  "abstract_words": [
+    150,
+    250
+  ],
+  "citation_style": "numeric",
+  "sections": [
+    {
+      "id": "introduction",
+      "title": "Introduction",
+      "words": [
+        400,
+        900
+      ]
+    },
+    {
+      "id": "related-work",
+      "title": "Related work",
+      "words": [
+        300,
+        800
+      ]
+    },
+    {
+      "id": "method",
+      "title": "Method",
+      "words": [
+        500,
+        1500
+      ]
+    },
+    {
+      "id": "results",
+      "title": "Results",
+      "words": [
+        500,
+        1500
+      ]
+    },
+    {
+      "id": "discussion",
+      "title": "Discussion",
+      "words": [
+        300,
+        900
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "Conclusion",
+      "words": [
+        100,
+        300
+      ]
+    }
+  ]
+}

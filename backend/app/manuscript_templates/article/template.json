@@ -1,0 +1,64 @@
+{
+  "name": "article",
+  "label": "Plain article",
+  "order": 0,
+  "official": false,
+  "provenance": "Plain LaTeX article class; generic layout, not a venue.",
+  "page_limit": null,
+  "references_count": false,
+  "abstract_words": [
+    150,
+    250
+  ],
+  "citation_style": "author_year",
+  "sections": [
+    {
+      "id": "introduction",
+      "title": "Introduction",
+      "words": [
+        400,
+        900
+      ]
+    },
+    {
+      "id": "related-work",
+      "title": "Related work",
+      "words": [
+        300,
+        800
+      ]
+    },
+    {
+      "id": "method",
+      "title": "Method",
+      "words": [
+        500,
+        1500
+      ]
+    },
+    {
+      "id": "results",
+      "title": "Results",
+      "words": [
+        500,
+        1500
+      ]
+    },
+    {
+      "id": "discussion",
+      "title": "Discussion",
+      "words": [
+        300,
+        900
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "Conclusion",
+      "words": [
+        100,
+        300
+      ]
+    }
+  ]
+}
