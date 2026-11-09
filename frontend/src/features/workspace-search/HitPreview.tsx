@@ -106,10 +106,10 @@ export function HitPreview({ hit, workspaceId, inTree, wide, extra, onReview, on
 
       <div className="mt-2 flex flex-col gap-2 border-t border-glass-border pt-3">
         <div className="flex gap-2">
-          <Button type="button" size="sm" onClick={() => onReview(hit.id, { stage1_status: 'relevant' })}>
+          <Button type="button" size="sm" aria-pressed={hit.stage1_status === 'relevant'} variant={hit.stage1_status === 'relevant' ? 'default' : 'outline'} onClick={() => onReview(hit.id, { stage1_status: 'relevant' })}>
             Relevant
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => onReview(hit.id, { stage1_status: 'maybe' })}>
+          <Button type="button" size="sm" aria-pressed={hit.stage1_status === 'maybe'} variant={hit.stage1_status === 'maybe' ? 'default' : 'outline'} onClick={() => onReview(hit.id, { stage1_status: 'maybe' })}>
             Maybe
           </Button>
         </div>
@@ -131,7 +131,7 @@ export function HitPreview({ hit, workspaceId, inTree, wide, extra, onReview, on
               </option>
             ))}
           </select>
-          <Button type="button" size="sm" variant="destructive" disabled={!reason} onClick={markNotRelevant}>
+          <Button type="button" size="sm" aria-pressed={hit.stage1_status === 'not_relevant'} variant={hit.stage1_status === 'not_relevant' ? 'destructive' : 'outline'} disabled={!reason} onClick={markNotRelevant}>
             Not relevant
           </Button>
         </div>

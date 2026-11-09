@@ -50,3 +50,11 @@ test('selecting another hit does not carry the first hit\'s snowball result over
   show({ ...hit, id: 'h2', title: 'Other' } as Hit)
   expect(screen.queryByText('Found 3 new papers.')).toBeNull()
 })
+
+test('screening buttons are neutral until chosen, then the current one is pressed', () => {
+  const rerender = mount()
+  for (const name of ['Relevant', 'Maybe', 'Not relevant']) expect(screen.getByRole('button', { name }).getAttribute('aria-pressed')).toBe('false')
+  rerender({ ...hit, stage1_status: 'relevant' } as Hit)
+  expect(screen.getByRole('button', { name: 'Relevant' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.getByRole('button', { name: 'Maybe' }).getAttribute('aria-pressed')).toBe('false')
+})

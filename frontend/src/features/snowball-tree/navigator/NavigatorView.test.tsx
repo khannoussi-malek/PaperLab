@@ -355,3 +355,27 @@ test('Full details is a titled dialog with the abstract, DOI and AI note, no bra
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(document.activeElement).toBe(button)
 })
+
+test('the card groups Screening and Snowball and shows each state', async () => {
+  setup(prov(), 'root:r1,A,B')
+  const screening = await screen.findByRole('group', { name: 'Screening' })
+  expect(within(screening).getByTestId('screening-state').textContent).toBe('Not screened')
+  expect(within(screening).getByRole('button', { name: 'Include' }).getAttribute('aria-pressed')).toBe('false')
+  expect(within(screen.getByRole('group', { name: 'Snowball' })).getByTestId('snowball-state').textContent).toBe('Undecided')
+  expect(within(screening).getByRole('button', { name: 'Exclude' }).getAttribute('title')).toBe('Pick a reason to exclude.')
+  expect(within(screening).getByText('Pick a reason to exclude.')).toBeTruthy()
+})
+
+test('an included paper and a stopped branch show their chips', async () => {
+  const data = prov({ nodes: prov().nodes.map((n) => (n.id === 'B' ? { ...n, decision: 'relevant', branch: { state: 'stopped', directions: [], reason: 'too general' } } : n)) })
+  setup(data, 'root:r1,A,B')
+  expect((await screen.findByTestId('screening-state')).textContent).toBe('Included')
+  expect(screen.getByTestId('snowball-state').textContent).toBe('Stopped: too general')
+  expect(screen.getByRole('button', { name: 'Include' }).getAttribute('aria-pressed')).toBe('true')
+})
+
+test('an unfetched tab explains itself, a fetched empty one says None found.', () => {
+  setup(prov(), 'root:r1,A,B')
+  expect(screen.getByText('Not fetched yet.')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Find its references' })).toBeTruthy()
+})

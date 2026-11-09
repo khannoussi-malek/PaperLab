@@ -89,13 +89,17 @@ export function NextPapers(props: Props) {
         <TabsList>{tabs.map((t) => <TabsTrigger key={t.kind} value={t.kind}>{t.text}</TabsTrigger>)}</TabsList>
         {tabs.map((t) => (
           <TabsContent key={t.kind} value={t.kind}>
-            {!t.fetched && snowballed.length > 0 && target && (
-              <Button type="button" size="sm" className="mb-2" disabled={props.grabs[parentId]?.status === 'pending'}
-                onClick={() => props.grab(parentId, target, { backward: t.kind === 'cites', forward: t.kind === 'cited_by' })}>
-                {t.kind === 'cites' ? 'Find its references' : 'Find papers citing it'}
-              </Button>
-            )}
-            {list(t.kind)}
+            {!t.fetched ? (
+              <div className="flex flex-col items-start gap-2 py-2 text-sm text-muted-foreground">
+                <p>Not fetched yet.</p>
+                {target && (
+                  <Button type="button" size="sm" disabled={props.grabs[parentId]?.status === 'pending'}
+                    onClick={() => props.grab(parentId, target, { backward: t.kind === 'cites', forward: t.kind === 'cited_by' })}>
+                    {t.kind === 'cites' ? 'Find its references' : 'Find papers citing it'}
+                  </Button>
+                )}
+              </div>
+            ) : childrenOf(data, parentId, t.kind).length === 0 ? <p className="py-2 text-sm text-muted-foreground">None found.</p> : list(t.kind)}
           </TabsContent>
         ))}
       </Tabs>

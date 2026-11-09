@@ -66,21 +66,20 @@ export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading, 
   const pdfHref = paperId && hasPdf ? readerHref(paperId) : freeCopy
   return (
     <article aria-label="Current paper" className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
-      <h2 ref={heading} tabIndex={-1} className="font-heading text-base leading-snug outline-none">{title}</h2>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h2 ref={heading} tabIndex={-1} className="min-w-0 flex-1 font-heading text-base leading-snug outline-none">{title}</h2>
+        <div className="flex shrink-0 flex-wrap gap-1.5">
+          {pdfHref && <Button asChild size="sm" variant="outline"><a href={pdfHref} {...(pdfHref === freeCopy && { target: '_blank', rel: 'noreferrer' })}>Open PDF</a></Button>}
+          {isHit ? <Button ref={detailsButton} type="button" size="sm" variant="outline" onClick={() => setDetails(true)}>Full details</Button>
+            : paperId && <Button asChild size="sm" variant="outline"><a href={readerHref(paperId)}>Full details</a></Button>}
+        </div>
+      </div>
       {byline && <p className="text-xs text-muted-foreground">{byline}</p>}
       <p className="text-xs text-muted-foreground">Level {node.level} · reached by {node.paths} {node.paths === 1 ? 'route' : 'routes'} · {hasPdf ? 'PDF available' : 'no PDF yet'}</p>
       {isHit ? <Fit hit={hit} workspaceId={workspaceId} /> : <p className="text-sm text-muted-foreground">Added by hand: no fit score</p>}
       <Abstract text={hit?.abstract ?? library?.abstract} />
-      <div className="flex flex-wrap gap-1.5">
-        {pdfHref && <Button asChild size="sm" variant="outline"><a href={pdfHref} {...(pdfHref === freeCopy && { target: '_blank', rel: 'noreferrer' })}>Open PDF</a></Button>}
-        {isHit ? <Button ref={detailsButton} type="button" size="sm" variant="outline" onClick={() => setDetails(true)}>Full details</Button>
-          : paperId && <Button asChild size="sm" variant="outline"><a href={readerHref(paperId)}>Full details</a></Button>}
-        {target && node.snowballed.length === 0 && (
-          <Button type="button" size="sm" disabled={grabs[node.id]?.status === 'pending'} onClick={() => grab(node.id, target)}>{grabs[node.id]?.status === 'pending' ? 'Snowballing…' : 'Find citing & cited papers'}</Button>
-        )}
-      </div>
       {grabs[node.id]?.status === 'done' && <p role="status" className="text-xs text-muted-foreground">{grabLine(node, data, grabs[node.id])}</p>}
-      <Decisions key={node.id} workspaceId={workspaceId} node={node} target={target} isHit={isHit} grab={grab} pending={grabs[node.id]?.status === 'pending'} onReveal={onReveal} />
+      <Decisions key={node.id} workspaceId={workspaceId} node={node} hit={hit} target={target} isHit={isHit} grab={grab} pending={grabs[node.id]?.status === 'pending'} onReveal={onReveal} />
       {grabs[node.id]?.status === 'error' && <p role="alert" className="text-xs text-destructive">{(grabs[node.id] as { text: string }).text}</p>}
       {hit && <DetailsDialog returnFocus={detailsButton} workspaceId={workspaceId} hit={hit} open={details} onOpenChange={setDetails} />}
     </article>
