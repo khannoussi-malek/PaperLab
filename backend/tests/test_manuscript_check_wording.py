@@ -1,3 +1,4 @@
+import time
 from types import MappingProxyType
 
 import pytest
@@ -70,6 +71,7 @@ FLAGGED = [
     "The rule holds universally.",
     "We ran extensive experiments.",
     "We are the first to study this problem.",
+    "This is the first work to combine both signals.",
 ]
 LEGIT = [
     "The gain is significant ($p < 0.01$).",
@@ -91,6 +93,9 @@ LEGIT = [
     "The formula is universally quantified over x.",
     "We ran extensive experiments on 12 datasets.",
     "Lee et al.~\\cite{lee} were the first to propose it.",
+    "Transformers have proven effective for translation~\\cite{v17}.",
+    "Proofs of this kind have proven useful~\\cite{lee}.",
+    "The encoder is the first layer to see the input.",
 ]
 
 
@@ -141,3 +146,12 @@ def test_proofs_headings_and_captions_are_not_scanned():
     text = ("\\begin{proof}\nThis proves it is robust.\n\\end{proof}\n\\caption{A robust model.}\n"
             "\\section{A robust method}\n")
     assert run("wording.overclaim", text) == []
+
+
+def test_overclaim_on_a_thesis_sized_file_is_fast_and_does_not_split_every_sentence():
+    # One guarded hit ("significant") used to split every sentence of the file with pylatexenc (1.6 s on a thesis)
+    line = "We train the model on the corpus and report the mean over five seeds in the appendix " * 18
+    body = "\n".join([line[:1500]] * 390) + "\nThe gain is significant."
+    start = time.perf_counter()
+    assert len(run("wording.overclaim", "\\section{Method}\n" + body)) == 1
+    assert time.perf_counter() - start < 0.5

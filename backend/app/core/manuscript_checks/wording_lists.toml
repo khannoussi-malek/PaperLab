@@ -88,7 +88,7 @@ hint = 'Name the test and report the p-value or an interval, or write "improves 
 [[overclaim]]
 id = "prove"
 pattern = '\bprov(?:e|es|ed|en)\b'
-skip_sentence_if = ["theory"]
+skip_sentence_if = ["theory", "anchored"]
 skip_after = '\s+(?:useful|difficult|hard|challenging|helpful|valuable|impractical|costly|unnecessary)\b'
 why = "experiments cannot prove; only a proof does."
 hint = 'Experiments support or suggest; only a proof proves. Write "suggests" or "is consistent with".'
@@ -133,7 +133,7 @@ hint = "Give the number of datasets, runs or settings instead."
 
 [[overclaim]]
 id = "first_to"
-pattern = '\bwe\s+are\s+the\s+first\b|\b(?:were|was|is|are)\s+the\s+first(?:\s+\w+)?\s+to\b|\bto\s+our\s+knowledge,?\s+(?:this\s+is\s+)?the\s+first\b'
+pattern = '\bwe\s+are\s+the\s+first\b|\b(?:were|was|is|are)\s+the\s+first(?:\s+(?:work|paper|study|method|approach|framework|system|model|algorithm|attempt|one))?\s+to\b|\bto\s+our\s+knowledge,?\s+(?:this\s+is\s+)?the\s+first\b'
 skip_sentence_if = ["anchored"]
 why = "a priority claim with no cited literature check."
 hint = "Priority claims need a cited literature check; say what is new instead."
