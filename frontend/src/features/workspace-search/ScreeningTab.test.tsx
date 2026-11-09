@@ -438,3 +438,14 @@ test('the awaiting hits come from the one query step 2 and the counts share (no 
   expect(screen.queryByText('Not Relevant One')).toBeNull()
   void spy
 })
+
+test('an unassessed row has no pressed button; an included row has Include pressed', () => {
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [{ ...manualHit, stage2_status: 'include' }] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  const [include1, include2] = screen.getAllByRole('button', { name: 'Include' })
+  const [exclude1, exclude2] = screen.getAllByRole('button', { name: 'Exclude' })
+  expect(include1).toHaveAttribute('aria-pressed', 'false')
+  expect(exclude1).toHaveAttribute('aria-pressed', 'false')
+  expect(include2).toHaveAttribute('aria-pressed', 'true')
+  expect(exclude2).toHaveAttribute('aria-pressed', 'false')
+})

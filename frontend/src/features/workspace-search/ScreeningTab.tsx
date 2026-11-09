@@ -224,7 +224,8 @@ function ScreeningRow({
           <Button
             type="button"
             size="sm"
-            variant="default"
+            variant={hit.stage2_status === 'include' ? 'default' : 'outline'}
+            aria-pressed={hit.stage2_status === 'include'}
             onClick={() => onSetEligibility(paperId, hit.run_id, { status: 'include' })}
           >
             Include
@@ -263,6 +264,7 @@ function ScreeningRow({
               type="button"
               size="sm"
               variant={hit.stage2_status === 'exclude' ? 'destructive' : 'outline'}
+              aria-pressed={hit.stage2_status === 'exclude'}
               onClick={() => setExcluding(true)}
             >
               Exclude
