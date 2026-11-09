@@ -42,3 +42,14 @@ test('nav in the URL forces Navigate whatever is stored', async () => {
   setup('#/workspaces/w1?tab=tree&nav=root:r1,A')
   expect(await screen.findByRole('navigation', { name: 'Snowball path' })).toBeTruthy()
 })
+
+test('navPaper opens the card even with no search runs', async () => {
+  history.replaceState(null, '', '#/workspaces/w1?tab=tree&navPaper=p9')
+  vi.spyOn(api, 'provenance').mockResolvedValue({ truncated: false, roots: [], nodes: [], links: [], levels: [] } as never)
+  vi.spyOn(api, 'snowballNext').mockResolvedValue([])
+  vi.spyOn(api, 'listSearchRuns').mockResolvedValue([])
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([{ id: 'p9', title: 'Solo paper', authors: [], year: null, venue: null, abstract: null, has_pdf: false, oa_url: null }] as never)
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><SnowballTreeTab workspaceId="w1" /></QueryClientProvider>)
+  expect(await screen.findByText('Added by hand: no fit score')).toBeTruthy()
+  expect(screen.queryByText(/Nothing to draw yet/)).toBeNull()
+})

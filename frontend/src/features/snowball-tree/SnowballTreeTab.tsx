@@ -11,7 +11,8 @@ import { MapView } from './MapView'
 import { OutlineView } from './OutlineView'
 import { RadialView } from './RadialView'
 import { NavigatorView } from './navigator/NavigatorView'
-import { readNav, readNavPaper } from './navigator/navUrl'
+import { primaryPath } from './navigator/navPath'
+import { readNav, readNavPaper, writeNav } from './navigator/navUrl'
 import { TreeView } from './TreeView'
 import { useStoredView, ViewSwitch } from './ViewSwitch'
 
@@ -68,9 +69,15 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
     )
   }
 
+  const navigateFrom = (id: string) => {
+    if (!data) return
+    writeNav(primaryPath(data, id))
+    setHasNav(true)
+  }
+
   if (isPending) return <p className="text-sm text-muted-foreground">Loading the tree…</p>
   if (error || !data) return <p role="alert" className="text-sm text-destructive">Could not load the snowball tree.</p>
-  if (data.roots.length === 0) return <p className="text-sm text-muted-foreground">Nothing to draw yet. Run a search first.</p>
+  if (data.roots.length === 0 && !hasNav) return <p className="text-sm text-muted-foreground">Nothing to draw yet. Run a search first.</p>
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -92,7 +99,7 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
         {view === 'radial' && <RadialView data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
         {view === 'map' && <MapView data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
         {view === 'outline' && <OutlineView workspaceId={workspaceId} data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
-        {view !== 'navigate' && selected && <SidePanel workspaceId={workspaceId} data={data} id={selected} busy={busy === selected} onFind={find} />}
+        {view !== 'navigate' && selected && <SidePanel workspaceId={workspaceId} data={data} id={selected} busy={busy === selected} onFind={find} onNavigate={navigateFrom} />}
       </div>
     </div>
   )

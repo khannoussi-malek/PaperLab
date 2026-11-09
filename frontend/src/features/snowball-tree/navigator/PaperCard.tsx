@@ -56,7 +56,9 @@ export function PaperCard({ workspaceId, data, node, grab, grabs }: Props) {
   const byline = [(hit?.authors ?? library?.authors)?.join(', ') || null, hit?.year ?? library?.year ?? node.year, hit?.venue ?? library?.venue].filter(Boolean).join(' · ')
   const paperId = node.paper_id ?? hit?.paper_id ?? null
   const hasPdf = library ? library.has_pdf : hit ? hit.acquisition_status === 'imported' || hit.acquisition_status === 'manual' : false
-  const pdfHref = paperId && hasPdf ? readerHref(paperId) : null
+  // ponytail: HitOut carries no free-copy URL, so only a library paper's oa_url can back this up; add a hit field if one is ever exposed.
+  const freeCopy = library?.oa_url ?? null
+  const pdfHref = paperId && hasPdf ? readerHref(paperId) : freeCopy
   return (
     <article aria-label="Current paper" className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
       <h2 className="font-heading text-base leading-snug">{title}</h2>
@@ -65,7 +67,7 @@ export function PaperCard({ workspaceId, data, node, grab, grabs }: Props) {
       {isHit ? <Fit hit={hit} workspaceId={workspaceId} /> : <p className="text-sm text-muted-foreground">Added by hand: no fit score</p>}
       <Abstract text={hit?.abstract ?? library?.abstract} />
       <div className="flex flex-wrap gap-1.5">
-        {pdfHref && <Button asChild size="sm" variant="outline"><a href={pdfHref}>Open PDF</a></Button>}
+        {pdfHref && <Button asChild size="sm" variant="outline"><a href={pdfHref} {...(pdfHref === freeCopy && { target: '_blank', rel: 'noreferrer' })}>Open PDF</a></Button>}
         {isHit ? <Button type="button" size="sm" variant="outline" onClick={() => setDetails(true)}>Full details</Button>
           : paperId && <Button asChild size="sm" variant="outline"><a href={readerHref(paperId)}>Full details</a></Button>}
         {target && node.snowballed.length === 0 && (

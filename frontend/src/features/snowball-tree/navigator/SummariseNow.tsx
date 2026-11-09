@@ -13,7 +13,7 @@ const MESSAGES: Record<string, string> = {
 const failure = (e: unknown) => (e instanceof ApiError && MESSAGES[e.code]) || (e instanceof Error ? e.message : 'Could not summarise this paper.')
 
 /** "Summarise now" for one hit: the AI reads it against the review question. Old suggestion stays if it fails. */
-export function SummariseNow({ workspaceId, hitId }: { workspaceId: string; hitId: string }) {
+export function SummariseNow({ workspaceId, hitId, label }: { workspaceId: string; hitId: string; label?: string }) {
   const suggest = useSuggestHit(workspaceId)
   const [error, setError] = useState<string | null>(null)
   const [host, setHost] = useState<string | null>(null)
@@ -29,11 +29,11 @@ export function SummariseNow({ workspaceId, hitId }: { workspaceId: string; hitI
   }
   return (
     <>
-      <Button type="button" size="xs" variant="outline" disabled={suggest.isPending} onClick={() => run(false)}>
+      <Button type="button" size="xs" variant="outline" aria-label={label} disabled={suggest.isPending} onClick={() => run(false)}>
         {suggest.isPending ? 'Reading…' : 'Summarise now'}
       </Button>
-      {error && <span role="alert" className="block text-xs text-destructive">{error}</span>}
-      <RemoteConfirmDialog what="text" host={host} onSend={() => run(true)} onCancel={() => setHost(null)} />
+      {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
+      <RemoteConfirmDialog what="text" host={host} onSend={() => run(true)} onCancel={() => { setHost(null); setError('Not summarised.') }} />
     </>
   )
 }
