@@ -466,3 +466,25 @@ async def test_0061_round_trip(scratch_url):
             "SELECT id, 'before_mcp', '{}' FROM manuscripts"))
     await scratch.dispose()
     assert left == ["autosave"]
+
+
+@pytest.mark.anyio
+async def test_0068_manuscript_template_round_trip(scratch_url):
+    """The new column defaults existing rows to 'custom' and downgrade drops it."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "0067")
+    scratch = create_async_engine(scratch_url)
+    async with scratch.begin() as conn:
+        await conn.execute(text("INSERT INTO manuscripts (title) VALUES ('Old draft')"))
+    alembic(dsn, "upgrade", "0068")
+    async with scratch.begin() as conn:
+        await conn.execute(text("INSERT INTO manuscripts (title) VALUES ('New draft')"))
+        rows = (await conn.execute(text("SELECT title, template FROM manuscripts ORDER BY title"))).all()
+    assert rows == [("New draft", "custom"), ("Old draft", "custom")]
+    alembic(dsn, "downgrade", "0067")
+    async with scratch.connect() as conn:
+        cols = (await conn.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'manuscripts'"))).scalars().all()
+    assert "template" not in cols
+    alembic(dsn, "upgrade", "head")
+    await scratch.dispose()

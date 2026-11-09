@@ -29,6 +29,7 @@ class Manuscript(Base):
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"))
     title: Mapped[str] = mapped_column(Text)
     main_file: Mapped[str] = mapped_column(Text, server_default="main.tex")
+    template: Mapped[str] = mapped_column(Text, server_default="custom")  # a manuscript_templates name, or custom
     checklist: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     compile_status: Mapped[str] = mapped_column(Text, server_default="never")  # never | running | ok | failed
     compile_requested: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
