@@ -129,10 +129,10 @@ class SearchRunSummary(RunReport):
     paused_sources: list[str] = []
 
     @classmethod
-    def from_run(cls, run, left: list[str], report: dict) -> "SearchRunSummary":
+    def from_run(cls, run, left: list[str], report: dict, label: str | None = None) -> "SearchRunSummary":
         return cls(
             **_continuation(run.status, run.stats_json or {}, left), **report,
-            id=run.id, query_text=run.query_text, status=run.status, started_at=run.started_at,
+            id=run.id, query_text=label or run.query_text, status=run.status, started_at=run.started_at,
             stopped_at=run.stopped_at, sources_json=run.sources_json,
         )
 

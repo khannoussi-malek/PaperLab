@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react'
+import { useLoadingHint } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
 import { workspaceHref } from '@/lib/route'
 import { WORKSPACE_TABS } from './workspaceTabs'
 
 /** Placeholder bars while a tab's data loads, so a loading tab never reads as an empty one. */
-export function TabSkeleton({ rows = 3, label }: { rows?: number; label: string }) {
+export function TabSkeleton({ rows = 3, label, failureCount }: { rows?: number; label: string; failureCount?: number }) {
+  const hint = useLoadingHint(failureCount)
   return (
-    <div role="status" aria-busy="true" className="flex flex-col gap-2 py-2">
+    <div role="status" aria-live="polite" aria-busy="true" className="flex flex-col gap-2 py-2">
       <span className="sr-only">{label}</span>
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} data-skeleton-row className="h-10 animate-pulse rounded-lg bg-muted motion-reduce:animate-none" />
       ))}

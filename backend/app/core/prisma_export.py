@@ -103,9 +103,10 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
         ).scalars().all()
         stats_identified = sum(sum(r.stats_json.get("per_source_raw_count", {}).values()) for r in runs)
         hit_query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
+        labels = await search_run_results.run_labels(session, runs)
         runs_meta = [
             {
-                "id": str(r.id), "query_text": r.query_text, "filters_json": r.filters_json,
+                "id": str(r.id), "query_text": labels[r.id], "filters_json": r.filters_json,
                 "started_at": r.started_at.isoformat(),
             }
             for r in runs

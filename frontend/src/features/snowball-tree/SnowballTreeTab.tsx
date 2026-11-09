@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { refreshTree, useProvenance, useSearchRuns, useSnowball } from '@/api/queries'
+import { LoadingState } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
 import { defaultFolded } from './layout'
@@ -17,7 +18,7 @@ import { TreeView } from './TreeView'
 import { useStoredView, ViewSwitch } from './ViewSwitch'
 
 export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
-  const { data, isPending, error } = useProvenance(workspaceId)
+  const { data, isPending, error, failureCount } = useProvenance(workspaceId)
   const [stored, setView] = useStoredView(workspaceId)
   const [hasNav, setHasNav] = useState(() => readNav() !== '' || readNavPaper() !== '') // a shared walk opens in Navigate whatever is stored
   const view = hasNav ? 'navigate' : stored
@@ -75,7 +76,7 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
     setHasNav(true)
   }
 
-  if (isPending) return <p className="text-sm text-muted-foreground">Loading the tree…</p>
+  if (isPending) return <LoadingState label="Loading the tree…" failureCount={failureCount} className="text-sm" />
   if (error || !data) return <p role="alert" className="text-sm text-destructive">Could not load the snowball tree.</p>
   if (data.roots.length === 0 && view !== 'navigate') {
     return (
