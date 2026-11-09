@@ -2,8 +2,7 @@ import type { components } from './schema'
 
 export type CheckFinding = components['schemas']['CheckFindingOut']
 export type CheckRunResult = components['schemas']['RunChecksOut']
-// hand-written until the DOI route's generated type lands
-export type DoiCheckResult = { checked: number; not_checked: number; findings: CheckFinding[]; counts: Record<'error' | 'warning' | 'info', number> }
+export type DoiCheckResult = components['schemas']['DoiCheckOut']
 export type CheckInfo = components['schemas']['CheckInfoOut']
 export type Manuscript = components['schemas']['ManuscriptOut']
 export type ManuscriptDetail = components['schemas']['ManuscriptDetailOut']

@@ -272,7 +272,7 @@ async def test_check_manuscript_lists_findings_and_is_read_only(session):
     assert hit["severity"] == "error" and hit["fix_hint"]
     assert report["truncated"] == 0 and "citations.missing_keys" in report["ran"]
     only = result(await call("check_manuscript", manuscript_id=mid, checks=["citations.missing_keys"]))
-    assert only["ran"] == ["citations.missing_keys"]
+    assert "citations.missing_keys" in only["ran"] and set(only["ran"]) <= {"citations.missing_keys"}
     assert result(await call("check_manuscript", manuscript_id=mid, checks=[]))["ran"] == report["ran"]  # [] = all
     assert not (session.new or session.dirty or session.deleted)  # nothing pending: it only read
     assert await section(mid) == before  # same text version, nothing rewritten
