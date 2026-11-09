@@ -161,3 +161,21 @@ test('a needs_full_text refusal reads in words, never as the raw code', async ()
   expect(await screen.findByText('Needs the full text')).toBeInTheDocument()
   expect(screen.queryByText('needs_full_text')).toBeNull()
 })
+
+test('a header counts the papers that need a PDF and links to Get PDFs', async () => {
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(null, 'p1', 'A'), row(null, 'p2', 'B'), row(null, 'p3', 'C')])
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([
+    { id: 'p1', has_pdf: false }, { id: 'p2', has_pdf: false }, { id: 'p3', has_pdf: true },
+  ] as Awaited<ReturnType<typeof api.listWorkspacePapers>>)
+  renderTab()
+  expect(await screen.findByText(/2 papers need their PDF before AI can read them\./)).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Go to Get PDFs' }).getAttribute('href')).toContain('tab=acquisition')
+})
+
+test('no header line when every paper has its PDF', async () => {
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(null, 'p1', 'A')])
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([{ id: 'p1', has_pdf: true }] as Awaited<ReturnType<typeof api.listWorkspacePapers>>)
+  renderTab()
+  await screen.findByRole('button', { name: 'Generate card for A' })
+  expect(screen.queryByText(/need their PDF/)).toBeNull()
+})

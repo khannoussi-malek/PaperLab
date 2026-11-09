@@ -7,6 +7,7 @@ import { LoadError } from '@/features/library/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { workspaceHref } from '@/lib/route'
 import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 import { Making, NeedsFullText } from './EvidenceBits'
 import { EvidenceCell } from './EvidenceCell'
@@ -21,6 +22,8 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
   // "Generate cards" skips these on the server; their rows say why instead of offering a Generate that would fail.
   const papers = useWorkspacePapers(workspaceId)
   const withoutPdf = new Set(papers.data?.filter((p) => p.has_pdf === false).map((p) => p.id))
+  // Rows that show "Needs the full text": no card to read yet and no PDF to make one from.
+  const needPdf = rows.data?.filter((r) => r.card?.status !== 'ready' && r.card?.status !== 'generating' && withoutPdf.has(r.paper_id)).length ?? 0
   const error = generateMissing.error ?? generateOne.error
   const generating = rows.data?.filter((r) => r.card?.status === 'generating').length ?? 0
 
@@ -44,6 +47,14 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
           </span>
         )}
       </div>
+      {needPdf > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {needPdf} {needPdf === 1 ? 'paper needs' : 'papers need'} their PDF before AI can read {needPdf === 1 ? 'it' : 'them'}.{' '}
+          <Button variant="link" size="sm" className="h-auto p-0" asChild>
+            <a href={workspaceHref(workspaceId, 'acquisition')}>Go to Get PDFs</a>
+          </Button>
+        </p>
+      )}
       {rows.error && <LoadError message={rows.error.message} onRetry={() => void rows.refetch()} />}
       {error && <Alert variant="destructive"><AlertDescription>{errorWords(error.message)}</AlertDescription></Alert>}
       {rows.isPending && <TabSkeleton label="Loading evidence cards" />}
