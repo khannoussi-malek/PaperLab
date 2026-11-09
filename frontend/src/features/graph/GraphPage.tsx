@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { GraphLink } from '@/api/client'
 import { useEmbeddingStatus, useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/api/queries'
+import { LoadingState } from '@/components/LoadingState'
 import { AppShell } from '@/components/AppShell'
 import { glass } from '@/components/glass'
 import { useChartTheme } from '@/features/charts/useChartTheme'
@@ -136,7 +137,7 @@ export function GraphPage() {
       title="Graph"
       status={
         <>
-          {counted}
+          {graph.data && counted /* not "0 papers" while the graph is still on its way */}
           {graph.data?.truncated && ' · Showing the first 2000 links.'}
           {embedding.data?.rebuild && ` · ${rebuildLine(embedding.data.source.label, embedding.data.rebuild)}`}
         </>
@@ -152,7 +153,8 @@ export function GraphPage() {
             }}
           />
         ) : (
-          <div className="min-h-0 flex-1 animate-pulse rounded-xl bg-muted" />
+          // The library graph takes a few seconds: say so rather than show an empty frame.
+          <LoadingState label="Loading the graph…" failureCount={graph.failureCount} className="p-4 text-sm" />
         )
       ) : (
         // Narrower than they were as a page: the rail takes 14rem of the window now, and the canvas is what
