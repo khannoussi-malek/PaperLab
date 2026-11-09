@@ -15,6 +15,8 @@ IDENTIFIER_FIELDS = {"doi", "url", "eprint", "isbn"}
 IDENTIFIER_KINDS = {"article", "inproceedings", "conference", "misc", "online", "unpublished"}
 URL_IN = re.compile(r"\\url|https?://", re.I)
 IDENTIFIER_FROM_YEAR = 2000  # older articles have no DOI
+WEB_KINDS = {"misc", "online", "electronic", "www", "software", "dataset"}  # no person author or year to give
+AUTHOR_FIELDS = {"author", "editor", "organization", "institution", "key"}
 
 
 def bib_entries(ctx: CheckContext) -> Iterator[tuple[str, BibEntry]]:
@@ -38,9 +40,15 @@ def _duplicates(ctx: CheckContext) -> list[Finding]:
     return found
 
 
+def _has_url(e: BibEntry) -> bool:
+    return bool(e.fields.get("url")) or any(URL_IN.search(e.fields.get(k, "")) for k in ("howpublished", "note"))
+
+
 def _missing(e: BibEntry) -> list[str]:
     has = {k for k, v in e.fields.items() if v}
-    missing = [n for n, ok in (("title", "title" in has), ("author", bool({"author", "editor"} & has)),
+    if e.kind in WEB_KINDS and _has_url(e):  # a website or software page: the title and the URL are enough
+        return [] if "title" in has else ["title"]
+    missing = [n for n, ok in (("title", "title" in has), ("author", bool(AUTHOR_FIELDS & has)),
                                ("year", bool({"year", "date"} & has))) if not ok]
     if e.kind in VENUE_KINDS and not VENUE_FIELDS & has:
         missing.append("venue")
@@ -86,6 +94,7 @@ def _unused(ctx: CheckContext) -> list[Finding]:
     ]
 
 
+INCLUDED = r"\\(?:input|include|subfile|import|subimport)\b"  # a body placed by another file is not missing its cites
 CITING_SECTIONS = {"introduction", "related work", "related works", "background", "literature review"}
 MIN_SECTION_WORDS = 40  # a fresh heading with a line or two does not nag while drafting
 HEADING = re.compile(r"\\section\*?\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}")
@@ -102,7 +111,7 @@ def _zero_cite(ctx: CheckContext) -> list[Finding]:
                 continue
             body = text[h.end() : heads[i + 1].start() if i + 1 < len(heads) else len(text)]
             words = len(re.findall(r"[A-Za-z]{2,}", re.sub(r"\\[A-Za-z]+\*?", " ", body)))
-            if words < MIN_SECTION_WORDS or re.search(r"\\(?:input|include)\b", body) or cite_spans(body):
+            if words < MIN_SECTION_WORDS or re.search(INCLUDED, body) or cite_spans(body):
                 continue
             found.append(Finding(
                 "references.zero_cite_section", "warning", path, text.count("\n", 0, h.start()) + 1,

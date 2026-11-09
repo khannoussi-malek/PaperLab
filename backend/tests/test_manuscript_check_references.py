@@ -146,3 +146,18 @@ def test_the_three_reference_checks_parse_each_bib_once():
     for name in ("references.duplicate_key", "references.stub_entry", "references.unused_entry"):
         run(name, files)
     assert parse_bib.cache_info().misses == 1
+
+
+def test_web_and_software_entries_with_a_url_need_only_a_title():
+    bib = ("@misc{pytorch, title={PyTorch}, howpublished={\\url{https://pytorch.org}}}\n"
+           "@online{hf, title={Hugging Face}, url={https://huggingface.co}, urldate={2024-01-01}}\n"
+           "@software{lib, title={Lib}, url={https://example.org/lib}, version={1.0}}\n"
+           "@misc{org, title={Docs}, organization={ACME}, url={https://acme.example}}\n")
+    assert run("references.stub_entry", {"r.bib": bib}) == []
+    [f, _] = run("references.stub_entry", {"r.bib": "@misc{nourl, title={No link}}\n"})
+    assert f.message == "Entry nourl is missing: author, year."  # a web kind without a URL is still a stub
+
+
+def test_a_related_work_body_pulled_in_by_subfile_is_not_zero_cite():
+    text = f"\\section{{Related Work}}\n\\subfile{{chapters/related}}\n{WORDS}\n"
+    assert run("references.zero_cite_section", text) == []
