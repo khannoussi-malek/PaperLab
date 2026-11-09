@@ -114,7 +114,7 @@ async def test_abstract_parent_is_ignored_once_the_hit_has_full_text(client, ses
     hit_chat.HISTORY.clear()
 
 
-async def test_hit_chat_without_a_default_model_is_409(client, session, fake_llm):
+async def test_hit_chat_without_a_default_model_is_409(client, session):
     from sqlalchemy import update
 
     from app.models import LLMModel
