@@ -5,6 +5,10 @@
 
 # PaperLab
 
+> **Why this project exists:** I built PaperLab to use it for my own research and to help me find a PhD,
+> ideally in software engineering and AI. If you work in that area and have an opening, or just want to talk
+> research, I'd be glad to hear from you through [my GitHub profile](https://github.com/khannoussi-malek).
+
 [![GitHub stars](https://img.shields.io/github/stars/khannoussi-malek/PaperLab?style=social)](https://github.com/khannoussi-malek/PaperLab/stargazers)
 [![Latest release](https://img.shields.io/github/v/release/khannoussi-malek/PaperLab)](https://github.com/khannoussi-malek/PaperLab/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/github/license/khannoussi-malek/PaperLab)](LICENSE)
