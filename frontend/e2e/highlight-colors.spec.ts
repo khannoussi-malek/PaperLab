@@ -33,7 +33,9 @@ test('recolouring a note from the notes panel, including a custom colour, persis
   const highlight = page.locator('.highlight:not(.draft)').first()
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(250, 204, 21, 0.4)')
 
+  // The menu closes after a pick, so open Note actions > Colour whenever the swatches aren't showing.
   const recolour = async () => {
+    if (await page.getByRole('button', { name: 'Blue' }).isVisible()) return
     await card.getByRole('button', { name: 'Note actions' }).click()
     await page.getByRole('menuitem', { name: 'Colour' }).click()
   }
@@ -41,8 +43,10 @@ test('recolouring a note from the notes panel, including a custom colour, persis
   await page.getByRole('button', { name: 'Blue' }).click()
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(96, 165, 250, 0.4)')
 
+  await recolour()
   await page.getByLabel('Custom colour').fill('#ff00aa')
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(255, 0, 170, 0.4)')
+  await recolour()
   await expect(page.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'false')
 
   await page.reload()
