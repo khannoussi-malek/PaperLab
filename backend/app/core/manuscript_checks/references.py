@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from app.core.manuscript_checks.base import Check, CheckContext, Finding
 from app.core.manuscript_checks.bibparse import BibEntry, parse_bib
 from app.core.manuscript_paths import RESERVED
-from app.core.manuscript_sentences import cite_spans
+from app.core.manuscript_sentences import _blank_comments, cite_spans
 
 VENUE_FIELDS = {"journal", "booktitle", "publisher", "howpublished", "school", "institution", "organization", "series"}
 VENUE_KINDS = {"article", "inproceedings", "conference", "incollection", "inbook", "book", "phdthesis",
@@ -85,8 +85,34 @@ def _unused(ctx: CheckContext) -> list[Finding]:
     ]
 
 
+CITING_SECTIONS = {"introduction", "related work", "related works", "background", "literature review"}
+MIN_SECTION_WORDS = 40  # a fresh heading with a line or two does not nag while drafting
+HEADING = re.compile(r"\\section\*?\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}")
+
+
+def _zero_cite(ctx: CheckContext) -> list[Finding]:
+    found = []
+    for path in sorted(p for p in ctx.files if p.endswith(".tex")):
+        text = _blank_comments(ctx.files[path])
+        heads = list(HEADING.finditer(text))
+        for i, h in enumerate(heads):
+            title = h.group(1).strip()
+            if " ".join(title.lower().split()) not in CITING_SECTIONS:
+                continue
+            body = text[h.end() : heads[i + 1].start() if i + 1 < len(heads) else len(text)]
+            words = len(re.findall(r"[A-Za-z]{2,}", re.sub(r"\\[A-Za-z]+\*?", " ", body)))
+            if words < MIN_SECTION_WORDS or re.search(r"\\(?:input|include)\b", body) or cite_spans(body):
+                continue
+            found.append(Finding(
+                "references.zero_cite_section", "warning", path, text.count("\n", 0, h.start()) + 1,
+                f'Section "{title}" cites nothing.',
+                "Related work and introductions normally cite the work they build on; add citations or confirm this is intended."))
+    return found
+
+
 CHECKS = (
     Check("references.duplicate_key", "cheap", "Bib keys defined more than once", _duplicates),
     Check("references.stub_entry", "cheap", "Bib entries missing title, author, year or venue (and a DOI or URL, as info)", _stubs),
     Check("references.unused_entry", "cheap", "Bib entries that no .tex file cites", _unused),
+    Check("references.zero_cite_section", "cheap", "Introduction and related-work sections that cite nothing", _zero_cite),
 )

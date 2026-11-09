@@ -91,3 +91,29 @@ def test_nocite_star_silences_and_nocite_key_counts():
     assert run("references.unused_entry", {"r.bib": bib, "main.tex": "\\nocite{*}\n"}) == []
     assert [f.message for f in run("references.unused_entry", {"r.bib": bib, "main.tex": "\\nocite{a}\n"})] == [
         "Entry b is never cited."]
+
+
+WORDS = " ".join(["word"] * 45)
+
+
+def test_a_body_section_with_no_cites_is_flagged_at_its_heading():
+    text = f"\\section{{Introduction}}\n{WORDS}.\n"
+    [f] = run("references.zero_cite_section", text)
+    assert (f.file, f.line, f.severity) == ("main.tex", 1, "warning")
+    assert f.message == 'Section "Introduction" cites nothing.'
+    assert f.fix_hint == ("Related work and introductions normally cite the work they build on; add citations or "
+                          "confirm this is intended.")
+
+
+def test_starred_headings_and_per_section_counting():
+    text = f"\\section*{{Related Work}}\n{WORDS}.\n\\section{{Conclusion}}\nSee \\cite{{a}}.\n"
+    [f] = run("references.zero_cite_section", text)
+    assert f.message == 'Section "Related Work" cites nothing.'  # the cite in the next section does not count
+
+
+def test_cited_short_input_and_own_method_sections_are_silent():
+    assert run("references.zero_cite_section", f"\\section{{Introduction}}\n{WORDS} \\citep{{a}}.\n") == []
+    assert run("references.zero_cite_section", "\\section{Introduction}\nTo write.\n") == []
+    assert run("references.zero_cite_section", f"\\section{{Background}}\n{WORDS}\n\\input{{sections/bg}}\n") == []
+    assert run("references.zero_cite_section", f"\\section{{Method}}\n{WORDS}.\n") == []
+    assert run("references.zero_cite_section", f"\\section{{Introduction}}\n{WORDS}\n% \\cite{{a}}\n") != []
