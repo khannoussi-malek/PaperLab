@@ -16,7 +16,8 @@ _HEADER = re.compile(
     r"(?:in (?:paragraph|alignment) at lines (?P<a>\d+)--(?P<b>\d+)|detected at line (?P<c>\d+))"
 )
 _TOKEN = re.compile(r"\((?P<open>[^\s()]+)|(?P<close>\))")
-_SKIP = ("warning:", "note:", "error:", "info:")  # stderr chatter: never touches the file stack; box headers match first
+# stderr chatter: never touches the file stack; box headers match first
+_SKIP = ("warning:", "note:", "error:", "info:")
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,8 @@ def _unwrap(lines: list[str]) -> list[str]:
     """Rejoin a line TeX hard-wrapped at WRAP columns with the line that follows it."""
     out: list[str] = []
     for line in lines:
-        # ponytail: a 79-column line that is not a wrap is joined too; harmless, box bodies are skipped and tokens match anywhere
+        # ponytail: a 79-column line that is not a wrap is joined too; harmless,
+        # box bodies are skipped and tokens match anywhere
         if out and len(out[-1]) == WRAP and line and not _starts_block(line):
             out = [*out[:-1], out[-1] + line]
         else:

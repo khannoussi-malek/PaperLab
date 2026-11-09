@@ -63,7 +63,8 @@ def test_stderr_lines_never_move_the_file_stack():
 
 def test_stderr_and_log_copies_are_one_box():
     stderr = "warning: sections/method.tex:40: Overfull \\hbox (12.3pt too wide) in paragraph at lines 40--42\n"
-    log = "(main.tex\n(sections/method.tex\nOverfull \\hbox (12.3pt too wide) in paragraph at lines 40--42\n[]x\n\n)\n)\n"
+    log = ("(main.tex\n(sections/method.tex\n"
+           "Overfull \\hbox (12.3pt too wide) in paragraph at lines 40--42\n[]x\n\n)\n)\n")
     assert pdf_log.boxes(stderr + log) == [Box("overfull", 12.3, 40, 42, "sections/method.tex")]
 
 

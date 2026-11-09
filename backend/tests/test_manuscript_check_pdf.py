@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pymupdf
-import pytest
 
 from app.core import latex_compile
 from app.core.manuscript_checks import pdf
@@ -119,7 +118,8 @@ def test_overfull_findings(tmp_path):
     big = next(f for f in found if f.severity == "warning")
     assert (big.file, big.line, big.message) == ("sections/method.tex", 40, "Line is 12.3pt too wide (lines 40-42).")
     assert "\\resizebox" in big.fix_hint
-    assert any(f.severity == "info" and f.message == "1 smaller overfull box(es) (under 5pt) not listed." for f in found)
+    small = "1 smaller overfull box(es) (under 5pt) not listed."
+    assert any(f.severity == "info" and f.message == small for f in found)
     assert any(f.severity == "info" and f.message == "Line is badly stretched (lines 7-8)." for f in found)
     assert all(f.check == "pdf.overfull_boxes" for f in found)
 

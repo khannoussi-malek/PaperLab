@@ -86,7 +86,8 @@ def test_fresh_page_threshold_is_fifteen_words(tmp_path, words_above, expected_b
 
 
 def test_references_heading_in_the_top_band_of_a_letter_page_still_counts(tmp_path):
-    # Heading at y0 ~ 51 on a letter page (inside the top 10%) with no body above it: a real heading, not a running head.
+    # Heading at y0 ~ 51 on a letter page (inside the top 10%) with no body above
+    # it: a real heading, not a running head.
     p = make(tmp_path / "i.pdf", [
         {"body": True}, {"body": True},
         {"heading": "References", "heading_y": 60, "extra": "[1] A"},

@@ -1,4 +1,6 @@
-"""Loads what the checks may read, once, and runs them off the event loop. Read-only: nothing is written or committed."""
+"""Loads what the checks may read, once, and runs them off the event loop.
+
+Read-only: nothing is written or committed."""
 
 import asyncio
 import uuid
