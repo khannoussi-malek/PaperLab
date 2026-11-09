@@ -17,6 +17,7 @@ def run(name, files):
 def test_lists_parse_and_every_pattern_compiles():
     rules = wording.load_rules()
     assert len(rules["ai_phrase"]) == 13
+    assert len(rules["overclaim"]) == 8
     ids = [r.id for group in rules.values() for r in group]
     assert len(ids) == len(set(ids))
 
@@ -58,3 +59,84 @@ def test_comments_math_headings_proofs_and_bib_files_are_not_scanned():
             "\\begin{proof}\nIt should be noted that x.\n\\end{proof}\n")
     assert run("wording.ai_phrase", text) == []
     assert run("wording.ai_phrase", {"refs.bib": "@misc{a, note={a testament to}}"}) == []
+
+
+FLAGGED = [
+    "Our method significantly improves accuracy.",
+    "These results prove that our model is better.",
+    "The model is robust.",
+    "Our method generalizes to all domains.",
+    "We reach state-of-the-art accuracy.",
+    "The rule holds universally.",
+    "We ran extensive experiments.",
+    "We are the first to study this problem.",
+]
+LEGIT = [
+    "The gain is significant ($p < 0.01$).",
+    "The gain is significant under a paired t-test.",
+    "Our method significantly outperforms the baselines (Table~\\ref{tab:main}).",
+    "The difference is significant (Wilcoxon, 30 runs).",
+    "The most significant bit is stored first.",
+    "We keep four significant digits.",
+    "We prove Theorem~\\ref{thm:main} in the appendix.",
+    "This approach may prove useful in practice.",
+    "Proof sketch: the bound proves tight when n grows.",
+    "We approve the plan and improve the draft, as its provenance shows.",
+    "We use robust standard errors throughout.",
+    "The model is robust to noise (Table~\\ref{tab:noise}).",
+    "Robustness checks are in Section 5.",
+    "We train a generalized linear model.",
+    "We generalize Definition 1 to graphs.",
+    "It beats the prior state-of-the-art~\\cite{lee2020}.",
+    "The formula is universally quantified over x.",
+    "We ran extensive experiments on 12 datasets.",
+    "Lee et al.~\\cite{lee} were the first to propose it.",
+]
+
+
+AMBIGUOUS = ("significantly", "robust", "generalizes")  # word sense is unclear: info, never in the badge
+
+
+@pytest.mark.parametrize("text", FLAGGED)
+def test_overclaims_are_flagged_once_with_the_right_severity(text):
+    [f] = run("wording.overclaim", text)
+    expected = "info" if any(w in text for w in AMBIGUOUS) else "warning"
+    assert (f.check, f.severity, f.line) == ("wording.overclaim", expected, 1)
+    assert f.message.startswith('"') and "is a strong claim: " in f.message and f.fix_hint
+
+
+@pytest.mark.parametrize("text", LEGIT)
+def test_legitimate_uses_are_silent(text):
+    assert run("wording.overclaim", text) == []
+
+
+def test_robust_to_x_is_still_flagged_because_the_gap_is_evidence_not_the_object():
+    [f] = run("wording.overclaim", "The model is robust to noise.")
+    assert f.message == '"robust" is a strong claim: no table or figure in this sentence shows it.'
+
+
+def test_significant_in_the_sense_of_important_is_flagged_honestly_as_info():
+    [f] = run("wording.overclaim", "A significant challenge is noise.")
+    assert f.severity == "info" and "no p-value or test name in this sentence" in f.message
+
+
+def test_a_prove_hit_is_a_warning():
+    [f] = run("wording.overclaim", "These results prove that our model is better.")
+    assert f.severity == "warning"
+
+
+def test_significant_message_and_hint_are_exact():
+    [f] = run("wording.overclaim", "Our method significantly improves accuracy.")
+    assert f.message == '"significantly" is a strong claim: no p-value or test name in this sentence.'
+    assert f.fix_hint == ('Name the test and report the p-value or an interval, or write '
+                          '"improves by <delta> (no significance test performed)". If you mean "important", say so.')
+
+
+def test_a_p_value_in_the_next_sentence_does_not_excuse_significant():
+    found = run("wording.overclaim", "The gains are significant. We report p < 0.01 in Table 1.")
+    assert len(found) == 1
+
+
+def test_proofs_headings_and_captions_are_not_scanned():
+    text = "\\begin{proof}\nThis proves it is robust.\n\\end{proof}\n\\caption{A robust model.}\n\\section{A robust method}\n"
+    assert run("wording.overclaim", text) == []
