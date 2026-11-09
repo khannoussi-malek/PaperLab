@@ -1,7 +1,10 @@
 import uuid
+from datetime import timedelta
 
 import pytest
 
+from app.models.references import ExternalRef
+from app.models.workspace_search import WorkspaceSearchHit
 from tests.screening_pool import make_pool
 
 pytestmark = pytest.mark.anyio
@@ -79,3 +82,33 @@ async def test_ranked_hit_without_external_ref_uses_normalized_title(client, ses
     body = (await client.get(_url(workspace))).json()
     assert body["items"][0]["id"] == str(hits[2].id)
     assert body["items"][0]["title"] is None
+
+
+async def test_a_hit_found_after_a_ranked_call_is_ranked_on_its_own_text(client, session):
+    workspace, hits = await make_pool(session, [
+        (POSITIVE, "relevant"), (NEGATIVE, "not_relevant"), ("sleep in adults", None),
+    ])
+    await client.get(_url(workspace))  # caches this pool's features
+    ref = ExternalRef(title="late paper", abstract=POSITIVE)
+    session.add(ref)
+    await session.flush()
+    late = WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=hits[0].run_id, external_ref_id=ref.id, source_method="database_search",
+        normalized_title="late paper", first_seen_at=hits[2].first_seen_at + timedelta(seconds=1),
+    )
+    session.add(late)
+    await session.flush()
+    body = (await client.get(_url(workspace))).json()
+    assert [item["id"] for item in body["items"]] == [str(late.id), str(hits[2].id)]
+
+
+async def test_an_abstract_filled_after_a_ranked_call_counts(client, session):
+    workspace, hits = await make_pool(session, [
+        (POSITIVE, "relevant"), (NEGATIVE, "not_relevant"), ("sleep in adults", None), (None, None),
+    ])
+    await client.get(_url(workspace))  # caches the features while hit 3 has no abstract
+    ref = await session.get(ExternalRef, hits[3].external_ref_id)
+    ref.abstract = POSITIVE
+    await session.flush()
+    body = (await client.get(_url(workspace))).json()
+    assert body["items"][0]["id"] == str(hits[3].id)

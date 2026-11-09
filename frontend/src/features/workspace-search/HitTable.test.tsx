@@ -1008,3 +1008,10 @@ test('below sm a result row gives the title the first line and wraps its chips u
   expect(title.className).toContain('basis-[calc(100%-2rem)]')
   vi.unstubAllGlobals()
 })
+
+test('while results load, the count says so instead of "0 results"', async () => {
+  vi.spyOn(api, 'listSearchHits').mockReturnValue(new Promise(() => {}))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  expect(await screen.findByText(/Loading results…/)).toBeInTheDocument()
+  expect(screen.queryByText(/0 results/)).not.toBeInTheDocument()
+})

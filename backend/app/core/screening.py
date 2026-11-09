@@ -1,6 +1,7 @@
 """Screening assist for M30's stage 1 (M31): a ranking that learns from the reader's decisions, and (M31b) the
 state of the local-model suggestion job. Suggest only: nothing here ever writes stage1_status."""
 
+import asyncio
 import uuid
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import llm_connections
 from app.core.branches import default_branch_on_decision
 from app.core.errors import Conflict, NotFound
-from app.core.screening_rank import Doc, rank, stop_hint
+from app.core.screening_rank import Doc, Features, features, rank, stop_hint
 from app.core.search_run_results import NOT_JUDGED
 from app.core.workspace_search import _hit_out_dict
 from app.models.references import ExternalRef
@@ -61,21 +62,82 @@ def ranked_order(pool: Pool) -> tuple[list[uuid.UUID], bool]:
     return rank([Doc(hit.id, hit_text(hit, ref), _label(hit.stage1_status)) for hit, ref in pool.rows])
 
 
+@dataclass(frozen=True)
+class _CachedFeatures:
+    workspace_id: uuid.UUID
+    ids: list[uuid.UUID]  # found order; any hit added or removed changes it
+    abstracts: int  # an enrichment that fills an abstract changes it
+    feats: Features
+
+
+# ponytail: one workspace's features kept in memory (~220 MB at 276k hits), rebuilt (~13 s) whenever its hits or
+# abstract count change, so a run still adding hits rebuilds on each call; tokenize only the new hits if that bites.
+# An edited title alone is not noticed until the next change.
+_feature_cache: _CachedFeatures | None = None
+_feature_lock = asyncio.Lock()
+
+
+def _pool_query(workspace_id: uuid.UUID, *text_columns):
+    hit = WorkspaceSearchHit
+    return (
+        select(hit.id, hit.stage1_status, hit.stage1_decided_at, ExternalRef.abstract.is_not(None), *text_columns)
+        .join(ExternalRef, hit.external_ref_id == ExternalRef.id, isouter=True)
+        .where(hit.workspace_id == workspace_id)
+        .order_by(hit.first_seen_at, hit.id)
+    )
+
+
+async def _pool_features(session: AsyncSession, workspace_id: uuid.UUID, rows: list) -> tuple[Features, list]:
+    """The pool's features and the rows they match: the cached ones when `rows` still match them, else a fresh read
+    of rows and text together (so a harvest landing between two reads can't misalign them)."""
+    global _feature_cache
+    async with _feature_lock:  # two tabs opening at once build once
+        ids, abstracts = [row[0] for row in rows], sum(row[3] for row in rows)
+        cached = _feature_cache
+        if cached and cached.workspace_id == workspace_id and cached.abstracts == abstracts and cached.ids == ids:
+            return cached.feats, rows
+        _feature_cache = None  # let the old pool go before building the next
+        fresh = (await session.execute(_pool_query(
+            workspace_id, WorkspaceSearchHit.normalized_title, ExternalRef.title, ExternalRef.abstract,
+        ))).all()
+        texts = [normalized if title is None else f"{title} {abstract or ''}"  # same text as hit_text()
+                 for *_, normalized, title, abstract in fresh]
+        feats = await asyncio.to_thread(features, texts)
+        _feature_cache = _CachedFeatures(workspace_id, [row[0] for row in fresh], sum(row[3] for row in fresh), feats)
+        return feats, fresh
+
+
 async def ranked_hits(session: AsyncSession, workspace_id: uuid.UUID, limit: int) -> dict:
-    pool = await load_pool(session, workspace_id)
-    order, trained = ranked_order(pool)
-    by_id = {hit.id: (hit, ref) for hit, ref in pool.rows}
+    """Reads only ids, decisions and (cached) features for the whole pool, and full rows for the `limit` shown:
+    SE Creativity's 276k hits took 49 s as ORM rows, retrained on the event loop."""
+    workspace = await session.get(Workspace, workspace_id)
+    if workspace is None:
+        raise NotFound(f"workspace {workspace_id} not found")
+    rows = (await session.execute(_pool_query(workspace_id))).all()
+    prebuilt = None
+    if {_label(row[1]) for row in rows} >= {True, False}:  # rank() trains: it needs the features
+        prebuilt, rows = await _pool_features(session, workspace_id, rows)
+    docs = [Doc(row[0], "", _label(row[1])) for row in rows]
+    order, trained = await asyncio.to_thread(rank, docs, prebuilt)
     decided = sorted(
-        (hit for hit, _ in pool.rows if hit.stage1_decided_at is not None and hit.stage1_status is not None),
-        key=lambda hit: hit.stage1_decided_at,
+        ((row[1], row[2]) for row in rows if row[2] is not None and row[1] is not None),
+        key=lambda pair: pair[1],
         reverse=True,
     )
-    hint = stop_hint([hit.stage1_status for hit in decided], len(pool.rows), trained)
-    if trained and not pool.workspace.screening_ranked_used:
-        pool.workspace.screening_ranked_used = True  # PRISMA reports the automation (spec §3.5)
+    hint = stop_hint([status for status, _ in decided], len(rows), trained)
+    if trained and not workspace.screening_ranked_used:
+        workspace.screening_ranked_used = True  # PRISMA reports the automation (spec §3.5)
         await session.commit()
+    shown = order[:limit]
+    hit = WorkspaceSearchHit
+    full = {
+        h.id: (h, ref) for h, ref in (await session.execute(
+            select(hit, ExternalRef).join(ExternalRef, hit.external_ref_id == ExternalRef.id, isouter=True)
+            .where(hit.id.in_(shown))
+        )).all()
+    }
     return {
-        "items": [_hit_out_dict(*by_id[hit_id]) for hit_id in order[:limit]],
+        "items": [_hit_out_dict(*full[hit_id]) for hit_id in shown if hit_id in full],  # cleared mid-request: dropped
         "trained": trained,
         "total_unscreened": len(order),
         "streak": hint.streak,
