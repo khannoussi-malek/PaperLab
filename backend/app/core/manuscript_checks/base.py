@@ -32,6 +32,7 @@ class ManuscriptInfo:
     compile_log: str | None
     pdf_path: Path | None  # manuscripts.pdf_path(id) when the file exists, else None
     updated_at: datetime | None = None  # the row's; compared with compiled_at to spot a stale PDF
+    template: str = "custom"  # manuscripts.template; "custom" names no folder
 
 
 @dataclass(frozen=True)
