@@ -5097,6 +5097,8 @@ export interface components {
             title: string;
             /** Main File */
             main_file: string;
+            /** Template */
+            template: string;
             /** Checklist */
             checklist: {
                 [key: string]: unknown;
