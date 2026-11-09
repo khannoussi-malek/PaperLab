@@ -40,6 +40,16 @@ def _is_running_head(match: tuple[int, float], matches: list[tuple[int, float]])
     )
 
 
+def _real_headings(
+    candidates: list[tuple[int, float]], tops: list[float]
+) -> list[tuple[int, float]]:
+    """If any candidate lies below its page's top band, drop the ones inside the band."""
+    # ponytail: a heading at the very top margin plus a running head on just one following page
+    # still counts one page too many. Upgrade path: also compare font size.
+    below = [m for m in candidates if m[1] > tops[m[0]]]
+    return below or candidates
+
+
 def stats(path: Path) -> PdfStats:
     with pymupdf.open(path) as doc:
         pages: list[tuple[list[tuple[float, float, str]], float]] = []  # (lines, top band y) per page
@@ -48,7 +58,8 @@ def stats(path: Path) -> PdfStats:
             lines = _lines(page)
             pages.append((lines, _HEADER_BAND * page.rect.height))
             matches += [(index, y0) for y0, _, text in lines if _HEADING.match(text)]
-        headings = [m for m in matches if not _is_running_head(m, matches)]
+        candidates = [m for m in matches if not _is_running_head(m, matches)]
+        headings = _real_headings(candidates, [top for _, top in pages])
         if not headings:
             return PdfStats(doc.page_count, None)
         # The last real heading is the References heading; a contents page may list it earlier.

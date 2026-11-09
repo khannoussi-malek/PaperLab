@@ -92,3 +92,14 @@ def test_references_heading_in_the_top_band_of_a_letter_page_still_counts(tmp_pa
         {"heading": "References", "heading_y": 60, "extra": "[1] A"},
     ])
     assert pl.stats(p).body_pages == 2
+
+
+def test_single_running_head_after_a_mid_page_heading_does_not_beat_it(tmp_path):
+    # Body on pages 1-2; a real heading mid-page on page 3 (outside the top band, no body above it);
+    # page 4 carries one "References" running head at y0 ~ 30 and reference text, repeated nowhere else.
+    p = make(tmp_path / "j.pdf", [
+        {"body": True}, {"body": True},
+        {"heading": "References", "heading_y": 300, "extra": "[1] A"},
+        {"heading": "References", "heading_y": 30, "extra": "[2] B"},
+    ])
+    assert pl.stats(p).body_pages == 2
