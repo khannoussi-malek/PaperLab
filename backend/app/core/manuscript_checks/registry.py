@@ -4,11 +4,12 @@ import logging
 from dataclasses import dataclass
 
 from app.core.errors import InvalidInput
+from app.core.manuscript_checks import citations
 from app.core.manuscript_checks.base import SEVERITIES, Check, CheckContext, Cost, Finding
 
 logger = logging.getLogger(__name__)
 
-REGISTRY: tuple[Check, ...] = ()  # Task 2 adds `*citations.CHECKS,`; later checks add one line each
+REGISTRY: tuple[Check, ...] = (*citations.CHECKS,)  # later checks add one line each
 
 
 @dataclass(frozen=True)
