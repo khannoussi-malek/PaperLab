@@ -100,9 +100,37 @@ def _stray_preamble(ctx: CheckContext) -> list[Finding]:
     return found
 
 
+
+LATEX_FORMS = {  # char -> LaTeX form named in the hint ("" = delete)
+    "\u2018": "`", "\u2019": "'", "\u201c": "``", "\u201d": "''", "\u2013": "--", "\u2014": "---", "\u2212": "$-$",
+    "\u00a0": "~", "\u2009": "\\,", "\u202f": "\\,", "\u2026": "\\ldots{}", "\u00d7": "$\\times$",
+    "\u2264": "$\\leq$", "\u2265": "$\\geq$", "\u00b1": "$\\pm$", "\u2192": "$\\to$", "\u200b": "delete",
+    "\ufeff": "delete",
+}
+ODD_RANGES = ((0x2000, 0x206F), (0x2190, 0x22FF), (0x0370, 0x03FF))
+TECTONIC_NOTE = "Tectonic reads UTF-8, so this only breaks the PDF if the font lacks the glyph."
+
+
+def _odd(ch: str) -> bool:
+    return ch in LATEX_FORMS or any(lo <= ord(ch) <= hi for lo, hi in ODD_RANGES)
+
+
+def _non_ascii(_blanked: str, text: str):
+    for m in re.finditer(r"[^\n]*[^\x00-\x7f][^\n]*", text):
+        chars = list(dict.fromkeys(c for c in m.group() if ord(c) > 127 and _odd(c)))
+        if not chars:
+            continue
+        forms = [f"{c} -> {LATEX_FORMS[c]}" for c in chars if c in LATEX_FORMS]
+        lead = f"Replace with the LaTeX form ({'; '.join(forms)})" if forms else "Replace with a LaTeX command"
+        yield ("warning", m.start(),
+               f"Non-ASCII characters outside math: {' '.join(chars)} ({', '.join(f'U+{ord(c):04X}' for c in chars)}).",
+               f"{lead} or put it in math mode. {TECTONIC_NOTE}")
+
+
 CHECKS = (
     Check("latex.markdown_leak", "cheap", "Markdown headings, bold and fences left in the source", per_file("latex.markdown_leak", _markdown)),
     Check("latex.placeholder", "cheap", "TODO, XX.X, [TBD] and ?? left in the source", per_file("latex.placeholder", _placeholder)),
     Check("latex.numbered_heading", "cheap", "Section headings that start with a number", per_file("latex.numbered_heading", _numbered)),
     Check("latex.stray_preamble", "cheap", "A second \\documentclass or document start in a body file", _stray_preamble),
+    Check("latex.non_ascii", "cheap", "Typographic and symbol characters outside math", per_file("latex.non_ascii", _non_ascii)),
 )

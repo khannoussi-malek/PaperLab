@@ -66,3 +66,23 @@ def test_stray_preamble_in_a_non_main_file_only():
     assert (f.file, f.line, f.severity) == ("sections/a.tex", 1, "warning")
     assert f.message == "sections/a.tex contains \\documentclass; only the main file should."
     assert f.fix_hint == "Remove it; this file is read through \\input and a second document start breaks the compile."
+
+
+def test_typography_characters_are_listed_once_per_line():
+    [f] = run("latex.non_ascii", "He said \u201chi\u201d \u2013 then left.\n")
+    assert (f.line, f.severity) == (1, "warning")
+    assert f.message == "Non-ASCII characters outside math: \u201c \u201d \u2013 (U+201C, U+201D, U+2013)."
+    assert f.fix_hint == ("Replace with the LaTeX form (\u201c -> ``; \u201d -> ''; \u2013 -> --) or put it in math mode. "
+                          "Tectonic reads UTF-8, so this only breaks the PDF if the font lacks the glyph.")
+
+
+def test_nbsp_and_greek_outside_math_are_flagged():
+    [a, b] = run("latex.non_ascii", "a\u00a0b\n\u03b1 is the rate.\n")
+    assert "U+00A0" in a.message and "(\u00a0 -> ~)" in a.fix_hint
+    assert "U+03B1" in b.message and b.fix_hint.startswith("Replace with a LaTeX command or put it in math mode.")
+
+
+def test_accents_math_comments_and_verbatim_are_silent():
+    text = ("M\u00fcller and \u0160imi\u0107 wrote it. $\\alpha \u2264 3$ holds.\n% \u201ccomment\u201d\n"
+            "\\begin{verbatim}\n\u201cx\u201d\n\\end{verbatim}\n")
+    assert run("latex.non_ascii", text) == []
