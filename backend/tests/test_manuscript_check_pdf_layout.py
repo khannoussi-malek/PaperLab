@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pymupdf
+import pytest
 
 from app.core.manuscript_checks import pdf_layout as pl
 
@@ -60,3 +61,25 @@ def test_contents_page_references_line_does_not_end_the_body(tmp_path):
         {"heading": "References", "heading_y": 100, "extra": "[1] A"},
     ])
     assert pl.stats(p).body_pages == 3
+
+
+def test_running_head_references_on_bibliography_pages_do_not_move_the_body_end(tmp_path):
+    # Body on pages 1-2; the real heading on page 3 has no body above it (body ends on page 2);
+    # pages 4-5 repeat "References" as a running head in the top 10% band.
+    p = make(tmp_path / "g.pdf", [
+        {"body": True}, {"body": True},
+        {"heading": "References", "heading_y": 400, "extra": "[1] A"},
+        {"heading": "References", "heading_y": 30, "extra": "[2] B"},
+        {"heading": "References", "heading_y": 30, "extra": "[3] C"},
+    ])
+    assert pl.stats(p).body_pages == 2
+
+
+@pytest.mark.parametrize("words_above, expected_body", [(14, 1), (15, 2)])
+def test_fresh_page_threshold_is_fifteen_words(tmp_path, words_above, expected_body):
+    # Page 1 is body; page 2 has the heading with `words_above` words above it on the same page.
+    p = make(tmp_path / f"h{words_above}.pdf", [
+        {"body": True},
+        {"heading": "References", "heading_y": 600, "extra": " ".join(["w"] * words_above)},
+    ])
+    assert pl.stats(p).body_pages == expected_body

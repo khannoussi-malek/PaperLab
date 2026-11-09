@@ -32,20 +32,22 @@ def _lines(page: pymupdf.Page) -> list[tuple[float, float, str]]:
 
 def stats(path: Path) -> PdfStats:
     with pymupdf.open(path) as doc:
-        # Keep the last heading match: a contents page may list "References" early.
-        last_page, last_heading, last_lines = None, None, []
+        # Keep the last heading match outside the top band: running heads are ignored,
+        # and a contents page may list "References" early.
+        last = None  # (page_no, heading y0, lines, top band y)
         for page_no, page in enumerate(doc, start=1):
             lines = _lines(page)
+            top = _HEADER_BAND * page.rect.height
             for y0, _, text in lines:
-                if _HEADING.match(text):
-                    last_page, last_heading, last_lines = page_no, y0, lines
-        if last_page is None:
+                if y0 > top and _HEADING.match(text):
+                    last = (page_no, y0, lines, top)
+        if last is None:
             return PdfStats(doc.page_count, None)
-        top = _HEADER_BAND * doc[last_page - 1].rect.height
+        last_page, heading_y, lines, top = last
         words = sum(
             len(text.split())
-            for y0, y1, text in last_lines
-            if y1 < last_heading and y0 > top
+            for y0, y1, text in lines
+            if y1 < heading_y and y0 > top
         )
         body = last_page if words >= _FRESH_PAGE_WORDS else last_page - 1
         return PdfStats(doc.page_count, body or None)
