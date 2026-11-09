@@ -3,6 +3,7 @@
 Real Tectonic 0.17.0 output (captured in tests/fixtures/tectonic): nested .tex files are logged without
 their extension, `(sections/a`; stderr repeats each box as `warning: sections/a:3: Overfull ...` with no
 box body; a 79-column line is wrapped and its tail sits on the next line.
+Boxes come from main.log only (the final pass). stderr repeats every TeX pass, so its copies only name files.
 """
 
 import re
@@ -68,16 +69,18 @@ def _same(a: Box, b: Box) -> bool:
         a.file is None or b.file is None or a.file == b.file)
 
 
-def _fold(found: list[Box], box: Box) -> list[Box]:
-    """The stderr copy and the log copy of one box are one box; the known file wins."""
-    for i, old in enumerate(found):
-        if _same(old, box):
-            return [*found[:i], replace(old, file=old.file or box.file), *found[i + 1:]]
-    return [*found, box]
+def _named(box: Box, hints: list[Box]) -> Box:
+    """A log box whose file the file stack lost takes the file of its one matching stderr copy."""
+    if box.file is not None:
+        return box
+    named = [h for h in hints if _same(box, h) and h.file is not None]
+    return replace(box, file=named[0].file) if len(named) == 1 else box
 
 
 def boxes(log: str) -> list[Box]:
     found: list[Box] = []
+    hints: list[Box] = []  # stderr copies: they name a file, they are never counted
+    # ponytail: a stray paren in a log message desyncs the stack -> file=None (row not clickable); upgrade: synctex.
     stack: list[str | None] = []  # open files; None for a non-TeX file
     in_body = False  # inside an overfull/underfull body, which can hold stray parens
     for line in _unwrap(log.splitlines()):
@@ -86,7 +89,8 @@ def boxes(log: str) -> list[Box]:
         in_body = False
         m = _HEADER.match(line)
         if m:
-            found = _fold(found, _box(m, stack[-1] if stack else None))
+            box = _box(m, stack[-1] if stack else None)
+            (hints if line.startswith("warning:") else found).append(box)
             in_body = True
             continue
         if line.startswith(_SKIP):
@@ -96,4 +100,4 @@ def boxes(log: str) -> list[Box]:
                 stack.append(_tex_name(tok["open"]))
             elif stack:
                 stack.pop()
-    return found
+    return [_named(box, hints) for box in found]

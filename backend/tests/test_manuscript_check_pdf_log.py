@@ -83,9 +83,8 @@ def test_real_captured_wrapped_path_is_attributed():
     """The one real wrapped-path case: Task 5 Step 0 captured a log where the long section file's open line wraps."""
     log = (FIX / "overfull.main.log").read_text()
     assert any(len(line) == 79 for line in log.splitlines()), "the fixture must contain a wrapped line"
-    both = (FIX / "overfull.stderr.txt").read_text() + "\n" + log
     long_name = "sections/" + "longname" * 9 + ".tex"
-    assert any(b.file == long_name for b in pdf_log.boxes(both))
+    assert any(b.file == long_name for b in pdf_log.boxes(log))
 
 
 def test_real_captured_log_parses():
@@ -94,6 +93,14 @@ def test_real_captured_log_parses():
     overfull = [b for b in found if b.kind == "overfull"]
     assert overfull and overfull[0].amount > 0
     assert overfull[0].file == "sections/a.tex"
+
+
+def test_two_pass_compile_reports_only_the_final_pass_box():
+    """Real Tectonic: pass 1 prints 252.41pt (\\ref undefined), the final pass 246.55pt. Only the final counts."""
+    both = (FIX / "twopass.stderr.txt").read_text() + "\n" + (FIX / "twopass.main.log").read_text()
+    found = pdf_log.boxes(both)
+    assert [b.amount for b in found] == [246.55]
+    assert found[0].file == "main.tex"
 
 
 @pytest.mark.tectonic
