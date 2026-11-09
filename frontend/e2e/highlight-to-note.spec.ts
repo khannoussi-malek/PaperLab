@@ -90,7 +90,8 @@ test('deleting a note removes its card and its highlight', async ({ page, reques
   await expect(page.locator('.highlight')).not.toHaveCount(0)
 
   page.once('dialog', (dialog) => dialog.accept())
-  await card.getByRole('button', { name: 'Delete' }).click()
+  await card.getByRole('button', { name: 'Note actions' }).click()
+  await page.getByRole('menuitem', { name: 'Delete' }).click()
 
   await expect(card).toHaveCount(0)
   await expect(page.locator('.highlight')).toHaveCount(0)

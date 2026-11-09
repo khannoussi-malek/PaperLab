@@ -27,7 +27,8 @@ test('a chart attached to an existing note can be removed again, keeping the not
   await addNote(request, paperId, 1, 'A note for a chart')
   await openReader(page, paperId)
   const card = page.locator('article.note', { hasText: 'A note for a chart' })
-  await card.getByRole('button', { name: 'Attach chart' }).click()
+  await card.getByRole('button', { name: 'Note actions' }).click()
+  await page.getByRole('menuitem', { name: 'Attach chart' }).click()
   await page.getByRole('dialog', { name: 'Attach chart' }).locator(`[data-chart-id="${chart.id}"]`).click()
 
   const embed = card.locator(`.note-chart[data-chart-id="${chart.id}"]`)

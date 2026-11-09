@@ -33,12 +33,17 @@ test('recolouring a note from the notes panel, including a custom colour, persis
   const highlight = page.locator('.highlight:not(.draft)').first()
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(250, 204, 21, 0.4)')
 
-  await card.getByRole('button', { name: 'Blue' }).click()
+  const recolour = async () => {
+    await card.getByRole('button', { name: 'Note actions' }).click()
+    await page.getByRole('menuitem', { name: 'Colour' }).click()
+  }
+  await recolour()
+  await page.getByRole('button', { name: 'Blue' }).click()
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(96, 165, 250, 0.4)')
 
-  await card.getByLabel('Custom colour').fill('#ff00aa')
+  await page.getByLabel('Custom colour').fill('#ff00aa')
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(255, 0, 170, 0.4)')
-  await expect(card.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'false')
 
   await page.reload()
   await expect.poll(() => backgroundOf(page.locator('.highlight:not(.draft)').first())).toBe('rgba(255, 0, 170, 0.4)')
