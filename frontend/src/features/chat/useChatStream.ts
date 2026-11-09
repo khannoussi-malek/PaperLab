@@ -7,6 +7,7 @@ import {
   type ChatScope,
   type ChatSource,
   type ChatSourcesEvent,
+  type HitMetaEvent,
   type ChatTokenEvent,
   type NoteSource,
 } from '@/api/client'
@@ -22,6 +23,8 @@ export type ChatStream = {
   /** The saved answer this question follows up; null for a question asked on its own. */
   parentId: string | null
   sources: ChatSource[] | null
+  /** What a hit chat read, from its `meta` event; null for paper and workspace chat. */
+  source: HitMetaEvent['source'] | null
   wholePaper: boolean
   /** The notes the answer can cite, and how many of the paper's or workspace's notes fit the prompt. */
   notes: NoteSource[]
@@ -37,6 +40,7 @@ const IDLE: ChatStream = {
   question: '',
   parentId: null,
   sources: null,
+  source: null,
   wholePaper: false,
   notes: [],
   notesUsed: null,
@@ -109,7 +113,10 @@ export function useChatStream(
     let splitter = citationSplitter(new Set())
     try {
       for await (const { event, data } of readSse(response.body)) {
-        if (event === 'sources') {
+        if (event === 'meta') {
+          const { source } = JSON.parse(data) as HitMetaEvent
+          set((s) => ({ ...s, source }))
+        } else if (event === 'sources') {
           const { sources, whole_paper, notes, notes_used, notes_total } = JSON.parse(data) as ChatSourcesEvent
           splitter = citationSplitter(new Set([...sources, ...notes].map((source) => source.label)))
           set((s) => ({

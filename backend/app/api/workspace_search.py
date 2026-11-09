@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, File, Query, Request, UploadFile
 
 from app.api.deps import DiscoveryDep, SessionDep
-from app.core import branches, screening, snowball_next, workspace_search
+from app.core import branches, hit_suggest, screening, snowball_next, workspace_search
 from app.core.errors import InvalidInput
 from app.core.hit_links import paths_to, provenance
 from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
@@ -12,6 +12,7 @@ from app.core.prisma_export import prisma_export
 from app.core.queue import INGEST_QUEUE
 from app.core.screening import RANKED_LIMIT_MAX
 from app.schemas.workspace_search import (
+    SuggestHitRequest,
     AcceptSuggestions,
     AcceptSuggestionsOut,
     AcquisitionStatus,
@@ -199,6 +200,14 @@ async def patch_hit(
 @router.get("/hits/{hit_id}")
 async def get_hit_route(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep) -> HitOut:
     return await workspace_search.get_hit(session, hit_id, workspace_id)
+
+
+@router.post("/hits/{hit_id}/suggest")
+async def suggest_hit(
+    workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep, payload: SuggestHitRequest | None = None
+) -> HitOut:
+    allow_remote = payload.confirm_remote if payload else False
+    return await hit_suggest.suggest_one(session, workspace_id, hit_id, allow_remote=allow_remote)
 
 
 @router.post("/hits/import")

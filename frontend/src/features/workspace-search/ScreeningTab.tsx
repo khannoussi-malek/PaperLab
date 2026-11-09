@@ -11,6 +11,7 @@ import { Term } from '@/features/workspaces/Term'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { matchesFilter, stage2Label } from './hitReview'
+import { skippedSeedsText } from './snowballText'
 import { StatusDot } from './StatusDot'
 
 /** Stage-2 (full-text) eligibility screening for papers already acquired via a search run (imported
@@ -149,7 +150,7 @@ export function snowballMessage(result: { new_hits: number; skipped_seeds: strin
     result.new_hits > 0 ? `Found ${result.new_hits} new paper${result.new_hits === 1 ? '' : 's'}.` : 'No new papers found.',
   ]
   if (result.skipped_seeds.length > 0) {
-    parts.push(`Skipped ${result.skipped_seeds.length} seed(s) with no Semantic Scholar match.`)
+    parts.push(skippedSeedsText(result.skipped_seeds.length))
   }
   const errorMessages = Object.values(result.errors)
   if (errorMessages.length > 0) parts.push(errorMessages.join(' '))

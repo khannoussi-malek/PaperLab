@@ -37,6 +37,11 @@ const EMPTY_CHAT = {
     help: 'Answers cite passages from its papers and your notes. Click a citation to open it in the paper.',
     starters: ['Compare their main contributions', 'How do their methods differ?', 'What do my notes say about them?'],
   },
+  hit: {
+    heading: 'Ask about this paper',
+    help: 'Answers use its abstract, or the full text once the paper has a file.',
+    starters: ['Summarize the main contribution', 'What method do they use?', 'Is this relevant to my question?'],
+  },
 }
 
 /** Labels whose chunk or note still exists; markers for any other label render as plain text. */
@@ -52,13 +57,15 @@ type Props = {
   /** Names a source's paper in pills and citations. Given on a workspace, whose answers cite several papers. */
   paperLabel?: (paperId: string) => string
   onCite: (source: ChatSource | NoteSource) => void
+  /** A hit chat's first event says whether it reads the full text or the abstract only. */
+  onSource?: (source: 'abstract' | 'full_text') => void
   /** Called with the new note once it is saved and listed. */
   onPromoted: (note: Note) => void
 }
 
 type Promote = { outputId: string; draft: PromoteDraft; style: CSSProperties }
 
-export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPromoted }: Props) {
+export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSource, onPromoted }: Props) {
   const history = useChatHistory(scope)
   const chatModels = useChatModels()
   const [pick, setPick] = useState<string | null>(null)
@@ -75,6 +82,10 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPr
     setFollowingId((current) => (current === parentId ? next : current)),
   )
   const [question, setQuestion] = useState('')
+  const streamSource = stream.source
+  useEffect(() => {
+    if (streamSource) onSource?.(streamSource)
+  }, [streamSource]) // eslint-disable-line react-hooks/exhaustive-deps -- fires on the event, not on a new callback
   const [promote, setPromote] = useState<Promote | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
   const promoteNote = usePromoteNote()
@@ -255,7 +266,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPr
               footer={{ model: answer.model, connectionName: answer.connection_name, promptVersion: answer.prompt_version }}
               paperLabel={paperLabel}
               onCite={onCite}
-              followUp={scope.kind === 'paper' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
+              followUp={scope.kind !== 'workspace' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
               suggestions={{ scope, saved: answer.saved_notes }}
             />
           </Fragment>
@@ -306,7 +317,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPr
             ref={textareaRef}
             aria-label="Question"
             aria-describedby="chat-question-hint"
-            placeholder={`Ask about this ${scope.kind}…`}
+            placeholder={`Ask about this ${scope.kind === 'hit' ? 'paper' : scope.kind}…`}
             rows={1}
             maxLength={MAX_QUESTION}
             value={question}

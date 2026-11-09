@@ -10,12 +10,17 @@ import { hiddenIds, NO_FILTERS, TreeFilters } from './TreeFilters'
 import { MapView } from './MapView'
 import { OutlineView } from './OutlineView'
 import { RadialView } from './RadialView'
+import { NavigatorView } from './navigator/NavigatorView'
+import { primaryPath } from './navigator/navPath'
+import { readNav, readNavPaper, writeNav } from './navigator/navUrl'
 import { TreeView } from './TreeView'
 import { useStoredView, ViewSwitch } from './ViewSwitch'
 
 export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   const { data, isPending, error } = useProvenance(workspaceId)
-  const [view, setView] = useStoredView(workspaceId)
+  const [stored, setView] = useStoredView(workspaceId)
+  const [hasNav, setHasNav] = useState(() => readNav() !== '' || readNavPaper() !== '') // a shared walk opens in Navigate whatever is stored
+  const view = hasNav ? 'navigate' : stored
   const [selected, setSelected] = useState<string | null>(null)
   const runs = useSearchRuns(workspaceId).data
   const runLabels = useMemo(() => Object.fromEntries((runs ?? []).map((r) => [r.id, r.query_text])), [runs])
@@ -64,30 +69,42 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
     )
   }
 
+  const navigateFrom = (id: string) => {
+    if (!data) return
+    writeNav(primaryPath(data, id))
+    setHasNav(true)
+  }
+
   if (isPending) return <p className="text-sm text-muted-foreground">Loading the tree…</p>
   if (error || !data) return <p role="alert" className="text-sm text-destructive">Could not load the snowball tree.</p>
-  if (data.roots.length === 0) return <p className="text-sm text-muted-foreground">Nothing to draw yet. Run a search first.</p>
+  if (data.roots.length === 0 && !hasNav) return <p className="text-sm text-muted-foreground">Nothing to draw yet. Run a search first.</p>
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <SnowballNext workspaceId={workspaceId} />
-      <ViewSwitch value={view} onChange={setView} />
-      <div className="flex flex-wrap items-center gap-3">
+      {view !== 'navigate' && <SnowballNext workspaceId={workspaceId} />}
+      <ViewSwitch value={view} onChange={(v) => {
+        if (v === view) return // re-clicking the current view keeps a shared nav and the stored choice
+        if (view === 'navigate') writeNav([])
+        setHasNav(false)
+        setView(v)
+      }} />
+      {view !== 'navigate' && <div className="flex flex-wrap items-center gap-3">
         <TreeFilters data={data} value={filters} onChange={changeFilters} runLabels={runLabels} />
         {view === 'tree' && stopped.size > 0 && (
           <Button type="button" size="sm" variant="outline" aria-pressed={showStopped} onClick={() => setShowStopped((v) => !v)}>
             {showStopped ? 'Hide stopped' : 'Show stopped'}
           </Button>
         )}
-      </div>
+      </div>}
       {snowball.isError && <p role="alert" className="text-sm text-destructive">{friendlySnowballError(snowball.error.message)}</p>}
       {data.truncated && <p className="text-xs text-muted-foreground">Showing the first part of a large tree.</p>}
       <div className="flex min-h-0 flex-1 gap-3">
+        {view === 'navigate' && <NavigatorView workspaceId={workspaceId} data={data} />}
         {view === 'tree' && <TreeView data={data} selected={selected} onSelect={setSelected} folded={effectiveFolded} onToggleFold={toggleFold} hidden={hidden} snowballing={busy} filterKey={filterKey} />}
         {view === 'radial' && <RadialView data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
         {view === 'map' && <MapView data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
         {view === 'outline' && <OutlineView workspaceId={workspaceId} data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
-        {selected && <SidePanel workspaceId={workspaceId} data={data} id={selected} busy={busy === selected} onFind={find} />}
+        {view !== 'navigate' && selected && <SidePanel workspaceId={workspaceId} data={data} id={selected} busy={busy === selected} onFind={find} onNavigate={navigateFrom} />}
       </div>
     </div>
   )

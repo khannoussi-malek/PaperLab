@@ -797,6 +797,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/search/hits/{hit_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hit History
+         * @description Abstract-only answers (kept in memory, lost on restart) then the paper's stored answers when it has full text.
+         */
+        get: operations["hit_history_api_workspaces__workspace_id__search_hits__hit_id__chat_get"];
+        put?: never;
+        /**
+         * Ask Hit
+         * @description Checked before streaming, in parameter order: 404/409 for the model, then 404 for a missing or foreign hit, then
+         *     paper chat's checks when the hit has full text. The first event is `meta`, with source "abstract" or "full_text".
+         */
+        post: operations["ask_hit_api_workspaces__workspace_id__search_hits__hit_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces": {
         parameters: {
             query?: never;
@@ -1329,6 +1354,23 @@ export interface paths {
         head?: never;
         /** Patch Hit */
         patch: operations["patch_hit_api_workspaces__workspace_id__search_hits__hit_id__patch"];
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/hits/{hit_id}/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suggest Hit */
+        post: operations["suggest_hit_api_workspaces__workspace_id__search_hits__hit_id__suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/workspaces/{workspace_id}/search/hits/import": {
@@ -4551,6 +4593,17 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /**
+         * HitMetaEvent
+         * @description First event of a search hit's chat: what the answer will read.
+         */
+        HitMetaEvent: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "abstract" | "full_text";
+        };
         /** HitOut */
         HitOut: {
             /**
@@ -5747,6 +5800,8 @@ export interface components {
             suggestion?: string | null;
             /** Relevance */
             relevance?: number | null;
+            /** Reason */
+            reason?: string | null;
             /** Paper Id */
             paper_id?: string | null;
             branch?: components["schemas"]["ProvBranch"] | null;
@@ -7129,6 +7184,14 @@ export interface components {
             notes_used: number | null;
             /** Notes Total */
             notes_total: number | null;
+        };
+        /** SuggestHitRequest */
+        SuggestHitRequest: {
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
         };
         /** SuggestStart */
         SuggestStart: {
@@ -8956,6 +9019,74 @@ export interface operations {
             };
         };
     };
+    hit_history_api_workspaces__workspace_id__search_hits__hit_id__chat_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAnswer"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_hit_api_workspaces__workspace_id__search_hits__hit_id__chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hit_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["HitMetaEvent"] | components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_workspaces_api_workspaces_get: {
         parameters: {
             query?: never;
@@ -10186,6 +10317,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HitReviewUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HitOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_hit_api_workspaces__workspace_id__search_hits__hit_id__suggest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SuggestHitRequest"] | null;
             };
         };
         responses: {

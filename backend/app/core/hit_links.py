@@ -104,6 +104,13 @@ async def level_of(session: AsyncSession, hit_id: uuid.UUID) -> int:
     return best or 0
 
 
+REASON_CHARS = 160
+
+
+def _short(text: str | None) -> str | None:
+    return text if text is None or len(text) <= REASON_CHARS else text[: REASON_CHARS - 1] + "…"
+
+
 # ---- Provenance reader (the snowball tree) ----------------------------------------------------------------------
 
 HAND = "root:hand"
@@ -354,7 +361,7 @@ async def provenance(
         else:
             h, title, year = hits[uuid.UUID(nid)]
             node = dict(title=title, year=year, decision=h.stage1_status, suggestion=h.suggestion,
-                        relevance=h.suggestion_relevance, paper_id=h.paper_id)
+                        relevance=h.suggestion_relevance, reason=_short(h.suggestion_note), paper_id=h.paper_id)
         nodes.append(ProvNode(
             id=nid, level=level[nid], branch=branch, snowballed=sorted(done.get(nid, ())), paths=incoming[nid],
             zero_found_error=zero.get(nid), **node))

@@ -48,6 +48,7 @@ export type NoteSource = components['schemas']['NoteSource']
 export type ChatAnswer = components['schemas']['ChatAnswer']
 export type SavedNote = components['schemas']['SavedNoteOut']
 // Prefixed: the DOM already has a global `ErrorEvent`.
+export type HitMetaEvent = components['schemas']['HitMetaEvent']
 export type ChatSourcesEvent = components['schemas']['SourcesEvent']
 export type ChatTokenEvent = components['schemas']['TokenEvent']
 export type ChatDoneEvent = components['schemas']['DoneEvent']
@@ -188,9 +189,12 @@ export type ScreeningState = components['schemas']['ScreeningStateOut']
 export type ScreeningUpdate = components['schemas']['ScreeningCriteriaUpdate']
 export type AcceptSuggestionsOut = components['schemas']['AcceptSuggestionsOut']
 
-/** Where a chat lives: the reader's paper, or a workspace. */
-export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
-const chatUrl = (scope: ChatScope) => `/api/${scope.kind === 'paper' ? 'papers' : 'workspaces'}/${scope.id}/chat`
+/** Where a chat lives: the reader's paper, a workspace, or a search hit (abstract-only until it has full text). */
+export type ChatScope = { kind: 'paper' | 'workspace'; id: string } | { kind: 'hit'; workspaceId: string; id: string; paperId?: string }
+const chatUrl = (scope: ChatScope) =>
+  scope.kind === 'hit'
+    ? `/api/workspaces/${scope.workspaceId}/search/hits/${scope.id}/chat`
+    : `/api/${scope.kind === 'paper' ? 'papers' : 'workspaces'}/${scope.id}/chat`
 
 /** The last `loc` segment of each FastAPI validation error that has one, deduplicated and in order. */
 function invalidFields(errors: unknown[]): string[] {
@@ -707,6 +711,9 @@ export const api = {
     request<SnowballNextOut>(`/api/workspaces/${workspaceId}/search/snowball-next/run`, { method: 'POST' }),
   getSearchHit: (workspaceId: string, hitId: string) =>
     request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}`),
+  /** Reads one hit against the review question and writes its suggestion fields. A 409's `detail` is the code. */
+  suggestHit: (workspaceId: string, hitId: string, confirmRemote = false) =>
+    request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}/suggest`, sendJson('POST', { confirm_remote: confirmRemote })),
   hitPaths: (workspaceId: string, hitId: string) =>
     request<ProvLink[][]>(`/api/workspaces/${workspaceId}/search/hits/${hitId}/paths`),
   setEligibility: (workspaceId: string, paperId: string, runId: string, body: EligibilityUpdate) =>

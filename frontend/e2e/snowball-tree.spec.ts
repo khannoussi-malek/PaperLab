@@ -44,6 +44,7 @@ test('the snowball tree shows levels, runs the next hop, and explains a level-2 
 
   // 2. The tree: the search paper at level 0, what it cites at level 1.
   await page.getByRole('tab', { name: /^Snowball tree/ }).click()
+  await page.getByRole('button', { name: 'Tree', exact: true }).click()
   await expect(page.getByRole('button', { name: new RegExp(`^${SEED}, level 0`) })).toBeVisible()
   const levelOne = page.getByRole('button', { name: new RegExp(`^${LEVEL_ONE}, level 1`) })
   await expect(levelOne).toBeVisible()

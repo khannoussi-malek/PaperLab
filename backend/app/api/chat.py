@@ -1,6 +1,7 @@
 import logging
 import uuid
 from collections.abc import AsyncIterable, Awaitable, Callable
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -8,7 +9,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
-from app.core import chat, notes
+from app.core import chat, hit_chat, notes
 from app.core.errors import Conflict
 from app.core.retrieval import RetrievedChunk
 from app.db import SessionLocal
@@ -19,6 +20,7 @@ from app.schemas.chat import (
     ChatSource,
     DoneEvent,
     ErrorEvent,
+    HitMetaEvent,
     NoteSource,
     SavedNoteOut,
     SaveSuggestion,
@@ -218,3 +220,66 @@ async def save_suggestion(output_id: uuid.UUID, payload: SaveSuggestion, session
     409 already_saved (the history's saved_notes names the note); 422 no_such_block, empty_body, or a cited passage a
     re-ingest replaced."""
     return await notes.save_suggestion(session, output_id, payload.index)
+
+
+HIT_STREAM_RESPONSES = {200: {"model": HitMetaEvent | SourcesEvent | TokenEvent | DoneEvent | ErrorEvent}}
+HIT_CHAT = "/api/workspaces/{workspace_id}/search/hits/{hit_id}/chat"
+
+
+@dataclass(frozen=True)
+class HitPrepared:
+    source: str
+    paper_id: uuid.UUID | None  # read before _prepare commits, which expires the ORM objects
+    prepared: chat.Prepared
+    parent_id: uuid.UUID | None  # the answer a follow-up follows; None when it starts a thread
+
+
+async def prepare_hit_answer(
+    workspace_id: uuid.UUID, hit_id: uuid.UUID, payload: ChatRequest, session: SessionDep
+) -> HitPrepared:
+    context = await hit_chat.load(session, workspace_id, hit_id)
+    if context.source == "abstract":
+        prepared = hit_chat.prepare_abstract(context, payload.question, payload.parent_id)
+        await session.commit()  # the stream can take minutes; don't hold a pooled connection
+        return HitPrepared("abstract", None, prepared, payload.parent_id)
+    paper_id = context.paper.id
+    # An abstract answer's id (the hit gained full text mid-thread) isn't a paper answer: start a new thread.
+    parent_id = payload.parent_id
+    if parent_id is not None and any(a.id == parent_id for a in hit_chat.HISTORY.get(hit_id, [])):
+        parent_id = None
+    thread = None if parent_id is None else await chat.load_thread(session, paper_id, parent_id)
+    prepared = await _prepare(session, chat.Scope(paper_id=paper_id), payload.question, thread)
+    return HitPrepared("full_text", paper_id, prepared, parent_id)
+
+
+HitPreparedDep = Annotated[HitPrepared, Depends(prepare_hit_answer)]
+
+
+@router.post(HIT_CHAT, response_class=EventSourceResponse, responses=HIT_STREAM_RESPONSES)
+async def ask_hit(
+    hit_id: uuid.UUID, payload: ChatRequest, llm: LLMDep, ready: HitPreparedDep
+) -> AsyncIterable[ServerSentEvent]:
+    """Checked before streaming, in parameter order: 404/409 for the model, then 404 for a missing or foreign hit, then
+    paper chat's checks when the hit has full text. The first event is `meta`, with source "abstract" or "full_text"."""
+    yield ServerSentEvent(event="meta", data=HitMetaEvent(source=ready.source))
+    if ready.paper_id is not None:
+        scope = chat.Scope(paper_id=ready.paper_id)
+        events = answer_events(scope, payload.question, ready.prepared, llm, ready.parent_id)
+    else:
+
+        async def save(_: AsyncSession, content: str) -> uuid.UUID:
+            return hit_chat.remember(hit_id, payload.question, content, llm.model, llm.connection_name, ready.parent_id)
+
+        events = stream_output(ready.prepared, llm, save, "answer", "hit chat answer", hit_id)
+    async for event in events:
+        yield event
+
+
+@router.get(HIT_CHAT)
+async def hit_history(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
+    """Abstract-only answers (kept in memory, lost on restart) then the paper's stored answers when it has full text."""
+    context = await hit_chat.load(session, workspace_id, hit_id)
+    answers = list(hit_chat.HISTORY.get(hit_id, []))
+    if context.source == "full_text":
+        answers += [to_answer(a) for a in await chat.list_answers(session, context.paper.id)]
+    return sorted(answers, key=lambda a: a.created_at)
