@@ -127,10 +127,88 @@ def _non_ascii(_blanked: str, text: str):
                f"{lead} or put it in math mode. {TECTONIC_NOTE}")
 
 
+
+GREEK = ("alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi rho varrho sigma "
+         "varsigma tau upsilon phi varphi chi psi omega Gamma Theta Lambda Xi Sigma Upsilon Phi Psi Omega").split()
+FUNCTION_LIKE = {"sigma", "Gamma", "Theta", "Omega"}  # \sigma(x), \Theta(n): a function or big-O, not a symbol
+SYMBOL = re.compile(r"\\(" + "|".join(sorted(GREEK, key=len, reverse=True)) + r")(?![A-Za-z])")
+
+
+def _symbols(text: str):
+    for m in SYMBOL.finditer(text):
+        if m.group(1) in FUNCTION_LIKE and text[m.end():].lstrip().startswith("("):
+            continue
+        yield m.group(1), m.start()
+
+
+def _notation(ctx: CheckContext) -> list[Finding]:
+    inline: set[str] = set()
+    first: dict[str, tuple[str, int]] = {}
+    for path, text in tex_files(ctx):
+        blanked = _blank_comments(text)
+        displays = [m for p in DISPLAY_MATH for m in p.finditer(blanked)
+                    if m.start() == 0 or blanked[m.start() - 1] != "\\"]  # `\\[2pt]` (a row break) is not a display
+        for m in sorted(displays, key=lambda m: m.start()):
+            for name, pos in _symbols(m.group()):
+                first.setdefault(name, (path, line_of(blanked, m.start() + pos)))
+        rest = blanked
+        for m in displays:
+            rest = rest[: m.start()] + re.sub(r"[^\n]", " ", m.group()) + rest[m.end():]
+        inline |= {name for p in INLINE_MATH for m in p.finditer(rest) for name, _ in _symbols(m.group())}
+    return [
+        Finding("latex.notation_undefined", "warning", path, line,
+                f"\\{name} appears in an equation but is never introduced in running text or a table.",
+                f'Say what it stands for where it first appears ("where \\{name} is ...") or add a notation table.')
+        for name, (path, line) in first.items()
+        if name not in inline
+    ]
+
+
+# Only plain pairs: a cite with an optional argument (\citep[p.~3]{a}) would lose its note in a merge.
+ADJACENT = re.compile(
+    r"\\(cite|citep|citet|citealp|citealt|parencite|textcite)\*?\{([^}]*)\}(?:\s|~)*\\\1\*?\{([^}]*)\}"
+)
+
+
+def _adjacent(blanked: str, _text: str):
+    for m in ADJACENT.finditer(blanked):
+        cmd, a, b = m.group(1), m.group(2), m.group(3)
+        yield ("info", m.start(), f"Adjacent citations \\{cmd}{{{a}}}\\{cmd}{{{b}}} print as two brackets.",
+               f"Merge them into \\{cmd}{{{a},{b}}} so numbered styles print a range.")
+
+
+TABLE_WIDE_COLUMNS = 8  # calibration knob: a tabular this wide with no wrapper is worth a look
+FLOAT_TABLE = re.compile(r"\\begin\{(table\*?)\}(.*?)\\end\{\1\}", re.S)
+TABULAR = re.compile(r"\\begin\{tabular\}\s*(?:\[[^\]]*\])?\s*\{((?:[^{}]|\{[^{}]*\})*)\}")
+FITS = re.compile(r"\\(?:resizebox|adjustbox|scalebox|small|footnotesize|scriptsize|tiny|tabcolsep)\b|\\begin\{adjustbox\}")
+
+
+def _columns(spec: str) -> int:
+    spec = re.sub(r"\[[^\]]*\]", "", spec)  # S[table-format=1.2]
+    while (inner := re.sub(r"\{[^{}]*\}", "", spec)) != spec:  # p{3cm}, @{\hspace{1em}}, >{\bfseries}
+        spec = inner
+    return len(re.findall(r"[lcrpmbXS]", spec))
+
+
+def _table_width(blanked: str, _text: str):
+    for fl in FLOAT_TABLE.finditer(blanked):
+        if FITS.search(fl.group(2)):
+            continue
+        for t in TABULAR.finditer(fl.group(2)):
+            columns = _columns(t.group(1))
+            if columns >= TABLE_WIDE_COLUMNS:
+                yield ("info", fl.start(2) + t.start(), f"A table with {columns} columns may run past the margin.",
+                       "Wrap the tabular in \\resizebox{\\columnwidth}{!}{...} or "
+                       "\\adjustbox{max width=\\columnwidth}{...}, or use \\footnotesize.")
+
+
 CHECKS = (
     Check("latex.markdown_leak", "cheap", "Markdown headings, bold and fences left in the source", per_file("latex.markdown_leak", _markdown)),
     Check("latex.placeholder", "cheap", "TODO, XX.X, [TBD] and ?? left in the source", per_file("latex.placeholder", _placeholder)),
     Check("latex.numbered_heading", "cheap", "Section headings that start with a number", per_file("latex.numbered_heading", _numbered)),
     Check("latex.stray_preamble", "cheap", "A second \\documentclass or document start in a body file", _stray_preamble),
     Check("latex.non_ascii", "cheap", "Typographic and symbol characters outside math", per_file("latex.non_ascii", _non_ascii)),
+    Check("latex.notation_undefined", "cheap", "Greek symbols used in equations but never introduced", _notation),
+    Check("latex.adjacent_cites", "cheap", "Back-to-back cite commands that could be one", per_file("latex.adjacent_cites", _adjacent)),
+    Check("latex.table_width", "cheap", "Wide tables with no width wrapper", per_file("latex.table_width", _table_width)),
 )

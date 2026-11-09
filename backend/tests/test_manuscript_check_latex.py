@@ -86,3 +86,67 @@ def test_accents_math_comments_and_verbatim_are_silent():
     text = ("M\u00fcller and \u0160imi\u0107 wrote it. $\\alpha \u2264 3$ holds.\n% \u201ccomment\u201d\n"
             "\\begin{verbatim}\n\u201cx\u201d\n\\end{verbatim}\n")
     assert run("latex.non_ascii", text) == []
+
+
+EQ = "\\begin{equation}\ny = \\alpha x + \\beta + \\pi + \\sigma(x) + \\Theta(n)\n\\end{equation}\nHere $\\alpha$ is the slope.\n"
+
+
+def test_undefined_symbol_flagged_at_its_first_display_use():
+    [f] = run("latex.notation_undefined", EQ)
+    assert (f.file, f.line, f.severity) == ("main.tex", 2, "warning")
+    assert f.message == "\\beta appears in an equation but is never introduced in running text or a table."
+    assert f.fix_hint == 'Say what it stands for where it first appears ("where \\beta is ...") or add a notation table.'
+
+
+def test_a_row_break_with_a_length_is_not_a_display_start():
+    text = ("\\begin{align}\nx &= \\gamma \\\\[2pt]\n y &= 1\n\\end{align}\nwhere $\\gamma$ is a rate and \\[ z \\]\n")
+    assert run("latex.notation_undefined", text) == []
+
+
+def test_symbol_introduced_in_another_file_or_a_table_is_silent():
+    eq = "\\begin{align}\nx &= \\gamma + \\delta\n\\end{align}\n"
+    files = {"main.tex": eq, "b.tex": "where $\\gamma$ is a rate.\n\\begin{tabular}{c}$\\delta$\\end{tabular}\n"}
+    assert run("latex.notation_undefined", files) == []
+
+
+def test_adjacent_cites_are_hinted_never_merged():
+    text = "A \\citep{a}\\citep{b}. B \\citep{c} \\citep{d}. C \\citep{e}~\\citep{f}.\n"
+    found = run("latex.adjacent_cites", text)
+    assert [f.severity for f in found] == ["info"] * 3
+    assert found[0].message == "Adjacent citations \\citep{a}\\citep{b} print as two brackets."
+    assert found[0].fix_hint == "Merge them into \\citep{a,b} so numbered styles print a range."
+
+
+def test_other_adjacent_cites_are_silent():
+    assert run("latex.adjacent_cites", "A \\citep{a}\\citet{b}. B \\cite{c}, \\cite{d}.\n") == []
+    assert run("latex.adjacent_cites", "A \\citep[see][p.~3]{a}\\citep{b}.\n") == []
+
+
+def wide(cols, wrapper=""):
+    return f"\\begin{{table}}\n{wrapper}\\begin{{tabular}}{{{cols}}}\na\\\\\n\\end{{tabular}}\n\\end{{table}}\n"
+
+
+def test_wide_table_flagged_with_a_hint():
+    [f] = run("latex.table_width", wide("lcccccccc"))
+    assert (f.line, f.severity) == (2, "info")
+    assert f.message == "A table with 9 columns may run past the margin."
+    assert f.fix_hint == ("Wrap the tabular in \\resizebox{\\columnwidth}{!}{...} or "
+                          "\\adjustbox{max width=\\columnwidth}{...}, or use \\footnotesize.")
+
+
+def test_siunitx_columns_count_once_each():
+    [f] = run("latex.table_width", wide("lSSSSSSSS"))
+    assert f.message == "A table with 9 columns may run past the margin."
+    [g] = run("latex.table_width", wide("lS[table-format=1.2]SSSSSSS"))
+    assert "9 columns" in g.message
+
+
+def test_tables_that_fit_or_are_wrapped_are_silent():
+    assert run("latex.table_width", wide("lcccccccc", "\\resizebox{\\columnwidth}{!}{%\n")) == []
+    assert run("latex.table_width", wide("lcccccccc", "\\footnotesize\n")) == []
+    assert run("latex.table_width", wide("lccc")) == []
+    assert run("latex.table_width", wide("lcccccccc", "\\small\n")) == []
+    assert run("latex.table_width", wide("l@{\\hspace{1em}}ccc")) == []
+    assert run("latex.table_width", wide("lp{3cm}p{3cm}p{3cm}")) == []
+    assert run("latex.table_width", "\\begin{tabular}{lcccccccc}\na\\\\\n\\end{tabular}\n") == []
+    assert run("latex.table_width", "\\begin{table}\n\\begin{tabularx}{\\textwidth}{XXXXXXXXX}\na\\\\\n\\end{tabularx}\n\\end{table}\n") == []
