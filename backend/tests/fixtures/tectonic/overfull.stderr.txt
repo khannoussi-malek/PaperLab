@@ -1,0 +1,7 @@
+warning: sections/a:3: Overfull \hbox (305.25998pt too wide) in paragraph at lines 2--3
+warning: sections/a:3: Underfull \hbox (badness 10000) detected at line 3
+warning: sections/longnamelongnamelongnamelongnamelongnamelongnamelongnamelongnamelongname:3: Overfull \hbox (305.25998pt too wide) in paragraph at lines 2--3
+warning: sections/a:3: Overfull \hbox (305.25998pt too wide) in paragraph at lines 2--3
+warning: sections/a:3: Underfull \hbox (badness 10000) detected at line 3
+warning: sections/longnamelongnamelongnamelongnamelongnamelongnamelongnamelongnamelongname:3: Overfull \hbox (305.25998pt too wide) in paragraph at lines 2--3
+warning: warnings were issued by the TeX engine; use --print and/or --keep-logs for details.
