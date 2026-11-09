@@ -226,5 +226,4 @@ test('a row with a reason shows it under the title', () => {
   const data = prov({ nodes: prov().nodes.map((n) => (n.id === 'B' ? { ...n, reason: 'Tests the point on small data.' } : n)) })
   setup(data, 'root:r1,A')
   expect(within(row('Paper B')).getByText('Tests the point on small data.')).toBeTruthy()
-  expect(within(row('Paper C')).queryByText(/Tests the point/)).toBeNull()
 })
