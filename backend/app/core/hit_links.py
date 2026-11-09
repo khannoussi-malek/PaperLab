@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import search_run_results
 from app.core.errors import NotFound
 from app.models import Paper
 from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
@@ -394,12 +395,13 @@ async def _roots(session, workspace_id, runs, node_ids, edges, level, hits) -> l
     for root in _tree_roots(node_ids, edges, level).values():
         if root:
             on_tree[root] += 1
+    labels = await search_run_results.run_labels(session, runs.values())
     roots = []
     for run in sorted(runs.values(), key=lambda r: r.started_at):
         rid = f"root:{run.id}"
         if counts.get(run.id) or on_tree[rid]:
             roots.append(ProvRoot(
-                id=rid, label=run.query_text, hit_count=counts.get(run.id, 0), on_tree=on_tree[rid],
+                id=rid, label=labels[run.id], hit_count=counts.get(run.id, 0), on_tree=on_tree[rid],
                 excluded_hidden=hidden.get(run.id, 0)))
     if on_tree[HAND]:
         papers = sum(n.startswith("paper:") for n in node_ids)
