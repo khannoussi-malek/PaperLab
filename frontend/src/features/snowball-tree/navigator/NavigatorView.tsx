@@ -10,6 +10,7 @@ import { parseNav, primaryPath, viaOf, type NavEntry } from './navPath'
 import { readNav, readNavPaper, writeNav } from './navUrl'
 import { PaperCard } from './PaperCard'
 import { StartFromPaper } from './StartFromPaper'
+import { workspaceHref } from '@/lib/route'
 import { useGrab } from './useGrab'
 
 /** The walk to a library paper: its tree node's primary path, else the hand-added root. */
@@ -87,7 +88,28 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
         )}
         {path.length === 0 && (
           <>
-            <StartFromPaper workspaceId={workspaceId} data={data} onPick={go} />
+            {data.roots.length === 0 && library?.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Nothing here yet. Add papers on the <a className="underline" href={workspaceHref(workspaceId, 'papers')}>Papers tab</a> or run a search in <a className="underline" href={workspaceHref(workspaceId, 'search')}>Search &amp; screen</a>.
+              </p>
+            )}
+            {(data.roots.length > 0 || !!library?.length) && <StartFromPaper workspaceId={workspaceId} data={data} onPick={go} />}
+            {data.roots.length === 0 && !!library?.length && (
+              <section className="flex flex-col gap-1">
+                <h3 className="text-sm font-medium">Papers in this workspace</h3>
+                <p className="text-xs text-muted-foreground">
+                  No searches yet. Start from one of your papers, or run a search in <a className="underline" href={workspaceHref(workspaceId, 'search')}>Search &amp; screen</a>.
+                </p>
+                <ul className="flex flex-col rounded-md border border-border">
+                  {library.slice(0, 20).map((p) => (
+                    <li key={p.id} className="flex items-center gap-2 px-2 py-1 text-sm">
+                      <span className="min-w-0 flex-1 truncate">{p.title}{p.year ? ` · ${p.year}` : ''}</span>
+                      <Button type="button" size="xs" variant="ghost" aria-label={`Step in to ${p.title}`} onClick={() => go([{ id: 'root:hand', via: 'hand' }, { id: `paper:${p.id}`, via: 'hand' }])}>Step in ›</Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             {data.roots.map((r) => (
               <section key={r.id} className="flex flex-col gap-2">
                 <h3 className="text-sm font-medium">{`🔍 ${r.label}`}</h3>
