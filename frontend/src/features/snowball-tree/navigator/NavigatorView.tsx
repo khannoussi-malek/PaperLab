@@ -33,6 +33,11 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
   const [path, setPath] = useState<NavEntry[]>(initial.current.path)
   const [moved, setMoved] = useState(false) // the card takes focus after the owner moves, not when the page loads
   const { grabs, grab } = useGrab(workspaceId)
+  const nextRef = useRef<HTMLDivElement>(null)
+  const reveal = () => { // after a click only: bring the next-papers tabs into view and focus the first tab
+    nextRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    nextRef.current?.querySelector<HTMLElement>('[role="tab"]')?.focus({ preventScroll: true })
+  }
   const library = useWorkspacePapers(workspaceId).data
   useEffect(() => {
     if (initial.current?.fromPaper) writeNav(initial.current.path)
@@ -87,8 +92,8 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
             ))}
           </>
         )}
-        {node && <PaperCard key={node.id} focusHeading={moved} workspaceId={workspaceId} data={data} node={node} grab={grab} grabs={grabs} />}
-        {currentId && (isRoot || node) && <NextPapers {...lists} parentId={currentId} dimmed={node?.branch?.state === 'stopped'} />}
+        {node && <PaperCard key={node.id} focusHeading={moved} workspaceId={workspaceId} data={data} node={node} grab={grab} grabs={grabs} onReveal={reveal} />}
+        {currentId && (isRoot || node) && <div ref={nextRef}><NextPapers {...lists} parentId={currentId} dimmed={node?.branch?.state === 'stopped'} /></div>}
       </div>
       {node && <AskPanel workspaceId={workspaceId} node={node} />}
     </div>

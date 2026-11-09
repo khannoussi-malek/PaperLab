@@ -11,7 +11,7 @@ import { grabLine } from './NextPapers'
 import { SummariseNow } from './SummariseNow'
 import type { Grab, GrabState } from './useGrab'
 
-type Props = { workspaceId: string; data: ProvenanceOut; node: ProvNode; grab: Grab; grabs: Record<string, GrabState>; focusHeading?: boolean }
+type Props = { workspaceId: string; data: ProvenanceOut; node: ProvNode; grab: Grab; grabs: Record<string, GrabState>; focusHeading?: boolean; onReveal: () => void }
 
 const ABSTRACT_CHARS = 600
 
@@ -47,7 +47,7 @@ function Fit({ hit, workspaceId }: { hit: Hit | undefined; workspaceId: string }
 }
 
 /** The paper the owner is standing on: facts, fit for their question, abstract, PDF, and the decisions. */
-export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading }: Props) {
+export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading, onReveal }: Props) {
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { if (focusHeading) heading.current?.focus() }, []) // eslint-disable-line react-hooks/exhaustive-deps -- once per card; the card is keyed by paper
   const isHit = !node.id.startsWith('paper:')
@@ -78,7 +78,7 @@ export function PaperCard({ workspaceId, data, node, grab, grabs, focusHeading }
         )}
       </div>
       {grabs[node.id]?.status === 'done' && <p role="status" className="text-xs text-muted-foreground">{grabLine(node, data, grabs[node.id])}</p>}
-      <Decisions key={node.id} workspaceId={workspaceId} node={node} target={target} isHit={isHit} grab={grab} />
+      <Decisions key={node.id} workspaceId={workspaceId} node={node} target={target} isHit={isHit} grab={grab} pending={grabs[node.id]?.status === 'pending'} onReveal={onReveal} />
       {grabs[node.id]?.status === 'error' && <p role="alert" className="text-xs text-destructive">{(grabs[node.id] as { text: string }).text}</p>}
       {isHit && (
         <Dialog open={details} onOpenChange={setDetails}>

@@ -9,10 +9,10 @@ import type { Grab } from './useGrab'
 
 const BOTH = ['cites', 'cited_by']
 
-type Props = { workspaceId: string; node: ProvNode; target: BranchTarget | null; isHit: boolean; grab: Grab }
+type Props = { workspaceId: string; node: ProvNode; target: BranchTarget | null; isHit: boolean; grab: Grab; pending: boolean; onReveal: () => void }
 
 /** Include / Exclude (screening) and Go further / Stop here (branch) for the paper on the card. None of them moves the walk. */
-export function Decisions({ workspaceId, node, target, isHit, grab }: Props) {
+export function Decisions({ workspaceId, node, target, isHit, grab, pending, onReveal }: Props) {
   const client = useQueryClient()
   const patch = usePatchSearchHit(workspaceId)
   const setBranch = useSetBranch(workspaceId)
@@ -27,7 +27,8 @@ export function Decisions({ workspaceId, node, target, isHit, grab }: Props) {
       await setBranch.mutateAsync({ ...target, state: 'go_further', directions: BOTH, reason: null })
     } catch { return } // the error shows below; do not grab for a branch that was not saved
     const missing = BOTH.filter((d) => !node.snowballed.includes(d))
-    if (missing.length) await grab(node.id, target, { backward: missing.includes('cites'), forward: missing.includes('cited_by') })
+    if (!missing.length) return onReveal() // nothing to fetch: still show the owner where the next papers are
+    if (await grab(node.id, target, { backward: missing.includes('cites'), forward: missing.includes('cited_by') })) onReveal()
   }
   const stop = (text: string | null) => target && setBranch.mutate({ ...target, state: 'stopped', directions: [], reason: text })
   const pressed = (on: boolean) => ({ 'aria-pressed': on, variant: on ? ('default' as const) : ('outline' as const) })
@@ -50,7 +51,8 @@ export function Decisions({ workspaceId, node, target, isHit, grab }: Props) {
         )}
         {target && (
           <>
-            <Button type="button" size="sm" {...pressed(state === 'go_further')} onClick={goFurther}>Go further</Button>
+            <Button type="button" size="sm" {...pressed(state === 'go_further')} disabled={pending || setBranch.isPending} onClick={goFurther}>Go further</Button>
+            {pending && <span role="status" className="text-xs text-muted-foreground">Snowballing…</span>}
             <Button type="button" size="sm" {...pressed(state === 'stopped')} onClick={() => stop(reason.trim() || null)}>Stop here</Button>
           </>
         )}

@@ -5,7 +5,7 @@ import { friendlySnowballError, skippedSeedsText } from '@/features/workspace-se
 import type { BranchTarget } from '../BranchControl'
 
 export type GrabState = { status: 'pending' } | { status: 'done' } | { status: 'error'; text: string }
-export type Grab = (id: string, target: BranchTarget, directions?: { backward: boolean; forward: boolean }) => Promise<void>
+export type Grab = (id: string, target: BranchTarget, directions?: { backward: boolean; forward: boolean }) => Promise<boolean>
 
 /** One paper's next layer, fetched on a click. State is per paper id so each row keeps its own line. */
 export function useGrab(workspaceId: string): { grabs: Record<string, GrabState>; grab: Grab } {
@@ -25,8 +25,10 @@ export function useGrab(workspaceId: string): { grabs: Record<string, GrabState>
       const failed = Object.values(out.errors)[0] ?? (out.skipped_seeds.includes(seed) ? skippedSeedsText(1) : undefined)
       put(id, failed ? { status: 'error', text: friendlySnowballError(failed) } : { status: 'done' })
       await refreshTree(client, workspaceId)
+      return !failed
     } catch (e) {
       put(id, { status: 'error', text: friendlySnowballError(e instanceof Error ? e.message : 'Could not fetch the next papers.') })
+      return false
     }
   }
   return { grabs, grab }

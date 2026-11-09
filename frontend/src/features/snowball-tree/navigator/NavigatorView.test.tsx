@@ -311,3 +311,31 @@ test('Stop here again keeps the stored reason', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Stop here' }))
   await waitFor(() => expect(branch).toHaveBeenCalledWith('w1', { hit_id: 'A', state: 'stopped', directions: [], reason: 'too general' }))
 })
+
+test('Go further shows it is working, cannot double-run, then shows the result', async () => {
+  setup(prov(), 'root:r1,A,B')
+  vi.spyOn(api, 'setBranch').mockResolvedValue({} as never)
+  let finish!: (v: never) => void
+  const snow = vi.spyOn(api, 'snowball').mockImplementation(() => new Promise((r) => { finish = r as never }))
+  const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+  const btn = screen.getByRole('button', { name: 'Go further' })
+  fireEvent.click(btn)
+  await waitFor(() => expect(screen.getAllByText('Snowballing…').length).toBeGreaterThan(0))
+  expect((screen.getByRole('button', { name: 'Go further' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Go further' }))
+  expect(snow).toHaveBeenCalledTimes(1)
+  finish({ new_hits: 0, skipped_seeds: [], errors: {} } as never)
+  expect(await screen.findByText('✓ grabbed · 0 cites · 0 citing')).toBeTruthy()
+  await waitFor(() => expect(scroll).toHaveBeenCalled())
+  expect(document.activeElement?.getAttribute('role')).toBe('tab')
+})
+
+test('Go further on a fully snowballed paper makes no call but still scrolls to the next papers', async () => {
+  setup(prov(), 'root:r1,A')
+  vi.spyOn(api, 'setBranch').mockResolvedValue({} as never)
+  const snow = vi.spyOn(api, 'snowball')
+  const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+  fireEvent.click(screen.getByRole('button', { name: 'Go further' }))
+  await waitFor(() => expect(scroll).toHaveBeenCalled())
+  expect(snow).not.toHaveBeenCalled()
+})
