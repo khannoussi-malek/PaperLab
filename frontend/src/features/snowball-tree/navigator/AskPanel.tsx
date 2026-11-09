@@ -23,7 +23,7 @@ export function AskPanel({ workspaceId, node }: { workspaceId: string; node: Pro
   const libraryId = isLibrary ? (node.paper_id ?? node.id.slice(6)) : null
   const hit = useSearchHit(workspaceId, isLibrary ? null : node.id).data
   const library = useWorkspacePapers(workspaceId).data
-  const scope: ChatScope = libraryId ? { kind: 'paper', id: libraryId } : { kind: 'hit', workspaceId, id: node.id }
+  const scope: ChatScope = libraryId ? { kind: 'paper', id: libraryId } : { kind: 'hit', workspaceId, id: node.id, ...(hit?.paper_id ? { paperId: hit.paper_id } : {}) }
   const hasFile = libraryId
     ? library?.find((p) => p.id === libraryId)?.has_pdf === true
     : !!hit?.paper_id && (hit.acquisition_status === 'imported' || hit.acquisition_status === 'manual')

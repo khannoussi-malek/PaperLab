@@ -190,7 +190,7 @@ export type ScreeningUpdate = components['schemas']['ScreeningCriteriaUpdate']
 export type AcceptSuggestionsOut = components['schemas']['AcceptSuggestionsOut']
 
 /** Where a chat lives: the reader's paper, a workspace, or a search hit (abstract-only until it has full text). */
-export type ChatScope = { kind: 'paper' | 'workspace'; id: string } | { kind: 'hit'; workspaceId: string; id: string }
+export type ChatScope = { kind: 'paper' | 'workspace'; id: string } | { kind: 'hit'; workspaceId: string; id: string; paperId?: string }
 const chatUrl = (scope: ChatScope) =>
   scope.kind === 'hit'
     ? `/api/workspaces/${scope.workspaceId}/search/hits/${scope.id}/chat`
