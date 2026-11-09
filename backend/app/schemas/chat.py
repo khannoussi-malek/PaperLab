@@ -40,6 +40,12 @@ class SourcesEvent(BaseModel):
     notes_total: int | None  # every note in the paper or workspace
 
 
+class HitMetaEvent(BaseModel):
+    """First event of a search hit's chat: what the answer will read."""
+
+    source: Literal["abstract", "full_text"]
+
+
 class TokenEvent(BaseModel):
     text: str
 
