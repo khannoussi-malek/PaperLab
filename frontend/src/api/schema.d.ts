@@ -1331,6 +1331,23 @@ export interface paths {
         patch: operations["patch_hit_api_workspaces__workspace_id__search_hits__hit_id__patch"];
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/search/hits/{hit_id}/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suggest Hit */
+        post: operations["suggest_hit_api_workspaces__workspace_id__search_hits__hit_id__suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/search/hits/import": {
         parameters: {
             query?: never;
@@ -10188,6 +10205,38 @@ export interface operations {
                 "application/json": components["schemas"]["HitReviewUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HitOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_hit_api_workspaces__workspace_id__search_hits__hit_id__suggest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
