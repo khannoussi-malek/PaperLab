@@ -91,20 +91,19 @@ async def _pool_features(session: AsyncSession, workspace_id: uuid.UUID, rows: l
     """The pool's features and the rows they match: the cached ones when `rows` still match them, else a fresh read
     of rows and text together (so a harvest landing between two reads can't misalign them)."""
     global _feature_cache
-    async with _feature_lock:  # two tabs opening at once build once
-        ids, abstracts = [row[0] for row in rows], sum(row[3] for row in rows)
-        cached = _feature_cache
-        if cached and cached.workspace_id == workspace_id and cached.abstracts == abstracts and cached.ids == ids:
-            return cached.feats, rows
-        _feature_cache = None  # let the old pool go before building the next
-        fresh = (await session.execute(_pool_query(
-            workspace_id, WorkspaceSearchHit.normalized_title, ExternalRef.title, ExternalRef.abstract,
-        ))).all()
-        texts = [normalized if title is None else f"{title} {abstract or ''}"  # same text as hit_text()
-                 for *_, normalized, title, abstract in fresh]
-        feats = await asyncio.to_thread(features, texts)
-        _feature_cache = _CachedFeatures(workspace_id, [row[0] for row in fresh], sum(row[3] for row in fresh), feats)
-        return feats, fresh
+    ids, abstracts = [row[0] for row in rows], sum(row[3] for row in rows)
+    cached = _feature_cache
+    if cached and cached.workspace_id == workspace_id and cached.abstracts == abstracts and cached.ids == ids:
+        return cached.feats, rows
+    _feature_cache = None  # let the old pool go before building the next
+    fresh = (await session.execute(_pool_query(
+        workspace_id, WorkspaceSearchHit.normalized_title, ExternalRef.title, ExternalRef.abstract,
+    ))).all()
+    texts = [normalized if title is None else f"{title} {abstract or ''}"  # same text as hit_text()
+             for *_, normalized, title, abstract in fresh]
+    feats = await asyncio.to_thread(features, texts)
+    _feature_cache = _CachedFeatures(workspace_id, [row[0] for row in fresh], sum(row[3] for row in fresh), feats)
+    return feats, fresh
 
 
 async def ranked_hits(session: AsyncSession, workspace_id: uuid.UUID, limit: int) -> dict:
@@ -114,11 +113,14 @@ async def ranked_hits(session: AsyncSession, workspace_id: uuid.UUID, limit: int
     if workspace is None:
         raise NotFound(f"workspace {workspace_id} not found")
     rows = (await session.execute(_pool_query(workspace_id))).all()
-    prebuilt = None
-    if {_label(row[1]) for row in rows} >= {True, False}:  # rank() trains: it needs the features
-        prebuilt, rows = await _pool_features(session, workspace_id, rows)
-    docs = [Doc(row[0], "", _label(row[1])) for row in rows]
-    order, trained = await asyncio.to_thread(rank, docs, prebuilt)
+    # One build or ranking at a time: two tabs opening at once build once, and each ranking of a big pool holds
+    # ~300 MB of temporaries. ponytail: a second workspace waits behind a rebuild; per-workspace locks if that bites.
+    async with _feature_lock:
+        prebuilt = None
+        if {_label(row[1]) for row in rows} >= {True, False}:  # rank() trains: it needs the features
+            prebuilt, rows = await _pool_features(session, workspace_id, rows)
+        docs = [Doc(row[0], "", _label(row[1])) for row in rows]
+        order, trained = await asyncio.to_thread(rank, docs, prebuilt)
     decided = sorted(
         ((row[1], row[2]) for row in rows if row[2] is not None and row[1] is not None),
         key=lambda pair: pair[1],

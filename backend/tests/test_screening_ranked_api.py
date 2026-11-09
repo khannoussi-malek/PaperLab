@@ -3,6 +3,7 @@ from datetime import timedelta
 
 import pytest
 
+from app.core import screening
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchHit
 from tests.screening_pool import make_pool
@@ -112,3 +113,18 @@ async def test_an_abstract_filled_after_a_ranked_call_counts(client, session):
     await session.flush()
     body = (await client.get(_url(workspace))).json()
     assert body["items"][0]["id"] == str(hits[3].id)
+
+
+async def test_a_new_decision_reuses_the_cached_features(client, session, monkeypatch):
+    workspace, hits = await make_pool(
+        session, [(POSITIVE, "relevant"), (NEGATIVE, "not_relevant"), ("sleep in adults", None), ("graph", None)]
+    )
+    builds = []
+    real = screening.features
+    monkeypatch.setattr(screening, "features", lambda texts: builds.append(len(texts)) or real(texts))
+    await client.get(_url(workspace))
+    hits[2].stage1_status = "relevant"
+    await session.flush()
+    body = (await client.get(_url(workspace))).json()
+    assert builds == [4]  # built once; the decision changed labels, not texts
+    assert [item["id"] for item in body["items"]] == [str(hits[3].id)]
