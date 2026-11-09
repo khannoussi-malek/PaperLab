@@ -31,6 +31,7 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
     initial.current = paperId ? { path: pathToPaper(data, paperId), cut: false, fromPaper: true } : parseNav(readNav(), data)
   }
   const [path, setPath] = useState<NavEntry[]>(initial.current.path)
+  const [moved, setMoved] = useState(false) // the card takes focus after the owner moves, not when the page loads
   const { grabs, grab } = useGrab(workspaceId)
   const library = useWorkspacePapers(workspaceId).data
   useEffect(() => {
@@ -40,7 +41,16 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
     writeNav(initial.current.path)
   }, [])
 
-  const go = (next: NavEntry[]) => { setPath(next); writeNav(next) }
+  useEffect(() => { // a navPaper that is no library paper and no tree node (a hit that left the tree) is stale
+    const last = initial.current?.fromPaper ? initial.current.path[initial.current.path.length - 1]?.id : undefined
+    if (moved || !last?.startsWith('paper:') || !library || data.nodes.some((n) => n.id === last) || library.some((p) => `paper:${p.id}` === last)) return
+    initial.current = { ...initial.current!, fromPaper: false }
+    sileo.info({ title: STALE })
+    setPath([])
+    writeNav([])
+  }, [library, data, moved])
+
+  const go = (next: NavEntry[]) => { setPath(next); setMoved(true); writeNav(next) }
   const stepIn = (parentId: string, childId: string, kind: string) => {
     const base = path[path.length - 1]?.id === parentId ? path : [{ id: parentId, via: 'search' as const }]
     go([...base, { id: childId, via: viaOf(kind) }])
@@ -75,7 +85,7 @@ export function NavigatorView({ workspaceId, data }: { workspaceId: string; data
             ))}
           </>
         )}
-        {node && <PaperCard key={node.id} workspaceId={workspaceId} data={data} node={node} grab={grab} grabs={grabs} />}
+        {node && <PaperCard key={node.id} focusHeading={moved} workspaceId={workspaceId} data={data} node={node} grab={grab} grabs={grabs} />}
         {currentId && (isRoot || node) && <NextPapers {...lists} parentId={currentId} dimmed={node?.branch?.state === 'stopped'} />}
       </div>
       {node && <AskPanel workspaceId={workspaceId} node={node} />}

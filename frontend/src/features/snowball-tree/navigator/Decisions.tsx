@@ -51,7 +51,7 @@ export function Decisions({ workspaceId, node, target, isHit, grab }: Props) {
         {target && (
           <>
             <Button type="button" size="sm" {...pressed(state === 'go_further')} onClick={goFurther}>Go further</Button>
-            <Button type="button" size="sm" {...pressed(state === 'stopped')} onClick={() => stop(null)}>Stop here</Button>
+            <Button type="button" size="sm" {...pressed(state === 'stopped')} onClick={() => stop(reason.trim() || null)}>Stop here</Button>
           </>
         )}
       </div>

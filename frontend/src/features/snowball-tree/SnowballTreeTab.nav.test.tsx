@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { api, type ProvenanceOut } from '@/api/client'
 import { SnowballTreeTab } from './SnowballTreeTab'
@@ -52,4 +52,11 @@ test('navPaper opens the card even with no search runs', async () => {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><SnowballTreeTab workspaceId="w1" /></QueryClientProvider>)
   expect(await screen.findByText('Added by hand: no fit score')).toBeTruthy()
   expect(screen.queryByText(/Nothing to draw yet/)).toBeNull()
+})
+
+test('switching away from Navigate clears nav so a reload does not force it back', async () => {
+  setup('#/workspaces/w1?tab=tree&nav=root:r1,A')
+  await screen.findByRole('navigation', { name: 'Snowball path' })
+  fireEvent.click(screen.getByRole('button', { name: 'Outline' }))
+  expect(location.hash).not.toContain('nav=')
 })

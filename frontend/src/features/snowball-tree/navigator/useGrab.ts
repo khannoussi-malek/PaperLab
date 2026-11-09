@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { refreshTree, useSnowball } from '@/api/queries'
-import { friendlySnowballError } from '@/features/workspace-search/snowballText'
+import { friendlySnowballError, skippedSeedsText } from '@/features/workspace-search/snowballText'
 import type { BranchTarget } from '../BranchControl'
 
 export type GrabState = { status: 'pending' } | { status: 'done' } | { status: 'error'; text: string }
@@ -21,7 +21,8 @@ export function useGrab(workspaceId: string): { grabs: Record<string, GrabState>
         seed_paper_ids: 'paper_id' in target ? [target.paper_id] : [],
         ...directions,
       })
-      const failed = Object.values(out.errors)[0]
+      const seed = 'hit_id' in target ? target.hit_id : target.paper_id
+      const failed = Object.values(out.errors)[0] ?? (out.skipped_seeds.includes(seed) ? skippedSeedsText(1) : undefined)
       put(id, failed ? { status: 'error', text: friendlySnowballError(failed) } : { status: 'done' })
       await refreshTree(client, workspaceId)
     } catch (e) {

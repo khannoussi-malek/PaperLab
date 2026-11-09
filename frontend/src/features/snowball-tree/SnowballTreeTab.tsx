@@ -82,7 +82,7 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {view !== 'navigate' && <SnowballNext workspaceId={workspaceId} />}
-      <ViewSwitch value={view} onChange={(v) => { setHasNav(false); setView(v) }} />
+      <ViewSwitch value={view} onChange={(v) => { if (view === 'navigate') writeNav([]); setHasNav(false); setView(v) }} />
       {view !== 'navigate' && <div className="flex flex-wrap items-center gap-3">
         <TreeFilters data={data} value={filters} onChange={changeFilters} runLabels={runLabels} />
         {view === 'tree' && stopped.size > 0 && (

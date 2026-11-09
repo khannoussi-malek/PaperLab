@@ -22,9 +22,9 @@ const hit = (id: string, over: object = {}) => ({
   doi: null, sources: [], suggestion: null, suggestion_relevance: null, suggestion_reason: null, suggestion_quotes: null, ...over,
 }) as unknown as Hit
 
-function setup(data = prov(), nav = '') {
+function setup(data = prov(), nav = '', hitA: object = {}) {
   if (!location.hash.includes('navPaper')) history.replaceState(null, '', nav ? `#/workspaces/w1?tab=tree&nav=${nav}` : '#/workspaces/w1?tab=tree')
-  vi.spyOn(api, 'getSearchHit').mockImplementation(async (_w, id) => hit(id, id === 'A' ? { suggestion: 'include', suggestion_relevance: 4, suggestion_reason: 'It tests the point.', suggestion_quotes: ['we show X'] } : {}))
+  vi.spyOn(api, 'getSearchHit').mockImplementation(async (_w, id) => hit(id, id === 'A' ? { suggestion: 'include', suggestion_relevance: 4, suggestion_reason: null, suggestion_note: 'It tests the point.', suggestion_quotes: ['we show X'], ...hitA } : {}))
   vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([{ id: 'p9', title: 'Library only paper', authors: [], year: 2019, venue: null, abstract: null, has_pdf: false, oa_url: null }] as never)
   vi.spyOn(api, 'provenance').mockResolvedValue(data)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -65,10 +65,10 @@ test('Start from a paper finds tree papers by title fragment', () => {
 test('Step in grows the breadcrumb and updates the URL without a history entry', async () => {
   setup()
   const before = history.length
-  fireEvent.click(within(row('Paper A')).getByRole('button', { name: 'Step in to Paper A' }))
+  fireEvent.click(within(row('Paper A')).getByRole('button', { name: 'Step in ›' }))
   expect(crumbs().getByText('Paper A')).toBeTruthy()
   expect(location.hash).toContain('nav=root:r1,A')
-  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Step in to Paper B' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Step in ›' }))
   expect(crumbs().getByText('Paper B')).toBeTruthy()
   expect(location.hash).toContain('nav=root:r1,A,B')
   expect(history.length).toBe(before)
@@ -103,7 +103,7 @@ test('the card shows the fit, the reason, a quote and the abstract', async () =>
 test('Grab calls snowball for only that hit, then shows the done line', async () => {
   setup(prov(), 'root:r1,A')
   const snow = vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 3, skipped_seeds: [], errors: {} })
-  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Grab next papers for Paper B' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: '⤓ Grab next papers' }))
   expect(within(row('Paper B')).getByText('Grabbing…')).toBeTruthy()
   await waitFor(() => expect(snow).toHaveBeenCalledWith('w1', { seed_hit_ids: ['B'], seed_paper_ids: [], backward: true, forward: true }))
   expect(snow).toHaveBeenCalledTimes(1)
@@ -114,7 +114,7 @@ test('Grab calls snowball for only that hit, then shows the done line', async ()
 test('a Grab error shows the friendly text', async () => {
   setup(prov(), 'root:r1,A')
   vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 0, skipped_seeds: [], errors: { B: 'HTTP 429 from api.semanticscholar.org' } })
-  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Grab next papers for Paper B' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: '⤓ Grab next papers' }))
   expect(await within(row('Paper B')).findByText('Semantic Scholar refused: add a free key in Settings → Paper sources.')).toBeTruthy()
 })
 
@@ -139,7 +139,7 @@ test('Stop here records the branch with a reason field and greys out the list', 
   setup(data, 'root:r1,A')
   expect(screen.getByLabelText('Reason')).toBeTruthy()
   expect(screen.getByTestId('next-papers').className).toContain('opacity-50')
-  expect(within(row('Paper B')).getByRole('button', { name: 'Step in to Paper B' })).toBeTruthy() // still works
+  expect(within(row('Paper B')).getByRole('button', { name: 'Step in ›' })).toBeTruthy() // still works
 })
 
 test('clicking Stop here saves the branch', async () => {
@@ -156,21 +156,21 @@ test.each([
 ])('Summarise now shows the message for %s', async (code, text) => {
   setup(prov(), 'root:r1,A')
   vi.spyOn(api, 'suggestHit').mockRejectedValue(new ApiError(code, 409, { detail: code }))
-  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Summarise Paper B' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Summarise now' }))
   expect(await within(row('Paper B')).findByText(text)).toBeTruthy()
 })
 
 test('Summarise now retries with confirm_remote after the owner agrees', async () => {
   setup(prov(), 'root:r1,A')
   const suggest = vi.spyOn(api, 'suggestHit').mockRejectedValueOnce(new ApiError('x', 409, { detail: 'remote_model_needs_confirm', host: 'api.example.com' })).mockResolvedValue(hit('B', { suggestion_relevance: 2 }))
-  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Summarise Paper B' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Summarise now' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Send' }))
   await waitFor(() => expect(suggest).toHaveBeenLastCalledWith('w1', 'B', true))
 })
 
 test('a refetch keeps the current paper and the breadcrumb', () => {
   const { rerender } = setup(prov(), 'root:r1,A')
-  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Step in to Paper B' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Step in ›' }))
   rerender(prov({ nodes: prov().nodes.map((n) => (n.id === 'B' ? { ...n, decision: 'relevant' } : n)) }))
   expect(crumbs().getByText('Paper B')).toBeTruthy()
   expect(crumbs().getByText('Paper A')).toBeTruthy()
@@ -217,13 +217,89 @@ test('a fetched direction leaves the other one a Find button for just that direc
 test('cancelling the remote question says Not summarised.', async () => {
   setup(prov(), 'root:r1,A')
   vi.spyOn(api, 'suggestHit').mockRejectedValue(new ApiError('x', 409, { detail: 'remote_model_needs_confirm', host: 'h' }))
-  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Summarise Paper B' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Summarise now' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
   expect(await screen.findByText('Not summarised.')).toBeTruthy()
 })
 
-test('a row with a reason shows it under the title', () => {
+test('a row with a reason shows it under the title', async () => {
   const data = prov({ nodes: prov().nodes.map((n) => (n.id === 'B' ? { ...n, reason: 'Tests the point on small data.' } : n)) })
   setup(data, 'root:r1,A')
-  expect(within(row('Paper B')).getByText('Tests the point on small data.')).toBeTruthy()
+  expect(await screen.findByText('Tests the point on small data.')).toBeTruthy()
+})
+
+test('an include shows the AI note; an exclude shows its note, never the raw code', async () => {
+  setup(prov(), 'root:r1,A', { suggestion: 'exclude', suggestion_reason: 'wrong_topic', suggestion_note: 'Not about graphs.' })
+  expect(await screen.findByText('Not about graphs.')).toBeTruthy()
+  expect(screen.queryByText('wrong_topic')).toBeNull()
+})
+
+test('a reload of nav=root:hand,paper:x with no tree node keeps both entries, no notice', async () => {
+  setup(prov(), 'root:hand,paper:p9')
+  expect(await crumbs().findByText('Library only paper')).toBeTruthy()
+  expect(crumbs().getByText('Added by hand')).toBeTruthy()
+  expect(sileo.info).not.toHaveBeenCalled()
+  expect(location.hash).toContain('nav=root:hand,paper:p9')
+})
+
+test('a navPaper that is neither in the tree nor in the library shows the stale notice', async () => {
+  history.replaceState(null, '', '#/workspaces/w1?tab=tree&navPaper=zzz')
+  setup(prov())
+  await waitFor(() => expect(sileo.info).toHaveBeenCalledWith(expect.objectContaining({ title: 'This path changed; showing the part that still exists.' })))
+  expect(screen.queryByRole('navigation', { name: 'Snowball path' })).toBeNull()
+  expect(location.hash).not.toContain('zzz')
+})
+
+test('Step in moves focus to the new card heading; the first paint does not', () => {
+  setup(prov(), 'root:r1,A')
+  expect(document.activeElement).not.toBe(screen.getByRole('heading', { name: 'Paper A' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Step in ›' }))
+  expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Paper B' }))
+})
+
+test('a seed Semantic Scholar does not know is an error on the card button and on a row', async () => {
+  setup(prov(), 'root:r1,A,B')
+  vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 0, skipped_seeds: ['B'], errors: {} })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Find citing & cited papers' })[0])
+  expect(screen.getByRole('button', { name: 'Snowballing…' })).toBeTruthy()
+  expect(await screen.findByText('Skipped 1 seed(s) with no Semantic Scholar match.')).toBeTruthy()
+})
+
+test('a row whose paper was snowballed before shows the grabbed line with totals', () => {
+  setup()
+  expect(within(row('Paper A')).getByText('✓ grabbed · 1 cites · 1 citing')).toBeTruthy()
+  expect(within(row('Paper D')).getByText('⤓ Grab next papers')).toBeTruthy()
+})
+
+test.each([
+  [['no_abstract'], 'No abstract to read yet.'],
+  [['model_error'], 'The AI could not read this paper.'],
+])('Summarise now with flags %s says so', async (flags, text) => {
+  setup(prov(), 'root:r1,A')
+  vi.spyOn(api, 'suggestHit').mockResolvedValue(hit('B', { suggestion_flags: flags }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Summarise now' }))
+  expect(await within(row('Paper B')).findByText(text)).toBeTruthy()
+})
+
+test('Summarise now with no model set up points to Settings', async () => {
+  setup(prov(), 'root:r1,A')
+  vi.spyOn(api, 'suggestHit').mockRejectedValue(new ApiError('no_model', 409, { detail: 'no_model' }))
+  fireEvent.click(within(row('Paper B')).getByRole('button', { name: 'Summarise now' }))
+  expect(await within(row('Paper B')).findByText('No AI model is set up. Add one in Settings → AI.')).toBeTruthy()
+})
+
+test('the current crumb is aria-current=page and row buttons are described by the row title', () => {
+  setup(prov(), 'root:r1,A')
+  expect(crumbs().getByRole('button', { name: 'Paper A' }).getAttribute('aria-current')).toBe('page')
+  expect(crumbs().getByRole('button', { name: '🔍 graph search' }).getAttribute('aria-current')).toBeNull()
+  const step = within(row('Paper B')).getByRole('button', { name: 'Step in ›' })
+  expect(document.getElementById(step.getAttribute('aria-describedby')!)?.textContent).toBe('Paper B')
+})
+
+test('Stop here again keeps the stored reason', async () => {
+  const data = prov({ nodes: prov().nodes.map((n) => (n.id === 'A' ? { ...n, branch: { state: 'stopped', directions: [], reason: 'too general' } } : n)) })
+  setup(data, 'root:r1,A')
+  const branch = vi.spyOn(api, 'setBranch').mockResolvedValue({} as never)
+  fireEvent.click(screen.getByRole('button', { name: 'Stop here' }))
+  await waitFor(() => expect(branch).toHaveBeenCalledWith('w1', { hit_id: 'A', state: 'stopped', directions: [], reason: 'too general' }))
 })

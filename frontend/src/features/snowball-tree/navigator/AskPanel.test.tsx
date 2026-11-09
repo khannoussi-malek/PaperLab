@@ -27,13 +27,13 @@ function mount(n: ProvNode) {
 
 test('a hit without a paper reads the abstract only', async () => {
   mount(node('A'))
-  expect(await screen.findByText('Reads: abstract only')).toBeTruthy()
+  expect(await screen.findByText('Reads: Paper A (abstract only)')).toBeTruthy()
   expect(screen.getByRole('heading', { name: 'Ask the AI' })).toBeTruthy()
 })
 
 test('a hit with a library file reads the full text', async () => {
   mount(node('B'))
-  expect(await screen.findByText('Reads: full text')).toBeTruthy()
+  expect(await screen.findByText('Reads: Paper B (full text)')).toBeTruthy()
 })
 
 test('questions about a hit post to the hit chat URL', async () => {
@@ -49,7 +49,7 @@ test('questions about a hit post to the hit chat URL', async () => {
 test('a library paper uses the paper chat and its file', async () => {
   const listChat = vi.spyOn(api, 'listChat')
   mount(node('paper:p9', { paper_id: 'p9' }))
-  expect(await screen.findByText('Reads: full text')).toBeTruthy()
+  expect(await screen.findByText('Reads: Lib (full text)')).toBeTruthy()
   await waitFor(() => expect(listChat).toHaveBeenCalledWith({ kind: 'paper', id: 'p9' }))
 })
 
@@ -67,4 +67,29 @@ test('the panel folds and unfolds', async () => {
   expect(screen.queryByLabelText('Question')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Ask the AI' }))
   expect(await screen.findByLabelText('Question')).toBeTruthy()
+})
+
+test('the Reads line follows what the first stream event says the AI read', async () => {
+  fetchSpy.mockResolvedValue(new Response('event: meta\ndata: {"source":"full_text"}\n\n', { headers: { 'content-type': 'text/event-stream' } }))
+  mount(node('A'))
+  expect(await screen.findByText('Reads: Paper A (abstract only)')).toBeTruthy()
+  const box = await screen.findByLabelText('Question')
+  await waitFor(() => expect((box as HTMLTextAreaElement).disabled).toBe(false))
+  fireEvent.change(box, { target: { value: 'What is new?' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
+  expect(await screen.findByText('Reads: Paper A (full text)')).toBeTruthy()
+})
+
+test('below 900px the drawer takes focus when opened and Escape closes it', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }))
+  try {
+    mount(node('A'))
+    fireEvent.click(screen.getByRole('button', { name: 'Ask the AI' }))
+    const drawer = await screen.findByRole('complementary', { name: 'Ask the AI' })
+    await waitFor(() => expect(document.activeElement).toBe(drawer))
+    fireEvent.keyDown(drawer, { key: 'Escape' })
+    expect(screen.queryByRole('complementary', { name: 'Ask the AI' })).toBeNull()
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })

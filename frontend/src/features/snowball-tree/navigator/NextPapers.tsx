@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { ProvenanceOut, ProvNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -19,9 +20,10 @@ type Props = {
   dimmed?: boolean
 }
 
-function grabLine(id: string, data: ProvenanceOut, state: GrabState | undefined) {
+export function grabLine(node: ProvNode, data: ProvenanceOut, state: GrabState | undefined) {
+  const id = node.id
   if (state?.status === 'pending') return 'Grabbing…'
-  if (state?.status === 'done') return `✓ grabbed · ${childrenOf(data, id, 'cites').length} cites · ${childrenOf(data, id, 'cited_by').length} citing`
+  if (state?.status === 'done' || node.snowballed.length > 0) return `✓ grabbed · ${childrenOf(data, id, 'cites').length} cites · ${childrenOf(data, id, 'cited_by').length} citing`
   return '⤓ Grab next papers'
 }
 
@@ -30,10 +32,11 @@ function Row({ node, kind, workspaceId, data, onStep, grab, grabs, parentId }: {
   const isHit = target !== null && 'hit_id' in target
   const fit = node.relevance ?? null // from the tree, so a row costs no request; the card reads the full hit
   const state = grabs[node.id]
+  const titleId = useId() // the buttons keep their visible text as their name and point at the title for context
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 text-sm">
       <div className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate font-medium" title={node.title}>{node.title}</span>
+        <span id={titleId} className="min-w-0 flex-1 truncate font-medium" title={node.title}>{node.title}</span>
         {node.year ? <span className="shrink-0 text-xs text-muted-foreground">{node.year}</span> : null}
       </div>
       {node.reason && <p className="line-clamp-1 text-xs text-muted-foreground">{node.reason}</p>}
@@ -41,17 +44,17 @@ function Row({ node, kind, workspaceId, data, onStep, grab, grabs, parentId }: {
         {!isHit ? <span>no fit score</span> : fit != null ? <span className="rounded-full bg-muted px-2 py-0.5">{`fits ${fit}/5`}</span> : (
           <>
             <span className="rounded-full bg-muted px-2 py-0.5">not read yet</span>
-            <SummariseNow workspaceId={workspaceId} hitId={node.id} label={`Summarise ${node.title}`} />
+            <SummariseNow workspaceId={workspaceId} hitId={node.id} describedBy={titleId} />
           </>
         )}
         <span className="text-muted-foreground">{decisionWord(node.decision)}</span>
         <span className="flex-1" />
         {target && (
-          <Button type="button" size="xs" variant="ghost" aria-label={`Grab next papers for ${node.title}`} disabled={state?.status === 'pending'} onClick={() => grab(node.id, target)}>
-            {grabLine(node.id, data, state)}
+          <Button type="button" size="xs" variant="ghost" aria-describedby={titleId} disabled={state?.status === 'pending'} onClick={() => grab(node.id, target)}>
+            {grabLine(node, data, state)}
           </Button>
         )}
-        <Button type="button" size="xs" aria-label={`Step in to ${node.title}`} onClick={() => onStep(parentId, node.id, kind)}>Step in ›</Button>
+        <Button type="button" size="xs" aria-describedby={titleId} onClick={() => onStep(parentId, node.id, kind)}>Step in ›</Button>
       </div>
       {state?.status === 'error' && <p role="alert" className="text-xs text-destructive">{state.text}</p>}
     </li>

@@ -42,7 +42,7 @@ export function parseNav(param: string, data: ProvenanceOut): { path: NavEntry[]
     }
     const main = parents.get(id)
     const link = main?.parent === prev.id ? main : data.links.find((l) => l.parent === prev.id && l.child === id)
-    const handPaper = prev.id === 'root:hand' && id.startsWith('paper:') && data.nodes.some((n) => n.id === id)
+    const handPaper = prev.id === 'root:hand' && id.startsWith('paper:') // a library paper added by hand may have no tree node; the card reads it from the library
     if (!link && !handPaper) break
     path.push({ id, via: link ? viaOf(link.kind) : 'search' })
   }
