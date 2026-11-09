@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redact import redact
+from app.models import Paper
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
 from app.schemas.workspace_search import PrescreenCounts, SourceResult
 
@@ -123,3 +124,30 @@ async def prescreen_counts(session: AsyncSession, run_ids: list[uuid.UUID]) -> d
         ).where(hit.run_id.in_(run_ids)).group_by(hit.run_id)
     )
     return {row[0]: PrescreenCounts(judged=row[1], not_judged=row[2], not_asked=row[3]) for row in rows.all()}
+
+
+async def run_labels(session: AsyncSession, runs: Iterable[WorkspaceSearchRun]) -> dict[uuid.UUID, str]:
+    """Each run's display name. Snowball runs from before the snowball tree stored "snowball (N seed paper(s))" and no
+    stats; they read `Snowball from "<seed title>"` from their hits' seeds instead (display only, nothing is rewritten)."""
+    runs = list(runs)
+    labels = {r.id: r.query_text for r in runs}
+    old = [r.id for r in runs if r.query_text.startswith("snowball (") and "snowball" not in (r.stats_json or {})]
+    if not old:
+        return labels
+    rows = (await session.execute(
+        select(WorkspaceSearchHit.run_id, Paper.title)
+        .join(Paper, Paper.id == WorkspaceSearchHit.seed_paper_id)
+        .where(WorkspaceSearchHit.run_id.in_(old))
+        .group_by(WorkspaceSearchHit.run_id, WorkspaceSearchHit.seed_paper_id, Paper.title)
+        .order_by(WorkspaceSearchHit.run_id, Paper.title)
+    )).all()
+    titles: dict[uuid.UUID, list[str]] = {}
+    for run_id, title in rows:
+        titles.setdefault(run_id, []).append(title)
+    for run_id in old:
+        seeds = titles.get(run_id)
+        labels[run_id] = (
+            f'Snowball from "{seeds[0]}"' + (f" and {len(seeds) - 1} more" if len(seeds) > 1 else "")
+            if seeds else "Snowball (older run)"
+        )
+    return labels

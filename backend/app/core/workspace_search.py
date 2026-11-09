@@ -478,7 +478,8 @@ async def run_out(session: AsyncSession, run: WorkspaceSearchRun) -> SearchRunOu
     )
     left = await sources_left(session, [run.id])
     report = (await _reports(session, [(run, hit_count or 0)]))[run.id]
-    return SearchRunOut.model_validate(run).with_report(left.get(run.id, []), report)
+    label = (await search_run_results.run_labels(session, [run]))[run.id]
+    return SearchRunOut.model_validate(run).model_copy(update={"query_text": label}).with_report(left.get(run.id, []), report)
 
 
 async def run_summaries(
@@ -486,7 +487,8 @@ async def run_summaries(
 ) -> list[SearchRunSummary]:
     left = await sources_left(session, [run.id for run, _ in rows])
     reports = await _reports(session, rows)
-    return [SearchRunSummary.from_run(run, left.get(run.id, []), reports[run.id]) for run, _ in rows]
+    labels = await search_run_results.run_labels(session, [run for run, _ in rows])
+    return [SearchRunSummary.from_run(run, left.get(run.id, []), reports[run.id], labels[run.id]) for run, _ in rows]
 
 
 async def stop_run(session: AsyncSession, run_id, workspace_id=None) -> WorkspaceSearchRun:
