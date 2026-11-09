@@ -59,28 +59,40 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
           <p className="truncate">{title}</p>
           {byline && <p className="truncate text-xs text-muted-foreground">{byline}</p>}
         </div>
-        <a
-          href={`https://scholar.google.com/scholar?q=${encodeURIComponent(title)}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Search by title
-        </a>
-        {openPage && (
-          <a href={openPage} target="_blank" rel="noreferrer">
-            Open page
-          </a>
-        )}
-        {hit.doi && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => copyDoi(hit.doi!)}>
-            Copy DOI
-          </Button>
-        )}
-        <UploadPdfButton
-          title={title}
-          disabled={upload.isPending}
-          onPick={(file, onFail) => upload.mutate({ hitId: hit.id, file }, { onError: onFail })}
-        />
+        {/* Four fixed slots, so the actions line up down the list; an unavailable action leaves its slot empty. */}
+        {/* Below sm the slots wrap in a flex row with Upload PDF first; from sm up they form the aligned grid. */}
+        <div className="flex flex-wrap items-center gap-2 sm:grid sm:grid-cols-[7rem_5rem_5.5rem_auto]">
+          <div data-slot="action" className="whitespace-nowrap">
+            <a
+              href={`https://scholar.google.com/scholar?q=${encodeURIComponent(title)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Search by title
+            </a>
+          </div>
+          <div data-slot="action" aria-hidden={openPage ? undefined : true} className="whitespace-nowrap empty:hidden sm:empty:block">
+            {openPage && (
+              <a href={openPage} target="_blank" rel="noreferrer">
+                Open page
+              </a>
+            )}
+          </div>
+          <div data-slot="action" aria-hidden={hit.doi ? undefined : true} className="empty:hidden sm:empty:block">
+            {hit.doi && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => copyDoi(hit.doi!)}>
+                Copy DOI
+              </Button>
+            )}
+          </div>
+          <div data-slot="action" className="order-first sm:order-none">
+            <UploadPdfButton
+              title={title}
+              disabled={upload.isPending}
+              onPick={(file, onFail) => upload.mutate({ hitId: hit.id, file }, { onError: onFail })}
+            />
+          </div>
+        </div>
         {hit.acquisition_status === 'awaiting_pdf' && hit.paper_id && <FindFreeCopy paperId={hit.paper_id} title={title} />}
       </div>
     )

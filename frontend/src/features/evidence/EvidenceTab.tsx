@@ -7,10 +7,15 @@ import { LoadError } from '@/features/library/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { workspaceHref } from '@/lib/route'
 import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 import { Making, NeedsFullText } from './EvidenceBits'
 import { EvidenceCell } from './EvidenceCell'
 import { FIELDS, errorWords, failureReason } from './evidenceFields'
+
+/** One rule for "Needs the full text": no card to read, none being made, and no PDF to make one from. */
+const needsFullText = (row: EvidenceCardRow, noPdf: boolean) =>
+  row.card?.status !== 'ready' && row.card?.status !== 'generating' && noPdf
 
 /** The workspace Evidence tab: one row per paper, one column per card field. */
 export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
@@ -21,6 +26,8 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
   // "Generate cards" skips these on the server; their rows say why instead of offering a Generate that would fail.
   const papers = useWorkspacePapers(workspaceId)
   const withoutPdf = new Set(papers.data?.filter((p) => p.has_pdf === false).map((p) => p.id))
+  // Rows that show "Needs the full text": no card to read yet and no PDF to make one from.
+  const needPdf = rows.data?.filter((r) => needsFullText(r, withoutPdf.has(r.paper_id))).length ?? 0
   const error = generateMissing.error ?? generateOne.error
   const generating = rows.data?.filter((r) => r.card?.status === 'generating').length ?? 0
 
@@ -44,6 +51,16 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
           </span>
         )}
       </div>
+      {needPdf > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {needPdf === 1
+            ? '1 paper needs its PDF before AI can read it.'
+            : `${needPdf} papers need their PDF before AI can read them.`}{' '}
+          <Button variant="link" size="sm" className="h-auto p-0" asChild>
+            <a href={workspaceHref(workspaceId, 'papers')}>Show them on the Papers tab</a>
+          </Button>
+        </p>
+      )}
       {rows.error && <LoadError message={rows.error.message} onRetry={() => void rows.refetch()} />}
       {error && <Alert variant="destructive"><AlertDescription>{errorWords(error.message)}</AlertDescription></Alert>}
       {rows.isPending && <TabSkeleton label="Loading evidence cards" />}
@@ -123,7 +140,7 @@ function PaperRow({ row, workspaceId, hasPdf, onGenerate }: RowProps) {
         <TableCell colSpan={FIELDS.length} className="align-top">
           {card?.status === 'generating' ? (
             <Making title={title} />
-          ) : !hasPdf ? (
+          ) : needsFullText(row, !hasPdf) ? (
             <NeedsFullText />
           ) : (
             <div className="flex flex-wrap items-center gap-3 text-sm">
