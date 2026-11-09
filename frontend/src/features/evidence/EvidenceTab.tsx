@@ -49,9 +49,11 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
       </div>
       {needPdf > 0 && (
         <p className="text-sm text-muted-foreground">
-          {needPdf} {needPdf === 1 ? 'paper needs' : 'papers need'} their PDF before AI can read {needPdf === 1 ? 'it' : 'them'}.{' '}
+          {needPdf === 1
+            ? '1 paper needs its PDF before AI can read it.'
+            : `${needPdf} papers need their PDF before AI can read them.`}{' '}
           <Button variant="link" size="sm" className="h-auto p-0" asChild>
-            <a href={workspaceHref(workspaceId, 'acquisition')}>Go to Get PDFs</a>
+            <a href={workspaceHref(workspaceId, 'papers')}>Show them on the Papers tab</a>
           </Button>
         </p>
       )}

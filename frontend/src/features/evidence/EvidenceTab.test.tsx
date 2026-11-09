@@ -162,14 +162,24 @@ test('a needs_full_text refusal reads in words, never as the raw code', async ()
   expect(screen.queryByText('needs_full_text')).toBeNull()
 })
 
-test('a header counts the papers that need a PDF and links to Get PDFs', async () => {
+test('a header counts the papers that need a PDF and links to the Papers tab', async () => {
   vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(null, 'p1', 'A'), row(null, 'p2', 'B'), row(null, 'p3', 'C')])
   vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([
     { id: 'p1', has_pdf: false }, { id: 'p2', has_pdf: false }, { id: 'p3', has_pdf: true },
   ] as Awaited<ReturnType<typeof api.listWorkspacePapers>>)
   renderTab()
-  expect(await screen.findByText(/2 papers need their PDF before AI can read them\./)).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Go to Get PDFs' }).getAttribute('href')).toContain('tab=acquisition')
+  expect(await screen.findByText('2 papers need their PDF before AI can read them.')).toBeInTheDocument()
+  const link = screen.getByRole('link', { name: 'Show them on the Papers tab' })
+  // Papers is the default tab, so workspaceHref omits the tab param.
+  expect(link.getAttribute('href')).not.toContain('tab=')
+  expect(link.getAttribute('href')).not.toContain('acquisition')
+})
+
+test('a header uses singular wording when one paper needs a PDF', async () => {
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(null, 'p1', 'A')])
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([{ id: 'p1', has_pdf: false }] as Awaited<ReturnType<typeof api.listWorkspacePapers>>)
+  renderTab()
+  expect(await screen.findByText('1 paper needs its PDF before AI can read it.')).toBeInTheDocument()
 })
 
 test('no header line when every paper has its PDF', async () => {
