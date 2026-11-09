@@ -99,6 +99,6 @@ async def test_suggest_one_remote_needs_confirm(session, use_llm, client):
     workspace, hit = await _pool(session)
     url = f"/api/workspaces/{workspace.id}/search/hits/{hit.id}/suggest"
     refused = await client.post(url, json={"confirm_remote": False})
-    assert (refused.status_code, refused.json()["error"]["code"]) == (409, "remote_model_needs_confirm")
+    assert (refused.status_code, refused.json()["detail"]) == (409, "remote_model_needs_confirm")
     ok = await client.post(url, json={"confirm_remote": True})
     assert (ok.status_code, ok.json()["suggestion"]) == (200, "include")
