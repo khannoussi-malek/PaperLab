@@ -10,7 +10,7 @@ import { manuscriptHref } from '@/lib/route'
 import { manuscriptErrorMessage, manuscriptFailure } from './errors'
 
 // The server's rules (manuscript_paths.py), checked here first so a typo is caught before a round trip.
-const TEXT = ['tex', 'bib', 'sty', 'cls', 'bst', 'txt', 'md', 'csv', 'dat', 'clo', 'def', 'cfg', 'bbx', 'cbx', 'tikz', 'pgf']
+const TEXT = ['tex', 'bib', 'sty', 'cls', 'bst', 'txt', 'md', 'csv', 'dat', 'json', 'clo', 'def', 'cfg', 'bbx', 'cbx', 'tikz', 'pgf']
 const BINARY = ['png', 'jpg', 'jpeg', 'pdf']
 const SEGMENT = /^[A-Za-z0-9._-]+$/
 const RESERVED = 'paperlab.bib'

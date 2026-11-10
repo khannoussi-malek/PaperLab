@@ -26,3 +26,8 @@ def test_accepted_paths():
 @pytest.mark.parametrize("name", ["a.clo", "b.def", "c.cfg", "style.bbx", "style.cbx", "fig.tikz", "plot.pgf"])
 def test_tex_support_files_are_text(name):
     assert validate_path(name) == name and is_text(name)
+
+
+def test_json_data_files_are_text():
+    # S2P B4: results.json is ground truth for numbers.unbacked
+    assert validate_path("data/results.json") == "data/results.json" and is_text("data/results.json")
