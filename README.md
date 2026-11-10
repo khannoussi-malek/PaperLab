@@ -183,13 +183,83 @@ the newest answer until you press ×.
 - Ask for notes ("create notes to help me understand the method") and each note the answer suggests shows as a card
 with **Save**. A saved note is marked AI, keeps the answer's exact words, and belongs to the papers it cites.
 
+**Run a systematic review**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-systematic-review-dark.png">
+  <img alt="Search results screened against the criteria: AI suggestions with a score next to the researcher’s own decisions, one AI include overruled as wrong topic, and the PRISMA counts from 357 identified to 28 included, with Copy as text and Download CSV." src=".github/assets/feature-systematic-review.png">
+</picture>
+
+- Search many paper sources with one query and a year range from a workspace's **Search & screen** tab. Each run
+records what every source returned.
+- Save a search to run again on a schedule, daily or weekly; new results land in the workspace for screening.
+- Write the research question and the inclusion and exclusion criteria first. **Suggest for unscreened results** has a
+model judge each title and abstract against them: include, exclude or unsure, with a score and the quotes behind it. A
+suggestion never counts as a decision. You accept or overrule it, one by one or in bulk, with a reason for each
+exclusion. A remote model is only used after you confirm what will be sent.
+- **Get PDFs** fetches free copies of the papers you keep, **Full-text review** records your include or exclude after
+reading, and the **Reading list** holds what's left to read.
+- The **PRISMA report** counts every step of the PRISMA 2020 flow, with the exclusion reasons and citation searching on
+its own line. **Copy as text** or **Download CSV** for your methods section.
+
+**Snowball both ways**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-snowball-dark.png">
+  <img alt="The Snowball tree around a seed paper: cited papers on the left and citing papers on the right, each marked included, excluded or without a free PDF, and a note on stepping into a paper and running the next hop." src=".github/assets/feature-snowball.png">
+</picture>
+
+- From a search result or a paper, **Find citing & cited papers** fetches what it cites and what has cited it, one hop
+through Semantic Scholar. New papers land in the results for screening.
+- The **Snowball tree** tab shows how every paper reached the workspace, from a search or a citation, as a tree, a
+radial view, a map or an outline. Decide a whole branch at once, and **Run all** fetches the next hop.
+- **Navigate** walks the snowball one paper at a time, with a breadcrumb, the paper's card and a chat about it.
+
+**Pull out the evidence**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-evidence-dark.png">
+  <img alt="An AI evidence card for one paper: design, sample, findings and limitations, each with its page, and a research question left out because no quote supports it, beside the page the design quote comes from." src=".github/assets/feature-evidence.png">
+</picture>
+
+- **Generate cards** on a workspace's **Evidence** tab. For each paper a model lists the research question, design,
+sample, findings, effect sizes and limitations.
+- Every value quotes the passage it came from, with its page. A value no quote supports is left out and counted, never
+filled in.
+- Cards are marked AI. Edit a value and the card shows AI · edited. Export the whole table as CSV.
+
+**Write your paper**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-writing-dark.png">
+  <img alt="A related-work section in the writing studio: each cited sentence checked against its paper, three supported, one partly, and one flagged as not addressed, with History showing a version saved before a Claude edit and the list of checks." src=".github/assets/feature-writing.png">
+</picture>
+
+- Start a manuscript from a template (article, IEEE, ACM, LNCS or Elsevier) in a workspace's **Write** tab. The
+workspace's papers become `paperlab.bib`, and `\cite{` completes from them.
+- **Compile** to PDF in the app, then download the PDF, the LaTeX source, or both.
+- **Review → Check citations** compares each cited sentence with the paper it cites and says whether it supports it,
+partly supports it, doesn't support it or doesn't address it, with the passage and its page.
+- **Check** flags wording, LaTeX and reference problems, numbers that no data backs, and pages over the venue's limit.
+A DOI check is opt-in.
+- Every save keeps an earlier version in **History**, including the one before each edit by Claude.
+- **Export citations** gives a workspace's papers as BibTeX, RIS, CSL-JSON or APA 7.
+
 **Use your library from Claude Desktop**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-claude-dark.png">
+  <img alt="Claude calling PaperLab over MCP to search the library and save a note, and that note shown as an AI card on the passage it quotes, page 5." src=".github/assets/feature-claude.png">
+</picture>
 
 - Connect Claude Desktop, Claude Code or another MCP client to PaperLab
 ([how](#use-paperlab-from-claude-desktop)). It can search your papers, read a paper's details, reading pass, outline
 and notes, find the papers in your library connected to one (a shared workspace, note, author or topic, or a
 citation), and save a note on a passage it quotes.
 - A note it saves is marked AI, like a note saved from chat, and is highlighted on the lines it quoted.
+- It can also run searches and snowballs, read screening suggestions and record the decisions you ask for, build
+evidence cards, check a claim against the papers it cites, and write and compile manuscripts. Each manuscript write
+keeps an earlier version you can restore.
 
 **Install it as an app**
 
