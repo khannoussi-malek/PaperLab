@@ -26,6 +26,7 @@ TABLES = re.compile(r"\\begin\{(tabular\*?|tabularx|tabulary|longtable\*?|tabu)\
 TABLE_ARG = re.compile(r"\s*(?:\[[^\]]*\])?\s*\{(?:[^{}]|\{[^{}]*\})*\}")  # [pos]{spec}: p{2.5cm} is not a cell
 WIDTH_FIRST = {"tabular*", "tabularx", "tabulary"}  # {width}{spec}
 MAX_PER_FILE = 25  # calibration knob: a wrong data file would otherwise flood the panel
+MAX_DATA_BYTES = 512 * 1024  # ponytail: calibration knob; bigger data files are skipped, add streaming if needed
 LINKS = re.compile(
     r"\\(?:[cC]ref|autoref|eqref|pageref|nameref|vref|url|href|doi|includegraphics)\*?"
     r"(?:\[[^\]]*\])?\{[^}]*\}"
@@ -275,6 +276,18 @@ def harvest(files: Mapping[str, str], blanked: Mapping[str, str]) -> Truth | Non
     pairs: list[tuple[float, str]] = []
     problems = []
     for path in data:
+        if len(files[path].encode()) > MAX_DATA_BYTES:
+            problems.append(
+                Finding(
+                    NAME,
+                    "info",
+                    path,
+                    None,
+                    "This data file is too large to read for number checks (over 512 KB).",
+                    None,
+                )
+            )
+            continue
         read = _csv if path.lower().endswith(".csv") else _json
         try:
             pairs.extend(read(path, files[path]))
@@ -384,6 +397,8 @@ def _file(path: str, blanked: str, truth: Truth) -> list[Finding]:
     scan = prose(blanked)
     found = []
     for m in NUMBER.finditer(scan):
+        if len(found) > MAX_PER_FILE:
+            break  # enough to fill the cap and the summary: the rest is only counted in words, never built
         num, percent = m["num"].replace(",", ""), m["pct"] is not None
         if "." not in num and not percent:
             continue  # bare integers are counts, years and constants
@@ -418,14 +433,13 @@ def _file(path: str, blanked: str, truth: Truth) -> list[Finding]:
                 )
             )
     if len(found) > MAX_PER_FILE:
-        rest = len(found) - MAX_PER_FILE
         found = found[:MAX_PER_FILE] + [
             Finding(
                 NAME,
                 "info",
                 path,
                 found[MAX_PER_FILE].line,
-                f"{rest} more numbers in {path} match no data; only the first {MAX_PER_FILE} are listed",
+                f"More numbers in {path} match no data; only the first {MAX_PER_FILE} are listed",
                 None,
             )
         ]

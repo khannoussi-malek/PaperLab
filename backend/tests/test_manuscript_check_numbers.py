@@ -240,8 +240,26 @@ def test_a_plain_unmatched_percent_is_still_a_warning():
 def test_more_than_the_cap_gives_one_info_summary():
     found = run("\n".join(f"Ours reaches {i}.5 here." for i in range(100, 130)))
     assert [f.severity for f in found].count("warning") == 25
-    assert found[-1].severity == "info" and found[-1].message.startswith("5 more numbers in main.tex")
+    assert found[-1].severity == "info" and found[-1].message.startswith("More numbers in main.tex match no data")
     assert found[-1].line == 26
+
+
+def test_a_thousand_unbacked_numbers_stay_cheap_and_capped():
+    text = "\n".join(f"Ours reaches {i}.5 here." for i in range(100, 1100))
+    start = time.perf_counter()
+    found = run(text)
+    assert time.perf_counter() - start < 0.5
+    assert len(found) <= numbers.MAX_PER_FILE + 1
+    assert found[-1].severity == "info" and "match no data" in found[-1].message
+
+
+def test_a_data_file_over_512_kb_is_skipped_with_one_info():
+    big = "value\n77.7\n" + "a" * (600 * 1024)
+    [f] = run({"big.csv": big, "main.tex": "We reach 77.7 here."})
+    assert (f.check, f.file, f.line, f.severity) == ("numbers.unbacked", "big.csv", None, "info")
+    assert f.message == "This data file is too large to read for number checks (over 512 KB)."
+    found = run({**DATA, "big.csv": big, "main.tex": "We reach 77.7 here."})
+    assert [f.severity for f in found] == ["info", "warning"]  # 77.7 is not backed by the skipped file
 
 
 def test_data_bib_and_markdown_files_are_not_scanned_as_prose():
