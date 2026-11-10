@@ -29,6 +29,22 @@ that cite the passages they used, then keep the useful parts as notes.
 The note is the main thing in PaperLab, not the chat. Anything an AI wrote is stored apart from what you wrote and is
 always marked as AI in the interface.
 
+## Try it
+
+PaperLab is free and open source, and on a Mac it takes three commands with [Homebrew](https://brew.sh/):
+
+```sh
+brew install --cask docker-desktop   # PaperLab runs on Docker: open Docker Desktop once after this
+brew tap khannoussi-malek/paperlab https://github.com/khannoussi-malek/PaperLab
+brew install --cask khannoussi-malek/paperlab/paperlab
+```
+
+Then open **PaperLab** from Applications. Homebrew picks the right build for Apple silicon or Intel, and macOS opens it
+without the Open Anyway step. On Windows or Linux, or without Homebrew, see the [Quick start](#quick-start).
+
+Give it a try with a few of your own papers, and tell me how it went, good or bad, in an
+[issue](https://github.com/khannoussi-malek/PaperLab/issues) or on [LinkedIn](https://www.linkedin.com/company/os-paperlab).
+
 ## See it in action
 
 https://github.com/user-attachments/assets/6cc6f05f-3b3c-4352-9acd-09bc32686423
