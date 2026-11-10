@@ -21,3 +21,5 @@ research_notes/
 # Long-documents research: benchmark, questions, results and write-up stay local
 backend/evals/longdocs/
 backend/evals/long-documents.md
+# Demo video project (captures, review log, sources, render code): local only; the video is embedded in README
+demo-video/
