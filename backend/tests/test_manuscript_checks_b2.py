@@ -18,7 +18,7 @@ def test_registry_holds_the_fifteen_checks_all_cheap_and_no_doi_check():
     names = [c.name for c in REGISTRY]
     assert set(NAMES) <= set(names)  # the 15 B2 checks; later families (pdf.*) add to them
     assert all(c.cost == "cheap" for c in REGISTRY if c.name in NAMES)
-    assert [c.name for c in select(cost="cheap")] == [n for n in names if n in NAMES]
+    assert set(NAMES) <= {c.name for c in select(cost="cheap")}  # later families (numbers.*) add to the cheap set
 
 
 async def test_a_real_run_gives_a_finding_from_each_family(session):
