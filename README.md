@@ -29,6 +29,16 @@ that cite the passages they used, then keep the useful parts as notes.
 The note is the main thing in PaperLab, not the chat. Anything an AI wrote is stored apart from what you wrote and is
 always marked as AI in the interface.
 
+## See it in action
+
+https://github.com/user-attachments/assets/6cc6f05f-3b3c-4352-9acd-09bc32686423
+
+A 3½-minute narrated walkthrough of a small literature review run end to end in PaperLab, on one question: how do
+developers decide whether to accept, verify or reject AI code suggestions? Every app screen in it is a real capture
+from that review: the saved search and snowballing, AI suggestions next to the researcher's own decisions, the PRISMA
+counts, evidence cards, a citation check that catches a planted overstatement, citations that open the exact passage,
+and Claude working on the same library through the MCP server.
+
 ## What you can do
 
 **Build a library**
