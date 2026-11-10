@@ -255,3 +255,61 @@ def test_thesis_sized_manuscript_is_fast():
     start = time.perf_counter()
     assert len(run({"results.csv": data, "main.tex": text})) == 1
     assert time.perf_counter() - start < 2.0  # target 200 ms; prototype measured ~80 ms on the dev Mac
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We use a significance level of 0.01 here.",
+        "We use a significance level 0.05 here.",
+        "Alpha level 0.05 is used here.",
+        "We set an alpha of 0.05 here.",
+    ],
+)
+def test_significance_and_alpha_levels_are_exempt(text):
+    assert run(text) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We use gamma 0.99 here.",
+        "We use a discount factor of 1.0 here.",
+        "We use a threshold of 0.5 here.",
+        "We use temperature 0.7 here.",
+        "We use a 0.75 sampling rate here.",
+        "We sample with top-p 0.9 here.",
+        "We sample with top p 0.9 here.",
+    ],
+)
+def test_hyperparameter_cues_are_exempt(text):
+    assert run(text) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We split the data 0.8/0.1/0.1 for training, validation and test.",
+        "We split the data 80/10/10 for training, validation and test.",
+    ],
+)
+def test_split_ratios_are_exempt(text):
+    assert run(text) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "It costs $12.50 per GPU hour.",
+        "It costs \\$12.50 per GPU hour.",
+        "It costs €3.20 here.",
+        "It costs £4.50 here.",
+    ],
+)
+def test_currency_amounts_are_exempt(text):
+    assert run(text) == []
+
+
+def test_one_huge_integer_skips_only_that_value():
+    text = '{"big": ' + "9" * 400 + ', "v": 91.3}'
+    assert run({"r.json": text, "main.tex": "We reach 91.3 here."}) == []

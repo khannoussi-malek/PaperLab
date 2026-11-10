@@ -133,16 +133,24 @@ CUE_WORDS = {  # a decimal right after one of these is a reference or a version,
 }
 SECTION_SIGN = re.compile(r"(?:§|\\S)[\s~]*$")  # §4.2, § 4.2, \S~4.2
 STAT_BEFORE = re.compile(
-    r"(?:\bp(?:-values?)?|α|\\alpha|\balpha)\$?\s*"  # p = 0.03, p < 0.001, $\alpha$ = 0.05
-    r"(?:[=<>≤≥]|\\[lg]eq?\b|\\text(?:less|greater)|of\b)\s*\$?\s*$"
+    # alpha and significance level: the operator is optional, "alpha level 0.05", "significance level of 0.01"
+    r"(?:(?i:\balpha)(?:\s+level)?|α|\\alpha|(?i:\bsignificance\s+level))\$?\s*"
+    r"(?:of\s+|(?:[=<>≤≥]|\\[lg]eq?\b)\s*)?\$?\s*$"
+    # p = 0.03, p < 0.001: p needs its operator
+    r"|\bp(?:-values?)?\$?\s*(?:[=<>≤≥]|\\[lg]eq?\b|\\text(?:less|greater)|of\b)\s*\$?\s*$"
 )
 CONFIDENCE_AFTER = re.compile(r"(?:\s|\\,)*(?:confidence|CI)\b")  # 95% confidence, 95% CI
+CURRENCY = re.compile(r"[$€£]\s*$")  # $12.50, \$12.50 (the backslash is not adjacent to the digits)
+RATIO_BEFORE = re.compile(r"/\s*$")  # the 0.1 in 0.8/0.1/0.1
+RATIO_AFTER = re.compile(r"\s*/\s*\d")  # the 0.8 in 0.8/0.1/0.1
 LAST_WORD = re.compile(r"([A-Za-z]+)\.?\s*\(?$")
 HYPER = re.compile(
     r"learning[ -]rates?|\blr\b|dropout|batch[ -]sizes?|weight[ -]decay|\bdecay|\\?(?:var)?epsilon|ε"
-    r"|momentum|\\beta|β|\\lambda|λ|temperature|label[ -]smoothing|warm[ -]?up|step[ -]sizes?",
+    r"|momentum|\\beta|β|\\lambda|λ|temperature|label[ -]smoothing|warm[ -]?up|step[ -]sizes?"
+    r"|\\?gamma|γ|discount[ -]factor|\bthreshold|top[ -]?p\b",
     re.I,
 )
+HYPER_AFTER = re.compile(r"\s+(?:sampling|learning|dropout)[ -]rates?\b", re.I)  # a 0.75 sampling rate
 # The one list of difference cues: before the number, after any number, and after a percent only.
 DIFF_BEFORE = re.compile(
     r"improve[sd]? by|improvements? (?:of|by)|gains? of|increase[sd]? (?:of|by)"
@@ -200,7 +208,12 @@ class Truth:
 
 
 def _finite(x) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    if not isinstance(x, (int, float)) or isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(x)
+    except OverflowError:  # a JSON integer beyond float range: skip this value, keep the file
+        return False
 
 
 def _stats(nums: list[float], where: str) -> Iterator[tuple[float, str]]:
@@ -355,8 +368,12 @@ def _excused(scan: str, blanked: str, m: re.Match) -> bool:
         return True  # p = 0.03, p < 0.001, $\alpha$ = 0.05: significance, not a result (effect sizes stay checked)
     if m["pct"] and CONFIDENCE_AFTER.match(scan, m.end()):
         return True  # 95% confidence, 95\% CI
-    if _cued(HYPER, blanked, start, CONNECTORS):
+    if _cued(HYPER, blanked, start, CONNECTORS) or HYPER_AFTER.match(scan, end):
         return True
+    if CURRENCY.search(scan, max(0, start - 4), start):
+        return True  # $12.50 is money, not a result
+    if RATIO_BEFORE.search(scan, max(0, start - 12), start) or RATIO_AFTER.match(scan, end):
+        return True  # 0.8/0.1/0.1: a split, not a result
     ends = list(SENTENCE_END.finditer(blanked, max(0, start - SENTENCE_REACH), start))
     left = ends[-1].end() if ends else max(0, start - SENTENCE_REACH)
     right = SENTENCE_END.search(blanked, end)
