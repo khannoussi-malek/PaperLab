@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from app.core.errors import InvalidInput
-from app.core.manuscript_checks import citations, latex_hygiene, pdf, references, wording
+from app.core.manuscript_checks import citations, latex_hygiene, number_provenance, pdf, references, wording
 from app.core.manuscript_checks.base import SEVERITIES, Check, CheckContext, Cost, Finding
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,7 @@ REGISTRY: tuple[Check, ...] = (
     *latex_hygiene.CHECKS,
     *references.CHECKS,
     *pdf.CHECKS,
+    *number_provenance.CHECKS,
 )  # later checks add one line each
 
 

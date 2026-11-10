@@ -128,3 +128,8 @@ test('pathProblem mirrors the server rules', () => {
   expect(pathProblem('a.exe', ['tex'])).toBe('unsupported_file_type')
   expect(pathProblem('latexmkrc', ['tex'])).toBeNull()
 })
+
+test('json data files can be uploaded, like csv', () => {
+  renderList()
+  expect(document.querySelector('input[type="file"]')?.getAttribute('accept')).toContain('.json')
+})
