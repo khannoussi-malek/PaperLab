@@ -3,6 +3,7 @@
 from pydantic import ValidationError
 
 from app.core import manuscript_blueprint as bp
+from app.core.manuscript_checks import latex_hygiene
 from app.core.manuscript_checks.base import Check, CheckContext, Finding
 
 W = "blueprint.words"
@@ -51,6 +52,31 @@ def _words(ctx: CheckContext) -> list[Finding]:
     return found
 
 
+def _greek(symbol: str) -> set[str]:
+    # same SYMBOL list and function-like rule as the latex check
+    return {name for name, _ in latex_hygiene.symbols(symbol)}
+
+
+def _notation(ctx: CheckContext) -> list[Finding]:
+    spec, _ = load(ctx)
+    if spec is None or not spec.notation:
+        return []
+    listed = set().union(*(_greek(s.symbol) for s in spec.notation))
+    first, inline = latex_hygiene.math_symbols(ctx)
+    used = set(first) | inline
+    # a display-only symbol is latex.notation_undefined's to report; here only what the text introduced
+    # but the plan lacks
+    unlisted = sorted(inline - listed)
+    unused = sorted(listed - used)
+    return [Finding(N, "info", bp.PATH, 1,
+                    f"\\{n} is used in the manuscript but is not in the blueprint's notation list.",
+                    "Add it to notation in blueprint.json.") for n in unlisted] + [
+        Finding(N, "info", bp.PATH, 1,
+                f"\\{n} is listed in the blueprint's notation but never used in the manuscript.",
+                "Use it, or remove it from the list.") for n in unused]
+
+
 CHECKS = [
     Check(W, "cheap", "Section word counts against the blueprint's targets (or the template's bands)", _words),
+    Check(N, "cheap", "Greek notation in the blueprint that is unused, or used but not listed", _notation),
 ]

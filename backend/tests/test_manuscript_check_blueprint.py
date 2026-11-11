@@ -74,3 +74,40 @@ def test_math_cites_and_comments_do_not_inflate_the_count():
     files = {"blueprint.json": plan(target_words={"a": [1, 10]}), "main.tex": f"\\section{{A}}\n{body}\n"}
     f = run("blueprint.words", files)
     assert f == []
+
+
+def listed(*symbols):
+    return plan(notation=[{"symbol": s, "meaning": "m"} for s in symbols])
+
+
+def test_notation_silent_without_a_list_or_with_an_invalid_file():
+    main = "$\\alpha$ here.\n"
+    assert run("blueprint.notation", {"main.tex": main}) == []
+    assert run("blueprint.notation", {"blueprint.json": "{}", "main.tex": main}) == []
+    assert run("blueprint.notation", {"blueprint.json": '{"x":1}', "main.tex": main}) == []
+
+
+def test_listed_but_unused_and_used_but_unlisted():
+    files = {"blueprint.json": listed("\\alpha", "$\\lambda$"),
+             "main.tex": "Let $\\alpha + \\beta$ be given.\n"}
+    f = run("blueprint.notation", files)
+    beta = "\\beta is used in the manuscript but is not in the blueprint's notation list."
+    lam = "\\lambda is listed in the blueprint's notation but never used in the manuscript."
+    assert [(x.severity, x.file, x.line, x.message) for x in f] == [
+        ("info", "blueprint.json", 1, beta),
+        ("info", "blueprint.json", 1, lam)]
+    assert f[0].fix_hint == "Add it to notation in blueprint.json."
+    assert f[1].fix_hint == "Use it, or remove it from the list."
+
+
+def test_display_only_symbols_are_left_to_the_latex_check():
+    # beta: latex.notation_undefined's
+    files = {"blueprint.json": listed("\\alpha"), "main.tex": "\\[ \\alpha + \\beta \\]\n"}
+    assert run("blueprint.notation", files) == []
+
+
+def test_symbol_spellings_and_non_greek_and_function_like():
+    files = {"blueprint.json": listed("\\alpha_t", "x_i", "\\sigma"),
+             "main.tex": "$\\alpha_t$ and $x_i$ and $\\sigma(x)$.\n"}
+    f = run("blueprint.notation", files)
+    assert [x.message.split()[0] for x in f] == ["\\sigma"]  # listed, used only as a function: unused
