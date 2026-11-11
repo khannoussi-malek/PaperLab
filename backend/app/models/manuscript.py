@@ -71,6 +71,9 @@ class ManuscriptSnapshot(Base):
     manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"))
     reason: Mapped[str] = mapped_column(Text)  # compile | autosave | before_restore | before_sections | before_mcp
     files: Mapped[dict[str, str]] = mapped_column(JSONB)  # {path: text}
+    ai_tool: Mapped[str | None] = mapped_column(Text)  # the MCP tool that made this before_mcp snapshot
+    ai_path: Mapped[str | None] = mapped_column(Text)
+    ai_reason: Mapped[str | None] = mapped_column(Text)  # what the agent said it was doing, if it said
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
 
 

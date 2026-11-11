@@ -342,3 +342,11 @@ async def test_a_guessed_base_is_file_changed_for_write_rename_and_delete(sessio
     await agent.write_file(session, mid, "main.tex", "ok", cur)  # the exact base works
     await agent.rename_file(session, mid, "a.tex", "b.tex", row_time)
     await agent.delete_file(session, mid, "b.tex", await updated(session, mid, "b.tex"))
+
+
+async def test_snapshot_has_ai_log_columns(session):
+    mid = await new(session)
+    snap = ManuscriptSnapshot(manuscript_id=mid, reason="autosave", files={})
+    session.add(snap)
+    await session.flush()
+    assert (snap.ai_tool, snap.ai_path, snap.ai_reason) == (None, None, None)
