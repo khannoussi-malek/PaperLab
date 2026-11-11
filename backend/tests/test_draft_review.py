@@ -90,11 +90,37 @@ async def test_bad_issues_are_dropped_and_counted_without_losing_their_siblings(
 
 
 async def test_a_reviewer_that_fails_is_counted_and_all_three_failing_fails_the_run():
-    # ask_json retries once on a bad reply, so reviewer 1 uses two replies; reviewer 2 raises LLMError
-    result, _ = await run(Routed("not json", "still not", LLMError("x"), issues(1, 2)))
+    # a bad reply is not retried: reviewer 1 fails on its one call; reviewer 3 raises LLMError
+    result, _ = await run(Routed("not json", issues(1, 2), LLMError("x")))
     assert result.counts["reviewers_failed"] == 2 and [i["id"] for i in result.issues] == ["I-01"]
     with pytest.raises(dr.ReviewFailed):
         await run(Routed("a", "b", LLMError("x"), LLMError("y")))
+
+
+class Garbled(Routed):
+    """Reviewers answer as Routed; every skeptic reply is text with no JSON object in it."""
+
+    async def stream(self, system, prompt):
+        if system == dr.SYSTEM_PROMPT:
+            async for token in super().stream(system, prompt):
+                yield token
+            return
+        self.calls.append((system, prompt))
+        yield "no json here"
+
+
+async def test_light_with_bad_json_makes_no_more_than_its_eleven_counted_calls():
+    llm = Garbled(issues(0, 3), issues(3, 6), issues(6, 9))  # 9 candidates: 8 reach the skeptics, all garbled
+    result, _ = await run(llm)
+    assert len(llm.calls) == result.calls == dr.max_calls("light") == 11
+    assert result.counts["skeptics_failed"] == 8 and len(result.issues) == 8
+
+
+async def test_full_with_bad_json_makes_no_more_than_its_fifty_four_counted_calls():
+    llm = Garbled(issues(0, 3), issues(3, 6), issues(6, 8), issues(8, 11), issues(11, 14), issues(14, 17))
+    result, _ = await run(llm, mode="full")
+    assert len(llm.calls) == result.calls == dr.max_calls("full") == 54
+    assert result.counts["rounds_run"] == 2 and len(result.issues) == 16
 
 
 async def test_light_one_skeptic_refuting_drops_the_issue_and_a_broken_skeptic_keeps_it():

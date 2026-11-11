@@ -44,10 +44,11 @@ def _parse(text: str, model: type[BaseModel]) -> tuple[BaseModel | None, str | N
         return None, str(exc)[:500]
 
 
-async def ask_json(llm, system: str, prompt: str, model: type[BaseModel]) -> BaseModel | None:
+async def ask_json(llm, system: str, prompt: str, model: type[BaseModel], *, retry: bool = True) -> BaseModel | None:
+    """retry=False makes exactly one call: a bad reply gives None, for callers that count their calls."""
     reply = "".join([token async for token in llm.stream(system, prompt)])
     parsed, error = _parse(reply, model)
-    if parsed is not None:
+    if parsed is not None or not retry:
         return parsed
-    retry = "".join([token async for token in llm.stream(system, prompt + RETRY.format(error=error))])
-    return _parse(retry, model)[0]
+    again = "".join([token async for token in llm.stream(system, prompt + RETRY.format(error=error))])
+    return _parse(again, model)[0]

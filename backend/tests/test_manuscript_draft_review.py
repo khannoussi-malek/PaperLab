@@ -278,8 +278,8 @@ async def test_worker_done_writes_issues_counts_and_model(session):
 async def test_worker_failure_reasons(session):
     for replies, reason in [
         ([LLMUnavailable("down")], "model_unavailable"),
-        # ask_json retries once, so each of the three reviewers needs two bad replies to fail
-        (["nothing", "nothing", "nothing", "nothing", "nothing", "nothing"], "model_error"),
+        # a bad reply is not retried, so one bad reply per reviewer is enough to fail all three
+        (["nothing", "nothing", "nothing"], "model_error"),
         ([LLMError("boom")] * 3, "model_error"),
         ([RuntimeError("bug")], "check_failed"),
     ]:

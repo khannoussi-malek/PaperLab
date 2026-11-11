@@ -129,7 +129,7 @@ class Result:
 
 async def _ask(llm, system: str, prompt: str, model: type[BaseModel]):
     try:
-        return await ask_json(llm, system, prompt, model)
+        return await ask_json(llm, system, prompt, model, retry=False)  # counted: one call, no retry
     except LLMError:  # LLMUnavailable is not one: it fails the run
         return None
 

@@ -49,3 +49,9 @@ async def test_two_bad_replies_give_none():
 async def test_a_brace_right_after_an_escaped_quote_stays_inside_the_string():
     reply = r'{"why": "a \"} b", "score": 4}'
     assert (await ask_json(Scripted(reply), "sys", "p", Why)) == Why(why='a "} b', score=4)
+
+
+async def test_retry_false_makes_exactly_one_call_and_gives_none_on_a_bad_reply():
+    llm = Scripted('{"score": 9}', '{"score": 3}')
+    assert await ask_json(llm, "sys", "p", Answer, retry=False) is None
+    assert len(llm.prompts) == 1
