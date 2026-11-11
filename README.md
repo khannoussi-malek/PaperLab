@@ -568,6 +568,7 @@ Writing studio:
 - `delete_manuscript_file`: deletes a text file, only when you ask;
 - `add_manuscript_figure`: adds an image or PDF at a new path; it never overwrites a file;
 - `check_manuscript`: runs the offline checks (today: cited keys that match nothing) and lists every finding with file, line and a text-only fix hint;
+- `check_dois`: checks each DOI in the manuscript's .bib files against Crossref (only the DOIs are sent; nothing when Crossref is off in Settings) and lists the ones it does not find;
 - `start_draft_review`: starts PaperLab's tough whole-draft review in the background (light or full mode); it never edits the draft;
 - `get_draft_review`: the latest whole-draft review's status, progress and issues, blocker first;
 - `cancel_draft_review`: stops a running whole-draft review; a finished one is returned unchanged;

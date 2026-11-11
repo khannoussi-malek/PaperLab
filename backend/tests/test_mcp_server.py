@@ -62,6 +62,7 @@ EXPECTED_TOOLS = {
     "get_manuscript_checklist": True, "set_manuscript_checklist": None,
     "start_manuscript_review": None, "get_manuscript_review": True, "cancel_manuscript_review_all": None,
     "start_draft_review": None, "get_draft_review": True, "cancel_draft_review": None,
+    "check_dois": None,
 }
 
 

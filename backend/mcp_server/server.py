@@ -34,6 +34,7 @@ from app.core import (
     workspaces,
 )
 from app.core.errors import DomainError, error_code
+from app.core.manuscript_checks import doi_service
 from app.db import SessionLocal
 
 # ponytail: the embedding model loads on the first search (seconds). Warm it up in a lifespan if a first search
@@ -78,7 +79,7 @@ mcp = MCPServer(
         "accept_suggestions record one, so ask the owner first. "
         "Writing studio: list_manuscripts, create_manuscript, list_manuscript_files, read_manuscript_file, then "
         "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
-        "`base` you read), add_manuscript_figure, check_manuscript, start_draft_review, get_draft_review, "
+        "`base` you read), add_manuscript_figure, check_manuscript, check_dois, start_draft_review, get_draft_review, "
         "cancel_draft_review, "
         "get/set_manuscript_checklist, compile_manuscript "
         "then get_compile_result, start_manuscript_review, get_manuscript_review, cancel_manuscript_review_all, "
@@ -922,6 +923,17 @@ async def check_manuscript(
     unknown names are an error. Findings are capped at 200 (errors first); `truncated` counts the rest."""
     async with sessions() as session:
         return await manuscript_agent_checks.check_manuscript(session, manuscript_id, checks)
+
+
+@mcp.tool()
+@recoverable
+async def check_dois(manuscript_id: uuid.UUID) -> doi_service.DoiCheckResult:
+    """Use to check each DOI in the manuscript's .bib files against Crossref, the same check as the app's Check DOIs
+    online. Only the DOIs are sent: no email and nothing else. It does nothing when Crossref is turned off in Settings
+    (error crossref_disabled). Returns the findings (a DOI Crossref does not know is an error, a failed lookup a
+    warning), with `checked` and `not_checked` counts; DOIs past the cap or the time limit are not checked."""
+    async with sessions() as session:
+        return await doi_service.run_doi_check(session, manuscript_id)
 
 
 @mcp.tool()

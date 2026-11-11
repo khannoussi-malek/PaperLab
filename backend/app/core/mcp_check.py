@@ -20,6 +20,7 @@ TOOLS = [
     "add_papers",
     "cancel_draft_review",
     "cancel_manuscript_review_all",
+    "check_dois",
     "check_manuscript",
     "compile_manuscript",
     "continue_search_run",
