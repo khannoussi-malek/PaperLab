@@ -44,8 +44,9 @@ UNITS = (
     "°C °F ° px pixels fps FLOPs GFLOPs TFLOPs ppm rpm bits bytes Pa kPa MPa"
 ).split()  # calibration knob
 UNIT = re.compile(
-    r"(?:\s|\\[,; ])*(?:" + "|".join(sorted(map(re.escape, UNITS), key=len, reverse=True)) + r")(?![A-Za-z])|\}\s*\{\\"
-)  # 3.5 ms, 3.5\,ms, \SI{3.5}{\milli\second}
+    r"(?:\s|\\[,; ]|\\thinspace\b)*(?:\\(?:text|textrm|mathrm|si|unit)\{\s*)?"  # 3.5\,\text{ms}, 3.5\thinspace s
+    r"(?:" + "|".join(sorted(map(re.escape, UNITS), key=len, reverse=True)) + r")(?![A-Za-z])|\}\s*\{\\"
+)  # 3.5 ms, 3.5\,ms, 3.5~ms (prose() turns ~ into a space), \SI{3.5}{\milli\second}
 CUE_WORDS = {  # a decimal right after one of these is a reference or a version, not a result
     "section",
     "sections",

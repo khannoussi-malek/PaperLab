@@ -261,6 +261,33 @@ def test_a_number_after_a_difference_cue_is_info(text):
     )
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Runs take 1.19\\,s each.",
+        "The model needs 5.17\\,GB of memory.",
+        "Latency is 24~ms per call.",
+        "Latency is 24\\ ms per call.",
+        "It took 1.97\\,\\text{s} in total.",
+        "It took 1.97\\,\\mathrm{ms} here.",
+        "It took 1.97~\\textrm{s} here.",
+        "It took 1.97\\thinspace s here.",
+    ],
+)
+def test_a_thin_space_tilde_or_escaped_space_before_a_unit_is_exempt(text):
+    assert run(text) == []
+
+
+def test_only_the_unbacked_decimals_are_flagged_next_to_a_unit_thin_space():
+    flagged = {f.message.split('"')[1] for f in run("Times were 0.96, 1.19 and 1.97\\,s in total.")}
+    assert flagged == {"0.96", "1.19"}
+
+
+def test_a_plain_unbacked_decimal_is_still_flagged():
+    [f] = run("Runs take 1.19 each.")
+    assert f.severity == "warning"
+
+
 def test_an_unbacked_number_after_an_ordinary_word_is_still_flagged():
     [f] = run("Our accuracy of 5.5 here.")
     assert f.severity == "warning"
