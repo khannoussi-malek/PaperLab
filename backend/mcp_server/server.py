@@ -24,6 +24,7 @@ from app.core import (
     manuscript_agent_checks,
     manuscript_agent_compile,
     notes,
+    novelty,
     pipeline,
     screening,
     workspaces,
@@ -37,7 +38,7 @@ mcp = MCPServer(
     "paperlab",
     instructions=(
         "PaperLab is the owner's research library. Learn workspace names with list_workspaces. "
-        "Library: search_library, get_paper, read_pages, related_papers, list_papers; "
+        "Library: search_library, novelty_check, get_paper, read_pages, related_papers, list_papers; "
         "create_workspace makes a new one; add papers "
         "by DOI, arXiv ID or PDF link with add_paper (free copies only; add_papers takes up to 50 at once), "
         "or upload_paper for a PDF you already hold, "
@@ -126,6 +127,19 @@ async def search_library(
         return await library.search(
             session, query, workspace, tags=tags, match=match, paper_id=paper_id, doi=doi, limit=limit
         )
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def novelty_check(text: str, workspace: str | None = None) -> novelty.NoveltyReport:
+    """Use this to ask "has this been done?" about an idea or an abstract (up to 6000 characters). Gives the 10 papers
+    in the owner's library closest to `text`, closest first, each with its best passage, its page (null for an
+    abstract), and a label: "very close", "related" or "distant". Leave out `workspace` for the whole library, or give
+    a workspace's exact name. It only covers the owner's own library, so finding nothing close is weak evidence that
+    an idea is new: say so when you report it, and never call an idea novel on this alone. Errors are the same as
+    search_library's (search_not_set_up, search_rebuilding, unknown_workspace, ...), plus text_too_long."""
+    async with sessions() as session:
+        return await novelty.check(session, text, workspace)
 
 
 @mcp.tool(annotations=READ_ONLY)
