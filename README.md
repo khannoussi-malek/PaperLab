@@ -563,6 +563,7 @@ Writing studio:
 - `list_manuscript_files`: a manuscript's files, without their text;
 - `read_manuscript_file`: a file's text, or a range of lines, with the `updated_at` Claude passes back as `base` when it changes the file;
 - `create_manuscript_file`: a new text file, such as `sections/results.tex`;
+- `create_manuscript_blueprint`: starts `blueprint.json` (the title, and each section's word target from the template) when the manuscript has none; it never overwrites one;
 - `write_manuscript_file`: replaces a whole text file;
 - `edit_manuscript_file`: changes one passage that matches exactly once;
 - `rename_manuscript_file`: renames or moves a text file (not the main file);

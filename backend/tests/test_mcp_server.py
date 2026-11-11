@@ -64,6 +64,7 @@ EXPECTED_TOOLS = {
     "start_draft_review": None, "get_draft_review": True, "cancel_draft_review": None,
     "check_dois": None,
     "list_manuscript_templates": True,
+    "create_manuscript_blueprint": None,
 }
 
 
@@ -87,7 +88,7 @@ async def test_every_tool_and_which_of_them_only_read():
 
 async def test_reason_is_in_exactly_the_five_snapshotting_tools():
     five = {"create_manuscript_file", "write_manuscript_file", "edit_manuscript_file",
-            "rename_manuscript_file", "delete_manuscript_file"}
+            "rename_manuscript_file", "delete_manuscript_file", "create_manuscript_blueprint"}
     screening = {"review_hits", "set_eligibility"}  # these already took their own reason before the AI log
     async with Client(server.mcp) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}

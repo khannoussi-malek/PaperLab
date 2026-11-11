@@ -81,7 +81,9 @@ mcp = MCPServer(
         "Writing studio: list_manuscripts, list_manuscript_templates, create_manuscript, list_manuscript_files, "
         "read_manuscript_file, then "
         "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
-        "`base` you read), add_manuscript_figure, check_manuscript, check_dois, start_draft_review, get_draft_review, "
+        "`base` you read), create_manuscript_blueprint (starts blueprint.json, never overwrites), "
+        "add_manuscript_figure, "
+        "check_manuscript, check_dois, start_draft_review, get_draft_review, "
         "cancel_draft_review, "
         "get/set_manuscript_checklist, compile_manuscript "
         "then get_compile_result, start_manuscript_review, get_manuscript_review, cancel_manuscript_review_all, "
@@ -842,6 +844,17 @@ async def read_manuscript_file(
     pass when you change that file."""
     async with sessions() as session:
         return await manuscript_agent.read_file(session, manuscript_id, path, start_line, end_line)
+
+
+@mcp.tool()
+@recoverable
+async def create_manuscript_blueprint(manuscript_id: uuid.UUID, reason: str | None = None) -> manuscript_agent.Written:
+    """Use to start a manuscript's blueprint.json (its plan: title, contributions, notation and each section's word
+    target, taken from the template's bands) when it has none. It never overwrites: with a blueprint already there it
+    answers blueprint_exists, so edit that file instead. Optionally pass `reason`: one short line on why, shown next to
+    this edit in History."""
+    async with sessions() as session:
+        return await manuscript_agent.create_blueprint(session, manuscript_id, reason)
 
 
 @mcp.tool()

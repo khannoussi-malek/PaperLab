@@ -25,6 +25,7 @@ TOOLS = [
     "compile_manuscript",
     "continue_search_run",
     "create_manuscript",
+    "create_manuscript_blueprint",
     "create_manuscript_file",
     "create_note",
     "create_saved_search",
