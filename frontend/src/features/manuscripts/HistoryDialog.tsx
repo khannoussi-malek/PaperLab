@@ -46,7 +46,14 @@ export function HistoryDialog({ manuscriptId, open, onOpenChange, onRestored, be
         <ul className="flex max-h-80 flex-col gap-1 overflow-auto">
           {snapshots.data?.map((s) => (
             <li key={s.id} className="flex items-center justify-between gap-2 rounded-md border border-glass-border px-3 py-2 text-sm">
-              <span>{when(s.created_at)} <span className="text-muted-foreground">{REASON[s.reason] ?? s.reason}</span></span>
+              <span>
+                {when(s.created_at)} <span className="text-muted-foreground">{REASON[s.reason] ?? s.reason}</span>
+                {s.ai_tool && (
+                  <span className="block text-xs text-muted-foreground">
+                    {s.ai_tool} {s.ai_path}{s.ai_reason ? <> {'\u201c'}{s.ai_reason}{'\u201d'}</> : null}
+                  </span>
+                )}
+              </span>
               {confirming === s.id ? (
                 <span className="flex items-center gap-2">
                   <span>Replace the current files with this version?</span>

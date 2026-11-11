@@ -31,6 +31,7 @@ vi.mock('@/components/AppShell', () => ({
 vi.mock('../reader/usePdfDocument', () => ({ usePdfDocument: pdf }))
 vi.mock('../reader/PdfPage', () => ({ PdfPage: () => null }))
 
+const T1 = '2026-10-01T00:00:00Z'
 const T2 = '2026-10-02T00:00:00Z'
 const T3 = '2026-10-03T00:00:00Z'
 const T4 = '2026-10-04T00:00:00Z'
@@ -42,6 +43,9 @@ const detail = (over: Partial<ManuscriptDetail> = {}): ManuscriptDetail => ({
 })
 const conflict = () => new ApiError('file_changed', 409, { detail: 'file_changed', updated_at: T3 })
 const saved = (at = T4) => ({ path: 'main.tex', size: 11, updated_at: at })
+type Snap = { id: string; reason: string; created_at: string; ai_tool: string | null; ai_path: string | null; ai_reason: string | null }
+const snap = (id: string, reason: string, at: string, ai: Partial<Snap> = {}): Snap =>
+  ({ id, reason, created_at: at, ai_tool: null, ai_path: null, ai_reason: null, ...ai })
 
 let server: Record<string, { text: string; at: string }>
 
@@ -70,7 +74,7 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
   vi.spyOn(api, 'getManuscriptFile').mockImplementation(async (_id, path) => ({ path, text: server[path].text, updated_at: server[path].at }))
-  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's1', reason: 'compile', created_at: T2 }])
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([snap('s1', 'compile', T2)])
   vi.spyOn(api, 'listManuscriptChecks').mockResolvedValue([])
   vi.spyOn(api, 'runChecks').mockResolvedValue({ ran: [], findings: [], counts: { error: 0, warning: 0, info: 0 } })
 })
@@ -153,8 +157,7 @@ test('an interrupted compile says so and Compile is offered again', async () => 
 
 test('History names each kind of snapshot', async () => {
   vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([
-    { id: 's1', reason: 'compile', created_at: T2 }, { id: 's2', reason: 'autosave', created_at: T2 },
-    { id: 's3', reason: 'before_restore', created_at: T2 },
+    snap('s1', 'compile', T2), snap('s2', 'autosave', T2), snap('s3', 'before_restore', T2),
   ])
   renderPage()
   fireEvent.click(await screen.findByRole('button', { name: 'History' }))
@@ -163,15 +166,28 @@ test('History names each kind of snapshot', async () => {
 })
 
 test('History labels a snapshot taken before a Claude edit and still offers Restore', async () => {
-  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's1', reason: 'before_mcp', created_at: T2 }])
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([snap('s1', 'before_mcp', T2)])
   renderPage()
   fireEvent.click(await screen.findByRole('button', { name: 'History' }))
   expect(await screen.findByText('Before a Claude edit (MCP)')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /Restore/ })).toBeInTheDocument()
 })
 
+test('History shows the claude step (tool, path, reason) as plain text', async () => {
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([
+    snap('s1', 'before_mcp', T2, { ai_tool: 'edit_manuscript_file', ai_path: 'main.tex', ai_reason: '<b>why</b>' }),
+    snap('s2', 'autosave', T1),
+  ])
+  renderPage()
+  fireEvent.click(await screen.findByRole('button', { name: 'History' }))
+  expect(await screen.findByText(/edit_manuscript_file main\.tex/)).toBeInTheDocument()
+  expect(screen.getByText(/<b>why<\/b>/)).toBeInTheDocument()
+  expect(document.querySelector('b')).toBeNull()
+  expect(screen.getAllByText(/edit_manuscript_file/)).toHaveLength(1)
+})
+
 test('History says "Before changing sections" for a section change', async () => {
-  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's1', reason: 'before_sections', created_at: T2 }])
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([snap('s1', 'before_sections', T2)])
   renderPage()
   fireEvent.click(await screen.findByRole('button', { name: 'History' }))
   expect(await screen.findByText('Before changing sections')).toBeInTheDocument()
@@ -952,7 +968,7 @@ test('the Insert menu shows only while a .tex file is open', async () => {
 const setVisibility = (state: 'visible' | 'hidden') => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
 const outsideWrite = (reason: string) => {
   server['main.tex'] = { text: 'hello from Claude', at: T3 }
-  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's9', reason, created_at: T3 }])
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([snap('s9', reason, T3)])
 }
 const tick = (ms = 5000) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
 

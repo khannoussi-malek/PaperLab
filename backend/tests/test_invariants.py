@@ -488,3 +488,30 @@ async def test_0068_manuscript_template_round_trip(scratch_url):
     assert "template" not in cols
     alembic(dsn, "upgrade", "head")
     await scratch.dispose()
+
+
+@pytest.mark.anyio
+async def test_0069_ai_log_round_trip(scratch_url):
+    """The log columns arrive NULL on existing snapshots, hold values, and downgrade drops them but keeps rows."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "0068")
+    scratch = create_async_engine(scratch_url)
+    async with scratch.begin() as conn:
+        await conn.execute(text("INSERT INTO manuscripts (title) VALUES ('Old draft')"))
+        await conn.execute(text(
+            "INSERT INTO manuscript_snapshots (manuscript_id, reason, files) "
+            "SELECT id, 'before_mcp', '{}' FROM manuscripts"))
+    alembic(dsn, "upgrade", "0069")
+    async with scratch.begin() as conn:
+        row = (await conn.execute(text("SELECT ai_tool, ai_path, ai_reason FROM manuscript_snapshots"))).one()
+        assert tuple(row) == (None, None, None)
+        await conn.execute(text("UPDATE manuscript_snapshots SET ai_tool = 't', ai_path = 'p', ai_reason = 'r'"))
+    alembic(dsn, "downgrade", "0068")
+    async with scratch.connect() as conn:
+        cols = (await conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'manuscript_snapshots'"))).scalars().all()
+        kept = (await conn.execute(text("SELECT count(*) FROM manuscript_snapshots"))).scalar_one()
+    assert not {"ai_tool", "ai_path", "ai_reason"} & set(cols) and kept == 1
+    alembic(dsn, "upgrade", "head")
+    await scratch.dispose()

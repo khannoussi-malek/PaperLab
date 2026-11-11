@@ -398,3 +398,21 @@ async def test_the_latex_only_export_leaves_the_pdf_out_and_says_so_in_its_name(
     assert source.headers["content-disposition"] == (
         "attachment; filename=\"My_Paper-latex.zip\"; filename*=UTF-8''My%20Paper%20%28LaTeX%29.zip"
     )
+
+
+async def test_ai_log_fields_on_snapshots(client, session):
+    from app.core import manuscript_agent as agent
+    from app.core import manuscript_history
+    m = await make(client)
+    mid = uuid.UUID(m["id"])
+    base = f"/api/manuscripts/{m['id']}"
+    await client.put(f"{base}/files/main.tex", json={"text": TEX + "\\n",
+                     "base_updated_at": (await client.get(f"{base}/files/main.tex")).json()["updated_at"]})
+    await agent.edit_file(session, mid, "main.tex", "Hi", "Hello",
+                          (await manuscripts.read(session, mid, "main.tex")).updated_at, reason="r")
+    await manuscript_history.take(session, mid, "autosave")
+    rows = {s["reason"]: s for s in (await client.get(f"{base}/snapshots")).json()}
+    mcp = rows["before_mcp"]
+    assert mcp["ai_tool"] == "edit_manuscript_file" and mcp["ai_reason"] == "r"
+    assert rows["autosave"]["ai_tool"] is None and rows["autosave"]["ai_path"] is None
+    assert rows["autosave"]["ai_reason"] is None

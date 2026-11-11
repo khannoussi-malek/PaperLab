@@ -80,6 +80,17 @@ async def test_every_tool_and_which_of_them_only_read():
                if name not in ("search_library", "get_paper", "related_papers", "create_note"))
 
 
+async def test_reason_is_in_exactly_the_five_snapshotting_tools():
+    five = {"create_manuscript_file", "write_manuscript_file", "edit_manuscript_file",
+            "rename_manuscript_file", "delete_manuscript_file"}
+    screening = {"review_hits", "set_eligibility"}  # these already took their own reason before the AI log
+    async with Client(server.mcp) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+    for name, tool in tools.items():
+        assert ("reason" in tool.input_schema.get("properties", {})) == (name in five | screening), name
+        assert "reason" not in tool.input_schema.get("required", []), name
+
+
 async def test_the_server_holds_no_sql_and_imports_only_core():
     source = Path(server.__file__).read_text()
     imports = [line for line in source.splitlines() if line.startswith(("import ", "from "))]

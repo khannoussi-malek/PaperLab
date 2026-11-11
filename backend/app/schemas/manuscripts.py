@@ -149,6 +149,9 @@ class SnapshotOut(BaseModel):
     id: uuid.UUID
     reason: str
     created_at: datetime
+    ai_tool: str | None
+    ai_path: str | None
+    ai_reason: str | None
 
 
 class CitablePaperOut(BaseModel):

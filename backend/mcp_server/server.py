@@ -825,62 +825,74 @@ async def read_manuscript_file(
 
 @mcp.tool()
 @recoverable
-async def create_manuscript_file(manuscript_id: uuid.UUID, path: str, text: str) -> manuscript_agent.Written:
+async def create_manuscript_file(
+    manuscript_id: uuid.UUID, path: str, text: str, reason: str | None = None
+) -> manuscript_agent.Written:
     """Use to add a new text file (for example sections/results.tex) to a manuscript; an existing path is refused
     with file_exists. Never write paperlab.bib: it is generated from the workspace's papers. Each write keeps an
-    earlier version the owner can restore from History, marked as a Claude edit."""
+    earlier version the owner can restore from History, marked as a Claude edit.
+    Optionally pass `reason`: one short line on why, shown next to this edit in History."""
     async with sessions() as session:
-        return await manuscript_agent.create_file(session, manuscript_id, path, text)
+        return await manuscript_agent.create_file(session, manuscript_id, path, text, reason)
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
 @recoverable
 async def write_manuscript_file(
-    manuscript_id: uuid.UUID, path: str, text: str, base: manuscript_agent.Base
+    manuscript_id: uuid.UUID, path: str, text: str, base: manuscript_agent.Base, reason: str | None = None
 ) -> manuscript_agent.Written:
     """Use to replace a whole text file with new text; prefer edit_manuscript_file for a small change. Pass `base` =
     the updated_at you last read for that file; on file_changed the owner may be typing, so re-read before trying
     again. Never write paperlab.bib. Each write keeps an earlier version the owner can restore from History, marked
-    as a Claude edit. The owner's own words are theirs: change only what was asked."""
+    as a Claude edit. The owner's own words are theirs: change only what was asked.
+    Optionally pass `reason`: one short line on why, shown next to this edit in History."""
     async with sessions() as session:
-        return await manuscript_agent.write_file(session, manuscript_id, path, text, base)
+        return await manuscript_agent.write_file(session, manuscript_id, path, text, base, reason)
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
 @recoverable
 async def edit_manuscript_file(
-    manuscript_id: uuid.UUID, path: str, old_text: str, new_text: str, base: manuscript_agent.Base
+    manuscript_id: uuid.UUID,
+    path: str,
+    old_text: str,
+    new_text: str,
+    base: manuscript_agent.Base,
+    reason: str | None = None,
 ) -> manuscript_agent.Written:
     """Use to change part of a text file: old_text must match exactly once (no_match or ambiguous_match otherwise);
     prefer this to write_manuscript_file for a small change. Pass `base` = the updated_at you last read; on
     file_changed re-read before trying again. Never edit paperlab.bib. Each write keeps an earlier version the owner
-    can restore from History, marked as a Claude edit. Change only what was asked: the owner's own words are theirs."""
+    can restore from History, marked as a Claude edit. Change only what was asked: the owner's own words are theirs.
+    Optionally pass `reason`: one short line on why, shown next to this edit in History."""
     async with sessions() as session:
-        return await manuscript_agent.edit_file(session, manuscript_id, path, old_text, new_text, base)
+        return await manuscript_agent.edit_file(session, manuscript_id, path, old_text, new_text, base, reason)
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
 @recoverable
 async def rename_manuscript_file(
-    manuscript_id: uuid.UUID, path: str, new_path: str, base: manuscript_agent.Base
+    manuscript_id: uuid.UUID, path: str, new_path: str, base: manuscript_agent.Base, reason: str | None = None
 ) -> manuscript_agent.Renamed:
     """Use to rename or move a text file (not the main file). Pass `base` = the updated_at you last read; on
     file_changed re-read before trying again. Each change keeps an earlier version the owner can restore from
-    History, marked as a Claude edit. paperlab.bib is reserved."""
+    History, marked as a Claude edit. paperlab.bib is reserved.
+    Optionally pass `reason`: one short line on why, shown next to this edit in History."""
     async with sessions() as session:
-        return await manuscript_agent.rename_file(session, manuscript_id, path, new_path, base)
+        return await manuscript_agent.rename_file(session, manuscript_id, path, new_path, base, reason)
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
 @recoverable
 async def delete_manuscript_file(
-    manuscript_id: uuid.UUID, path: str, base: manuscript_agent.Base
+    manuscript_id: uuid.UUID, path: str, base: manuscript_agent.Base, reason: str | None = None
 ) -> manuscript_agent.Deleted:
     """Use to delete a text file, only when asked to. Pass `base` = the updated_at you last read; on file_changed
     re-read before trying again. The deletion keeps an earlier version the owner can restore from History, marked as
-    a Claude edit. The owner's own words are theirs: change only what was asked."""
+    a Claude edit. The owner's own words are theirs: change only what was asked.
+    Optionally pass `reason`: one short line on why, shown next to this edit in History."""
     async with sessions() as session:
-        return await manuscript_agent.delete_file(session, manuscript_id, path, base)
+        return await manuscript_agent.delete_file(session, manuscript_id, path, base, reason)
 
 
 @mcp.tool()

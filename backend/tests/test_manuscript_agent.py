@@ -342,3 +342,64 @@ async def test_a_guessed_base_is_file_changed_for_write_rename_and_delete(sessio
     await agent.write_file(session, mid, "main.tex", "ok", cur)  # the exact base works
     await agent.rename_file(session, mid, "a.tex", "b.tex", row_time)
     await agent.delete_file(session, mid, "b.tex", await updated(session, mid, "b.tex"))
+
+
+async def test_snapshot_has_ai_log_columns(session):
+    mid = await new(session)
+    snap = ManuscriptSnapshot(manuscript_id=mid, reason="autosave", files={})
+    session.add(snap)
+    await session.flush()
+    assert (snap.ai_tool, snap.ai_path, snap.ai_reason) == (None, None, None)
+
+
+# --- the AI step log: tool, path and reason on the before_mcp snapshot ------------------------------------------
+
+
+async def test_each_write_logs_tool_path_and_reason(session):
+    mid = await new(session)
+    base = await updated(session, mid, "main.tex")
+    await agent.edit_file(session, mid, "main.tex", "\\begin{document}", "\\begin{document}\n", base, reason="  tidy  ")
+    await agent.create_file(session, mid, "sections/new.tex", "x", reason=None)
+    log = {(s.ai_tool, s.ai_path, s.ai_reason) for s in await snaps(session, mid)}
+    assert log == {("edit_manuscript_file", "main.tex", "tidy"), ("create_manuscript_file", "sections/new.tex", None)}
+
+
+async def test_nul_in_reason_never_blocks_the_write_and_is_not_logged(session):
+    mid = await new(session)
+    base = await updated(session, mid, "main.tex")
+    await agent.edit_file(session, mid, "main.tex", "\\begin{document}", "\\begin{document}\n", base, reason="a\x00b\x00 ")
+    assert "\\begin{document}\n" in await text(session, mid, "main.tex")
+    logged = [s.ai_reason for s in await snaps(session, mid) if s.ai_tool == "edit_manuscript_file"]
+    assert logged == ["ab"]
+
+
+async def test_write_rename_delete_log_and_blank_or_long_reasons(session):
+    mid = await new(session)
+    await agent.create_file(session, mid, "a.tex", "1")
+    await agent.create_file(session, mid, "b.tex", "2")
+    w = await agent.write_file(session, mid, "a.tex", "3", await updated(session, mid, "a.tex"), reason="   ")
+    r = await agent.rename_file(session, mid, "a.tex", "c.tex", w.updated_at, reason="x" * 600)
+    d = await agent.delete_file(session, mid, "b.tex", await updated(session, mid, "b.tex"), reason="gone")
+    by_id = {s.id: s for s in await snaps(session, mid)}
+    assert (by_id[w.snapshot_id].ai_tool, by_id[w.snapshot_id].ai_reason) == ("write_manuscript_file", None)
+    assert (by_id[r.snapshot_id].ai_path, by_id[r.snapshot_id].ai_reason) == ("a.tex", "x" * 500)
+    assert (by_id[d.snapshot_id].ai_path, by_id[d.snapshot_id].ai_reason) == ("b.tex", "gone")
+
+
+async def test_failed_write_leaves_no_log_and_owner_snapshots_stay_clean(session):
+    mid = await new(session)
+    base = await updated(session, mid, "main.tex")
+    await code(agent.edit_file(session, mid, "main.tex", "NOPE-NOT-THERE", "y", base, reason="r"), Conflict)
+    assert await snaps(session, mid) == []
+    await manuscript_history.take(session, mid, "autosave")
+    owner = await snaps(session, mid, "autosave")
+    assert owner
+    assert all(s.ai_tool is None and s.ai_reason is None for s in owner)
+
+
+async def test_log_is_pruned_with_its_snapshot_keep_20(session):
+    mid = await new(session)
+    for i in range(21):
+        await agent.create_file(session, mid, f"s/f{i}.tex", "x", reason=f"r{i}")
+    kept = {s.ai_reason for s in await snaps(session, mid)}
+    assert kept == {f"r{i}" for i in range(1, 21)}
