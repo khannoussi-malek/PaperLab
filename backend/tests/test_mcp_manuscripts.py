@@ -300,3 +300,23 @@ async def test_findings_are_capped_with_a_truncated_count(session, monkeypatch):
     report = result(await call("check_manuscript", manuscript_id=mid))
     assert len(report["findings"]) == agent.MAX_FINDINGS == 200
     assert report["truncated"] == 50 and report["counts"]["warning"] == 250
+
+
+async def test_reason_is_logged_and_optional(session):
+    mid = (await created())["id"]
+    sec = await section(mid)
+    out = result(
+        await call(
+            "edit_manuscript_file",
+            manuscript_id=mid,
+            path=sec["path"],
+            old_text="\\section",
+            new_text="\\section",
+            base=sec["updated_at"],
+            reason="fix heading",
+        )
+    )
+    snap = await session.get(ManuscriptSnapshot, uuid.UUID(out["snapshot_id"]))
+    assert (snap.ai_tool, snap.ai_path, snap.ai_reason) == ("edit_manuscript_file", sec["path"], "fix heading")
+    out = result(await call("create_manuscript_file", manuscript_id=mid, path="sections/x.tex", text="x"))
+    assert (await session.get(ManuscriptSnapshot, uuid.UUID(out["snapshot_id"]))).ai_reason is None
