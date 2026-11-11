@@ -23,6 +23,7 @@ from app.core import (
     manuscript_agent,
     manuscript_agent_checks,
     manuscript_agent_compile,
+    manuscript_agent_review,
     manuscripts,
     notes,
     novelty,
@@ -77,7 +78,7 @@ mcp = MCPServer(
         "Writing studio: list_manuscripts, create_manuscript, list_manuscript_files, read_manuscript_file, then "
         "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
         "`base` you read), add_manuscript_figure, check_manuscript, get/set_manuscript_checklist, compile_manuscript "
-        "then get_compile_result, "
+        "then get_compile_result, start_manuscript_review, get_manuscript_review, cancel_manuscript_review_all, "
         "read_manuscript_pdf_text."
     ),
 )
@@ -918,6 +919,47 @@ async def check_manuscript(
     unknown names are an error. Findings are capped at 200 (errors first); `truncated` counts the rest."""
     async with sessions() as session:
         return await manuscript_agent_checks.check_manuscript(session, manuscript_id, checks)
+
+
+@mcp.tool()
+@recoverable
+async def start_manuscript_review(
+    manuscript_id: uuid.UUID, include_uncited: bool = True, confirm_large: bool = False, allow_remote: bool = False
+) -> manuscript_agent_review.ReviewStarted:
+    """Use to check every cited sentence of every .tex file of a manuscript against the papers it cites, in one run
+    (the studio's "Review all files"). It returns at once; poll get_manuscript_review. Runs of more than 30 checks
+    do not start until you pass confirm_large=true: the first call then returns started=false, needs_confirm=true
+    and the pair count, so tell the owner the count (a local model can take hours) and call again only if they agree.
+    include_uncited also asks the model which uncited sentences are claims. A remote default model is refused
+    unless the owner agreed and you pass allow_remote=true. The reviewer only judges; it never proposes wording."""
+    async with sessions() as session:
+        return await manuscript_agent_review.start_review(
+            session, manuscript_id, include_uncited, confirm_large, allow_remote
+        )
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def get_manuscript_review(manuscript_id: uuid.UUID) -> manuscript_agent_review.ReviewView:
+    """Use to read the manuscript's latest citation review: run (status, done of total), counts by outcome
+    (supported, partially_supported, not_supported = contradicted, not_addressed = not found in the paper,
+    cannot_verify, claim = uncited claim, unfinished) and items with file, sentence, cite key, paper, verdict, reason
+    and the paper's quote with its page. Problems come first; items are capped at 200 and `truncated` counts the rest.
+    Verdicts are AI judgements: tell the owner they need checking against the quotes. It can be read while a run is
+    going. No run yet gives run=null."""
+    async with sessions() as session:
+        return await manuscript_agent_review.get_review(session, manuscript_id)
+
+
+@mcp.tool()
+@recoverable
+async def cancel_manuscript_review_all(
+    manuscript_id: uuid.UUID, run_id: uuid.UUID
+) -> manuscript_agent_review.ReviewRunOut:
+    """Use to stop a running citation review (run_id from start_manuscript_review). The run stops after the check it
+    is on; unchecked rows are marked cancelled. A finished run is left as it is."""
+    async with sessions() as session:
+        return await manuscript_agent_review.cancel_review(session, manuscript_id, run_id)
 
 
 class GuidelineOption(TypedDict):

@@ -60,6 +60,7 @@ EXPECTED_TOOLS = {
     "add_manuscript_figure": None, "check_manuscript": True, "compile_manuscript": None, "get_compile_result": True,
     "read_manuscript_pdf_text": True,
     "get_manuscript_checklist": True, "set_manuscript_checklist": None,
+    "start_manuscript_review": None, "get_manuscript_review": True, "cancel_manuscript_review_all": None,
 }
 
 
