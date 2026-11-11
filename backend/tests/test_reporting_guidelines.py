@@ -58,3 +58,35 @@ def test_bad_files_are_rejected():
 def test_unknown_guideline():
     with pytest.raises(InvalidInput, match="unknown_guideline"):
         rg.get("nope")
+
+
+def test_view_empty_and_counts():
+    assert rg.view({}).guideline is None and rg.view({}).items == [] and rg.view({}).total == 0
+    v = rg.view({"guideline": "ml", "ml:data.splits": True, "prisma2020:3": True, "Submit": True})
+    assert (v.guideline, v.done, v.total) == ("ml", 1, 18)
+    assert [i.id for i in v.items if i.ticked] == ["data.splits"]
+
+
+def test_apply_is_pure_and_keeps_other_keys():
+    before = {"Submit": True, "guideline": "prisma2020", "prisma2020:3": True}
+    after = rg.apply(before, guideline="ml", tick=["data.splits"])
+    assert before == {"Submit": True, "guideline": "prisma2020", "prisma2020:3": True}
+    assert after == {"Submit": True, "guideline": "ml", "prisma2020:3": True, "ml:data.splits": True}
+    back = rg.apply(after, guideline="prisma2020", untick=["3"])
+    assert back == {"Submit": True, "guideline": "prisma2020", "ml:data.splits": True}
+
+
+def test_choosing_a_guideline_ticks_nothing_and_ticking_is_idempotent():
+    assert rg.apply({}, guideline="strobe") == {"guideline": "strobe"}
+    once = rg.apply({}, guideline="strobe", tick=["1"])
+    assert rg.apply(once, tick=["1"]) == once
+
+
+def test_apply_errors_list_valid_ids_in_file_order():
+    with pytest.raises(InvalidInput, match="unknown_item") as e:
+        rg.apply({"guideline": "ml"}, tick=["99"])
+    assert e.value.details["available"] == ML_IDS and e.value.details["unknown"] == ["99"]
+    with pytest.raises(InvalidInput, match="unknown_guideline"):
+        rg.apply({}, tick=["1"])
+    with pytest.raises(InvalidInput, match="unknown_guideline"):
+        rg.apply({}, guideline="nope")

@@ -74,3 +74,48 @@ def get(guideline_id: str) -> Guideline:
         return _load()[guideline_id]
     except KeyError:
         raise InvalidInput("unknown_guideline") from None
+
+
+class ItemView(Item):
+    ticked: bool
+
+
+class ChecklistView(BaseModel):
+    guideline: str | None
+    items: list[ItemView]
+    done: int
+    total: int
+
+
+def _key(guideline_id: str, item_id: str) -> str:
+    return f"{guideline_id}:{item_id}"
+
+
+def view(checklist: dict) -> ChecklistView:
+    chosen = checklist.get("guideline")
+    g = _load().get(chosen) if isinstance(chosen, str) else None
+    if g is None:
+        return ChecklistView(guideline=None, items=[], done=0, total=0)
+    items = [ItemView(**i.model_dump(), ticked=checklist.get(_key(g.id, i.id)) is True) for i in g.items]
+    return ChecklistView(guideline=g.id, items=items, done=sum(i.ticked for i in items), total=len(items))
+
+
+def apply(checklist: dict, guideline: str | None = None, tick=(), untick=()) -> dict:
+    """A new checklist dict; the input is not touched. guideline=None keeps the current one. Ticks of other guidelines
+    and final-step keys stay."""
+    out = dict(checklist)
+    if guideline is not None:
+        out["guideline"] = get(guideline).id
+    if not (tick or untick):
+        return out
+    chosen = out.get("guideline")
+    if not isinstance(chosen, str) or chosen not in _load():
+        raise InvalidInput("unknown_guideline")
+    available = [i.id for i in get(chosen).items]
+    if bad := [i for i in (*tick, *untick) if i not in available]:
+        raise InvalidInput("unknown_item", available=available, unknown=bad)
+    for i in untick:
+        out.pop(_key(chosen, i), None)
+    for i in tick:
+        out[_key(chosen, i)] = True
+    return out
