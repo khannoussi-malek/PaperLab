@@ -130,7 +130,15 @@ CUE_WORDS = {  # a decimal right after one of these is a reference or a version,
     "gemini",
     "falcon",
     "deepseek",
-    "vicuna",  # calibration knob: products with versions
+    "vicuna",
+    "sonnet",
+    "opus",
+    "haiku",
+    "postgres",
+    "postgresql",
+    "docker",
+    "pgvector",
+    "ollama",  # calibration knob: products with versions
 }
 SECTION_SIGN = re.compile(r"(?:§|\\S)[\s~]*$")  # §4.2, § 4.2, \S~4.2
 STAT_BEFORE = re.compile(
