@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { codeInWords } from '@/lib/errorWords'
 import { readerHref } from '@/lib/route'
 import { ErrorAlert } from './ErrorAlert'
 
@@ -37,7 +38,7 @@ export function NoveltyPanel() {
         </div>
       </div>
 
-      {novelty.error && <ErrorAlert message={novelty.error.message} />}
+      {novelty.error && <ErrorAlert message={codeInWords(novelty.error.message)} />}
 
       {result && (
         <div className="flex flex-col gap-3">
@@ -45,16 +46,19 @@ export function NoveltyPanel() {
             <p>Nothing close in your library</p>
           ) : (
             <ul className="flex flex-col gap-3">
-              {result.papers.map((p) => (
-                <li key={p.chunk_id} className="flex flex-col gap-1 rounded-lg border border-glass-border p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <a href={readerHref(p.paper_id)} className="font-medium underline-offset-4 hover:underline">{p.title}</a>
-                    <Badge variant="secondary">{p.label}</Badge>
-                  </div>
-                  {where(p.page, p.from_abstract) && <p className="text-sm text-muted-foreground">{where(p.page, p.from_abstract)}</p>}
-                  <blockquote className="line-clamp-3 border-l-2 border-border pl-3 text-sm">{p.passage}</blockquote>
-                </li>
-              ))}
+              {result.papers.map((p) => {
+                const location = where(p.page, p.from_abstract)
+                return (
+                  <li key={p.chunk_id} className="flex flex-col gap-1 rounded-lg border border-glass-border p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a href={readerHref(p.paper_id)} className="font-medium underline-offset-4 hover:underline">{p.title}</a>
+                      <Badge variant="secondary">{p.label}</Badge>
+                    </div>
+                    {location && <p className="text-sm text-muted-foreground">{location}</p>}
+                    <blockquote className="line-clamp-3 border-l-2 border-border pl-3 text-sm">{p.passage}</blockquote>
+                  </li>
+                )
+              })}
             </ul>
           )}
           <p className="text-sm text-muted-foreground">{result.note}</p>

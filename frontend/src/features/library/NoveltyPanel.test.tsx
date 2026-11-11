@@ -88,6 +88,15 @@ test('a failed check shows the error message', async () => {
   expect(await screen.findByText('Your idea is too long')).toBeInTheDocument()
 })
 
+test('a 409 search_not_set_up shows plain words, not the code', async () => {
+  vi.spyOn(api, 'novelty').mockRejectedValue(new Error('search_not_set_up'))
+  renderPanel()
+  fireEvent.change(idea(), { target: { value: 'Long idea' } })
+  fireEvent.click(check())
+  expect(await screen.findByText("Search isn't set up yet. Download the search model in Settings, then try again.")).toBeInTheDocument()
+  expect(screen.queryByText('search_not_set_up')).toBeNull()
+})
+
 test('the Library page opens the panel from a Has this been done? button', () => {
   render(<QueryClientProvider client={new QueryClient()}><LibraryPage /></QueryClientProvider>)
   expect(screen.queryByLabelText('Paste an idea or an abstract')).toBeNull()

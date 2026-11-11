@@ -358,8 +358,8 @@ export const api = {
   findPaperPdf: (id: string) => request<Paper>(`/api/papers/${id}/find-pdf`, { method: 'POST' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
-  /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID, and a notice per source that failed. */
   novelty: (text: string) => request<NoveltyResult>('/api/novelty', sendJson('POST', { text })),
+  /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID, and a notice per source that failed. */
   searchPapers: (query: string) => request<SearchResult>(`/api/discovery/search?q=${encodeURIComponent(query)}`),
   similarPapers: (paperId: string) => request<Candidate[]>(`/api/papers/${paperId}/similar`),
   /** Downloads a found paper's free PDF into the library (or, with `saveWithoutPdf`, saves it without one); with a `workspaceId` it also joins that workspace. */
