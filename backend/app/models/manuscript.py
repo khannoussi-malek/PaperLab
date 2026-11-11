@@ -227,6 +227,36 @@ class ManuscriptSectionReview(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
 
 
+class ManuscriptDraftReview(Base):
+    """The AI's whole-draft review: issues with an exact quote and a close criterion; it never writes text."""
+
+    __tablename__ = "manuscript_draft_reviews"
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_draft_reviews_status"),
+        CheckConstraint("mode IN ('light', 'full')", name="ck_manuscript_draft_reviews_mode"),
+        Index("ix_manuscript_draft_reviews_manuscript", "manuscript_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
+    manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"))
+    mode: Mapped[str] = mapped_column(Text, server_default="light")
+    status: Mapped[str] = mapped_column(Text)  # queued | running | done | failed
+    stage: Mapped[str | None] = mapped_column(Text)  # "Reviewer 2 of 3: Evidence and experiments"
+    calls_done: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    calls_max: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text)  # the paper text the model read, at most 40 000 chars
+    # {"files": [[path, raw text], ...]}: a JSON ARRAY, so the order the files went into the paper survives
+    inputs: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    issues: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    refuted: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)  # [{"summary", "reason"}]
+    counts: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    confirm_remote: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # re-checked by the job
+    model: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+
+
 class ManuscriptDiagram(Base):
     """A TikZ picture generated from the researcher's own description; inserted only on a click."""
 
