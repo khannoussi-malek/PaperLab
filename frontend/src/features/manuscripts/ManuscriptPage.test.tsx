@@ -76,6 +76,7 @@ beforeEach(() => {
   vi.spyOn(api, 'getManuscriptFile').mockImplementation(async (_id, path) => ({ path, text: server[path].text, updated_at: server[path].at }))
   vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([snap('s1', 'compile', T2)])
   vi.spyOn(api, 'listManuscriptChecks').mockResolvedValue([])
+  vi.spyOn(api, 'listReportingGuidelines').mockResolvedValue([])
   vi.spyOn(api, 'runChecks').mockResolvedValue({ ran: [], findings: [], counts: { error: 0, warning: 0, info: 0 } })
 })
 afterEach(() => {
