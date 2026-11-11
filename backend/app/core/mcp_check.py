@@ -18,6 +18,7 @@ TOOLS = [
     "add_paper",
     "add_paper_to_workspace",
     "add_papers",
+    "cancel_draft_review",
     "cancel_manuscript_review_all",
     "check_manuscript",
     "compile_manuscript",

@@ -79,6 +79,7 @@ mcp = MCPServer(
         "Writing studio: list_manuscripts, create_manuscript, list_manuscript_files, read_manuscript_file, then "
         "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
         "`base` you read), add_manuscript_figure, check_manuscript, start_draft_review, get_draft_review, "
+        "cancel_draft_review, "
         "get/set_manuscript_checklist, compile_manuscript "
         "then get_compile_result, start_manuscript_review, get_manuscript_review, cancel_manuscript_review_all, "
         "read_manuscript_pdf_text."
@@ -956,6 +957,17 @@ async def get_draft_review(manuscript_id: uuid.UUID) -> manuscript_draft_review.
     or no close criterion. review is null before the first start."""
     async with sessions() as session:
         return manuscript_draft_review.DraftReviewState(**await manuscript_draft_review.state(session, manuscript_id))
+
+
+@mcp.tool()
+@recoverable
+async def cancel_draft_review(manuscript_id: uuid.UUID, review_id: uuid.UUID) -> manuscript_draft_review.DraftReviewOut:
+    """Use to stop a running tough draft review (review_id from start_draft_review). A queued or running review stops
+    and reads as failed with reason cancelled; a finished review is returned unchanged."""
+    async with sessions() as session:
+        return manuscript_draft_review.DraftReviewOut(
+            **await manuscript_draft_review.cancel(session, manuscript_id, review_id)
+        )
 
 
 @mcp.tool()

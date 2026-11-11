@@ -5,10 +5,13 @@ import uuid
 import pytest
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
+from sqlalchemy import update
 from test_manuscript_papers import setup
 from test_remote_confirm import _remote
 
-from app.core import manuscripts
+from app.core import manuscript_draft_review, manuscripts
+from app.core.errors import DomainError, error_code
+from app.models import ManuscriptDraftReview as Row
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
 
@@ -74,3 +77,31 @@ async def test_an_unknown_manuscript_gives_the_same_error_as_check_manuscript(se
     started = await call("start_draft_review", manuscript_id=missing)
     assert checked.is_error and started.is_error
     assert started.structured_content["error"] == checked.structured_content["error"]
+
+
+async def test_cancel_a_running_review_stops_it(session, jobs):
+    m = await manuscript(session)
+    out = result(await call("start_draft_review", manuscript_id=str(m.id)))
+    await session.execute(update(Row).where(Row.id == uuid.UUID(out["id"])).values(status="running"))
+    await session.flush()
+    cancelled = result(await call("cancel_draft_review", manuscript_id=str(m.id), review_id=out["id"]))
+    assert (cancelled["status"], cancelled["reason"]) == ("failed", "cancelled")
+    got = result(await call("get_draft_review", manuscript_id=str(m.id)))
+    assert (got["review"]["status"], got["review"]["reason"]) == ("failed", "cancelled")
+
+
+async def test_cancel_a_finished_review_returns_it_unchanged(session, jobs):
+    m = await manuscript(session)
+    out = result(await call("start_draft_review", manuscript_id=str(m.id)))
+    await session.execute(update(Row).where(Row.id == uuid.UUID(out["id"])).values(status="done", reason=None))
+    await session.flush()
+    again = result(await call("cancel_draft_review", manuscript_id=str(m.id), review_id=out["id"]))
+    assert (again["status"], again["reason"]) == ("done", None)
+
+
+async def test_an_unknown_review_gives_the_core_error_code(session, jobs):
+    m = await manuscript(session)
+    with pytest.raises(DomainError) as core:
+        await manuscript_draft_review.cancel(session, m.id, uuid.uuid4())
+    missing = str(uuid.uuid4())
+    failed(await call("cancel_draft_review", manuscript_id=str(m.id), review_id=missing), error_code(core.value))
