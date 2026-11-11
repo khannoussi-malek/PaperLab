@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { parseBlueprint } from './blueprint'
+import { parseBlueprint, starterBlueprint } from './blueprint'
 
 test('reads the fields it knows and ignores the rest', () => {
   const b = parseBlueprint('{"title":"T","contributions":["a"],"notation":[{"symbol":"\\\\alpha","meaning":"w"}],"target_words":{"method":[100,200]},"extra":1}')
@@ -16,4 +16,15 @@ test('malformed entries are dropped, not thrown on', () => {
   const b = parseBlueprint('{"contributions":["a",3],"target_words":{"m":[1],"n":[2,3]}}')
   expect(b?.contributions).toEqual(['a'])
   expect(b?.targets).toEqual([{ id: 'n', min: 2, max: 3 }])
+})
+
+test('the starter has the title, empty lists and the template bands', () => {
+  const text = starterBlueprint('My paper', { introduction: [400, 900], method: [500, 1500] })
+  expect(JSON.parse(text)).toEqual({ title: 'My paper', contributions: [], notation: [], target_words: { introduction: [400, 900], method: [500, 1500] } })
+  expect(text.endsWith('\n')).toBe(true)
+  expect(text).toContain('\n  "title"')
+})
+
+test('no bands gives an empty target_words', () => {
+  expect(JSON.parse(starterBlueprint('T', undefined)).target_words).toEqual({})
 })

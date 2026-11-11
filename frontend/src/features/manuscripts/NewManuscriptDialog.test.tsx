@@ -8,10 +8,10 @@ import { NewManuscriptDialog } from './NewManuscriptDialog'
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   vi.spyOn(api, 'listManuscriptTemplates').mockResolvedValue([
-    { name: 'article', label: 'Plain article', official: false, provenance: '', page_limit: null, references_count: false },
-    { name: 'ieee', label: 'IEEE conference', official: true, provenance: '', page_limit: 6, references_count: true },
-    { name: 'acm', label: 'ACM (sigconf)', official: true, provenance: '', page_limit: 9, references_count: false },
-    { name: 'elsevier', label: 'Elsevier', official: true, provenance: '', page_limit: null, references_count: false },
+    { name: 'article', label: 'Plain article', official: false, provenance: '', page_limit: null, references_count: false, section_words: {} },
+    { name: 'ieee', label: 'IEEE conference', official: true, provenance: '', page_limit: 6, references_count: true, section_words: {} },
+    { name: 'acm', label: 'ACM (sigconf)', official: true, provenance: '', page_limit: 9, references_count: false, section_words: {} },
+    { name: 'elsevier', label: 'Elsevier', official: true, provenance: '', page_limit: null, references_count: false, section_words: {} },
   ])
 })
 afterEach(() => {

@@ -28,3 +28,8 @@ export function parseBlueprint(text: string): Blueprint | null {
       Array.isArray(b) && b.length === 2 && b.every((x) => typeof x === 'number') ? [{ id, min: b[0], max: b[1] }] : []),
   }
 }
+
+/** The starter file: the title, empty lists and the template's word bands. Pretty-printed, newline at the end. */
+export function starterBlueprint(title: string, bands: Record<string, number[]> | undefined): string {
+  return JSON.stringify({ title, contributions: [], notation: [], target_words: bands ?? {} }, null, 2) + '\n'
+}
