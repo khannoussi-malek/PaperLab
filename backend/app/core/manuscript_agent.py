@@ -6,6 +6,7 @@ snapshot. Every writing function commits on success and rolls back on any error.
 import base64
 import binascii
 import functools
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -244,7 +245,8 @@ def _require_base(row, base: Base) -> None:
 
 @_committing
 async def create_file(
-    session: AsyncSession, mid: uuid.UUID, path: str, text: str, reason: str | None = None
+    session: AsyncSession, mid: uuid.UUID, path: str, text: str, reason: str | None = None, *,
+    tool: str = "create_manuscript_file",
 ) -> Written:
     try:
         row = await manuscripts.save_text(
@@ -252,7 +254,35 @@ async def create_file(
         )
     except IntegrityError:  # a racing create or rename of the same new path committed first
         raise Conflict("file_exists") from None
-    return await _written(session, mid, row, "create_manuscript_file", reason)
+    return await _written(session, mid, row, tool, reason)
+
+
+BLUEPRINT = "blueprint.json"
+
+
+def starter_blueprint(title: str, template: str) -> str:
+    """The app's Create blueprint starter (frontend starterBlueprint): the title, empty lists and the template's word
+    bands; a custom manuscript has no bands, so no targets. Pretty-printed, newline at the end."""
+    spec = manuscript_templates.get(template)
+    targets = {} if spec is None else {s.id: list(s.words) for s in spec.sections}
+    body = {"title": title, "contributions": [], "notation": [], "target_words": targets}
+    return json.dumps(body, indent=2, ensure_ascii=False) + "\n"
+
+
+async def create_blueprint(session: AsyncSession, mid: uuid.UUID, reason: str | None = None) -> Written:
+    """Starts blueprint.json when there is none; never overwrites one."""
+    manuscript = await manuscripts.get(session, mid)
+    if await manuscripts.get_text(session, mid, BLUEPRINT) is not None:
+        raise InvalidInput("blueprint_exists")
+    try:
+        return await create_file(
+            session, mid, BLUEPRINT, starter_blueprint(manuscript.title, manuscript.template), reason,
+            tool="create_manuscript_blueprint",
+        )
+    except Conflict as exc:  # a racing create of blueprint.json committed first
+        if str(exc) == "file_exists":
+            raise InvalidInput("blueprint_exists") from None
+        raise
 
 
 @_committing

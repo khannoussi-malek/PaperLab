@@ -559,15 +559,18 @@ Systematic search and screening:
 Writing studio:
 - `list_manuscripts`: your manuscripts, with workspace, main file and compile status;
 - `create_manuscript`: a new manuscript from a template (article, IEEE, ACM, LNCS or Elsevier), optionally tied to a workspace;
+- `list_manuscript_templates`: the five templates with each one's page limit, whether references count toward it, and its section word bands;
 - `list_manuscript_files`: a manuscript's files, without their text;
 - `read_manuscript_file`: a file's text, or a range of lines, with the `updated_at` Claude passes back as `base` when it changes the file;
 - `create_manuscript_file`: a new text file, such as `sections/results.tex`;
+- `create_manuscript_blueprint`: starts `blueprint.json` (the title, and each section's word target from the template) when the manuscript has none; it never overwrites one;
 - `write_manuscript_file`: replaces a whole text file;
 - `edit_manuscript_file`: changes one passage that matches exactly once;
 - `rename_manuscript_file`: renames or moves a text file (not the main file);
 - `delete_manuscript_file`: deletes a text file, only when you ask;
 - `add_manuscript_figure`: adds an image or PDF at a new path; it never overwrites a file;
 - `check_manuscript`: runs the offline checks (today: cited keys that match nothing) and lists every finding with file, line and a text-only fix hint;
+- `check_dois`: checks each DOI in the manuscript's .bib files against Crossref (only the DOIs are sent; nothing when Crossref is off in Settings) and lists the ones it does not find;
 - `start_draft_review`: starts PaperLab's tough whole-draft review in the background (light or full mode); it never edits the draft;
 - `get_draft_review`: the latest whole-draft review's status, progress and issues, blocker first;
 - `cancel_draft_review`: stops a running whole-draft review; a finished one is returned unchanged;
