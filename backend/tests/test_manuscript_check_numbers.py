@@ -156,6 +156,10 @@ def test_a_tabular_cell_backs_the_prose():
         "\\linespread{1.3}\\scalebox{0.8}{x} width=0.5\\textwidth [0.5] text.",
         "See §4.2, § 5.1 and \\S~6.3 for it.",
         "We use XGBoost 1.7, LightGBM 4.1, SQLite 3.45, ROS 2.0 and TensorRT 8.6.",
+        "The draft was written by Claude Sonnet 5.5 (Anthropic) in one pass.",
+        "We ran the baselines once to GPT-4o mini and once to Gemini 3.5 Flash.",
+        "Postgres 16.15 with pgvector 0.8.6 stores the index.",
+        "We used Claude Opus 4.1 and Claude Haiku 4.5 and PostgreSQL 15.2 with Docker 24.0.",
         "We use dropout probability of 0.5, label smoothing factor 0.1, warmup ratio 0.1 and momentum coefficient 0.9.",
         "Run \\texttt{--alpha 0.5} and \\verb|--beta 0.7| here.",
     ],
@@ -176,6 +180,31 @@ def test_false_positive_guards(text):
 def test_a_number_in_a_sentence_with_a_citation_is_exempt(text):
     # lead ruling: such numbers come from another paper, not the author's own results
     assert run(text) == []
+
+
+@pytest.mark.parametrize(
+    "product",
+    [
+        "Sonnet",
+        "Opus",
+        "Haiku",
+        "Gemini",
+        "Claude",
+        "Postgres",
+        "PostgreSQL",
+        "Python",
+        "Node",
+        "Docker",
+        "pgvector",
+        "Ollama",
+        "Qwen",
+        "Mistral",
+        "Phi",
+        "GPT",
+    ],  # the product word list lives once, in CUE_WORDS
+)
+def test_a_version_after_a_product_name_is_silent(product):
+    assert run(f"We used {product} 4.5 here.") == []
 
 
 @pytest.mark.parametrize(
@@ -230,6 +259,49 @@ def test_a_number_after_a_difference_cue_is_info(text):
     assert f.fix_hint.endswith(
         "PaperLab does not compute differences, so check this one by hand; PaperLab never edits your text."
     )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Runs take 1.19\\,s each.",
+        "The model needs 5.17\\,GB of memory.",
+        "Latency is 24~ms per call.",
+        "Latency is 24\\ ms per call.",
+        "It took 1.97\\,\\text{s} in total.",
+        "It took 1.97\\,\\mathrm{ms} here.",
+        "It took 1.97~\\textrm{s} here.",
+        "It took 1.97\\thinspace s here.",
+    ],
+)
+def test_a_thin_space_tilde_or_escaped_space_before_a_unit_is_exempt(text):
+    assert run(text) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Times were 0.96, 1.19 and 1.97\\,s for fused search.",
+        "Peaks were 2.4 or 3.1 GB per run.",
+        "It ranged from 1.19 to 1.97 ms.",
+    ],
+)
+def test_a_number_in_a_list_that_ends_in_a_unit_is_exempt(text):
+    assert run(text) == []
+
+
+def test_a_list_without_a_unit_is_still_checked():
+    assert [f.message[:6] for f in run("Scores were 0.96, 1.19 and 1.97 overall.")] == ['"0.96"', '"1.19"', '"1.97"']
+
+
+def test_a_plain_unbacked_decimal_is_still_flagged():
+    [f] = run("Runs take 1.19 each.")
+    assert f.severity == "warning"
+
+
+def test_an_unbacked_number_after_an_ordinary_word_is_still_flagged():
+    [f] = run("Our accuracy of 5.5 here.")
+    assert f.severity == "warning"
 
 
 def test_a_plain_unmatched_percent_is_still_a_warning():
