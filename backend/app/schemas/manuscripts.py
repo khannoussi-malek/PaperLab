@@ -12,6 +12,7 @@ class TemplateOut(BaseModel):
     provenance: str
     page_limit: int | None
     references_count: bool
+    section_words: dict[str, tuple[int, int]] = {}
 
 
 class FileOut(BaseModel):

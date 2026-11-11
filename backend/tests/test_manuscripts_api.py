@@ -27,8 +27,12 @@ async def test_templates_listed(client):
     body = (await client.get("/api/templates/manuscripts")).json()
     assert [t["name"] for t in body] == ["article", "ieee", "acm", "lncs", "elsevier"]
     ieee = next(t for t in body if t["name"] == "ieee")
-    assert ieee == {"name": "ieee", "label": "IEEE conference", "official": True, "page_limit": 6,
-                    "references_count": True, "provenance": ieee["provenance"]}
+    assert {k: v for k, v in ieee.items() if k != "section_words"} == {"name": "ieee", "label": "IEEE conference",
+        "official": True, "page_limit": 6, "references_count": True, "provenance": ieee["provenance"]}
+    assert ieee["section_words"]  # every template ships bands
+    assert body[0]["section_words"]["introduction"] == [400, 900]
+    assert set(body[0]["section_words"]) == {"introduction", "related-work", "method", "results", "discussion",
+                                             "conclusion"}
     article = body[0]
     assert article["page_limit"] is None and article["official"] is False
 
