@@ -14,6 +14,7 @@ MAX_LOG = 200 * 1024
 
 _ERROR = re.compile(r"^error: (?:(?P<file>[^\s:]+):(?P<line>\d+): |!)(?P<message>.+)$")
 # Real Tectonic puts this in main.log, not on stderr; natbib words it "Package natbib Warning".
+_WARNING_START = re.compile(r"^(?:LaTeX|Package \w+) Warning: ")
 _CITATION = re.compile(
     r"^(?:LaTeX|Package \w+) Warning: (?P<message>Citation .* undefined) on input line (?P<line>\d+)\.$"
 )
@@ -41,15 +42,26 @@ class CompileResult:
     synctex: bytes | None = None  # <main stem>.synctex.gz, read like the PDF
 
 
+def _warning_at(raw: list[str], i: int) -> str:
+    """A TeX warning wraps at 79 columns and the rest starts on the next line, its break space kept: join them back."""
+    text = raw[i]
+    j = i
+    while _WARNING_START.match(text.lstrip()) and not text.rstrip().endswith(".") and j + 1 < len(raw):
+        j += 1
+        text += raw[j]
+    return text.strip()
+
+
 def parse_errors(log: str, main_file: str = "main.tex") -> list[dict]:
     out = []
-    for raw in log.splitlines():
-        line = raw.strip()
+    raw = log.splitlines()
+    for i, rawline in enumerate(raw):
+        line = rawline.strip()
         m = _ERROR.match(line)
         if m:  # the generic "something bad happened" follow-ups carry no file or "!", so they never match
             out.append(_entry(m, "error"))
             continue
-        m = _CITATION.match(line)
+        m = _CITATION.match(_warning_at(raw, i))
         if m:
             out.append(
                 {"file": main_file, "line": int(m.group("line")), "message": m.group("message"), "kind": "warning"}

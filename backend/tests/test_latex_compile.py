@@ -45,6 +45,14 @@ def test_undefined_citation_is_a_warning_with_its_line():
     ]
 
 
+def test_undefined_citation_wrapped_in_a_real_log_is_reported():
+    # real Tectonic 0.17 output: \cite{known1,missingkey,known2}; TeX wraps the warning at 79 columns
+    log = _fix("undefcite_multi.main.log")
+    assert lc.parse_errors(log, "main.tex") == [
+        {"file": "main.tex", "line": 4, "message": "Citation `missingkey' on page 1 undefined", "kind": "warning"}
+    ]
+
+
 def test_friendly_biber():
     assert lc.friendly_message(_fix("biblatex.stderr.txt")) == "biber_unsupported"
 

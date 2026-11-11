@@ -1,9 +1,13 @@
 """A failed compile must say why in `errors`, and a compile's undefined citations and references come as a list."""
 
+from pathlib import Path
+
 import pytest
 
 from app.core import latex_compile
 from app.core.manuscript_agent_compile import undefined_keys
+
+FIX = Path(__file__).parent / "fixtures" / "tectonic"
 
 XDV_STDERR = """Requested font "ntxsym" at 7.3pt
 error: something bad happened inside xdvipdfmx; its output follows:
@@ -70,6 +74,11 @@ def test_a_timeout_or_outside_file_keeps_its_own_message():
 )
 def test_undefined_keys_are_read_from_the_log(log, citations, references):
     assert undefined_keys(log) == (citations, references)
+
+
+def test_a_real_tectonic_log_gives_the_undefined_key():
+    # \\cite{known1,missingkey,known2} compiled by the pinned Tectonic 0.17 (the warning wraps across two lines)
+    assert undefined_keys((FIX / "undefcite_multi.main.log").read_text()) == (["missingkey"], [])
 
 
 @pytest.mark.parametrize("size", ["small", "footnotesize", "scriptsize", "tiny"])
