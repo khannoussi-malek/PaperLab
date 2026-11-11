@@ -30,6 +30,8 @@ export type SectionFinding = components['schemas']['FindingOut']
 export type SectionRef = components['schemas']['RefOut']
 export type SectionSpan = components['schemas']['SectionSpanOut']
 export type SectionReviewStart = components['schemas']['SectionReviewIn']
+export type DraftReview = components['schemas']['DraftReviewOut']
+export type DraftReviewEstimate = components['schemas']['DraftReviewEstimate']
 export type Diagram = components['schemas']['DiagramOut']
 export type DiagramStart = components['schemas']['DiagramIn']
 export type CitablePaper = components['schemas']['CitablePaperOut']
@@ -623,6 +625,12 @@ export const api = {
     request<{ reviews: SectionReview[] }>(`/api/manuscripts/${id}/section-review?file=${encodeURIComponent(file)}`),
   cancelSectionReview: (id: string, reviewId: string) =>
     request<SectionReview>(`/api/manuscripts/${id}/section-review/${reviewId}/cancel`, { method: 'POST' }),
+  startDraftReview: (id: string, body: components['schemas']['DraftReviewIn']) =>
+    request<DraftReview>(`/api/manuscripts/${id}/draft-review`, sendJson('POST', body)),
+  draftReview: (id: string) => request<{ review: DraftReview | null }>(`/api/manuscripts/${id}/draft-review`),
+  draftReviewEstimate: (id: string) => request<DraftReviewEstimate>(`/api/manuscripts/${id}/draft-review/estimate`),
+  cancelDraftReview: (id: string, reviewId: string) =>
+    request<DraftReview>(`/api/manuscripts/${id}/draft-review/${reviewId}/cancel`, { method: 'POST' }),
   createDiagram: (id: string, body: DiagramStart) =>
     request<Diagram>(`/api/manuscripts/${id}/diagrams`, sendJson('POST', body)),
   diagram: (id: string, diagramId: string) => request<Diagram>(`/api/manuscripts/${id}/diagrams/${diagramId}`),
