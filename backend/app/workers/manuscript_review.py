@@ -5,12 +5,14 @@ while its row is still the `running` one this job took (the stamp), so a newer s
 overwritten. The model comes from ctx["llm"] when a test sets it, else the default connection's."""
 
 import logging
+import time
 import uuid
 
 from sqlalchemy import func, select, update
 
-from app.core import claim_detect, claims, llm_connections
+from app.core import claim_detect, claims, llm_connections, queue
 from app.core.errors import DomainError, error_code
+from app.core.manuscript_review import JOB
 from app.db import SessionLocal
 from app.models import ManuscriptClaimCheck as Check
 from app.models import ManuscriptReviewRun as Run
@@ -19,6 +21,8 @@ from app.providers.llm import build_llm
 logger = logging.getLogger(__name__)
 
 REVIEW_JOB_TIMEOUT = 60 * 60
+# ponytail: a job stops taking rows here and queues itself again, so a big run is never killed mid-row
+REVIEW_BUDGET_S = REVIEW_JOB_TIMEOUT - 10 * 60
 MAX_REASON = 300
 
 
@@ -126,8 +130,33 @@ async def _cancelled(run_id: uuid.UUID) -> bool | None:
         )
 
 
+async def _requeue(rid: uuid.UUID, run_id: str) -> bool:
+    """Past the budget: queue the same run once, and only when a row still waits and no stop was asked. True when this
+    job should return (a successor was queued, or the run was failed); False to let the loop end and finish the run."""
+    async with SessionLocal() as session:
+        more = await session.scalar(select(Check.id).where(Check.run_id == rid, Check.status == "queued").limit(1))
+        stop = await session.scalar(
+            select(Run.cancel_requested).where(Run.id == rid).execution_options(populate_existing=True)
+        )
+    if more is None or stop is not False:  # nothing left, cancelled, or the run is gone
+        return False
+    try:
+        await queue.enqueue(JOB, run_id)
+    except Exception:
+        logger.exception("could not queue the continuation of review run %s", run_id)
+        async with SessionLocal() as session:
+            await session.execute(
+                update(Run)
+                .where(Run.id == rid)
+                .values(status="failed", reason="queue_unavailable", updated_at=func.clock_timestamp())
+            )
+            await session.commit()
+    return True
+
+
 async def check_manuscript_citations(ctx: dict, run_id: str) -> None:
     rid = uuid.UUID(run_id)
+    deadline = time.monotonic() + REVIEW_BUDGET_S
     while (stop := await _cancelled(rid)) is False and (taken := await _take(rid)) is not None:
         row_id, kind, paper_id, plain, confirmed, stamp = taken
         try:
@@ -138,5 +167,7 @@ async def check_manuscript_citations(ctx: dict, run_id: str) -> None:
             logger.exception("review check failed for run %s", run_id)
             values = {"status": "failed", "reason": "check_failed"}
         await _write(rid, row_id, stamp, **values)
+        if time.monotonic() > deadline and await _requeue(rid, run_id):
+            return
     if stop is not None:
         await _finish(rid)

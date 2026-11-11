@@ -459,3 +459,71 @@ async def test_crlf_file_starts_with_the_same_rows_as_its_lf_twin(session):
     await manuscripts.upsert_text(session, m.id, "main.tex", twin.replace("\r\n", "\n"))
     await go(session, m)
     assert [(r.sentence_hash, r.kind) for r in await rows(session, m.id)] == crlf_rows
+
+
+async def test_a_job_past_its_budget_requeues_the_same_run(session, arq, monkeypatch):
+    papers, keys, m = await doc(
+        session,
+        lambda k: " ".join(f"Claim {i} is well known \\cite{{{k[0]}}}." for i in range(3)),
+        "Alpha",
+    )
+    run = await go(session, m, include_uncited=False)
+    monkeypatch.setattr(worker, "REVIEW_BUDGET_S", -1)  # over budget after the first row
+    llm = Scripted(check(), check(), check())
+    await worker.check_manuscript_citations({"llm": llm}, str(run["id"]))
+    assert [r.status for r in await rows(session, m.id)].count("done") == 1
+    assert arq.jobs == [("check_manuscript_citations", str(run["id"]))] * 2  # the start's job and the continuation
+    monkeypatch.setattr(worker, "REVIEW_BUDGET_S", 3000)
+    await worker.check_manuscript_citations({"llm": llm}, str(run["id"]))
+    assert {r.status for r in await rows(session, m.id)} == {"done"}
+    assert arq.jobs.count(("check_manuscript_citations", str(run["id"]))) == 2  # a run under budget queues nothing more
+
+
+async def test_a_cancelled_run_past_its_budget_is_not_requeued(session, arq, monkeypatch):
+    _, _, m = await doc(
+        session,
+        lambda k: " ".join(f"Claim {i} is well known \\cite{{{k[0]}}}." for i in range(3)),
+        "Alpha",
+    )
+    run = await go(session, m, include_uncited=False)
+    rid = uuid.UUID(str(run["id"]))
+    monkeypatch.setattr(worker, "REVIEW_BUDGET_S", -1)
+    await session.execute(
+        update(ManuscriptReviewRun).where(ManuscriptReviewRun.id == rid).values(cancel_requested=True)
+    )
+    await session.commit()
+    assert await worker._requeue(rid, str(rid)) is False
+    await worker.check_manuscript_citations({"llm": Scripted()}, str(rid))
+    assert arq.jobs == [("check_manuscript_citations", str(rid))]  # only the start's job
+    saved = await session.get(ManuscriptReviewRun, rid, populate_existing=True)
+    assert saved.status == "cancelled"
+
+
+async def test_the_budget_passing_on_the_last_row_finishes_the_run(session, arq, monkeypatch):
+    _, _, m = await doc(session, lambda k: f"Claim is well known \\cite{{{k[0]}}}.", "Alpha")
+    run = await go(session, m, include_uncited=False)
+    rid = uuid.UUID(str(run["id"]))
+    monkeypatch.setattr(worker, "REVIEW_BUDGET_S", -1)
+    await worker.check_manuscript_citations({"llm": Scripted(check())}, str(rid))
+    assert arq.jobs == [("check_manuscript_citations", str(rid))]  # no row waits, so no continuation
+    saved = await session.get(ManuscriptReviewRun, rid, populate_existing=True)
+    assert saved.status == "done"
+
+
+async def test_a_dead_queue_on_requeue_fails_the_run_without_raising(session, arq, monkeypatch):
+    _, _, m = await doc(
+        session,
+        lambda k: " ".join(f"Claim {i} is well known \\cite{{{k[0]}}}." for i in range(3)),
+        "Alpha",
+    )
+    run = await go(session, m, include_uncited=False)
+    rid = uuid.UUID(str(run["id"]))
+    monkeypatch.setattr(worker, "REVIEW_BUDGET_S", -1)
+
+    async def down(*args, **kwargs):
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(worker.queue, "enqueue", down)
+    await worker.check_manuscript_citations({"llm": Scripted(check(), check(), check())}, str(rid))
+    saved = await session.get(ManuscriptReviewRun, rid, populate_existing=True)
+    assert (saved.status, saved.reason) == ("failed", "queue_unavailable")
