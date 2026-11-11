@@ -47,6 +47,7 @@ UNIT = re.compile(
     r"(?:\s|\\[,; ]|\\thinspace\b)*(?:\\(?:text|textrm|mathrm|si|unit)\{\s*)?"  # 3.5\,\text{ms}, 3.5\thinspace s
     r"(?:" + "|".join(sorted(map(re.escape, UNITS), key=len, reverse=True)) + r")(?![A-Za-z])|\}\s*\{\\"
 )  # 3.5 ms, 3.5\,ms, 3.5~ms (prose() turns ~ into a space), \SI{3.5}{\milli\second}
+LIST_TO_UNIT = re.compile(r"(?:\s*,\s*(?:and\s+|or\s+)?|\s+(?:and|or|to)\s+)\d+(?:\.\d+)?")  # 0.96, 1.19 and 1.97\,s
 CUE_WORDS = {  # a decimal right after one of these is a reference or a version, not a result
     "section",
     "sections",
@@ -384,6 +385,11 @@ def _excused(scan: str, blanked: str, m: re.Match) -> bool:
         return True  # \linespread{1.3}, \scalebox{0.8}: layout, not a result
     if not m["pct"] and UNIT.match(scan, m.end("num")):
         return True
+    pos = m.end("num")
+    while not m["pct"] and (step := LIST_TO_UNIT.match(scan, pos)):
+        pos = step.end()
+        if UNIT.match(scan, pos):
+            return True  # a list shares its last number's unit
     word = LAST_WORD.search(scan, max(0, start - 30), start)
     if word and word[1].lower() in CUE_WORDS or SECTION_SIGN.search(blanked, max(0, start - 4), start):
         return True

@@ -278,9 +278,20 @@ def test_a_thin_space_tilde_or_escaped_space_before_a_unit_is_exempt(text):
     assert run(text) == []
 
 
-def test_only_the_unbacked_decimals_are_flagged_next_to_a_unit_thin_space():
-    flagged = {f.message.split('"')[1] for f in run("Times were 0.96, 1.19 and 1.97\\,s in total.")}
-    assert flagged == {"0.96", "1.19"}
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Times were 0.96, 1.19 and 1.97\\,s for fused search.",
+        "Peaks were 2.4 or 3.1 GB per run.",
+        "It ranged from 1.19 to 1.97 ms.",
+    ],
+)
+def test_a_number_in_a_list_that_ends_in_a_unit_is_exempt(text):
+    assert run(text) == []
+
+
+def test_a_list_without_a_unit_is_still_checked():
+    assert [f.message[:6] for f in run("Scores were 0.96, 1.19 and 1.97 overall.")] == ['"0.96"', '"1.19"', '"1.97"']
 
 
 def test_a_plain_unbacked_decimal_is_still_flagged():
