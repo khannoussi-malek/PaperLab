@@ -4489,6 +4489,8 @@ export interface components {
         };
         /** EstimateOut */
         EstimateOut: {
+            /** Replaces */
+            replaces: number;
             /** Files */
             files: components["schemas"]["EstimateFileOut"][];
             /** Pairs */

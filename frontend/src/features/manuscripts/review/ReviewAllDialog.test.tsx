@@ -5,8 +5,8 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { api, ApiError } from '@/api/client'
 import { ReviewAllDialog } from './ReviewAllDialog'
 
-const estimate = (pairs: number) => ({
-  files: [{ path: 'main.tex', pairs: pairs - 2, uncited: 0 }, { path: 'intro.tex', pairs: 2, uncited: 0 }],
+const estimate = (pairs: number, replaces = 0) => ({
+  replaces, files: [{ path: 'main.tex', pairs: pairs - 2, uncited: 0 }, { path: 'intro.tex', pairs: 2, uncited: 0 }],
   pairs, uncited: 0, uncited_skipped: 0, confirm_above: 30, max_pairs: 600, needs_confirm: pairs > 30,
 })
 const posted = (confirmRemote: boolean, confirmLarge: boolean) => ({ include_uncited: true, confirm_remote: confirmRemote, confirm_large: confirmLarge })
@@ -28,6 +28,19 @@ test('a labelled dialog shows the estimate with each file\'s checks', async () =
   expect(screen.getByText('main.tex: 10 checks')).toBeInTheDocument()
   expect(screen.getByText('intro.tex: 2 checks')).toBeInTheDocument()
   expect(screen.queryByText(/long time/)).not.toBeInTheDocument()
+})
+
+test('a start that replaces earlier results says so', async () => {
+  vi.spyOn(api, 'reviewEstimate').mockResolvedValue(estimate(12, 40))
+  show()
+  expect(await screen.findByText('This replaces the earlier results for every file.')).toBeInTheDocument()
+})
+
+test('a first start says nothing about replacing', async () => {
+  vi.spyOn(api, 'reviewEstimate').mockResolvedValue(estimate(12))
+  show()
+  await screen.findByText('12 checks across 2 files')
+  expect(screen.queryByText(/replaces the earlier results/)).not.toBeInTheDocument()
 })
 
 test('at 30 checks it starts without the large-run confirm', async () => {

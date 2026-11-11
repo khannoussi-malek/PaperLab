@@ -21,7 +21,7 @@ from app.providers.llm import build_llm
 logger = logging.getLogger(__name__)
 
 REVIEW_JOB_TIMEOUT = 60 * 60
-# ponytail: a job stops taking rows here and queues itself again, so a big run is never killed mid-row
+# ponytail: a job stops taking rows here and queues itself again; a single check must finish inside the 10-minute margin, or arq kills it mid-row at REVIEW_JOB_TIMEOUT
 REVIEW_BUDGET_S = REVIEW_JOB_TIMEOUT - 10 * 60
 MAX_REASON = 300
 
@@ -151,6 +151,18 @@ async def _requeue(rid: uuid.UUID, run_id: str) -> bool:
                 .values(status="failed", reason="queue_unavailable", updated_at=func.clock_timestamp())
             )
             await session.commit()
+        return True
+    # The continuation waits in the queue: keep the run and its waiting rows live until it picks them up.
+    async with SessionLocal() as session:
+        await session.execute(
+            update(Run).where(Run.id == rid).values(updated_at=func.clock_timestamp())
+        )
+        await session.execute(
+            update(Check)
+            .where(Check.run_id == rid, Check.status == "queued")
+            .values(updated_at=func.clock_timestamp())
+        )
+        await session.commit()
     return True
 
 

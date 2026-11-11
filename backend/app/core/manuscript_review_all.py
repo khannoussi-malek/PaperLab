@@ -4,7 +4,7 @@ real file and numbered across files in document order; app.workers.manuscript_re
 import asyncio
 import uuid
 
-from sqlalchemy import delete, func, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections, manuscript_papers, manuscripts
@@ -59,7 +59,11 @@ async def _plan_all(session: AsyncSession, mid: uuid.UUID, include_uncited: bool
 async def estimate(session: AsyncSession, mid: uuid.UUID, *, include_uncited: bool) -> dict:
     planned = await _plan_all(session, mid, include_uncited)
     pairs = sum(_pairs(rows) for _, rows, _ in planned)
+    replaces = await session.scalar(
+        select(func.count()).select_from(ManuscriptClaimCheck).where(ManuscriptClaimCheck.manuscript_id == mid)
+    )  # a start deletes every row of the manuscript, unchanged files included
     return {
+        "replaces": replaces,
         "files": [
             {"path": p, "pairs": _pairs(rows), "uncited": sum(r["kind"] == "uncited" for r in rows)}
             for p, rows, _ in planned

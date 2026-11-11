@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import manuscript_review as review
 from app.core import manuscript_review_all as review_all
 from app.core import manuscript_review_report as report
-from app.core.errors import NotFound, error_code
+from app.core.errors import InvalidInput, NotFound, error_code
 from app.schemas.manuscript_review import ReportItemOut, ReviewRunOut
 
 MAX_ITEMS = 200
@@ -34,10 +34,8 @@ async def start_review(
     session: AsyncSession, mid: uuid.UUID, include_uncited: bool, confirm_large: bool, allow_remote: bool
 ) -> ReviewStarted:
     est = await review_all.estimate(session, mid, include_uncited=include_uncited)
-    if est["pairs"] > est["max_pairs"]:  # too big to confirm: start_all refuses with too_many_claims
-        await review_all.start_all(
-            session, mid, include_uncited=include_uncited, confirm_large=True, confirm_remote=allow_remote
-        )
+    if est["pairs"] > est["max_pairs"]:  # too big to start at all
+        raise InvalidInput("too_many_claims", detail=f"{est['pairs']} checks", count=est["pairs"])
     if est["needs_confirm"] and not confirm_large:  # show the owner the count first; nothing is written
         return ReviewStarted(started=False, needs_confirm=True, pairs=est["pairs"], files=len(est["files"]), run=None)
     run = await review_all.start_all(

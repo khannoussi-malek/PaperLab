@@ -79,6 +79,7 @@ function Body({ manuscriptId, onClose }: { manuscriptId: string; onClose: () => 
         {est.needs_confirm && (
           <p className="text-sm">More than {est.confirm_above} checks. This can take a long time on a local model.</p>
         )}
+        {est.replaces > 0 && <p className="text-sm">This replaces the earlier results for every file.</p>}
         {n === 0 && <p className="text-sm text-muted-foreground">There is nothing to check yet.</p>}
       </div>
       {startAllError && <p role="alert" className="text-sm text-destructive">{startAllError}</p>}

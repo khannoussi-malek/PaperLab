@@ -164,3 +164,24 @@ async def test_the_job_judges_both_files_and_cancel_stops_it(session, arq):
     await mr.cancel(session, m2.id, run2["id"])
     await worker.check_manuscript_citations({"llm": Scripted()}, str(run2["id"]))
     assert {r.reason for r in await rows(session, m2.id) if r.status == "failed"} == {"cancelled"}
+
+
+async def test_estimate_says_how_many_earlier_results_a_start_replaces(session, arq):
+    keys, m = await two_files(session)
+    assert (await ra.estimate(session, m.id, include_uncited=True))["replaces"] == 0
+    await ra.start_all(session, m.id)
+    assert (await ra.estimate(session, m.id, include_uncited=True))["replaces"] == 5
+
+
+async def test_a_too_big_start_from_the_agent_is_refused_before_any_write(session, arq, monkeypatch):
+    import app.core.manuscript_agent_review as agent
+
+    _, _, big = await doc(session, lambda k: cites(601, k[0]), "Alpha")
+
+    async def no_write(*args, **kwargs):
+        raise AssertionError("the agent's start must refuse before start_all writes anything")
+
+    monkeypatch.setattr(ra, "start_all", no_write)
+    with pytest.raises(InvalidInput, match="too_many_claims"):
+        await agent.start_review(session, big.id, True, True, False)
+    assert await rows(session, big.id) == [] and arq.jobs == []

@@ -527,3 +527,22 @@ async def test_a_dead_queue_on_requeue_fails_the_run_without_raising(session, ar
     await worker.check_manuscript_citations({"llm": Scripted(check(), check(), check())}, str(rid))
     saved = await session.get(ManuscriptReviewRun, rid, populate_existing=True)
     assert (saved.status, saved.reason) == ("failed", "queue_unavailable")
+
+
+async def test_a_requeued_run_and_its_waiting_rows_are_live_after_the_requeue(session, arq, monkeypatch):
+    _, _, m = await doc(
+        session,
+        lambda k: " ".join(f"Claim {i} is well known \\cite{{{k[0]}}}." for i in range(3)),
+        "Alpha",
+    )
+    run = await go(session, m, include_uncited=False)
+    rid = uuid.UUID(str(run["id"]))
+    stale = datetime.now(UTC) - timedelta(minutes=30)  # past LIVE: the queue sat on the continuation this long
+    await session.execute(update(ManuscriptReviewRun).where(ManuscriptReviewRun.id == rid).values(updated_at=stale))
+    await session.execute(update(ManuscriptClaimCheck).where(ManuscriptClaimCheck.run_id == rid).values(updated_at=stale))
+    await session.commit()
+    assert await worker._requeue(rid, str(rid)) is True
+    saved = await session.get(ManuscriptReviewRun, rid, populate_existing=True)
+    assert mr._live(saved)
+    waiting = await rows(session, m.id)
+    assert waiting and all(r.status == "queued" and datetime.now(UTC) - r.updated_at < mr.LIVE for r in waiting)

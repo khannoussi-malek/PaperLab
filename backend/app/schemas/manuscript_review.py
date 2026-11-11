@@ -89,6 +89,7 @@ class EstimateFileOut(BaseModel):
 
 
 class EstimateOut(BaseModel):
+    replaces: int  # rows of earlier results that a start deletes
     files: list[EstimateFileOut]
     pairs: int
     uncited: int
