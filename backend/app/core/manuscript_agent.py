@@ -1,6 +1,7 @@
 """The manuscript operations an outside agent (the MCP) may do, each guarded the way the editor is: the app's path
 and size rules, a `base` (the file's `updated_at`) on every change to an existing file, and a `before_mcp` snapshot
-in the same transaction as every text write. Every writing function commits on success and rolls back on any error."""
+in the same transaction as every text write, which also logs the tool, path and optional reason the agent gave on that
+snapshot. Every writing function commits on success and rolls back on any error."""
 
 import base64
 import binascii
@@ -10,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from pydantic import AwareDatetime
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from app.models import ManuscriptSnapshot
 
 Base = AwareDatetime  # the tools' `base` type, so server.py imports nothing new
 MAX_TITLE = 200
+MAX_REASON = 500
 
 
 @dataclass(frozen=True)
@@ -211,9 +213,26 @@ async def _snapshot_id(session: AsyncSession, mid: uuid.UUID) -> uuid.UUID | Non
     )
 
 
-async def _written(session: AsyncSession, mid: uuid.UUID, row) -> Written:
+async def _log(session: AsyncSession, mid: uuid.UUID, tool: str, path: str, reason: str | None) -> uuid.UUID | None:
+    """Record the step on this transaction's `before_mcp` snapshot (the newest); returns its id."""
+    snapshot_id = await _snapshot_id(session, mid)
+    if snapshot_id is not None:
+        note = (reason or "").strip()[:MAX_REASON] or None  # never refuse a write over its reason
+        await session.execute(
+            update(ManuscriptSnapshot)
+            # never overwrite another step's log
+            .where(ManuscriptSnapshot.id == snapshot_id, ManuscriptSnapshot.ai_tool.is_(None))
+            .values(ai_tool=tool, ai_path=path, ai_reason=note)
+        )
+    return snapshot_id
+
+
+async def _written(session: AsyncSession, mid: uuid.UUID, row, tool: str, reason: str | None) -> Written:
     return Written(
-        path=row.path, size=row.size, updated_at=row.updated_at, snapshot_id=await _snapshot_id(session, mid)
+        path=row.path,
+        size=row.size,
+        updated_at=row.updated_at,
+        snapshot_id=await _log(session, mid, tool, row.path, reason),
     )
 
 
@@ -224,23 +243,27 @@ def _require_base(row, base: Base) -> None:
 
 
 @_committing
-async def create_file(session: AsyncSession, mid: uuid.UUID, path: str, text: str) -> Written:
+async def create_file(
+    session: AsyncSession, mid: uuid.UUID, path: str, text: str, reason: str | None = None
+) -> Written:
     try:
         row = await manuscripts.save_text(
             session, mid, path, text, base=None, snapshot=manuscript_history.MCP_REASON
         )
     except IntegrityError:  # a racing create or rename of the same new path committed first
         raise Conflict("file_exists") from None
-    return await _written(session, mid, row)
+    return await _written(session, mid, row, "create_manuscript_file", reason)
 
 
 @_committing
-async def write_file(session: AsyncSession, mid: uuid.UUID, path: str, text: str, base: Base) -> Written:
+async def write_file(
+    session: AsyncSession, mid: uuid.UUID, path: str, text: str, base: Base, reason: str | None = None
+) -> Written:
     if not paths.is_text(paths.validate_path(path)):
         raise InvalidInput("unsupported_file_type")
     _require_base(await _text_row(session, mid, path), base)
     row = await manuscripts.save_text(session, mid, path, text, base=base, snapshot=manuscript_history.MCP_REASON)
-    return await _written(session, mid, row)
+    return await _written(session, mid, row, "write_manuscript_file", reason)
 
 
 def apply_edit(text: str, old: str, new: str) -> str:
@@ -256,7 +279,13 @@ def apply_edit(text: str, old: str, new: str) -> str:
 
 @_committing
 async def edit_file(
-    session: AsyncSession, mid: uuid.UUID, path: str, old_text: str, new_text: str, base: Base
+    session: AsyncSession,
+    mid: uuid.UUID,
+    path: str,
+    old_text: str,
+    new_text: str,
+    base: Base,
+    reason: str | None = None,
 ) -> Written:
     paths.validate_path(path)  # a hostile path answers its own code, not unknown_file
     row = await _text_row(session, mid, path)
@@ -272,11 +301,13 @@ async def edit_file(
         base=row.updated_at,
         snapshot=manuscript_history.MCP_REASON,
     )
-    return await _written(session, mid, saved)
+    return await _written(session, mid, saved, "edit_manuscript_file", reason)
 
 
 @_committing
-async def rename_file(session: AsyncSession, mid: uuid.UUID, path: str, new_path: str, base: Base) -> Renamed:
+async def rename_file(
+    session: AsyncSession, mid: uuid.UUID, path: str, new_path: str, base: Base, reason: str | None = None
+) -> Renamed:
     paths.validate_path(new_path)
     paths.validate_path(path)
     _require_base(await _text_row(session, mid, path), base)
@@ -289,16 +320,21 @@ async def rename_file(session: AsyncSession, mid: uuid.UUID, path: str, new_path
     except IntegrityError:  # a racing create of the new path committed first
         raise Conflict("file_exists") from None
     return Renamed(
-        path=path, new_path=row.path, updated_at=row.updated_at, snapshot_id=await _snapshot_id(session, mid)
+        path=path,
+        new_path=row.path,
+        updated_at=row.updated_at,
+        snapshot_id=await _log(session, mid, "rename_manuscript_file", path, reason),
     )
 
 
 @_committing
-async def delete_file(session: AsyncSession, mid: uuid.UUID, path: str, base: Base) -> Deleted:
+async def delete_file(
+    session: AsyncSession, mid: uuid.UUID, path: str, base: Base, reason: str | None = None
+) -> Deleted:
     paths.validate_path(path)
     _require_base(await _text_row(session, mid, path), base)
     await manuscripts.remove(session, mid, path, base=base, snapshot=manuscript_history.MCP_REASON)
-    return Deleted(path=path, snapshot_id=await _snapshot_id(session, mid))
+    return Deleted(path=path, snapshot_id=await _log(session, mid, "delete_manuscript_file", path, reason))
 
 
 @_committing
