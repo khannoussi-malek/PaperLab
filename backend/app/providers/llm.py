@@ -288,6 +288,16 @@ def fake_claim_detect_reply(prompt: str) -> str:
     return json.dumps({"is_claim": flag, "reason": "Fake: a number or 'show'." if flag else "Fake: neither."})
 
 
+def fake_draft_review_reply(prompt: str) -> str:
+    """One issue whatever the lens: the paper's first eight words as the quote, so three lenses merge into one issue.
+    The summary and criterion have no colon, bracket or SUGGEST word ("says" is one), so they pass the wording guard."""
+    paper = prompt.split("Paper (LaTeX source):\n", 1)[1]
+    quote = " ".join(paper.split()[:8])
+    issue = {"severity": "major", "section": "Paper", "summary": "This opening claim has no result behind it",
+             "evidence_quote": quote, "close_criterion": "The claim must point to a result or a source"}
+    return json.dumps({"issues": [issue]})
+
+
 def fake_section_review_reply(prompt: str) -> str:
     """The first checklist item as Missing, and Supported on [S1] when a first sentence exists."""
     item = re.search(r"Checklist:\n- (.+)", prompt)
@@ -392,6 +402,8 @@ class FakeLLM:
         from app.core.claim_detect import SYSTEM_PROMPT as CLAIM_DETECT_SYSTEM_PROMPT
         from app.core.claims import SYSTEM_PROMPT as CLAIM_CHECK_SYSTEM_PROMPT
         from app.core.diagram import SYSTEM_PROMPT as DIAGRAM_SYSTEM_PROMPT
+        from app.core.draft_review import SYSTEM_PROMPT as DRAFT_REVIEW_SYSTEM_PROMPT
+        from app.core.draft_review import VERIFY_SYSTEM_PROMPT as DRAFT_VERIFY_SYSTEM_PROMPT
         from app.core.evidence_cards import SYSTEM_PROMPT as EVIDENCE_CARD_SYSTEM_PROMPT
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
         from app.core.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
@@ -421,6 +433,10 @@ class FakeLLM:
             tokens = [fake_section_review_reply(prompt)]
         elif system == DIAGRAM_SYSTEM_PROMPT:
             tokens = [fake_diagram_reply(prompt)]
+        elif system == DRAFT_REVIEW_SYSTEM_PROMPT:
+            tokens = [fake_draft_review_reply(prompt)]
+        elif system == DRAFT_VERIFY_SYSTEM_PROMPT:
+            tokens = [json.dumps({"refuted": False, "reason": "The fake skeptic found the issue fair."})]
         else:
             tokens = FAKE_TOKENS
         for index, token in enumerate(tokens):
