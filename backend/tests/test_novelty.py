@@ -108,3 +108,9 @@ async def test_real_search_close_paper_is_very_close_and_orthogonal_one_distant(
     assert report.papers[0].title == "Near paper" and report.papers[0].label == "very close"
     assert report.papers[0].page == 1
     assert {p.label for p in report.papers[1:]} <= {"related", "distant"}
+
+
+async def test_an_abstract_passage_drops_the_abstract_only_prefix(session, found):
+    found["passages"] = [passage(uuid.uuid4(), 0.1, text="(abstract only) An abstract line.", abstract=True)]
+    hit = (await novelty.check(session, "idea")).papers[0]
+    assert hit.passage == "An abstract line." and hit.from_abstract

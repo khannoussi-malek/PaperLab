@@ -9,6 +9,7 @@ from app.core import embedding_index, library, workspaces
 from app.core.errors import InvalidInput
 
 MAX_CHARS = 6000
+ABSTRACT_PREFIX = "(abstract only) "  # library.search adds it to abstract passages; the panel already says "abstract"
 TOP = 10
 # ponytail: uncalibrated guesses (cosine distance, lower = closer); retune on a real library with the real model.
 # The source repo's 0.88/0.82 similarity cutoffs came from another corpus and model and are not used.
@@ -70,7 +71,7 @@ async def check(
     papers = [
         NoveltyPaper(
             paper_id=p.paper_id, title=p.paper_title, year=p.year, label=label_for(p.distance), distance=p.distance,
-            passage=p.text, page=p.page, section=p.section, from_abstract=p.from_abstract, chunk_id=p.chunk_id,
+            passage=p.text.removeprefix(ABSTRACT_PREFIX) if p.from_abstract else p.text, page=p.page, section=p.section, from_abstract=p.from_abstract, chunk_id=p.chunk_id,
         )
         for p in ranked
     ]
