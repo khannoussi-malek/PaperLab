@@ -216,3 +216,11 @@ def test_significance_stars_are_not_markdown_bold():
     assert run("latex.markdown_leak", "Gains of 0.85** & 0.91** are reported.\n") == []
     [f] = run("latex.markdown_leak", "This is **bold** text.\n")
     assert f.message == 'Markdown bold "**bold**" left in the source.'
+
+
+def test_math_symbols_splits_display_first_use_from_inline():
+    text = "\\[ \\alpha + \\beta \\]\nwhere $\\beta$ is a weight.\n"
+    ctx = CheckContext(MappingProxyType({"main.tex": text}), frozenset(), INFO)
+    first, inline = latex_hygiene.math_symbols(ctx)
+    assert set(first) == {"alpha", "beta"} and inline == {"beta"}
+    assert first["alpha"] == ("main.tex", 1)
