@@ -1,0 +1,26 @@
+{
+  "id": "ml",
+  "label": "ML / engineering",
+  "applies_to": "Machine-learning and engineering papers",
+  "source": "Our own list for ML and engineering papers; no external checklist is copied",
+  "items": [
+    {"id": "data.source", "section": "Data", "text": "Says where the data came from and under what licence or access."},
+    {"id": "data.size", "section": "Data", "text": "Gives the number of examples, classes and features in each dataset."},
+    {"id": "data.splits", "section": "Data", "text": "Explains how the data were split into training, validation and test sets."},
+    {"id": "data.preprocessing", "section": "Data", "text": "Describes every preprocessing and cleaning step applied to the data."},
+    {"id": "data.leakage", "section": "Data", "text": "Shows that test data was kept out of training, including any feature or time leakage checks."},
+    {"id": "method.algorithm", "section": "Method", "text": "Describes the model or algorithm in enough detail to reimplement it."},
+    {"id": "method.hyperparameters", "section": "Method", "text": "Lists the hyperparameters and how they were chosen."},
+    {"id": "method.training", "section": "Method", "text": "Describes the training setup, including the optimiser, schedule and stopping rule."},
+    {"id": "eval.metrics", "section": "Evaluation", "text": "Defines each evaluation metric and why it suits the task."},
+    {"id": "eval.baselines", "section": "Evaluation", "text": "Names the baselines compared against, tuned with the same effort as the method."},
+    {"id": "eval.runs", "section": "Evaluation", "text": "States how many runs were done and how the reported numbers were aggregated."},
+    {"id": "results.variance", "section": "Results", "text": "Reports the spread across runs, such as standard deviations or confidence intervals."},
+    {"id": "results.ablations", "section": "Results", "text": "Reports ablations that isolate the contribution of each component."},
+    {"id": "repro.seeds", "section": "Reproducibility", "text": "Lists the random seeds used for data splits and training."},
+    {"id": "repro.environment", "section": "Reproducibility", "text": "Lists the software versions, libraries and hardware used."},
+    {"id": "repro.availability", "section": "Reproducibility", "text": "Says where the code, data and trained models can be obtained."},
+    {"id": "limits.scope", "section": "Limitations", "text": "Says which settings, datasets or tasks the results do not cover."},
+    {"id": "limits.failures", "section": "Limitations", "text": "Describes the cases where the method fails or performs worse."}
+  ]
+}
