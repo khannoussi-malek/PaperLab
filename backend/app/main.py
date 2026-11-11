@@ -28,6 +28,7 @@ from app.api import (
     links,
     llm,
     notes,
+    novelty,
     papers,
     triage,
     workspaces,
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(charts.router)
     app.include_router(llm.router)
     app.include_router(embedding.router)
+    app.include_router(novelty.router)
     app.include_router(discovery.router)
     app.include_router(graph.router)
     app.include_router(paper_sources_api.router)

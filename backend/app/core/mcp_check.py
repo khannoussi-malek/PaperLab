@@ -52,6 +52,7 @@ TOOLS = [
     "list_search_runs",
     "list_tags",
     "list_workspaces",
+    "novelty_check",
     "read_manuscript_file",
     "read_manuscript_pdf_text",
     "read_pages",

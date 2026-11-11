@@ -2877,6 +2877,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/novelty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check
+         * @description The library papers closest to a pasted idea, with their best passage and a plain label. Library only.
+         */
+        post: operations["check_api_novelty_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/discovery/search": {
         parameters: {
             query?: never;
@@ -5479,6 +5499,54 @@ export interface components {
             /** Color */
             color?: string | null;
             kind?: components["schemas"]["NoteKind"] | null;
+        };
+        /** NoveltyIn */
+        NoveltyIn: {
+            /** Text */
+            text: string;
+            /** Workspace */
+            workspace?: string | null;
+        };
+        /** NoveltyOut */
+        NoveltyOut: {
+            /** Papers */
+            papers: components["schemas"]["NoveltyPaperOut"][];
+            /** Searched Papers */
+            searched_papers: number;
+            /** Note */
+            note: string;
+        };
+        /** NoveltyPaperOut */
+        NoveltyPaperOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Title */
+            title: string;
+            /** Year */
+            year: number | null;
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "very close" | "related" | "distant";
+            /** Distance */
+            distance: number;
+            /** Passage */
+            passage: string;
+            /** Page */
+            page: number | null;
+            /** Section */
+            section: string | null;
+            /** From Abstract */
+            from_abstract: boolean;
+            /**
+             * Chunk Id
+             * Format: uuid
+             */
+            chunk_id: string;
         };
         /** NumberAddedOut */
         NumberAddedOut: {
@@ -13923,6 +13991,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReindexOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_api_novelty_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoveltyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoveltyOut"];
                 };
             };
             /** @description Validation Error */

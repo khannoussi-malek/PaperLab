@@ -244,6 +244,11 @@ export function useSuggestNotes(paperId: string) {
   return useMutation({ mutationFn: () => api.suggestNotes(paperId) })
 }
 
+/** Checks an idea against the library. Read-only, so nothing to invalidate. */
+export function useNovelty() {
+  return useMutation({ mutationFn: (text: string) => api.novelty(text) })
+}
+
 /** Saves part of a chat answer as an AI note. Resolves once the lists that show it have refetched and include it. */
 export function usePromoteNote() {
   const client = useQueryClient()

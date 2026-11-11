@@ -4,6 +4,9 @@ const WORDS: Record<string, string> = {
   needs_full_text: 'Needs the full text to assess.',
   not_a_pdf: 'That file is not a PDF.',
   pdf_too_large: 'That PDF is larger than 30 MB.',
+  search_not_set_up: "Search isn't set up yet. Download the search model in Settings, then try again.",
+  search_rebuilding: 'Search is being rebuilt. Try again when it finishes.',
+  embedding_model_changed: 'The search model changed. Re-index the library in Settings, then try again.',
 }
 
 /** A refused request's message: a known API code in words, anything else as it came. */

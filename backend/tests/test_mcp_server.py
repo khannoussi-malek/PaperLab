@@ -39,6 +39,7 @@ async def call(tool: str, **arguments):
 
 EXPECTED_TOOLS = {
     "search_library": True, "get_paper": True, "read_pages": True, "related_papers": True, "create_note": None,
+    "novelty_check": True,
     "list_workspaces": True, "create_workspace": None, "list_papers": True, "add_paper": None, "add_papers": None,
     "upload_paper": None,
     "add_paper_to_workspace": None, "remove_paper_from_workspace": None,
