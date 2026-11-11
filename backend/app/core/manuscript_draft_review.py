@@ -14,6 +14,7 @@ from app.core.draft_review_issues import MAX_PAPER_CHARS, MIN_PAPER_CHARS, assem
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.manuscript_missing_keys import load_texts
 from app.models import ManuscriptDraftReview as Row
+from app.schemas.manuscript_draft_review import DraftReviewOut, DraftReviewState  # noqa: F401 (the MCP tools' types)
 
 LIVE = timedelta(minutes=20)  # one long local-model call has no heartbeat inside it
 JOB = "review_manuscript_draft"
