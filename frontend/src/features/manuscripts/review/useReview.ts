@@ -7,6 +7,8 @@ const POLL_MS = 2000
 
 const START_ERRORS: Record<string, string> = {
   too_many_claims: "That's more than 30 citations to check at once. Select a smaller part and try again.",
+  confirm_large: 'Confirm the large run and try again.',
+  no_tex: 'There are no .tex files to review.',
   no_model: 'Add a model in Settings to run the reviewer.',
   review_running: 'A check is already running.',
   file_changed: 'The file changed. Try again.',
@@ -20,7 +22,30 @@ export function reviewStartError(e: unknown): string {
   return e instanceof Error ? e.message : 'Something went wrong. Please try again.'
 }
 
-export type ReviewSelection = { from?: number | null; to?: number | null; includeUncited?: boolean }
+/** The all-files start: its own too-many text (600 checks), else the per-file copy. */
+export function reviewAllStartError(e: unknown): string {
+  if (e instanceof ApiError && e.code.startsWith('too_many_claims')) return 'More than 600 checks. Review fewer files.'
+  return reviewStartError(e)
+}
+
+/** Review all files: one run over every .tex file. Refresh covers every file's review state (the run's file is '*'). */
+export function useStartReviewAll(manuscriptId: string) {
+  const qc = useQueryClient()
+  const start = useMutation({
+    mutationFn: ({ confirmRemote, confirmLarge }: { confirmRemote: boolean; confirmLarge: boolean }) =>
+      api.startReviewAll(manuscriptId, { include_uncited: true, confirm_remote: confirmRemote, confirm_large: confirmLarge }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['manuscriptReview', manuscriptId] }),
+  })
+  return {
+    startAll: (confirmRemote: boolean, confirmLarge: boolean) => start.mutateAsync({ confirmRemote, confirmLarge }),
+    startAllError: start.error && !remoteHost(start.error) ? reviewAllStartError(start.error) : null,
+    /** Set when the run needs a yes before the text goes to a remote model. */
+    confirmHost: remoteHost(start.error),
+    reset: () => start.reset(),
+  }
+}
+
+export type ReviewSelection ={ from?: number | null; to?: number | null; includeUncited?: boolean }
 
 export function useReview(manuscriptId: string, file: string, enabled = true) {
   const qc = useQueryClient()

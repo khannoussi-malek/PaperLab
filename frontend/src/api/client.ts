@@ -23,6 +23,8 @@ export type CheckItem = components['schemas']['CheckItemOut']
 export type ReviewState = components['schemas']['ReviewOut']
 export type ReviewSentence = components['schemas']['SentenceOut']
 export type ReviewStart = { file: string; base: string; from?: number | null; to?: number | null; include_uncited?: boolean; confirm_remote?: boolean }
+export type ReviewEstimate = components['schemas']['EstimateOut']
+export type ReviewAllStart = components['schemas']['ReviewAllIn']
 export type SectionReview = components['schemas']['SectionReviewOut']
 export type SectionFinding = components['schemas']['FindingOut']
 export type SectionRef = components['schemas']['RefOut']
@@ -600,6 +602,11 @@ export const api = {
   runDoiCheck: (id: string) => request<DoiCheckResult>(`/api/manuscripts/${id}/checks/dois`, { method: 'POST' }),
   startReview: (id: string, body: ReviewStart) =>
     request<ReviewRun>(`/api/manuscripts/${id}/review`, sendJson('POST', body)),
+  reviewEstimate: (id: string, includeUncited = true) =>
+    request<ReviewEstimate>(`/api/manuscripts/${id}/review/all/estimate?include_uncited=${includeUncited}`),
+  startReviewAll: (id: string, body: ReviewAllStart) =>
+    request<ReviewRun>(`/api/manuscripts/${id}/review/all`, sendJson('POST', body)),
+  reviewReportHref: (id: string) => `/api/manuscripts/${id}/review/report.md`,
   reviewState: (id: string, file: string) =>
     request<ReviewState>(`/api/manuscripts/${id}/review?file=${encodeURIComponent(file)}`),
   cancelReview: (id: string, runId: string) =>

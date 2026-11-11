@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { api, ApiError, type ReviewState } from '@/api/client'
-import { reviewStartError, useCiteProposals, useReview } from './useReview'
+import { reviewAllStartError, reviewStartError, useCiteProposals, useReview } from './useReview'
 
 const wrapper = ({ children }: { children: ReactNode }) => (
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>
@@ -85,4 +85,12 @@ test("another file's run is not this file's result, but still counts as a check 
   const { result } = renderHook(() => useReview('m', 'intro.tex'), { wrapper })
   await waitFor(() => expect(result.current.anyRun?.status).toBe('running'))
   expect(result.current.run).toBeNull()
+})
+
+test('all-files start errors: too_many_claims has its own text; confirm_large and no_tex map; per-file text stays', () => {
+  const e = (code: string) => new ApiError(code, 422, { detail: code })
+  expect(reviewAllStartError(e('too_many_claims'))).toBe('More than 600 checks. Review fewer files.')
+  expect(reviewStartError(e('too_many_claims'))).toMatch(/more than 30 citations/)
+  expect(reviewStartError(e('no_tex'))).toBe('There are no .tex files to review.')
+  expect(reviewStartError(e('confirm_large'))).toBe('Confirm the large run and try again.')
 })

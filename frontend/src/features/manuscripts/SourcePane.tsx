@@ -15,6 +15,7 @@ import { replaceSpan } from './pdfEdit'
 import type { PreambleEdit } from './results/insertBlock'
 import { InsertMenu } from './results/InsertMenu'
 import { ReviewMenu } from './review/ReviewMenu'
+import { ReviewAllDialog } from './review/ReviewAllDialog'
 import { ReviewPanel } from './review/ReviewPanel'
 import type { ReviewHandle } from './review/reviewMarks'
 import { useReview } from './review/useReview'
@@ -255,6 +256,7 @@ export function SourcePane(props: Props) {
   const [reviewHandleRef, setReviewHandle] = useState<ReviewHandle | null>(null)
   const sectionReview = useSectionReview(manuscriptId, path, isTex)
   const inEditor = useReviewInEditor({ manuscriptId, workspaceId: props.workspaceId ?? null, review, text, handle: reviewHandleRef, flush: flushNow, getBase: () => base.current, sections: { file: path, reviews: sectionReview.reviews } })
+  const [allOpen, setAllOpen] = useState(false)
   const [sectionTarget, setSectionTarget] = useState<{ at: number; section: SectionSpan | null; role?: Role; gone?: boolean } | null>(null)
   // The section under the cursor, or for Review again the section of that title as the text now reads.
   const openSectionReview = async (again?: SectionReview) => {
@@ -278,7 +280,7 @@ export function SourcePane(props: Props) {
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{path}</span>
         <span aria-live="polite" className="text-xs text-muted-foreground">{SAVE_LABEL[state]}</span>
         {props.onInsertBlock && /\.tex$/i.test(path) && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} filePaths={props.filePaths ?? (() => [])} onInsert={props.onInsertBlock} />}
-        {isTex && <ReviewMenu hasWorkspace={!!props.workspaceId} run={review.anyRun} onCheck={() => void inEditor.check()} onCancel={() => void review.cancel()} onReviewSection={() => void openSectionReview()} sectionLive={sectionReview.live} />}
+        {isTex && <ReviewMenu hasWorkspace={!!props.workspaceId} run={review.anyRun} onCheck={() => void inEditor.check()} onCancel={() => void review.cancel()} onCheckAll={() => setAllOpen(true)} reportHref={api.reviewReportHref(manuscriptId)} onReviewSection={() => void openSectionReview()} sectionLive={sectionReview.live} />}
         <Button size="sm" disabled={compiling || text === null} onClick={() => void compileNow()}>
           {compiling && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
           {compiling ? 'Compiling…' : 'Compile'}
@@ -326,6 +328,7 @@ export function SourcePane(props: Props) {
             sections={{ reviews: sectionReview.reviews, stale: inEditor.sectionStale, hasWorkspace: !!props.workspaceId, live: sectionReview.live, lost: sectionReview.lost, onCancel: (id) => void sectionReview.cancel(id), onReviewAgain: (r) => void openSectionReview(r) }} />
           <RemoteConfirmDialog what="text" host={review.confirmHost} onSend={() => void inEditor.check(true)} onCancel={review.dismissConfirm} />
           <SectionReviewDialog target={sectionTarget} onClose={() => setSectionTarget(null)} onStart={startSectionReview} />
+          <ReviewAllDialog open={allOpen} onClose={() => setAllOpen(false)} manuscriptId={manuscriptId} />
         </>
       )}
     </section>

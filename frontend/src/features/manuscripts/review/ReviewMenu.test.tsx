@@ -48,3 +48,35 @@ test('"Pick a workspace first" sits right under Check citations', async () => {
   const check = await screen.findByRole('menuitem', { name: 'Check citations' })
   expect(check.nextElementSibling).toHaveTextContent('Pick a workspace first')
 })
+
+test('Review all files calls onCheckAll; it is off without a workspace or while a run is live', async () => {
+  const onCheckAll = vi.fn()
+  const { unmount } = render(<ReviewMenu hasWorkspace run={null} onCheck={() => {}} onCancel={() => {}} onCheckAll={onCheckAll} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: /review/i }), { key: 'Enter' })
+  await fireEvent.click(await screen.findByRole('menuitem', { name: 'Review all files' }))
+  expect(onCheckAll).toHaveBeenCalled()
+  unmount()
+  const again = render(<ReviewMenu hasWorkspace={false} run={null} onCheck={() => {}} onCancel={() => {}} onCheckAll={onCheckAll} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: /review/i }), { key: 'Enter' })
+  expect(await screen.findByRole('menuitem', { name: 'Review all files' })).toHaveAttribute('aria-disabled', 'true')
+  again.unmount()
+  render(<ReviewMenu hasWorkspace run={run({ file: '*' })} onCheck={() => {}} onCancel={() => {}} onCheckAll={onCheckAll} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: /review/i }), { key: 'Enter' })
+  expect(await screen.findByRole('menuitem', { name: 'Review all files' })).toHaveAttribute('aria-disabled', 'true')
+})
+
+test('Download report is a link only for a finished all-files run that has a report', async () => {
+  const href = '/api/manuscripts/m/review/report.md'
+  const { unmount } = render(<ReviewMenu hasWorkspace run={run({ status: 'done', file: '*', done: 19, total: 19 })} onCheck={() => {}} onCancel={() => {}} onCheckAll={() => {}} reportHref={href} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: /review/i }), { key: 'Enter' })
+  const link = await screen.findByRole('menuitem', { name: 'Download report' })
+  expect(link.getAttribute('href')).toMatch(/\/review\/report\.md$/)
+  unmount()
+  for (const r of [run({ status: 'done', file: 'main.tex' }), run({ status: 'running', file: '*' }), null]) {
+    const view = render(<ReviewMenu hasWorkspace run={r} onCheck={() => {}} onCancel={() => {}} onCheckAll={() => {}} reportHref={href} />)
+    fireEvent.keyDown(screen.getAllByRole('button', { name: /review/i }).at(-1)!, { key: 'Enter' })
+    await screen.findByRole('menuitem', { name: 'Review all files' })
+    expect(screen.queryByRole('menuitem', { name: 'Download report' })).not.toBeInTheDocument()
+    view.unmount()
+  }
+})

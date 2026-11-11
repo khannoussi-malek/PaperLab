@@ -18,7 +18,7 @@ NOTE = "Rewrite it as: Sleep is vital."
 ALLOWED = set(
     "id file status total done reason include_uncited uncited_skipped created_at run items dismissed kind "
     "sentence_hash sentence ord cite_key paper_id paper_title verdict quote page chunk_id output_id model ai sentences "
-    "start end hash keys key line".split()
+    "start end hash keys key line files path pairs uncited max_pairs confirm_above needs_confirm counts outcome replaces".split()
 )
 BANNED = {"text", "insert", "latex", "suggestion", "replacement", "rewrite", "wording"}
 FREE_TEXT = {"sentence", "reason", "quote"}

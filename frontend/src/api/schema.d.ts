@@ -2098,6 +2098,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reporting-guidelines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Guidelines */
+        get: operations["list_guidelines_api_reporting_guidelines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/review": {
         parameters: {
             query?: never;
@@ -2127,6 +2144,74 @@ export interface paths {
         put?: never;
         /** Locate */
         post: operations["locate_api_manuscripts__manuscript_id__review_locate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/review/all/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estimate Review All */
+        get: operations["estimate_review_all_api_manuscripts__manuscript_id__review_all_estimate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/review/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Review All */
+        post: operations["start_review_all_api_manuscripts__manuscript_id__review_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/review/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review Report Json */
+        get: operations["review_report_json_api_manuscripts__manuscript_id__review_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/review/report.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review Report Markdown */
+        get: operations["review_report_markdown_api_manuscripts__manuscript_id__review_report_md_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4393,6 +4478,34 @@ export interface components {
             /** Retryable */
             retryable: boolean;
         };
+        /** EstimateFileOut */
+        EstimateFileOut: {
+            /** Path */
+            path: string;
+            /** Pairs */
+            pairs: number;
+            /** Uncited */
+            uncited: number;
+        };
+        /** EstimateOut */
+        EstimateOut: {
+            /** Replaces */
+            replaces: number;
+            /** Files */
+            files: components["schemas"]["EstimateFileOut"][];
+            /** Pairs */
+            pairs: number;
+            /** Uncited */
+            uncited: number;
+            /** Uncited Skipped */
+            uncited_skipped: number;
+            /** Confirm Above */
+            confirm_above: number;
+            /** Max Pairs */
+            max_pairs: number;
+            /** Needs Confirm */
+            needs_confirm: boolean;
+        };
         /** EvidenceFoundOut */
         EvidenceFoundOut: {
             /** Sentence Hash */
@@ -4667,6 +4780,19 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["RowIn"][];
         };
+        /** GuidelineOut */
+        GuidelineOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Applies To */
+            applies_to: string;
+            /** Source */
+            source: string;
+            /** Items */
+            items: components["schemas"]["ItemOut"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -4940,6 +5066,15 @@ export interface components {
             model: string;
             /** Chunks */
             chunks: number;
+        };
+        /** ItemOut */
+        ItemOut: {
+            /** Id */
+            id: string;
+            /** Section */
+            section: string;
+            /** Text */
+            text: string;
         };
         /** Layout */
         Layout: {
@@ -6271,6 +6406,58 @@ export interface components {
             /** New Path */
             new_path: string;
         };
+        /** ReportFileOut */
+        ReportFileOut: {
+            /** Path */
+            path: string;
+            /** Items */
+            items: components["schemas"]["ReportItemOut"][];
+        };
+        /** ReportItemOut */
+        ReportItemOut: {
+            /** File */
+            file: string;
+            /** Ord */
+            ord: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "cited" | "uncited";
+            /** Sentence */
+            sentence: string;
+            /** Cite Key */
+            cite_key: string | null;
+            /** Paper Title */
+            paper_title: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "interrupted";
+            /** Verdict */
+            verdict: string | null;
+            /** Outcome */
+            outcome: string;
+            /** Reason */
+            reason: string | null;
+            /** Quote */
+            quote: string | null;
+            /** Page */
+            page: number | null;
+        };
+        /** ReportOut */
+        ReportOut: {
+            run: components["schemas"]["ReviewRunOut"];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Dismissed */
+            dismissed: number;
+            /** Files */
+            files: components["schemas"]["ReportFileOut"][];
+        };
         /** ResolveRequest */
         ResolveRequest: {
             /** Spec */
@@ -6365,6 +6552,24 @@ export interface components {
             cells: {
                 [key: string]: components["schemas"]["ResolvedCellOut"];
             };
+        };
+        /** ReviewAllIn */
+        ReviewAllIn: {
+            /**
+             * Include Uncited
+             * @default true
+             */
+            include_uncited: boolean;
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
+            /**
+             * Confirm Large
+             * @default false
+             */
+            confirm_large: boolean;
         };
         /** ReviewIn */
         ReviewIn: {
@@ -12239,6 +12444,26 @@ export interface operations {
             };
         };
     };
+    list_guidelines_api_reporting_guidelines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuidelineOut"][];
+                };
+            };
+        };
+    };
     review_state_api_manuscripts__manuscript_id__review_get: {
         parameters: {
             query: {
@@ -12329,6 +12554,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estimate_review_all_api_manuscripts__manuscript_id__review_all_estimate_get: {
+        parameters: {
+            query?: {
+                include_uncited?: boolean;
+            };
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstimateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_review_all_api_manuscripts__manuscript_id__review_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewAllIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_report_json_api_manuscripts__manuscript_id__review_report_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_report_markdown_api_manuscripts__manuscript_id__review_report_md_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

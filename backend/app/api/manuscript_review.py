@@ -5,8 +5,19 @@ from fastapi import APIRouter, Query, Response
 
 from app.api.deps import SessionDep
 from app.core import manuscript_review as review
+from app.core import manuscript_review_all as review_all
+from app.core import manuscript_review_report as review_report
 from app.core import manuscripts
-from app.schemas.manuscript_review import LocateIn, LocateOut, ReviewIn, ReviewOut, ReviewRunOut
+from app.schemas.manuscript_review import (
+    EstimateOut,
+    LocateIn,
+    LocateOut,
+    ReportOut,
+    ReviewAllIn,
+    ReviewIn,
+    ReviewOut,
+    ReviewRunOut,
+)
 
 router = APIRouter(tags=["manuscripts"])
 BASE = "/api/manuscripts/{manuscript_id}/review"
@@ -37,6 +48,33 @@ async def review_state(manuscript_id: uuid.UUID, session: SessionDep, file: str 
 async def locate(manuscript_id: uuid.UUID, body: LocateIn, session: SessionDep) -> LocateOut:
     await manuscripts.get(session, manuscript_id)
     return LocateOut(sentences=await asyncio.to_thread(review.locate, body.text))
+
+
+@router.get(BASE + "/all/estimate")
+async def estimate_review_all(
+    manuscript_id: uuid.UUID, session: SessionDep, include_uncited: bool = True
+) -> EstimateOut:
+    return EstimateOut(**await review_all.estimate(session, manuscript_id, include_uncited=include_uncited))
+
+
+@router.post(BASE + "/all", status_code=202)
+async def start_review_all(manuscript_id: uuid.UUID, body: ReviewAllIn, session: SessionDep) -> ReviewRunOut:
+    return ReviewRunOut(**await review_all.start_all(session, manuscript_id, **body.model_dump()))
+
+
+@router.get(BASE + "/report")
+async def review_report_json(manuscript_id: uuid.UUID, session: SessionDep) -> ReportOut:
+    return ReportOut(**await review_report.build(session, manuscript_id))
+
+
+@router.get(BASE + "/report.md")
+async def review_report_markdown(manuscript_id: uuid.UUID, session: SessionDep) -> Response:
+    body = review_report.render_markdown(await review_report.build(session, manuscript_id))
+    return Response(
+        body,
+        media_type="text/markdown",
+        headers={"Content-Disposition": 'attachment; filename="citation-review.md"'},
+    )
 
 
 @router.post(BASE + "/{run_id}/cancel")
