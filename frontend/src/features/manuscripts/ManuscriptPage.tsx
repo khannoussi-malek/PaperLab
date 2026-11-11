@@ -12,6 +12,7 @@ import { manuscriptHref, workspaceHref } from '@/lib/route'
 import { errorsFor, parseCompileErrors } from './compileErrors'
 import { manuscriptFailure } from './errors'
 import { FileList } from './FileList'
+import { BlueprintPanel } from './BlueprintPanel'
 import { FinalStepsChecklist } from './FinalStepsChecklist'
 import { GuidelineChecklist } from './GuidelineChecklist'
 import { DeleteManuscriptDialog, MoveManuscriptDialog } from './ManuscriptDialogs'
@@ -305,6 +306,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                       <summary className="cursor-pointer px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">All files</summary>
                       <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file} flushCurrent={flushCurrent} />
                     </details>
+                    <BlueprintPanel manuscriptId={manuscriptId} files={data.files} />
                     <FinalStepsChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
                     <GuidelineChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
                   </div>
