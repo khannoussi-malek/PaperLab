@@ -1,0 +1,30 @@
+{
+  "id": "strobe",
+  "label": "STROBE",
+  "applies_to": "Observational studies (cohort, case-control, cross-sectional)",
+  "source": "STROBE statement, https://www.strobe-statement.org (pointer only; wording is our own)",
+  "items": [
+    {"id": "1", "section": "Title and abstract", "text": "Names the design in the title and gives an informative summary in the abstract."},
+    {"id": "2", "section": "Introduction", "text": "Explains the scientific background and why the study matters."},
+    {"id": "3", "section": "Introduction", "text": "States the specific aims or hypotheses of the study."},
+    {"id": "4", "section": "Methods", "text": "Says what kind of observational design was used, early on in the methods."},
+    {"id": "5", "section": "Methods", "text": "Describes where and when the participants were recruited or data collected."},
+    {"id": "6", "section": "Methods", "text": "Describes who was eligible, how they were selected, and the follow-up details."},
+    {"id": "7", "section": "Methods", "text": "Defines the outcomes, exposures, predictors and confounders, and how each was measured."},
+    {"id": "8", "section": "Methods", "text": "Explains where the data came from and how each measurement was made."},
+    {"id": "9", "section": "Methods", "text": "Describes the steps taken to reduce possible sources of bias."},
+    {"id": "10", "section": "Methods", "text": "Explains how the number of participants was chosen."},
+    {"id": "11", "section": "Methods", "text": "Says how continuous or grouped variables were handled in the analysis."},
+    {"id": "12", "section": "Methods", "text": "Lists the statistical methods used, including how confounding and missing data were handled."},
+    {"id": "13", "section": "Results", "text": "Reports how many people were considered at each stage, with reasons for drop-outs."},
+    {"id": "14", "section": "Results", "text": "Describes the participants' characteristics and exposure details."},
+    {"id": "15", "section": "Results", "text": "Reports the number of outcome events or summary measures over time."},
+    {"id": "16", "section": "Results", "text": "Gives the main estimates with their precision, and which confounders were adjusted for."},
+    {"id": "17", "section": "Results", "text": "Reports any subgroup, interaction or sensitivity analyses that were run."},
+    {"id": "18", "section": "Discussion", "text": "Summarises the key findings in light of the objectives."},
+    {"id": "19", "section": "Discussion", "text": "Discusses limits of the study, including sources of bias and imprecision."},
+    {"id": "20", "section": "Discussion", "text": "Gives a cautious reading of the results, weighing the evidence against other studies."},
+    {"id": "21", "section": "Discussion", "text": "Discusses how far the results apply to other people and settings."},
+    {"id": "22", "section": "Other", "text": "States the funding sources and the role of the funders."}
+  ]
+}

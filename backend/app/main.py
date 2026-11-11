@@ -45,6 +45,7 @@ from app.api import mcp as mcp_api
 from app.api import paper_sources as paper_sources_api
 from app.api import reading_bridge as reading_bridge_api
 from app.api import references as references_api
+from app.api import reporting_guidelines as reporting_guidelines_api
 from app.api import saved_searches as saved_searches_api
 from app.api import setup as setup_api
 from app.api import workspace_search as workspace_search_api
@@ -126,6 +127,7 @@ def create_app() -> FastAPI:
     app.include_router(saved_searches_api.router)
     app.include_router(evidence_cards_api.router)
     app.include_router(manuscripts_api.router)
+    app.include_router(reporting_guidelines_api.router)
     app.include_router(manuscript_review_api.router)
     app.include_router(manuscript_checks_api.router)
     app.include_router(manuscript_doi_check_api.router)

@@ -8,6 +8,9 @@ export type Manuscript = components['schemas']['ManuscriptOut']
 export type ManuscriptDetail = components['schemas']['ManuscriptDetailOut']
 export type ManuscriptImport = components['schemas']['ManuscriptImportOut']
 export type ManuscriptTemplate = components['schemas']['TemplateOut']
+/** A reporting guideline: a named checklist the author ticks as suggestions (`GET /api/reporting-guidelines`). */
+export type ReportingGuidelineItem = { id: string; section: string; text: string }
+export type ReportingGuideline = { id: string; label: string; applies_to: string; source: string; items: ReportingGuidelineItem[] }
 export type ManuscriptFile = components['schemas']['FileOut']
 export type ManuscriptFileText = components['schemas']['FileTextOut']
 export type ManuscriptSnapshot = components['schemas']['SnapshotOut']
@@ -562,6 +565,7 @@ export const api = {
   listManuscripts: (workspaceId: string | null) =>
     request<Manuscript[]>(workspaceId ? `/api/workspaces/${workspaceId}/manuscripts` : '/api/manuscripts?orphans=true'),
   listManuscriptTemplates: () => request<ManuscriptTemplate[]>('/api/templates/manuscripts'),
+  listReportingGuidelines: () => request<ReportingGuideline[]>('/api/reporting-guidelines'),
   getManuscript: (id: string) => request<ManuscriptDetail>(`/api/manuscripts/${id}`),
   createManuscript: (body: ManuscriptCreate) => request<ManuscriptDetail>('/api/manuscripts', sendJson('POST', body)),
   /** An Overleaf zip as a new manuscript; `skipped` names the members PaperLab can't hold. */

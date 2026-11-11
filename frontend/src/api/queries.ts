@@ -1500,6 +1500,8 @@ export const useManuscripts = (workspaceId: string | null) =>
 
 export const useManuscriptTemplates = () =>
   useQuery({ queryKey: ['manuscripts', 'templates'], queryFn: api.listManuscriptTemplates, staleTime: Infinity })
+export const useReportingGuidelines = () =>
+  useQuery({ queryKey: ['reporting-guidelines'], queryFn: api.listReportingGuidelines, staleTime: Infinity })
 
 /** Poll while compiling or while another pass is asked for; stop on error so a failing server isn't hammered. */
 export const manuscriptPollInterval = (data: { compile_status: string; compile_requested?: boolean } | undefined, failed: boolean) =>

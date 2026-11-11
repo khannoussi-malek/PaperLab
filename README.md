@@ -568,6 +568,8 @@ Writing studio:
 - `delete_manuscript_file`: deletes a text file, only when you ask;
 - `add_manuscript_figure`: adds an image or PDF at a new path; it never overwrites a file;
 - `check_manuscript`: runs the offline checks (today: cited keys that match nothing) and lists every finding with file, line and a text-only fix hint;
+- `get_manuscript_checklist`: reads the manuscript's reporting-guideline checklist (the chosen guideline, its items and which are ticked) and lists the guidelines to choose from;
+- `set_manuscript_checklist`: chooses a guideline and ticks or unticks its items; it never writes wording into the manuscript;
 - `compile_manuscript`: starts a compile and returns at once;
 - `get_compile_result`: the latest compile's status, errors with file and line, and page count;
 - `read_manuscript_pdf_text`: the compiled PDF's text, page by page.

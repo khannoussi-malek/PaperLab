@@ -1,0 +1,33 @@
+{
+  "id": "consort",
+  "label": "CONSORT",
+  "applies_to": "Randomised controlled trials",
+  "source": "CONSORT statement, https://www.consort-statement.org (pointer only; wording is our own)",
+  "items": [
+    {"id": "1", "section": "Title and abstract", "text": "Names the design as a randomised trial and gives a clear summary in the abstract."},
+    {"id": "2", "section": "Introduction", "text": "Explains the background, the rationale and the specific aims of the trial."},
+    {"id": "3", "section": "Methods", "text": "Describes the design, including its allocation ratio and structure."},
+    {"id": "4", "section": "Methods", "text": "Says who was eligible and where and when the trial took place."},
+    {"id": "5", "section": "Methods", "text": "Describes each intervention in enough detail for someone to repeat it."},
+    {"id": "6", "section": "Methods", "text": "Defines the primary and secondary outcomes and when they were measured."},
+    {"id": "7", "section": "Methods", "text": "Explains how the sample size was set and any rules for stopping early."},
+    {"id": "8", "section": "Methods", "text": "Says how the random sequence was generated."},
+    {"id": "9", "section": "Methods", "text": "Explains how the allocation was kept hidden until assignment."},
+    {"id": "10", "section": "Methods", "text": "Says who generated the sequence, enrolled people and assigned interventions."},
+    {"id": "11", "section": "Methods", "text": "Says who was blinded to allocation, and how."},
+    {"id": "12", "section": "Methods", "text": "Lists the methods used to compare the groups."},
+    {"id": "13", "section": "Results", "text": "Shows how many people were screened, randomised, followed up and analysed, ideally in a flow diagram."},
+    {"id": "14", "section": "Results", "text": "Gives the dates of recruitment and follow-up, and why the trial ended or was stopped."},
+    {"id": "15", "section": "Results", "text": "Reports the baseline characteristics of each group."},
+    {"id": "16", "section": "Results", "text": "Gives the number of participants analysed in each group, and why any were left out."},
+    {"id": "17", "section": "Results", "text": "Reports the results for each outcome, with the size and precision of the effect."},
+    {"id": "18", "section": "Results", "text": "Reports any extra analyses, marking which were planned and which were not."},
+    {"id": "19", "section": "Results", "text": "Reports adverse events and harms in each group."},
+    {"id": "20", "section": "Discussion", "text": "Discusses the trial's limits, including any risk of bias or imprecision."},
+    {"id": "21", "section": "Discussion", "text": "Discusses how far the results apply to other people and settings."},
+    {"id": "22", "section": "Discussion", "text": "Gives a cautious reading of the results in light of the evidence."},
+    {"id": "23", "section": "Other", "text": "Gives the trial registry name and the registration number."},
+    {"id": "24", "section": "Other", "text": "Says where the full trial protocol can be read."},
+    {"id": "25", "section": "Other", "text": "Names the funders and their role in the trial."}
+  ]
+}

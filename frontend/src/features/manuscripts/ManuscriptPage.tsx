@@ -13,6 +13,7 @@ import { errorsFor, parseCompileErrors } from './compileErrors'
 import { manuscriptFailure } from './errors'
 import { FileList } from './FileList'
 import { FinalStepsChecklist } from './FinalStepsChecklist'
+import { GuidelineChecklist } from './GuidelineChecklist'
 import { DeleteManuscriptDialog, MoveManuscriptDialog } from './ManuscriptDialogs'
 import { HistoryDialog } from './HistoryDialog'
 import { Breadcrumb } from './Breadcrumb'
@@ -305,6 +306,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                       <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file} flushCurrent={flushCurrent} />
                     </details>
                     <FinalStepsChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
+                    <GuidelineChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
                   </div>
                 ),
               },
