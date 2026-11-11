@@ -103,3 +103,29 @@ test('the Library page opens the panel from a Has this been done? button', () =>
   fireEvent.click(screen.getByRole('button', { name: 'Has this been done?' }))
   expect(idea()).toBeInTheDocument()
 })
+
+test('a 409 search_rebuilding shows plain words, not the code', async () => {
+  vi.spyOn(api, 'novelty').mockRejectedValue(new Error('search_rebuilding'))
+  renderPanel()
+  fireEvent.change(idea(), { target: { value: 'Long idea' } })
+  fireEvent.click(check())
+  expect(await screen.findByText('Search is being rebuilt. Try again when it finishes.')).toBeInTheDocument()
+  expect(screen.queryByText('search_rebuilding')).toBeNull()
+})
+
+test('the library-only line sits above the text box', () => {
+  renderPanel()
+  const line = screen.getByText('Searches your own library only.')
+  expect(line.compareDocumentPosition(idea()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+test('editing the idea after a result clears the old result', async () => {
+  vi.spyOn(api, 'novelty').mockResolvedValue({ papers: [], searched_papers: 12, note: NOTE })
+  renderPanel()
+  fireEvent.change(idea(), { target: { value: 'Something new' } })
+  fireEvent.click(check())
+  expect(await screen.findByText(NOTE)).toBeInTheDocument()
+  fireEvent.change(idea(), { target: { value: 'A different idea' } })
+  expect(screen.queryByText(NOTE)).toBeNull()
+  expect(screen.queryByText('Nothing close in your library')).toBeNull()
+})

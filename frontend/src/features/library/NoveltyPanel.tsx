@@ -25,12 +25,16 @@ export function NoveltyPanel() {
       <h2 id={`${helpId}-title`} className="text-base font-medium">Has this been done?</h2>
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${helpId}-idea`}>Paste an idea or an abstract</Label>
+        <p className="text-sm text-muted-foreground">Searches your own library only.</p>
         <Textarea
           id={`${helpId}-idea`}
           value={text}
           maxLength={MAX_CHARS}
           aria-describedby={`${helpId}-count`}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value)
+            novelty.reset()
+          }}
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span id={`${helpId}-count`} className="text-sm text-muted-foreground">{text.length} / {MAX_CHARS} characters</span>
