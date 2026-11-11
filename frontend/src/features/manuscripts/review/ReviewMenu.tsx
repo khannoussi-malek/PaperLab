@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 const NO_WORKSPACE = 'Pick a workspace first'
 
 /** The editor toolbar's Review button, and the run's progress line while a check is live. */
-export function ReviewMenu({ hasWorkspace, run, onCheck, onCancel, onCheckAll, reportHref, onReviewSection, sectionLive = false }: {
+export function ReviewMenu({ hasWorkspace, run, onCheck, onCancel, onCheckAll, reportHref, onReviewSection, sectionLive = false, onDraftReview }: {
   hasWorkspace: boolean
   run: Pick<ReviewRun, 'status' | 'done' | 'total' | 'file'> | null
   onCheck: () => void
@@ -20,6 +20,8 @@ export function ReviewMenu({ hasWorkspace, run, onCheck, onCancel, onCheckAll, r
   onReviewSection?: () => void
   /** A section review is queued or running for this file. */
   sectionLive?: boolean
+  /** Review → Tough draft review: opens the whole-draft review dialog. */
+  onDraftReview?: () => void
 }) {
   return (
     <>
@@ -41,6 +43,7 @@ export function ReviewMenu({ hasWorkspace, run, onCheck, onCancel, onCheckAll, r
             <DropdownMenuItem asChild><a href={reportHref} download>Download report</a></DropdownMenuItem>
           )}
           {onReviewSection && <DropdownMenuItem disabled={sectionLive} onSelect={onReviewSection}>Review this section</DropdownMenuItem>}
+          {onDraftReview && <DropdownMenuItem onSelect={onDraftReview}>Tough draft review</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
     </>

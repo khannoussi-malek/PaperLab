@@ -38,6 +38,7 @@ from app.api import evidence_cards as evidence_cards_api
 from app.api import manuscript_checks as manuscript_checks_api
 from app.api import manuscript_diagrams as manuscript_diagrams_api
 from app.api import manuscript_doi_check as manuscript_doi_check_api
+from app.api import manuscript_draft_review as manuscript_draft_review_api
 from app.api import manuscript_review as manuscript_review_api
 from app.api import manuscript_section_review as manuscript_section_review_api
 from app.api import manuscripts as manuscripts_api
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(manuscript_checks_api.router)
     app.include_router(manuscript_doi_check_api.router)
     app.include_router(manuscript_section_review_api.router)
+    app.include_router(manuscript_draft_review_api.router)
     app.include_router(manuscript_diagrams_api.router)
     app.include_router(datasets.router)
     app.include_router(charts.router)
@@ -151,7 +153,7 @@ def create_app() -> FastAPI:
         # no_free_pdf says what it tried and where a free copy may be (M63)
         extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
         # extras: manuscript file and cap (M27a), allowed/max
-        for key in ("path", "limit", "count", "allowed", "max", "available"):
+        for key in ("path", "limit", "count", "allowed", "max", "available", "likely_calls", "max_calls"):
             if key in exc.details:
                 extra[key] = exc.details[key]
         if "updated_at" in exc.details:  # file_changed: the file's clock; pydantic's UTC form (Z) matches the bodies

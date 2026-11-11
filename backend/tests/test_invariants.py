@@ -515,3 +515,28 @@ async def test_0069_ai_log_round_trip(scratch_url):
     assert not {"ai_tool", "ai_path", "ai_reason"} & set(cols) and kept == 1
     alembic(dsn, "upgrade", "head")
     await scratch.dispose()
+
+
+@pytest.mark.anyio
+async def test_0070_review_round_trip(scratch_url):
+    """The draft review table comes with both check constraints, goes on downgrade to 0069, and comes back."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    async with scratch.connect() as conn:
+        found = (await conn.execute(text("SELECT to_regclass('manuscript_draft_reviews')"))).scalar()
+        checks = {
+            r[0]
+            for r in await conn.execute(
+                text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conrelid = 'manuscript_draft_reviews'::regclass AND contype = 'c'"
+                )
+            )
+        }
+    assert found and {"ck_manuscript_draft_reviews_status", "ck_manuscript_draft_reviews_mode"} <= checks
+    alembic(dsn, "downgrade", "0069")
+    async with scratch.connect() as conn:
+        assert (await conn.execute(text("SELECT to_regclass('manuscript_draft_reviews')"))).scalar() is None
+    await scratch.dispose()
+    alembic(dsn, "upgrade", "head")

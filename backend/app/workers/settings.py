@@ -25,6 +25,7 @@ from app.workers.manuscript_diagrams import (
     compile_manuscript_diagram,
     generate_manuscript_diagram,
 )
+from app.workers.manuscript_draft_review import DRAFT_REVIEW_JOB_TIMEOUT, review_manuscript_draft
 from app.workers.manuscript_evidence import EVIDENCE_JOB_TIMEOUT, verify_manuscript_evidence
 from app.workers.manuscript_review import REVIEW_JOB_TIMEOUT, check_manuscript_citations
 from app.workers.manuscript_section_review import SECTION_REVIEW_JOB_TIMEOUT, review_manuscript_section
@@ -75,6 +76,7 @@ class WorkerSettings:
         func(verify_manuscript_evidence, timeout=EVIDENCE_JOB_TIMEOUT, max_tries=1),
         func(check_manuscript_citations, timeout=REVIEW_JOB_TIMEOUT, max_tries=1),
         func(review_manuscript_section, timeout=SECTION_REVIEW_JOB_TIMEOUT, max_tries=1),
+        func(review_manuscript_draft, timeout=DRAFT_REVIEW_JOB_TIMEOUT, max_tries=1),
         func(generate_manuscript_diagram, timeout=DIAGRAM_JOB_TIMEOUT, max_tries=1),
         func(compile_manuscript_diagram, timeout=DIAGRAM_JOB_TIMEOUT, max_tries=1),
         func(compile_manuscript, timeout=COMPILE_JOB_TIMEOUT, max_tries=1),

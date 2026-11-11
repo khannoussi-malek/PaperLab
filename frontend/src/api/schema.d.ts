@@ -2356,6 +2356,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/draft-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Draft Review */
+        get: operations["draft_review_api_manuscripts__manuscript_id__draft_review_get"];
+        put?: never;
+        /** Start Draft Review */
+        post: operations["start_draft_review_api_manuscripts__manuscript_id__draft_review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/draft-review/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Draft Review Estimate */
+        get: operations["draft_review_estimate_api_manuscripts__manuscript_id__draft_review_estimate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/draft-review/{review_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Draft Review */
+        post: operations["cancel_draft_review_api_manuscripts__manuscript_id__draft_review__review_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/diagrams": {
         parameters: {
             query?: never;
@@ -4399,6 +4451,85 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** DraftReviewEstimate */
+        DraftReviewEstimate: {
+            /** Paper Chars */
+            paper_chars: number;
+            /** Too Long */
+            too_long: boolean;
+            /** Modes */
+            modes: components["schemas"]["ModeEstimate"][];
+        };
+        /** DraftReviewIn */
+        DraftReviewIn: {
+            /**
+             * Mode
+             * @default light
+             * @enum {string}
+             */
+            mode: "light" | "full";
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
+            /**
+             * Confirm Full
+             * @default false
+             */
+            confirm_full: boolean;
+        };
+        /** DraftReviewOut */
+        DraftReviewOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "light" | "full";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "interrupted";
+            /** Stage */
+            stage: string | null;
+            /** Calls Done */
+            calls_done: number;
+            /** Calls Max */
+            calls_max: number;
+            /** Reason */
+            reason: string | null;
+            /** Issues */
+            issues: components["schemas"]["IssueOut"][];
+            /** Refuted */
+            refuted: components["schemas"]["RefutedOut"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Model */
+            model: string | null;
+            /**
+             * Ai
+             * @default true
+             * @constant
+             */
+            ai: true;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** DraftReviewState */
+        DraftReviewState: {
+            review: components["schemas"]["DraftReviewOut"] | null;
+        };
         /** EditIn */
         EditIn: {
             /** Changes */
@@ -5067,6 +5198,30 @@ export interface components {
             /** Chunks */
             chunks: number;
         };
+        /** IssueOut */
+        IssueOut: {
+            /** Id */
+            id: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocker" | "major" | "minor" | "nit";
+            /** Section */
+            section: string;
+            /** Summary */
+            summary: string;
+            /** Quote */
+            quote: string;
+            /** Close Criterion */
+            close_criterion: string;
+            /** Raised By */
+            raised_by: string[];
+            /** File */
+            file: string;
+            /** Line */
+            line: number;
+        };
         /** ItemOut */
         ItemOut: {
             /** Id */
@@ -5388,6 +5543,20 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /** ModeEstimate */
+        ModeEstimate: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "light" | "full";
+            /** Likely Calls */
+            likely_calls: number;
+            /** Max Calls */
+            max_calls: number;
+            /** Approx Input Tokens */
+            approx_input_tokens: number;
         };
         /** ModelCreate */
         ModelCreate: {
@@ -6382,6 +6551,13 @@ export interface components {
              * @enum {string}
              */
             state: "none" | "fetching" | "ready" | "failed";
+        };
+        /** RefutedOut */
+        RefutedOut: {
+            /** Summary */
+            summary: string;
+            /** Reason */
+            reason: string;
         };
         /** ReindexOut */
         ReindexOut: {
@@ -13018,6 +13194,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SectionReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_review_api_manuscripts__manuscript_id__draft_review_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftReviewState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_draft_review_api_manuscripts__manuscript_id__draft_review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_review_estimate_api_manuscripts__manuscript_id__draft_review_estimate_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftReviewEstimate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_draft_review_api_manuscripts__manuscript_id__draft_review__review_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftReviewOut"];
                 };
             };
             /** @description Validation Error */

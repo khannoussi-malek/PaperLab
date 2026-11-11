@@ -24,6 +24,7 @@ from app.core import (
     manuscript_agent_checks,
     manuscript_agent_compile,
     manuscript_agent_review,
+    manuscript_draft_review,
     manuscripts,
     notes,
     novelty,
@@ -77,7 +78,9 @@ mcp = MCPServer(
         "accept_suggestions record one, so ask the owner first. "
         "Writing studio: list_manuscripts, create_manuscript, list_manuscript_files, read_manuscript_file, then "
         "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
-        "`base` you read), add_manuscript_figure, check_manuscript, get/set_manuscript_checklist, compile_manuscript "
+        "`base` you read), add_manuscript_figure, check_manuscript, start_draft_review, get_draft_review, "
+        "cancel_draft_review, "
+        "get/set_manuscript_checklist, compile_manuscript "
         "then get_compile_result, start_manuscript_review, get_manuscript_review, cancel_manuscript_review_all, "
         "read_manuscript_pdf_text."
     ),
@@ -919,6 +922,52 @@ async def check_manuscript(
     unknown names are an error. Findings are capped at 200 (errors first); `truncated` counts the rest."""
     async with sessions() as session:
         return await manuscript_agent_checks.check_manuscript(session, manuscript_id, checks)
+
+
+@mcp.tool()
+@recoverable
+async def start_draft_review(
+    manuscript_id: uuid.UUID,
+    mode: Literal["light", "full"] = "light",
+    confirm_remote: bool = False,
+    confirm_full: bool = False,
+) -> manuscript_draft_review.DraftReviewOut:
+    """Use to start PaperLab's tough whole-draft review: three reviewers (ideas and definitions, evidence and
+    experiments, practical use) read the saved main .tex and the files it inputs, and a skeptic tries to refute each
+    issue. It runs in the background on the owner's model; poll get_draft_review. mode "light" (default) is 3
+    reviewers and 1 skeptic per issue, one round, at most 11 model calls. mode "full" is 3 skeptics per issue and up
+    to 2 rounds, about 42 and at most 54 calls: it answers full_needs_confirm with the estimate until the owner agreed
+    and you pass confirm_full=true. It never edits the draft and never writes wording: every issue has a severity, the
+    section, a summary, an exact quote of the draft with its file and line, and a close criterion (what an edit must
+    satisfy). Fix the draft yourself. A remote model needs confirm_remote=true after the owner agreed. It answers
+    review_running while one is live, and paper_too_short or paper_too_long when the draft cannot be reviewed."""
+    async with sessions() as session:
+        started = await manuscript_draft_review.start(
+            session, manuscript_id, mode=mode, confirm_remote=confirm_remote, confirm_full=confirm_full
+        )
+        return manuscript_draft_review.DraftReviewOut(**started)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def get_draft_review(manuscript_id: uuid.UUID) -> manuscript_draft_review.DraftReviewState:
+    """Use to read the latest tough draft review of a manuscript: status (queued, running, done, failed, interrupted),
+    progress (stage, calls_done of calls_max), and when done the issues, blocker first, then major, minor, nit.
+    `refuted` lists issues the skeptic dropped; `counts` says how many model issues were discarded for no exact quote
+    or no close criterion. review is null before the first start."""
+    async with sessions() as session:
+        return manuscript_draft_review.DraftReviewState(**await manuscript_draft_review.state(session, manuscript_id))
+
+
+@mcp.tool()
+@recoverable
+async def cancel_draft_review(manuscript_id: uuid.UUID, review_id: uuid.UUID) -> manuscript_draft_review.DraftReviewOut:
+    """Use to stop a running tough draft review (review_id from start_draft_review). A queued or running review stops
+    and reads as failed with reason cancelled; a finished review is returned unchanged."""
+    async with sessions() as session:
+        return manuscript_draft_review.DraftReviewOut(
+            **await manuscript_draft_review.cancel(session, manuscript_id, review_id)
+        )
 
 
 @mcp.tool()
