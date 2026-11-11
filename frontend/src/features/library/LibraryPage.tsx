@@ -17,6 +17,7 @@ import { ViewSwitch, usePaperView } from './ViewSwitch'
 import { SearchNotice } from './SearchNotice'
 import { ImportFromZoteroButton } from './ImportFromZoteroButton'
 import { UploadPdfsButton } from './UploadPdfsButton'
+import { NoveltyPanel } from './NoveltyPanel'
 
 const loadLibraryScene = () => import('@/features/scene3d/directors/library')
 
@@ -30,6 +31,7 @@ export function LibraryPage() {
   const [view, setView, exitTriage] = usePaperView('paperlab-library-view', 'library')
   const [visible, setVisible] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+  const [checking, setChecking] = useState(false)
   // A pick hidden by the list's own search is kept, but only the rows on screen are counted and exported.
   const selectedIds = (list ?? []).filter((p) => picked.has(p.id) && (visible?.includes(p.id) ?? true)).map((p) => p.id)
   const toggle = (id: string) => setPicked((prev) => new Set(prev.has(id) ? [...prev].filter((x) => x !== id) : [...prev, id]))
@@ -51,6 +53,9 @@ export function LibraryPage() {
         <FoundPdfsNotice />
 
         {upload.error && <ErrorAlert message={upload.error.message} />}
+
+        <Button variant="outline" className="self-start" aria-expanded={checking} onClick={() => setChecking((open) => !open)}>Has this been done?</Button>
+        {checking && <NoveltyPanel />}
 
         {list === undefined ? (
           papers.isError ? (
