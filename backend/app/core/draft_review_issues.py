@@ -102,7 +102,7 @@ def check_issue(raw: object, lens: str, files: Mapping[str, str], copied: set[tu
     place = locate(files, item.evidence_quote)
     if place is None or " ".join(item.evidence_quote.split()) not in " ".join(paper.split()):
         return None, "quote"
-    for point in (item.summary, item.close_criterion):
+    for point in (item.summary, item.close_criterion, item.section):
         if len(point.split()) > MAX_WORDS or reads_as_wording(point, NO_REF, copied):
             return None, "wording"
     return Issue(item.severity, item.section, item.summary, " ".join(item.evidence_quote.split()),

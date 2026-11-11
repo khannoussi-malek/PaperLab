@@ -77,6 +77,8 @@ def test_a_good_issue_is_kept_and_located():
         (issue(summary="Then show that sleep improves memory in adults too"), "wording"),  # a 7-word run of the paper
         (issue(evidence_quote="\\usepackage{amsmath}"), "quote"),  # in the preamble: in a file, not in the paper
         (issue(summary="word " * 41), "wording"),
+        (issue(section='Rewrite it as "Sleep helps memory a lot."'), "wording"),
+        (issue(section="Then show that sleep improves memory in adults too"), "wording"),
     ],
 )
 def test_a_bad_issue_is_dropped_with_its_reason(raw, why):
