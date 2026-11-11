@@ -10,7 +10,7 @@
     {"id": "4", "section": "Introduction", "text": "States the question the review sets out to answer."},
     {"id": "5", "section": "Methods", "text": "Lists what made a study eligible, and how the criteria were grouped."},
     {"id": "6", "section": "Methods", "text": "Names each source used to find studies, such as registers and websites."},
-    {"id": "7", "section": "Methods", "text": "Says how studies were searched, with dates and databases."},
+    {"id": "7", "section": "Methods", "text": "Says how studies were searched, with dates, databases and the full search strategy."},
     {"id": "8", "section": "Methods", "text": "Describes how studies were screened and who did it."},
     {"id": "9", "section": "Methods", "text": "Says how data were pulled from reports and who checked them."},
     {"id": "10", "section": "Methods", "text": "Lists the outcomes and variables collected from each study."},

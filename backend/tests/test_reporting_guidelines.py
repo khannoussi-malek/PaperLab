@@ -90,3 +90,30 @@ def test_apply_errors_list_valid_ids_in_file_order():
         rg.apply({}, tick=["1"])
     with pytest.raises(InvalidInput, match="unknown_guideline"):
         rg.apply({}, guideline="nope")
+
+
+def test_apply_rejects_bare_string_tick():
+    import pytest
+    from app.core.errors import InvalidInput
+    from app.core.reporting_guidelines import apply
+
+    with pytest.raises(InvalidInput):
+        apply({"guideline": "prisma2020"}, tick="3")
+    with pytest.raises(InvalidInput):
+        apply({"guideline": "prisma2020"}, untick="3")
+
+
+def test_apply_untick_wins_when_id_in_both():
+    from app.core.reporting_guidelines import apply
+
+    out = apply({"guideline": "prisma2020", "prisma2020:3": True}, tick=["3", "4"], untick=["3"])
+    assert "prisma2020:3" not in out and out["prisma2020:4"] is True
+
+
+def test_guideline_wording_fixes():
+    from app.core.reporting_guidelines import get
+
+    t = lambda g, i: next(x.text for x in get(g).items if x.id == i)  # noqa: E731
+    assert "search strategy" in t("prisma2020", "7")
+    assert "missing data" not in t("consort", "12")
+    assert "ended" in t("consort", "14") or "stopped" in t("consort", "14")

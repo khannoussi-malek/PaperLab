@@ -103,6 +103,8 @@ def view(checklist: dict) -> ChecklistView:
 def apply(checklist: dict, guideline: str | None = None, tick=(), untick=()) -> dict:
     """A new checklist dict; the input is not touched. guideline=None keeps the current one. Ticks of other guidelines
     and final-step keys stay."""
+    if isinstance(tick, str) or isinstance(untick, str):
+        raise InvalidInput("tick_must_be_a_list")
     out = dict(checklist)
     if guideline is not None:
         out["guideline"] = get(guideline).id
@@ -114,8 +116,8 @@ def apply(checklist: dict, guideline: str | None = None, tick=(), untick=()) -> 
     available = [i.id for i in get(chosen).items]
     if bad := [i for i in (*tick, *untick) if i not in available]:
         raise InvalidInput("unknown_item", available=available, unknown=bad)
-    for i in untick:
-        out.pop(_key(chosen, i), None)
     for i in tick:
         out[_key(chosen, i)] = True
+    for i in untick:  # untick wins when an id is in both
+        out.pop(_key(chosen, i), None)
     return out
