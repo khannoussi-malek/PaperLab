@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
 import type { ReportingGuideline, ReportingGuidelineItem } from '@/api/client'
-import { useReportingGuidelines, useUpdateManuscript } from '@/api/queries'
+import { useReportingGuidelines } from '@/api/queries'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { useChecklist, type Ticks } from './useChecklist'
 
 type Props = { manuscriptId: string; checklist: Record<string, unknown> }
-type Ticks = Record<string, unknown>
 
 /** Ticks are kept as `"<guideline>:<item>": true`; the chosen guideline as `guideline: "<id>"`. Suggestions only: nothing is auto-ticked. */
 const itemKey = (guideline: string, item: ReportingGuidelineItem) => `${guideline}:${item.id}`
@@ -44,29 +43,13 @@ function GuidelineItems({ guideline, shown, onToggle }: { guideline: ReportingGu
   )
 }
 
-/** Each change is built from `latest`, the freshest ticks (the prop, or the dict last sent), so quick ticks don't drop each other. */
+/** Each change is built from the shared current ticks (see useChecklist), so quick ticks, here or in the final steps, don't drop each other. */
 export function GuidelineChecklist({ manuscriptId, checklist }: Props) {
   const guidelines = useReportingGuidelines()
-  const update = useUpdateManuscript()
-  const [shown, setShown] = useState<Ticks>(checklist)
-  const [fromProp, setFromProp] = useState(checklist)
-  if (fromProp !== checklist) {
-    setFromProp(checklist)
-    setShown(checklist)
-  }
-  const latest = useRef<Ticks>(checklist)
-  useEffect(() => {
-    latest.current = checklist
-  }, [checklist])
-
-  const send = (next: Ticks) => {
-    latest.current = next
-    setShown(next)
-    update.mutate({ id: manuscriptId, patch: { checklist: next } })
-  }
-  const toggle = (key: string, on: boolean) => send(on ? { ...latest.current, [key]: true } : without(latest.current, key))
+  const { shown, current, send } = useChecklist(manuscriptId, checklist)
+  const toggle = (key: string, on: boolean) => send(on ? { ...current(), [key]: true } : without(current(), key))
   const pick = (id: string) => {
-    const rest = without(latest.current, 'guideline')
+    const rest = without(current(), 'guideline')
     send(id ? { ...rest, guideline: id } : rest)
   }
 
