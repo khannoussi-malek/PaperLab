@@ -7183,6 +7183,12 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Ai Tool */
+            ai_tool: string | null;
+            /** Ai Path */
+            ai_path: string | null;
+            /** Ai Reason */
+            ai_reason: string | null;
         };
         /** SnowballNextOut */
         SnowballNextOut: {
