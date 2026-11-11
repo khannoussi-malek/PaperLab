@@ -331,3 +331,14 @@ def test_currency_amounts_are_exempt(text):
 def test_one_huge_integer_skips_only_that_value():
     text = '{"big": ' + "9" * 400 + ', "v": 91.3}'
     assert run({"r.json": text, "main.tex": "We reach 91.3 here."}) == []
+
+
+def test_blueprint_json_is_configuration_not_data():
+    bp = '{"title": "T", "target_words": {"introduction": [400, 900]}}'
+    # the only .json is the blueprint: the check stays silent (no truth)
+    assert run({"blueprint.json": bp, "main.tex": "We reach 91.4 and wrote 400 here."}) == []
+    # its numbers back nothing, even next to a real data file
+    found = run({"blueprint.json": '{"x": 91.4}', "r.json": '{"acc": 0.85}', "main.tex": "We reach 91.4 here."})
+    assert [f.message.split('"')[1] for f in found] == ["91.4"]
+    # an unreadable blueprint is blueprint.words' to report, not this check's
+    assert run({"blueprint.json": "nope", "r.json": '{"acc": 0.85}', "main.tex": "Ours 0.85."}) == []

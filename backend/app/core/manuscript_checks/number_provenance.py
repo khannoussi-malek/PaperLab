@@ -272,7 +272,8 @@ def _cells(env: str, body: str) -> str:
 def harvest(files: Mapping[str, str], blanked: Mapping[str, str]) -> Truth | None:
     """Every number the manuscript's data backs, or None when it has no .csv/.json file and no number in a table.
     `blanked` maps each .tex path to its comment-blanked text."""
-    data = [p for p in sorted(files) if p.lower().endswith(DATA_SUFFIXES)]
+    # blueprint.json is configuration, not data (S2P B10): its target bands would back prose numbers
+    data = [p for p in sorted(files) if p.lower().endswith(DATA_SUFFIXES) and p != "blueprint.json"]
     pairs: list[tuple[float, str]] = []
     problems = []
     for path in data:
