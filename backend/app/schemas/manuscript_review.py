@@ -72,3 +72,54 @@ class SentenceOut(BaseModel):
 
 class LocateOut(BaseModel):
     sentences: list[SentenceOut]
+
+
+class ReviewAllIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    include_uncited: bool = True
+    confirm_remote: bool = False
+    confirm_large: bool = False  # over 30 checks needs this (the studio shows the estimate first)
+
+
+class EstimateFileOut(BaseModel):
+    path: str
+    pairs: int
+    uncited: int
+
+
+class EstimateOut(BaseModel):
+    files: list[EstimateFileOut]
+    pairs: int
+    uncited: int
+    uncited_skipped: int
+    confirm_above: int
+    max_pairs: int
+    needs_confirm: bool
+
+
+class ReportItemOut(BaseModel):
+    file: str
+    ord: int
+    kind: Literal["cited", "uncited"]
+    sentence: str
+    cite_key: str | None
+    paper_title: str | None
+    status: Literal["queued", "running", "done", "failed", "interrupted"]
+    verdict: str | None
+    outcome: str
+    reason: str | None
+    quote: str | None
+    page: int | None
+
+
+class ReportFileOut(BaseModel):
+    path: str
+    items: list[ReportItemOut]
+
+
+class ReportOut(BaseModel):
+    run: ReviewRunOut
+    counts: dict[str, int]
+    dismissed: int
+    files: list[ReportFileOut]
