@@ -7,11 +7,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 const NO_WORKSPACE = 'Pick a workspace first'
 
 /** The editor toolbar's Review button, and the run's progress line while a check is live. */
-export function ReviewMenu({ hasWorkspace, run, onCheck, onCancel, onReviewSection, sectionLive = false }: {
+export function ReviewMenu({ hasWorkspace, run, onCheck, onCancel, onCheckAll, reportHref, onReviewSection, sectionLive = false }: {
   hasWorkspace: boolean
-  run: Pick<ReviewRun, 'status' | 'done' | 'total'> | null
+  run: Pick<ReviewRun, 'status' | 'done' | 'total' | 'file'> | null
   onCheck: () => void
   onCancel: () => void
+  /** Review → Review all files: opens the estimate dialog. */
+  onCheckAll?: () => void
+  /** The report's Markdown URL; offered once an all-files run has finished. */
+  reportHref?: string
   /** Review → Review this section (no workspace needed: the notes are just left out). */
   onReviewSection?: () => void
   /** A section review is queued or running for this file. */
@@ -32,6 +36,10 @@ export function ReviewMenu({ hasWorkspace, run, onCheck, onCancel, onReviewSecti
         <DropdownMenuContent align="end">
           <DropdownMenuItem disabled={!hasWorkspace || isLive(run)} onSelect={onCheck}>Check citations</DropdownMenuItem>
           {!hasWorkspace && <p className="px-2 py-1 text-xs text-muted-foreground">{NO_WORKSPACE}</p>}
+          {onCheckAll && <DropdownMenuItem disabled={!hasWorkspace || isLive(run)} onSelect={onCheckAll}>Review all files</DropdownMenuItem>}
+          {reportHref && run?.file === '*' && (run.status === 'done' || run.status === 'cancelled') && (
+            <DropdownMenuItem asChild><a href={reportHref} download>Download report</a></DropdownMenuItem>
+          )}
           {onReviewSection && <DropdownMenuItem disabled={sectionLive} onSelect={onReviewSection}>Review this section</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
