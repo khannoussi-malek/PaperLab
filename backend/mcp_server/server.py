@@ -25,6 +25,7 @@ from app.core import (
     manuscript_agent_compile,
     manuscript_agent_review,
     manuscript_draft_review,
+    manuscript_templates,
     manuscripts,
     notes,
     novelty,
@@ -77,7 +78,8 @@ mcp = MCPServer(
         "import_citations brings in a Zotero export (poll a big one with its job_id). "
         "An AI suggestion on a hit is a suggestion, never a decision; only review_hits and "
         "accept_suggestions record one, so ask the owner first. "
-        "Writing studio: list_manuscripts, create_manuscript, list_manuscript_files, read_manuscript_file, then "
+        "Writing studio: list_manuscripts, list_manuscript_templates, create_manuscript, list_manuscript_files, "
+        "read_manuscript_file, then "
         "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
         "`base` you read), add_manuscript_figure, check_manuscript, check_dois, start_draft_review, get_draft_review, "
         "cancel_draft_review, "
@@ -796,6 +798,17 @@ async def list_manuscripts(workspace: str | None = None) -> list[manuscript_agen
     them or only those of one workspace."""
     async with sessions() as session:
         return await manuscript_agent.list_manuscripts(session, workspace)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def list_manuscript_templates() -> list[manuscript_templates.TemplateSummary]:
+    """Use to choose the `template` for create_manuscript: pass a `name`. Each one has `label`, `official` (true for a
+    venue's own class, false for a generic layout), `provenance` (where its layout comes from), `page_limit` (the page
+    limit the venue sets, null for none), `references_count` (true when the references count toward that limit) and
+    `section_words` (each section id with its [min, max] word band, the length a section is planned to run; the
+    blueprint's target_words copy these)."""
+    return manuscript_templates.summaries()
 
 
 @mcp.tool()

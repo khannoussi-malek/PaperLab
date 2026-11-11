@@ -51,6 +51,7 @@ TOOLS = [
     "list_evidence_cards",
     "list_hits",
     "list_manuscript_files",
+    "list_manuscript_templates",
     "list_manuscripts",
     "list_notes",
     "list_papers",

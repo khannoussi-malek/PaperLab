@@ -559,6 +559,7 @@ Systematic search and screening:
 Writing studio:
 - `list_manuscripts`: your manuscripts, with workspace, main file and compile status;
 - `create_manuscript`: a new manuscript from a template (article, IEEE, ACM, LNCS or Elsevier), optionally tied to a workspace;
+- `list_manuscript_templates`: the five templates with each one's page limit, whether references count toward it, and its section word bands;
 - `list_manuscript_files`: a manuscript's files, without their text;
 - `read_manuscript_file`: a file's text, or a range of lines, with the `updated_at` Claude passes back as `base` when it changes the file;
 - `create_manuscript_file`: a new text file, such as `sections/results.tex`;
