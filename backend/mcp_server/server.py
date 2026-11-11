@@ -10,7 +10,7 @@ nothing in this process may print.
 import functools
 import json
 import uuid
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict
 
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
@@ -23,9 +23,11 @@ from app.core import (
     manuscript_agent,
     manuscript_agent_checks,
     manuscript_agent_compile,
+    manuscripts,
     notes,
     novelty,
     pipeline,
+    reporting_guidelines,
     screening,
     workspaces,
 )
@@ -74,7 +76,8 @@ mcp = MCPServer(
         "accept_suggestions record one, so ask the owner first. "
         "Writing studio: list_manuscripts, create_manuscript, list_manuscript_files, read_manuscript_file, then "
         "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
-        "`base` you read), add_manuscript_figure, check_manuscript, compile_manuscript then get_compile_result, "
+        "`base` you read), add_manuscript_figure, check_manuscript, get/set_manuscript_checklist, compile_manuscript "
+        "then get_compile_result, "
         "read_manuscript_pdf_text."
     ),
 )
@@ -915,6 +918,57 @@ async def check_manuscript(
     unknown names are an error. Findings are capped at 200 (errors first); `truncated` counts the rest."""
     async with sessions() as session:
         return await manuscript_agent_checks.check_manuscript(session, manuscript_id, checks)
+
+
+class GuidelineOption(TypedDict):
+    id: str
+    label: str
+    applies_to: str
+
+
+class ChecklistReply(TypedDict):
+    guideline: str | None
+    items: list[reporting_guidelines.ItemView]
+    done: int
+    total: int
+    available: list[GuidelineOption]
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def get_manuscript_checklist(manuscript_id: uuid.UUID) -> ChecklistReply:
+    """Use to read a manuscript's reporting-guideline checklist (PRISMA 2020, STROBE, CONSORT, ML / engineering):
+    the chosen guideline, every item with its section, text and ticked state, and the count. Also lists the available
+    guidelines. Items are suggestions for the author; an incomplete list never blocks compile or export."""
+    async with sessions() as session:
+        m = await manuscripts.get(session, manuscript_id)
+        return {
+            **reporting_guidelines.view(m.checklist).model_dump(),
+            "available": [
+                {"id": g.id, "label": g.label, "applies_to": g.applies_to}
+                for g in reporting_guidelines.all_guidelines()
+            ],
+        }
+
+
+@mcp.tool()
+@recoverable
+async def set_manuscript_checklist(
+    manuscript_id: uuid.UUID,
+    guideline: str | None = None,
+    tick: list[str] | None = None,
+    untick: list[str] | None = None,
+) -> reporting_guidelines.ChecklistView:
+    """Use to choose a guideline (leave it out to keep the current one; this tool cannot clear it) and tick or untick
+    items. Tick only what the author confirmed is covered, never to make a count look good, and never write wording
+    for the author. Choosing a guideline ticks nothing. It does not touch the text or the final steps. Unknown ids are
+    an error listing the valid ones."""
+    async with sessions() as session:
+        m = await manuscripts.get(session, manuscript_id)
+        new = reporting_guidelines.apply(m.checklist, guideline, tick or [], untick or [])  # read-modify-write
+        m = await manuscripts.update(session, manuscript_id, checklist=new)
+        await session.commit()  # manuscripts.update does not commit; the agent modules commit themselves
+        return reporting_guidelines.view(m.checklist)
 
 
 @mcp.tool()
