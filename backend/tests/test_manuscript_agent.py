@@ -364,6 +364,15 @@ async def test_each_write_logs_tool_path_and_reason(session):
     assert log == {("edit_manuscript_file", "main.tex", "tidy"), ("create_manuscript_file", "sections/new.tex", None)}
 
 
+async def test_nul_in_reason_never_blocks_the_write_and_is_not_logged(session):
+    mid = await new(session)
+    base = await updated(session, mid, "main.tex")
+    await agent.edit_file(session, mid, "main.tex", "\\begin{document}", "\\begin{document}\n", base, reason="a\x00b\x00 ")
+    assert "\\begin{document}\n" in await text(session, mid, "main.tex")
+    logged = [s.ai_reason for s in await snaps(session, mid) if s.ai_tool == "edit_manuscript_file"]
+    assert logged == ["ab"]
+
+
 async def test_write_rename_delete_log_and_blank_or_long_reasons(session):
     mid = await new(session)
     await agent.create_file(session, mid, "a.tex", "1")

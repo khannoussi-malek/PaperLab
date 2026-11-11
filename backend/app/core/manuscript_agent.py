@@ -217,7 +217,7 @@ async def _log(session: AsyncSession, mid: uuid.UUID, tool: str, path: str, reas
     """Record the step on this transaction's `before_mcp` snapshot (the newest); returns its id."""
     snapshot_id = await _snapshot_id(session, mid)
     if snapshot_id is not None:
-        note = (reason or "").strip()[:MAX_REASON] or None  # never refuse a write over its reason
+        note = (reason or "").replace("\x00", "").strip()[:MAX_REASON].rstrip() or None  # never refuse a write over its reason
         await session.execute(
             update(ManuscriptSnapshot)
             # never overwrite another step's log
