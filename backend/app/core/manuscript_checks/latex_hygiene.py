@@ -163,26 +163,32 @@ FUNCTION_LIKE = {"sigma", "Gamma", "Theta", "Omega"}  # \sigma(x), \Theta(n): a 
 SYMBOL = re.compile(r"\\(" + "|".join(sorted(GREEK, key=len, reverse=True)) + r")(?![A-Za-z])")
 
 
-def _symbols(text: str):
+def symbols(text: str):
     for m in SYMBOL.finditer(text):
         if m.group(1) in FUNCTION_LIKE and text[m.end():].lstrip().startswith("("):
             continue
         yield m.group(1), m.start()
 
 
-def _notation(ctx: CheckContext) -> list[Finding]:
+def math_symbols(ctx: CheckContext) -> tuple[dict[str, tuple[str, int]], set[str]]:
+    """(Greek name -> (file, line) of its first display use, names used in inline math or outside displays)."""
     inline: set[str] = set()
     first: dict[str, tuple[str, int]] = {}
     for path, text in tex_files(ctx):
         blanked = _blank_comments(text)
         displays = [m for p in DISPLAY for m in p.finditer(blanked)]
         for m in sorted(displays, key=lambda m: m.start()):
-            for name, pos in _symbols(m.group()):
+            for name, pos in symbols(m.group()):
                 first.setdefault(name, (path, line_of(blanked, m.start() + pos)))
         rest = blanked
         for p in DISPLAY:
             rest = p.sub(_spaces, rest)
-        inline |= {name for p in INLINE_MATH for m in p.finditer(rest) for name, _ in _symbols(m.group())}
+        inline |= {name for p in INLINE_MATH for m in p.finditer(rest) for name, _ in symbols(m.group())}
+    return first, inline
+
+
+def _notation(ctx: CheckContext) -> list[Finding]:
+    first, inline = math_symbols(ctx)
     return [
         Finding("latex.notation_undefined", "warning", path, line,
                 f"\\{name} appears in an equation but is never introduced in running text or a table.",

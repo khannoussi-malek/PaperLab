@@ -7751,6 +7751,16 @@ export interface components {
             page_limit: number | null;
             /** References Count */
             references_count: boolean;
+            /**
+             * Section Words
+             * @default {}
+             */
+            section_words: {
+                [key: string]: [
+                    number,
+                    number
+                ];
+            };
         };
         /** TokenEvent */
         TokenEvent: {

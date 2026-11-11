@@ -20,8 +20,8 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   vi.spyOn(api, 'listManuscripts').mockResolvedValue([ms({}), ms({ id: 'm2', title: 'Draft two', compile_status: 'failed' })])
   vi.spyOn(api, 'listManuscriptTemplates').mockResolvedValue([
-    { name: 'article', label: 'Article', official: false, provenance: '', page_limit: null, references_count: false },
-    { name: 'ieee', label: 'IEEE', official: true, provenance: '', page_limit: 6, references_count: true },
+    { name: 'article', label: 'Article', official: false, provenance: '', page_limit: null, references_count: false, section_words: {} },
+    { name: 'ieee', label: 'IEEE', official: true, provenance: '', page_limit: 6, references_count: true, section_words: {} },
   ])
 })
 afterEach(() => {
