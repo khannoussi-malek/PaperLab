@@ -7,8 +7,9 @@
 
 > **Why this project exists:** I built PaperLab to learn how research really works, from finding papers to
 > writing them up, to grow my knowledge, and to find a strong, lasting way to keep developing it. I use it for my
-> own research, and I hope it helps me find a PhD, ideally in software engineering and AI. If you work in that
-> area and have an opening, or just want to talk research, I'd be glad to hear from you:
+> own research, and I want to give something back to the research community by helping as many researchers as I
+> can with the skills I have now. If you have an idea, a problem PaperLab could solve, or just want to talk research,
+> I'd be glad to hear from you:
 > [my website](https://www.malekkhannoussi.tn/) · [Gmail](mailto:khannoussimalek@gmail.com) ·
 > [LinkedIn](https://www.linkedin.com/in/khannoussi-malek)
 
@@ -725,13 +726,13 @@ stable test hooks listed there.
 PaperLab is built by **Malek Khannoussi** ([malekkhannoussi.tn](https://www.malekkhannoussi.tn/),
 [LinkedIn](https://www.linkedin.com/in/khannoussi-malek/)).
 
-I started it on my way to a PhD. I wanted a tool that let me read papers properly, where every note stays attached to
+I started it because I wanted a tool that let me read papers properly, where every note stays attached to
 the passage it came from and every answer can be checked against the page it came from. It didn't exist, so I built it,
 and it has been what I work on every day since.
 
-**I am looking for a PhD position.** If you supervise research, or you know a group where this kind of work would fit,
-I would be glad to hear from you. A pointer to an opening, an introduction, or an honest opinion on the work would all
-help, and any of them would mean a lot.
+**I want PaperLab to be useful to the research community.** I'm putting the skills I have now into helping as many
+researchers as I can. If you use it, or tried it and it didn't fit your work, I would be glad to hear from you. A bug
+report, a feature idea, or an honest opinion on the work all help, and any of them would mean a lot.
 
 The [PaperLab page on LinkedIn](https://www.linkedin.com/company/os-paperlab) posts a weekly breakdown of how one
 feature works: follow along there. This repository usually runs a few months ahead of what is posted, so what you see
