@@ -81,6 +81,25 @@ def to_plain(raw: str) -> str:
     return " ".join(LATEX.latex_to_text(text).split())
 
 
+THIS_PAPER, OTHER_SOURCE = "[this paper]", "[other source]"
+OWN_REF = re.compile(r"\\(?:[cC]|auto|eq|name|page)?ref\*?\{")  # \ref, \cref, \autoref…; never \href
+
+
+def scoped_plain(raw: str, key: str) -> str:
+    """The plain sentence with each citation replaced by where it points: [this paper] for the group holding `key`,
+    [other source] for the rest, so one paper is judged only on the part it is cited for."""
+
+    def mark(m: re.Match) -> str:
+        return f" {THIS_PAPER if key in {k.strip() for k in m.group(1).split(',')} else OTHER_SOURCE}"
+
+    return to_plain(CITE.sub(mark, COMMENT.sub("", raw)))
+
+
+def points_inside(raw: str) -> bool:
+    """True when the sentence refers to one of the manuscript's own sections, tables, figures or equations."""
+    return OWN_REF.search(COMMENT.sub("", raw)) is not None
+
+
 def _blank_comments(text: str) -> str:
     return COMMENT.sub(lambda m: " " * len(m.group()), text)
 

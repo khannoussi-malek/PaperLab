@@ -59,7 +59,7 @@ async def test_full_text_verdict_with_a_kept_quote_and_its_provenance_row(sessio
     assert {p["chunk_id"] for p in check.passages} == {c.id for c in chunks}
     assert "(page 1, section 1 Introduction)" in llm.prompts[0] and "[6]" not in llm.prompts[0]
     row = await session.get(LLMOutput, check.output_id)
-    assert (row.kind, row.paper_id, row.model, row.prompt_version) == ("claim_check", paper.id, "fake:scripted", 2)
+    assert (row.kind, row.paper_id, row.model, row.prompt_version) == ("claim_check", paper.id, "fake:scripted", 3)
     assert row.source_chunks == [p["chunk_id"] for p in check.passages]
     assert json.loads(row.content)["verdict"] == "supported"
 
@@ -382,9 +382,29 @@ async def test_a_dangling_chunk_just_before_wins_over_the_previous_page(session,
     assert "On average, we find" not in llm.prompts[0]
 
 
-def test_the_v2_prompt_explains_the_page_break_marker():
-    assert claims.CLAIM_PROMPT_VERSION == 2
+def test_the_prompt_explains_the_page_break_marker_and_the_cite_scope_marks():
+    assert claims.CLAIM_PROMPT_VERSION == 3
     assert "continues a sentence that began" in claims.SYSTEM_PROMPT
+    assert "[this paper]" in claims.SYSTEM_PROMPT and "[other source]" in claims.SYSTEM_PROMPT
+
+
+def spy(calls):
+    async def retrieve(session, query, paper_ids=None, k=None, **kwargs):
+        calls.append((query, kwargs.get("words")))
+        return []
+    return retrieve
+
+
+async def test_a_claim_with_figures_also_ranks_by_words_and_marks_never_reach_the_search(session, monkeypatch):
+    paper = await bare_paper(session, abstract="An abstract.")
+    session.add(Chunk(paper_id=paper.id, ordinal=0, page=1, bbox=[[0, 0, 1, 1]], text="x", embed_model="test",
+                      strategy_ver=1))
+    await session.flush()
+    calls = []
+    monkeypatch.setattr(retrieval, "retrieve", spy(calls))
+    for claim in ("Top-1 rose from 28.95 to 65.32 [this paper].", "Dense [other source] retrieval helps [this paper]."):
+        await claims.verify_claim(session, claim, paper_id=paper.id, llm=Scripted(reply("not_addressed")))
+    assert calls == [("Top-1 rose from 28.95 to 65.32.", True), ("Dense retrieval helps.", None)]
 
 
 class _Flaky:

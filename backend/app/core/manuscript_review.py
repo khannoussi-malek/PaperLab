@@ -14,7 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import llm_connections, manuscript_papers, manuscripts, queue
 from app.core import manuscript_paths as paths
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.core.manuscript_sentences import Sentence, in_range, normalize_newlines, split_sentences
+from app.core.manuscript_sentences import (
+    Sentence,
+    in_range,
+    normalize_newlines,
+    points_inside,
+    scoped_plain,
+    split_sentences,
+)
 from app.models import (
     ManuscriptClaimCheck,
     ManuscriptClaimDismissal,
@@ -30,11 +37,14 @@ JOB = "check_manuscript_citations"
 logger = logging.getLogger(__name__)
 
 
+INSIDE = "It points to a section, table or figure of this paper, which backs it."
+
+
 def _row(s: Sentence, ord_: int, kind: str, key: str | None, paper_id: uuid.UUID | None) -> dict:
     row = {
         "sentence_hash": s.hash,
         "sentence": s.norm,
-        "plain": s.plain,
+        "plain": scoped_plain(s.raw, key) if key else s.plain,
         "ord": ord_,
         "kind": kind,
         "cite_key": key,
@@ -43,7 +53,9 @@ def _row(s: Sentence, ord_: int, kind: str, key: str | None, paper_id: uuid.UUID
     }
     if kind == "cited" and paper_id is None:
         row |= {"status": "done", "verdict": "cannot_verify", "reason": "key_not_found"}
-    elif len(s.plain) > MAX_PLAIN:
+    elif kind == "uncited" and points_inside(s.raw):  # the writer's own result: this paper is its source
+        row |= {"status": "done", "verdict": "not_claim", "reason": INSIDE}
+    elif len(row["plain"]) > MAX_PLAIN:
         row |= {"status": "failed", "reason": "claim_too_long"}
     return row
 
@@ -75,10 +87,11 @@ def plan(targets: list[Sentence], papers: dict[str, uuid.UUID], include_uncited:
     cited, uncited = [s for s in unique if s.keys], [s for s in unique if not s.keys]
     pairs = {(s.hash, papers.get(k) or k): (s, k) for s in cited for k in s.keys}  # one row per sentence and paper
     rows = [_row(s, 0, "cited", k, papers.get(k)) for s, k in pairs.values()]
-    short = [s for s in uncited if len(s.plain) <= MAX_PLAIN]  # an over-long one needs no model call, so no slot
-    long = [s for s in uncited if len(s.plain) > MAX_PLAIN]
+    # An over-long sentence or one pointing inside the manuscript needs no model call, so it takes no slot.
+    free = [s for s in uncited if len(s.plain) > MAX_PLAIN or points_inside(s.raw)]
+    short = [s for s in uncited if s not in free]
     skipped = max(0, len(short) - MAX_UNCITED) if include_uncited else 0
-    kept = sorted(short[:MAX_UNCITED] + long, key=lambda s: s.start)
+    kept = sorted(short[:MAX_UNCITED] + free, key=lambda s: s.start)
     rows += [_row(s, 0, "uncited", None, None) for s in kept] if include_uncited else []
     return [r | {"ord": i} for i, r in enumerate(rows)], skipped
 

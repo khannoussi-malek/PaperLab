@@ -546,3 +546,27 @@ async def test_a_requeued_run_and_its_waiting_rows_are_live_after_the_requeue(se
     assert mr._live(saved)
     waiting = await rows(session, m.id)
     assert waiting and all(r.status == "queued" and datetime.now(UTC) - r.updated_at < mr.LIVE for r in waiting)
+
+
+async def test_each_cited_row_marks_which_cite_is_its_paper(session):
+    def text(keys):
+        a, b = keys
+        return f"Dense retrieval \\cite{{{a}}} beats BM25 on long files \\cite{{{b}}}."
+
+    _, keys, m = await doc(session, text, "Alpha", "Beta")
+    await go(session, m)
+    got = {r.cite_key: r.plain for r in await rows(session, m.id)}
+    assert got[keys[0]] == "Dense retrieval [this paper] beats BM25 on long files [other source]."
+    assert got[keys[1]] == "Dense retrieval [other source] beats BM25 on long files [this paper]."
+
+
+async def test_an_uncited_sentence_pointing_to_its_own_section_is_settled_without_a_model(session):
+    def text(keys):
+        return "As Section~\\ref{sec:r} shows, fused search wins on every file. Walking is good for health."
+
+    _, _, m = await doc(session, text, "Alpha")
+    run = await go(session, m)
+    got = await rows(session, m.id)
+    assert [(r.status, r.verdict) for r in got] == [("done", "not_claim"), ("queued", None)]
+    assert "this paper" in got[0].reason
+    assert run["done"] == 1 and run["total"] == 2
