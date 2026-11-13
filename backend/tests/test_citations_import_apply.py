@@ -50,6 +50,11 @@ def jobs(monkeypatch) -> FakeArq:
     return pool
 
 
+def without_embeds(jobs: FakeArq) -> list[tuple]:
+    """The jobs but the embed_note ones a saved note queues (M8.6 C7): these tests are about the paper's jobs."""
+    return [job for job in jobs.jobs if job[0] != "embed_note"]
+
+
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
     """Nothing reaches a paper source unless a test serves one (fetching below)."""
@@ -188,7 +193,7 @@ async def test_an_unreadable_bundled_pdf_leaves_a_held_paper_as_held(session, pd
 
     assert (result.already_in_library, result.pdfs_attached, result.failed) == (1, 0, [])
     await session.refresh(kept)
-    assert not kept.has_pdf and jobs.jobs == []
+    assert not kept.has_pdf and without_embeds(jobs) == []
 
 
 # ---- new papers ----
@@ -211,7 +216,7 @@ async def test_a_bundled_pdf_becomes_a_locked_paper_with_ingest_queued(session, 
     assert (paper.issn, paper.source_type, paper.authors) == ("1234-5678", "journal_article", ["Jane Smith"])
     assert {"title", "doi"} <= set(paper.manual_fields)
     assert Path(paper.file_path).read_bytes() == PDF
-    assert jobs.jobs == [("ingest_paper", str(paper.id))]
+    assert without_embeds(jobs) == [("ingest_paper", str(paper.id))]
     assert ws.id in (await papers.get_paper(session, paper.id)).workspace_ids
     assert (await tags.paper_tag_map(session, ws.id))[paper.id] == ["coffee", "genetics"]
     assert await bodies(session, paper.id) == ["A **key** idea.", "From Zotero — collection: Reading list"]
@@ -227,7 +232,7 @@ async def test_fetch_on_takes_a_free_copy(session, pdf_dir, jobs, fetching):
 
     assert (result.imported, result.pdfs_attached, result.needs_pdf) == (1, 0, [])
     [paper] = await titled(session, "free")
-    assert paper.doi == doi("f") and jobs.jobs == [("ingest_paper", str(paper.id))]
+    assert paper.doi == doi("f") and without_embeds(jobs) == [("ingest_paper", str(paper.id))]
     assert await bodies(session, paper.id) == ["Mine."]
 
 
@@ -280,7 +285,7 @@ async def test_zotero_import_saves_needs_pdf_entries_without_pdf_when_asked(sess
     assert [p.title for p in await workspaces.papers(session, ws.id)] == sorted([title("abs"), title("bare")])
     bodies = set(await session.scalars(select(Note.body).join(note_papers).where(note_papers.c.paper_id == saved.id)))
     assert "my note" in bodies and result.notes == 1
-    assert jobs.jobs == [("index_abstract", str(saved.id))]  # none for the paper without an abstract
+    assert without_embeds(jobs) == [("index_abstract", str(saved.id))]  # none for the paper without an abstract
     assert (saved.pdf_checked_at, saved.pdf_check_result) == (None, None)  # fetching was off: nothing looked
 
 
@@ -368,7 +373,7 @@ async def test_importing_the_same_file_twice_adds_nothing(session, pdf_dir, jobs
     assert (second.imported, second.already_in_library, second.pdfs_attached, second.notes) == (0, 2, 0, 0)
     assert len(await titled(session, "twice-a")) == 1 and len(await titled(session, "twice-b")) == 1
     assert count == 3 and await session.scalar(count_ours) == count
-    assert len(jobs.jobs) == 2
+    assert len(without_embeds(jobs)) == 2
 
 
 # ---- isolation ----
@@ -395,7 +400,7 @@ async def test_one_failing_entry_leaves_no_paper_and_the_rest_go_on(session, pdf
     assert result.imported == 2 and result.failed == [{"title": title("bad"), "reason": cia.FAILED}]
     assert await titled(session, "bad") == []
     assert len(await titled(session, "ok1")) == 1 and len(await titled(session, "ok2")) == 1
-    assert len(jobs.jobs) == 3  # ingest is queued before filing; the discarded paper's ingest finds it gone
+    assert len(without_embeds(jobs)) == 3  # ingest is queued before filing; the discarded paper's ingest finds it gone
     assert len(list(pdf_dir.glob("*.pdf"))) == 2  # the failed one's file is gone
 
 

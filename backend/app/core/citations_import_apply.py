@@ -133,12 +133,13 @@ def _prefill(entry: ImportEntry) -> dict:
     return fields | {"field_sources": provenance.sources_of(fields, "zotero")}
 
 
-async def _add_note(session: AsyncSession, paper_id: uuid.UUID, body: str) -> None:
-    """An unanchored note by You on the paper, as notes_markdown.import_files makes one."""
+async def _add_note(session: AsyncSession, paper_id: uuid.UUID, body: str) -> uuid.UUID:
+    """An unanchored note by You on the paper, as notes_markdown.import_files makes one. Returns its id."""
     note = Note(body=body, provenance=Provenance.HUMAN)
     session.add(note)
     await session.flush()
     await notes._link(session, note.id, [paper_id])
+    return note.id
 
 
 def _capped(body: str | None) -> str | None:
@@ -164,12 +165,15 @@ async def _file(session: AsyncSession, paper_id: uuid.UUID, entry: ImportEntry, 
     linked = select(note_papers.c.note_id).where(note_papers.c.paper_id == paper_id)
     have = set(await session.scalars(select(Note.body).where(Note.id.in_(linked))))
     added = 0
+    saved: list[uuid.UUID] = []
     for body in map(_capped, (*entry.notes, _zotero_note(entry, note_tags))):
         if body and body not in have:
-            await _add_note(session, paper_id, body)
+            saved.append(await _add_note(session, paper_id, body))
             have.add(body)
             added += 1
     await session.commit()
+    for note_id in saved:
+        await notes.queue_embed(note_id)
     return added
 
 

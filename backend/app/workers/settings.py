@@ -35,7 +35,7 @@ from app.workers.manuscripts import COMPILE_JOB_TIMEOUT, compile_manuscript
 from app.workers.paper_biblio import fill_paper_biblio
 from app.workers.paper_enrichment import ENRICH_PAPERS_TIMEOUT, enrich_papers
 from app.workers.pdf_recheck import RECHECK_JOB_TIMEOUT, recheck_free_pdfs, recheck_papers, retry_free_pdf
-from app.workers.references import fetch_references
+from app.workers.references import EMBED_NOTE_JOB_TIMEOUT, embed_note, fetch_references
 from app.workers.saved_searches import schedule_saved_searches
 from app.workers.screening_suggest import SUGGEST_JOB_TIMEOUT, suggest_screening
 from app.workers.workspace_search import SEARCH_RUN_JOB_TIMEOUT, run_workspace_search
@@ -66,6 +66,7 @@ class WorkerSettings:
         _to_ingest_queue("ingest_paper"),
         _to_ingest_queue("reembed_paper"),
         fetch_references,
+        func(embed_note, timeout=EMBED_NOTE_JOB_TIMEOUT, max_tries=1, keep_result=0),
         func(run_workspace_search, timeout=SEARCH_RUN_JOB_TIMEOUT),
         # no stored result: the job id frees as soon as it ends, so a re-run after a rate-limited stop starts
         func(enrich_hits, timeout=ENRICH_JOB_TIMEOUT, keep_result=0),

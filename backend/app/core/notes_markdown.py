@@ -210,6 +210,7 @@ async def import_files(session: AsyncSession, files: list[tuple[str, bytes]]) ->
             raise InvalidInput(f"{name} has no text to import.")
         parsed.append((front, body))
     created = linked = skipped = 0
+    saved: list[uuid.UUID] = []
     for front, body in parsed:
         if await session.scalar(select(Note.id).where(Note.body == body).limit(1)):
             skipped += 1
@@ -220,7 +221,10 @@ async def import_files(session: AsyncSession, files: list[tuple[str, bytes]]) ->
         session.add(note)
         await session.flush()
         await notes._link(session, note.id, found)
+        saved.append(note.id)
         created += 1
         linked += bool(found)
     await session.commit()
+    for note_id in saved:
+        await notes.queue_embed(note_id)
     return ImportResult(created, linked, created - linked, skipped)
