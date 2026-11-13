@@ -147,3 +147,20 @@ test('another failure shows the Sileo error', async () => {
   fireEvent.click(button)
   await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Couldn't create the blueprint" }))
 })
+
+const NO_TARGETS_LINE = 'No word targets yet: this template has none. Add them under target_words.'
+
+test('a plan with no targets on a template with no bands says so', async () => {
+  mockTemplates()
+  mockFile('blueprint.json', '{"title":"T"}')
+  renderPanel({ files: [{ path: 'blueprint.json' }], template: 'custom' })
+  expect(await screen.findByText(NO_TARGETS_LINE)).toBeInTheDocument()
+})
+
+test('no such line when the template has bands, or when there are targets', async () => {
+  mockTemplates()
+  mockFile('blueprint.json', '{"title":"T"}')
+  renderPanel({ files: [{ path: 'blueprint.json' }], template: 'article' })
+  expect(await screen.findByText('T')).toBeInTheDocument()
+  expect(screen.queryByText(NO_TARGETS_LINE)).toBeNull()
+})

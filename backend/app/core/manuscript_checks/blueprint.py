@@ -29,12 +29,15 @@ def _words(ctx: CheckContext) -> list[Finding]:
                         "Fix the file; the blueprint checks are off until it parses.")]
     if spec is None:
         return []
-    found, seen = [], set()
-    for s in bp.sections(ctx.files):
-        seen.add(s.id)
-        if not s.measurable:  # the body is in an \input file: no honest count, so no warning
-            continue
-        band = bp.band(spec, s.id, ctx.manuscript.template)
+    sections = bp.sections(ctx.files)
+    # the body in an \input file is no honest count, so no warning for it
+    bands = [(s, bp.band(spec, s.id, ctx.manuscript.template)) for s in sections if s.measurable]
+    found = []
+    if bands and all(band is None for _, band in bands):
+        found.append(Finding(W, "info", bp.PATH, 1,
+                             "No section has a word target, so section lengths aren't checked.",
+                             'Add targets to target_words in blueprint.json, for example "Introduction": [600, 900].'))
+    for s, band in bands:
         if band is None:
             continue
         lo, hi = band
@@ -46,9 +49,10 @@ def _words(ctx: CheckContext) -> list[Finding]:
             found.append(Finding(W, "warning", s.path, s.line,
                                  f'Section "{s.title}" has {s.words} words; more than the target of {lo} to {hi}.',
                                  f"Cut about {s.words - hi} words, or raise the target in blueprint.json."))
+    titles = {s.id for s in sections}
     found += [Finding(W, "info", bp.PATH, 1, f'target_words names "{k}", but no section has that title.',
                       "Rename the key to match a section title, or remove it.")
-              for k in spec.target_words if k not in seen]
+              for k in spec.target_words if k not in titles]
     return found
 
 

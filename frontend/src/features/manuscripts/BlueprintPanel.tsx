@@ -20,9 +20,9 @@ export function BlueprintPanel({ manuscriptId, files, mainFile, title, template 
     enabled: present,
   })
   const templates = useManuscriptTemplates()
+  const bands = templates.data?.find((t) => t.name === template)?.section_words
   const create = useMutation({
     mutationFn: async () => {
-      const bands = templates.data?.find((t) => t.name === template)?.section_words
       const main = files.some((f) => f.path === mainFile) ? await api.getManuscriptFile(manuscriptId, mainFile) : null
       const plainTitle = (main && latexTitle(main.text)) || title // the paper's \title, else the stored name
       return api.saveManuscriptFile(manuscriptId, BLUEPRINT_PATH, starterBlueprint(plainTitle, bands), null)
@@ -71,6 +71,9 @@ export function BlueprintPanel({ manuscriptId, files, mainFile, title, template 
             <ul className="flex flex-col gap-0.5">
               {plan.targets.map((t) => <li key={t.id}>{`${t.id}: ${t.min} to ${t.max} words`}</li>)}
             </ul>
+          )}
+          {plan.targets.length === 0 && templates.isSuccess && bands === undefined && (
+            <p className="text-xs text-muted-foreground">No word targets yet: this template has none. Add them under target_words.</p>
           )}
         </div>
       )}
