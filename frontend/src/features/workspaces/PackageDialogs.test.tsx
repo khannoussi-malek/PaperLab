@@ -28,6 +28,7 @@ const imported: PackageImportResult = {
   pdfs_skipped: 0,
   has_record: true,
   answers: 0,
+  hits: 0,
 };
 
 test("the export dialog links to the package without PDFs by default", () => {

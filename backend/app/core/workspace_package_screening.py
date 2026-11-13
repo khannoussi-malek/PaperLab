@@ -407,9 +407,9 @@ def _cursor_rows(runs: list[dict], run_ids: dict[str, uuid.UUID]) -> list[dict]:
     ]
 
 
-async def rebuild(session, doc: dict, workspace, paper_ids: dict[str, uuid.UUID]) -> None:
+async def rebuild(session, doc: dict, workspace, paper_ids: dict[str, uuid.UUID]) -> int:
     """Adds the package's screening to `workspace` (flushed; its papers are in `paper_ids`, every key the package
-    holds). Rows only: the caller owns the commit."""
+    holds). Rows only: the caller owns the commit. Returns the number of search results (hits) rebuilt."""
     workspace.screening_ranked_used = doc["workspace"]["screening_ranked_used"]
     workspace.screening_criteria = doc["workspace"]["screening_criteria"]
     run_ids = {run["key"]: uuid.uuid4() for run in doc["runs"]}
@@ -476,6 +476,7 @@ async def rebuild(session, doc: dict, workspace, paper_ids: dict[str, uuid.UUID]
             if (placed.get(b["hit"]) if b["hit"] else paper_ids.get(b["paper"])) is not None
         ],
     )
+    return len(placed)
 
 
 async def _insert_rows(session, model, rows: list[dict]) -> None:

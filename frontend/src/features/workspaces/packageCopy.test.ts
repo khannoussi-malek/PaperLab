@@ -10,6 +10,7 @@ const result = {
   pdfs_skipped: 0,
   has_record: true,
   answers: 0,
+  hits: 0,
 };
 
 test("the import result line uses the fixed wording", () => {
@@ -59,4 +60,20 @@ test("an unknown failure gets the generic line, never the raw code", () => {
 
 test("one chat answer is named in the singular", () => {
   expect(importResultLine({ ...result, answers: 1 })).toContain(", 1 chat answer.");
+});
+
+test("the result line names the search results when there are some", () => {
+  expect(importResultLine({ ...result, hits: 7 })).toBe(
+    'Imported "Sepsis review": 3 papers added, 2 already in your library, 5 notes, 7 search results.',
+  );
+});
+
+test("one search result is named in the singular", () => {
+  expect(importResultLine({ ...result, hits: 1 })).toContain(", 1 search result.");
+});
+
+test("the search results come before the chat answers and the skipped PDFs", () => {
+  expect(importResultLine({ ...result, hits: 7, answers: 4, pdfs_skipped: 2 })).toBe(
+    'Imported "Sepsis review": 3 papers added, 2 already in your library, 5 notes, 7 search results, 4 chat answers. 2 PDFs skipped.',
+  );
 });

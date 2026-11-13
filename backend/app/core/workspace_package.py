@@ -265,6 +265,7 @@ class ImportReport:
     pdfs_skipped: int  # a PDF that was too large, not a PDF, or missing from the zip
     has_record: bool  # the screening record was kept for download
     answers: int  # chat answers written to the workspace
+    hits: int  # search results rebuilt from the screening (0 for a package without live screening)
 
 
 @dataclass(frozen=True)
@@ -701,8 +702,9 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
         await _tags_into(session, workspace.id, pkg.tags, ids)
         note_count = await _notes_into(session, pkg.notes, ids)
         answer_count = await workspace_package_answers.write_rows(session, workspace.id, pkg.answers, ids)
+        hit_count = 0
         if workspace_package_screening.is_v2(pkg.screening):
-            await workspace_package_screening.rebuild(session, pkg.screening, workspace, ids)
+            hit_count = await workspace_package_screening.rebuild(session, pkg.screening, workspace, ids)
             await session.flush()
             if not await workspace_package_screening.counts_match(session, workspace.id, pkg.prisma):
                 raise InvalidInput(INVALID, detail="screening counts don't match")
@@ -720,7 +722,9 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
         except Exception:
             logger.exception("could not queue %s for paper %s; it stays uploaded until it is queued again", job, arg)
     has_record = not workspace_package_screening.is_v2(pkg.screening)
-    return ImportReport(workspace.id, name, added, matched, note_count, skipped, has_record, answer_count)
+    return ImportReport(
+        workspace.id, name, added, matched, note_count, skipped, has_record, answer_count, hit_count
+    )
 
 
 async def import_package(session: AsyncSession, data: bytes | IO[bytes]) -> ImportReport:

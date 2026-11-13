@@ -235,3 +235,16 @@ async def test_a_package_without_pdfs_imports_and_its_decisions_still_match(sess
         before.stage1_excluded,
     )
     assert after.included == 0 and after.not_retrieved == before.sought  # no full text here, so none retrieved
+
+
+async def test_the_import_report_counts_the_search_results_rebuilt(session, pdf_dir):
+    ws, rows = await screened(session, pdf_dir)
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    await workspaces.delete(session, ws.id)
+    report = await workspace_package.import_package(session, package)
+    assert report.hits == 4
+
+
+async def test_a_v1_package_reports_no_search_results(session, pdf_dir):
+    report = await workspace_package.import_package(session, _package(name="Old review"))
+    assert report.hits == 0
