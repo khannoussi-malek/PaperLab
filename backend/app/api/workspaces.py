@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.citations import download
 from app.api.deps import SessionDep
-from app.core import citations_bundle, notes_markdown, pipeline, tags, workspace_search, workspaces
+from app.core import citations_bundle, notes_markdown, pipeline, tags, workspace_package, workspace_search, workspaces
 from app.core.citations_export import filename_slug
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
@@ -62,7 +62,11 @@ async def list_notes(workspace_id: uuid.UUID, session: SessionDep) -> list[NoteO
 
 @router.patch("/{workspace_id}/papers/{paper_id}/eligibility")
 async def set_eligibility(
-    workspace_id: uuid.UUID, paper_id: uuid.UUID, run: uuid.UUID, payload: EligibilityUpdate, session: SessionDep,
+    workspace_id: uuid.UUID,
+    paper_id: uuid.UUID,
+    run: uuid.UUID,
+    payload: EligibilityUpdate,
+    session: SessionDep,
 ) -> EligibilityOut:
     return await workspace_search.set_eligibility(
         session, workspace_id, paper_id, run, payload.status, payload.exclude_reason
@@ -86,6 +90,18 @@ async def export_citations_zip(
     file, size = await citations_bundle.build(session, workspace_id, format, notes)
     slug = filename_slug((await workspaces.get(session, workspace_id)).name)
     headers = {"Content-Disposition": f'attachment; filename="{slug}.zip"', "Content-Length": str(size)}
+    return StreamingResponse(citations_bundle.chunks(file), media_type="application/zip", headers=headers)
+
+
+@router.get("/{workspace_id}/package")
+async def export_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: bool = False) -> StreamingResponse:
+    """The workspace as one `.paperlab` file (M35a): PDFs included with `pdfs=true`. 404 unknown workspace."""
+    file = await workspace_package.export_package(session, workspace_id, pdfs=pdfs)
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    slug = filename_slug((await workspaces.get(session, workspace_id)).name)
+    headers = {"Content-Disposition": f'attachment; filename="{slug}.paperlab"', "Content-Length": str(size)}
     return StreamingResponse(citations_bundle.chunks(file), media_type="application/zip", headers=headers)
 
 
