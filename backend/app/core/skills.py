@@ -317,7 +317,14 @@ def _clear_uncovered_defaults(row: Skill, scope: str) -> None:
         row.is_workspace_default = False
 
 
+async def _lock(session: AsyncSession) -> None:
+    """Every skill write takes this first, so writes run one at a time and always lock in the same order: two tabs
+    can't both pass the label check or meet the default index's error, and no two writes can deadlock."""
+    await session.execute(text("SELECT pg_advisory_xact_lock(hashtext('skills'))"))
+
+
 async def create(session: AsyncSession, *, label: str, description: str, scope: str, instructions: str) -> SkillView:
+    await _lock(session)
     cleaned = _clean(label=label, description=description, scope=scope, instructions=instructions)
     await _refuse_taken(session, cleaned["label"])
     row = Skill(
@@ -340,6 +347,7 @@ async def create(session: AsyncSession, *, label: str, description: str, scope: 
 
 async def update(session: AsyncSession, skill_id: str, **fields) -> SkillView:
     """Changes only the fields sent. `version` bumps when instructions change. Hiding clears both defaults."""
+    await _lock(session)
     if set(fields) - set(EDITABLE):
         raise InvalidInput("skill_field_unknown", fields=sorted(set(fields) - set(EDITABLE)))
     if any(value is None for value in fields.values()):
@@ -370,6 +378,7 @@ async def update(session: AsyncSession, skill_id: str, **fields) -> SkillView:
 
 async def delete(session: AsyncSession, skill_id: str) -> None:
     """Custom skills only. Raises NotFound, or Conflict("builtin_skill") for a bundled one."""
+    await _lock(session)
     await get_view(session, skill_id)
     if skill_id.startswith("builtin:"):
         raise Conflict("builtin_skill")
@@ -381,6 +390,7 @@ async def delete(session: AsyncSession, skill_id: str) -> None:
 async def reset(session: AsyncSession, skill_id: str) -> SkillView:
     """Bundled skills only: the text, label, description and scope go back to the shipped values. The row stays, so
     hidden and default state survive. Raises Conflict("custom_skill") for a custom one."""
+    await _lock(session)
     await get_view(session, skill_id)
     if skill_id.startswith("custom:"):
         raise Conflict("custom_skill")
@@ -401,8 +411,7 @@ async def reset(session: AsyncSession, skill_id: str) -> SkillView:
 async def set_default(session: AsyncSession, skill_id: str, kind: ChatKind, on: bool) -> SkillView:
     """Moves the default of one chat kind in one transaction: the old holder is unset first, as llm_connections
     set_default does, so the partial unique index never sees two. Raises Conflict("skill_scope")."""
-    # Two tabs at once: the lock serialises the unset-then-set, so the second request never meets the index's error.
-    await session.execute(text("SELECT pg_advisory_xact_lock(hashtext('skills_default'))"))
+    await _lock(session)
     view = await get_view(session, skill_id)
     if view.scope not in COVERED_KINDS[kind]:
         raise Conflict("skill_scope")
