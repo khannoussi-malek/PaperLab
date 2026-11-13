@@ -100,3 +100,39 @@ async def test_the_route_returns_the_kept_suggestions(client, session, fake_llm)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["suggestions"] and all(s["page"] == 5 for s in body["suggestions"])
+
+
+async def test_a_value_must_be_a_whole_number_of_its_quote_and_a_unit_must_be_in_it(session):
+    paper = await a_paper(session)
+    llm = Replying({"numbers": [
+        {"label": "Accuracy", "value": "92", "unit": "%", "quote": "reaches an accuracy of 92.3% on the test set"},
+        {"label": "Baseline", "value": "85.1", "unit": "ms", "quote": "while the baseline stays at 85.1%"},
+        {"label": "Ours", "value": "92.3", "unit": "%", "quote": "reaches an accuracy of 92.3% on the test set"},
+        {"label": "Ours again", "value": "92.3", "unit": "%", "quote": "reaches an accuracy of 92.3% on the test set"},
+    ]})  # fmt: skip
+    found = await number_suggest.suggest(session, paper.id, "Results", llm)
+    assert [(s.label, s.raw, s.unit) for s in found.suggestions] == [
+        ("Baseline", "85.1", ""), ("Ours", "92.3", "%"), ("Ours again", "92.3", "%"),
+    ]
+    assert found.dropped == 1
+
+
+async def test_one_malformed_item_does_not_sink_the_others(session):
+    paper = await a_paper(session)
+    llm = Replying({"numbers": [
+        {"label": "x" * 500, "value": "92.3", "unit": "%", "quote": "reaches an accuracy of 92.3% on the test set"},
+        {"label": "Baseline", "value": "85.1", "unit": "%", "quote": "while the baseline stays at 85.1%"},
+    ]})  # fmt: skip
+    found = await number_suggest.suggest(session, paper.id, "Results", llm)
+    assert [s.label for s in found.suggestions] == ["Baseline"] and found.dropped == 1
+
+
+async def test_a_reply_that_is_not_a_list_of_numbers_says_so(session):
+    paper = await a_paper(session)
+
+    class Rambling(Replying):
+        async def stream(self, system, prompt):
+            yield "I found several numbers."
+
+    with pytest.raises(InvalidInput, match="couldn't read"):
+        await number_suggest.suggest(session, paper.id, "Results", Rambling({}))

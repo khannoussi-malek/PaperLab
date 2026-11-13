@@ -83,7 +83,7 @@ export function NumberSuggestionsDialog({ paperId, sectionTitle, onClose }: Prop
         </ul>
         {dropped > 0 && (
           <p className="text-xs text-muted-foreground">
-            {dropped} more weren’t kept: their quote wasn’t found in this section, or didn’t hold the number.
+            {dropped} more weren’t kept: PaperLab couldn’t find them in this section exactly as quoted, or they repeated one above.
           </p>
         )}
         {addNumber.error && (
