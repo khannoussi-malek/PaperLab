@@ -1029,11 +1029,13 @@ test('the inbox lists only what a saved search found since the last look, and ca
   expect(onLeaveInbox).toHaveBeenCalled()
 })
 
-test('the inbox keeps found order even when the ranked sort was chosen', async () => {
+test('the ranked sort ranks only the inbox finds, trained on every decision', async () => {
   localStorage.setItem('paperlab-hit-sort:ws-1', 'ranked')
-  const ranked = vi.spyOn(api, 'rankedSearchHits')
+  const ranked = vi.spyOn(api, 'rankedSearchHits').mockResolvedValue({
+    items: [baseHit], trained: true, total_unscreened: 1, streak: 0, threshold: 0, show_stop_hint: false,
+  } as never)
   const inbox = { savedSearchId: 's1', query: 'q', since: '2026-10-02T00:00:00Z' }
   renderWithClient(<HitTable workspaceId="ws-1" inbox={inbox} onLeaveInbox={() => {}} />)
   expect(await pool().findByText('a paper about llms')).toBeInTheDocument()
-  expect(ranked).not.toHaveBeenCalled()
+  expect(ranked).toHaveBeenCalledWith('ws-1', 200, { saved_search_id: 's1', found_after: '2026-10-02T00:00:00Z' })
 })

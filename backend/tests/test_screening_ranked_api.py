@@ -128,3 +128,32 @@ async def test_a_new_decision_reuses_the_cached_features(client, session, monkey
     body = (await client.get(_url(workspace))).json()
     assert builds == [4]  # built once; the decision changed labels, not texts
     assert [item["id"] for item in body["items"]] == [str(hits[3].id)]
+
+
+async def test_the_ranked_order_can_narrow_to_a_saved_searchs_new_finds(client, session):
+    from datetime import datetime, timezone
+
+    from app.core import saved_searches
+    from app.models.workspace_search import WorkspaceSearchRun
+
+    workspace, hits = await make_pool(session, [
+        (POSITIVE, "relevant"), (NEGATIVE, "not_relevant"),
+        ("graph neural network benchmark for molecules", None), ("sleep deprivation trial in older adults", None),
+        ("sleep loss and memory in adults", None),
+    ])
+    looked = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    saved = await saved_searches.create(session, workspace.id, query="sleep", schedule="0 2 * * *", timezone="UTC",
+                                        now=looked)
+    run = WorkspaceSearchRun(workspace_id=workspace.id, query_text="sleep", filters_json={}, query_overrides_json={},
+                             sources_json=["arxiv"], status="exhausted", started_at=looked, stats_json={},
+                             saved_search_id=saved.id)
+    session.add(run)
+    await session.flush()
+    for hit in (hits[2], hits[4]):  # the new finds: the graph paper and the sleep-loss paper
+        hit.run_id, hit.first_seen_at = run.id, looked + timedelta(days=1)
+    await session.commit()
+    body = (await client.get(_url(workspace), params={
+        "saved_search_id": str(saved.id), "found_after": looked.isoformat(),
+    })).json()
+    assert [item["id"] for item in body["items"]] == [str(hits[4].id), str(hits[2].id)]
+    assert body["total_unscreened"] == 2
