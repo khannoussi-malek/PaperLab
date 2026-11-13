@@ -100,6 +100,9 @@ function scrollToElement(selector: string, block: ScrollLogicalPosition) {
   document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block })
 }
 
+/** A replaced citation (M33) has no passage box left, so it brings its page to the top instead. */
+const scrollToPage = (page: number) => scrollToElement(`[data-page="${page}"]`, 'start')
+
 /** The rects of these notes' highlights on one page. */
 const noteRects = (highlights: PageHighlight[], noteIds: string[]) =>
   highlights.filter((h) => h.noteId !== null && noteIds.includes(h.noteId)).map((h) => h.rect)
@@ -237,6 +240,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       if (chunk) flashChunk(chunk.page, chunk.bbox)
     } else if (target.kind === 'region') {
       flashChunk(target.page, target.rects)
+    } else if (target.kind === 'page') {
+      scrollToPage(target.page)
     } else {
       if (!notesQuery.data) return
       const note = notesQuery.data.find((n) => n.id === target.id)
@@ -695,7 +700,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 ? focusNote({ id: source.note_id })
                 : source.from_abstract
                   ? scrollToElement('.paper-abstract', 'center')
-                  : flashChunk(source.page, source.bbox ?? [])
+                  : source.replaced
+                    ? scrollToPage(source.page)
+                    : flashChunk(source.page, source.bbox ?? [])
             }
             onPromoted={showPromotedNote}
           />

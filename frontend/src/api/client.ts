@@ -51,6 +51,10 @@ export type Chunk = components['schemas']['ChunkOut']
 export type EmbeddingProgress = components['schemas']['EmbeddingProgressOut']
 export type Note = components['schemas']['NoteOut']
 export type NoteKind = NonNullable<Note['kind']>
+/** How an AI answer or note was made (M33), read on request. */
+export type AnswerProvenance = components['schemas']['AnswerProvenanceOut']
+export type AnswerPassage = components['schemas']['AnswerPassageOut']
+export type McpNoteProvenance = components['schemas']['McpNoteOut']
 export type FigureNoteCreate = components['schemas']['FigureNoteCreate']
 export type NoteCreate = components['schemas']['NoteCreate']
 export type NoteUpdate = components['schemas']['NoteUpdate']
@@ -442,6 +446,10 @@ export const api = {
   removeFromWorkspace: (workspaceId: string, paperId: string) =>
     request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'DELETE' }),
   listChat: (scope: ChatScope) => request<ChatAnswer[]>(chatUrl(scope)),
+  /** How a saved answer was made: its model, connection, prompt, skill and passages. */
+  answerProvenance: (outputId: string) => request<AnswerProvenance>(`/api/llm-outputs/${outputId}/provenance`),
+  /** How an AI note was made. A note an MCP client added says only where it came from. */
+  noteProvenance: (noteId: string) => request<AnswerProvenance | McpNoteProvenance>(`/api/notes/${noteId}/provenance`),
   promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),
   /** Saves block `index` of a saved answer's suggested notes. A second save is refused with `already_saved`. */
   saveSuggestion: (outputId: string, index: number) =>

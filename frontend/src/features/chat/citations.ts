@@ -1,5 +1,13 @@
 import type { ChatSource, NoteSource } from '@/api/client'
 import { PROVENANCE_LABEL } from '@/features/notes/ProvenanceBadge'
+import { chunkHref, pageHref, readerHref } from '@/lib/route'
+
+/** Where a passage opens in the reader. A replaced one (M33) opens its page, since its box no longer exists. */
+export function sourceReaderHref(source: ChatSource): string {
+  if (source.from_abstract) return readerHref(source.paper_id)
+  if (source.replaced) return pageHref(source.paper_id, source.page)
+  return source.chunk_id === null ? readerHref(source.paper_id) : chunkHref(source.paper_id, source.chunk_id, source.page)
+}
 
 /**
  * A cited source in words. "C1" alone means nothing to a reader. A passage: `Source 1: page 6, section “2.4 Analysis”`,

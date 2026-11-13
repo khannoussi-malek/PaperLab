@@ -44,3 +44,17 @@ test('choosing a colour in the menu calls onColorChange', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Blue' }))
   expect(onColorChange).toHaveBeenCalledWith('#60a5fa')
 })
+
+test('an AI note offers How this was made, a human note does not', () => {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <NoteCard note={{ id: 'ai', body: 'text', kind: null, provenance: 'llm', color: '#facc15', created_at: '2020-01-01T00:00:00Z', anchors: [], paper_ids: [], charts: [] } as never} onUpdate={vi.fn()} onColorChange={vi.fn()} onDelete={vi.fn()} />
+    </QueryClientProvider>,
+  )
+  expect(screen.getByRole('button', { name: 'How this was made' })).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('a human note has no How this was made', () => {
+  setup()
+  expect(screen.queryByRole('button', { name: 'How this was made' })).toBeNull()
+})

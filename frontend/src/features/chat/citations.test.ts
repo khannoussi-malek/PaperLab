@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { appendSegments, citationSplitter, describeSource, splitCitations, type Segment } from './citations'
+import { appendSegments, citationSplitter, describeSource, sourceReaderHref, splitCitations, type Segment } from './citations'
+import { chunkHref, pageHref, readerHref } from '@/lib/route'
+import type { ChatSource } from '@/api/client'
 
 const KNOWN = new Set(['C1', 'C2', 'C3', 'C12'])
 const text = (value: string): Segment => ({ kind: 'text', text: value })
@@ -106,5 +108,23 @@ describe('describeSource', () => {
     const whole = { label: 'N2', note_id: 'n', paper_id: 'p', page: null, provenance: 'llm' as const }
     expect(describeSource(whole, 'Devlin 2019')).toBe('N2 · AI · Devlin 2019')
     expect(describeSource(whole)).toBe('N2 · AI')
+  })
+})
+
+describe('sourceReaderHref', () => {
+  const P = '1f0e7570-3249-4d59-aa5c-8f9a03c2b70a'
+  const source = (over: Partial<ChatSource>) =>
+    ({ label: 'C1', chunk_id: 'c1', paper_id: P, page: 3, section: null, bbox: [[1, 2, 3, 4]], from_abstract: false, replaced: false, ...over }) as ChatSource
+
+  it('a live passage opens at its chunk', () => {
+    expect(sourceReaderHref(source({}))).toBe(chunkHref(P, 'c1', 3))
+  })
+
+  it('a replaced passage opens at its page, not the top of the paper', () => {
+    expect(sourceReaderHref(source({ chunk_id: null, bbox: null, replaced: true }))).toBe(pageHref(P, 3))
+  })
+
+  it('an abstract opens the paper', () => {
+    expect(sourceReaderHref(source({ from_abstract: true, chunk_id: null, bbox: null }))).toBe(readerHref(P))
   })
 })

@@ -315,6 +315,14 @@ export function useSetReading() {
 export const useTriageSummary = (sessionId: string, enabled: boolean) =>
   useQuery({ queryKey: ['triage-summary', sessionId] as const, queryFn: () => api.triageSummary(sessionId), enabled })
 
+/** How a saved answer was made; read only when its disclosure opens, so chat history stays as fast. */
+export const useAnswerProvenance = (outputId: string, enabled: boolean) =>
+  useQuery({ queryKey: ['llm-outputs', outputId, 'provenance'] as const, queryFn: () => api.answerProvenance(outputId), enabled })
+
+/** How an AI note was made; read only when its disclosure opens. */
+export const useNoteProvenance = (noteId: string, enabled: boolean) =>
+  useQuery({ queryKey: ['notes', noteId, 'provenance'] as const, queryFn: () => api.noteProvenance(noteId), enabled })
+
 /** A paper's reading history; `enabled` keeps a closed popover from fetching. */
 export const useTriageEvents = (paperId: string, enabled: boolean) =>
   useQuery({ queryKey: keys.triageEvents(paperId), queryFn: () => api.triageEvents(paperId), enabled })

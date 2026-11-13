@@ -129,3 +129,16 @@ describe('ChatAnswer skill chip', () => {
     expect(screen.getByText(/qwen3/)).toBeInTheDocument()
   })
 })
+
+describe('How this was made', () => {
+  it('a saved answer offers the disclosure, closed', () => {
+    render(<ChatAnswer {...base} outputId="out-1" footer={{ model: 'm', connectionName: null, promptVersion: 1, skillLabel: null }} />)
+    const trigger = screen.getByRole('button', { name: 'How this was made' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('a streaming answer, not yet saved, offers none', () => {
+    render(<ChatAnswer {...base} pending />)
+    expect(screen.queryByRole('button', { name: 'How this was made' })).toBeNull()
+  })
+})

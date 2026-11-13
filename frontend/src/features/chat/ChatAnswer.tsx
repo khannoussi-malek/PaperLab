@@ -12,6 +12,7 @@ import { markdownPieces } from './markdown'
 import { renderPieces } from './renderPieces'
 import { splitNoteBlocks } from './noteBlocks'
 import { SuggestedNote } from './SuggestedNote'
+import { HowThisWasMade } from './HowThisWasMade'
 import { Term } from '@/features/workspaces/Term'
 import { Scene3D } from '@/features/scene3d/Scene3D'
 
@@ -172,6 +173,7 @@ export function ChatAnswer(props: Props) {
                 followUp={followUp}
               />
             )}
+            {outputId && footer && <HowThisWasMade outputId={outputId} />}
             {notesUsed !== null && notesTotal !== null && notesUsed < notesTotal && (
               <p className="text-xs text-muted-foreground">
                 Using {notesUsed} of {notesTotal} <Term term="notesUsed">notes</Term> (newest first)

@@ -11,6 +11,7 @@ export type CellFocus = { rowId: string; columnId: string }
 /** What the reader shows once on load, then drops from the hash. `id` tells one target from the next. */
 export type ReaderTarget =
   | { kind: 'chunk'; id: string; page: number }
+  | { kind: 'page'; id: string; page: number } // a replaced passage: its page, with no box to flash
   | { kind: 'note'; id: string }
   | { kind: 'region'; id: string; page: number; rects: Rect[] }
   | null
@@ -66,7 +67,8 @@ function readerTarget(params: URLSearchParams): ReaderTarget {
   const note = params.get('note') ?? ''
   if (UUID.test(note)) return { kind: 'note', id: note }
   const rects = rectsOf(params.get('rects'))
-  return rects && page !== null ? { kind: 'region', id: `${page}:${params.get('rects')}`, page, rects } : null
+  if (rects && page !== null) return { kind: 'region', id: `${page}:${params.get('rects')}`, page, rects }
+  return page !== null && !params.has('tab') ? { kind: 'page', id: `page:${page}`, page } : null
 }
 
 function chartsRoute(match: RegExpExecArray): Route {
@@ -157,6 +159,9 @@ export const chunkHref = (paperId: string, chunkId: string, page: number) =>
   `#/papers/${paperId}?chunk=${chunkId}&page=${page}`
 
 export const noteHref = (paperId: string, noteId: string) => `#/papers/${paperId}?note=${noteId}`
+
+/** A page with no passage to flash: where a replaced citation lands (M33). */
+export const pageHref = (paperId: string, page: number) => `#/papers/${paperId}?page=${page}`
 
 /** A place on a page to flash, on the Data tab: where a charted number or a captured table sits. */
 export const regionHref = (paperId: string, page: number, rects: Rect[]) =>
