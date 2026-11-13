@@ -37,7 +37,7 @@ JOB = "check_manuscript_citations"
 logger = logging.getLogger(__name__)
 
 
-INSIDE = "It points to a section, table or figure of this paper, which backs it."
+INSIDE = "It points to a section, table or figure of this paper: check that part says it."
 
 
 def _row(s: Sentence, ord_: int, kind: str, key: str | None, paper_id: uuid.UUID | None) -> dict:

@@ -150,5 +150,11 @@ def test_points_inside_finds_own_section_table_and_figure_refs():
     inside = manuscript_sentences.points_inside
     assert inside(r"As Section~\ref{sec:results} shows, fused search wins on every file.")
     assert inside(r"Fused search wins (\cref{tab:main}) and \autoref{fig:x} plots it.")
+    assert inside(r"See \vref{tab:a} and \Autoref{fig:b} for the numbers.")
     assert not inside(r"See \href{https://x.org}{the site} for the data.")
     assert not inside(r"Fused search wins on every file we tried.")
+
+
+def test_to_plain_drops_every_reference_command():
+    plain = to_plain(r"Fused search wins~\cref{tab:main}, \vref{x} and \Autoref{y} show it.")
+    assert "ref" not in plain and "<" not in plain

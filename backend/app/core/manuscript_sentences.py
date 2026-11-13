@@ -72,17 +72,19 @@ def claim_hash(raw: str) -> str:
     return hashlib.sha256(re.sub(r"\s+", " ", raw.strip()).encode()).hexdigest()
 
 
+OWN_REF = re.compile(r"\\(?:[cC]|[aA]uto|eq|name|page|[vV])?ref\*?\{")  # \ref, \cref, \autoref…; never \href
+
+
 def to_plain(raw: str) -> str:
     text = COMMENT.sub("", raw)
     for pattern in DISPLAY_MATH:
         text = pattern.sub(" [math] ", text)
     text = re.sub(r"~?\s*" + CITE.pattern, "", text)
-    text = re.sub(r"\\(?:label|ref)\{[^}]*\}", "", text).replace("~", " ")
+    text = re.sub(r"\\label\{[^}]*\}|" + OWN_REF.pattern + r"[^}]*\}", "", text).replace("~", " ")
     return " ".join(LATEX.latex_to_text(text).split())
 
 
 THIS_PAPER, OTHER_SOURCE = "[this paper]", "[other source]"
-OWN_REF = re.compile(r"\\(?:[cC]|auto|eq|name|page)?ref\*?\{")  # \ref, \cref, \autoref…; never \href
 
 
 def scoped_plain(raw: str, key: str) -> str:
