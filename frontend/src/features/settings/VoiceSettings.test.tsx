@@ -53,6 +53,27 @@ test('the stage message says voice is off when it is off', async () => {
   expect(await screen.findByText('Voice is off.')).toBeInTheDocument()
 })
 
+test('with the switch on but the program not running, it says so instead of "Voice is off."', async () => {
+  show(off, latency([]), voiceBridge({ getVoiceEnabled: vi.fn(async () => true) }))
+  expect(await screen.findByText("Voice isn't running yet. If this lasts, turn voice off and on again.")).toBeInTheDocument()
+  expect(screen.queryByText('Voice is off.')).not.toBeInTheDocument()
+})
+
+test('an off program shows its own detail, unless the detail is the API default', async () => {
+  show({ ready: false, stage: 'off', detail: 'The reply was not understood.' })
+  expect(await screen.findByText('The reply was not understood.')).toBeInTheDocument()
+})
+
+test('an off program with the API default detail still says voice is off', async () => {
+  show({ ready: false, stage: 'off', detail: 'Voice is off. Turn it on in Settings → Voice.' })
+  expect(await screen.findByText('Voice is off.')).toBeInTheDocument()
+})
+
+test('a failed program with an empty detail shows the fallback, not a blank line', async () => {
+  show({ ready: false, stage: 'failed', detail: '' })
+  expect(await screen.findByText('Voice failed to start.')).toBeInTheDocument()
+})
+
 test('a ready program says so', async () => {
   show(ready)
   expect(await screen.findByText('Voice is ready.')).toBeInTheDocument()
@@ -141,6 +162,25 @@ test('turning on shows the latest progress line, then the stage', async () => {
   expect(screen.queryByText('Downloading model 1 of 2')).not.toBeInTheDocument()
   finish({ ok: true, detail: null })
   await waitFor(() => expect(bridge.setVoiceEnabled).toHaveBeenCalledWith(true))
+})
+
+test('the switch is disabled while voice is being turned on', async () => {
+  let finish: (value: { ok: boolean; detail: string | null }) => void = () => {}
+  const bridge = voiceBridge({
+    setVoiceEnabled: vi.fn(() => new Promise<{ ok: boolean; detail: string | null }>((resolve) => (finish = resolve))),
+  })
+  show(off, latency([]), bridge)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Ask questions out loud' }))
+  expect(screen.getByRole('switch', { name: 'Ask questions out loud' })).toBeDisabled()
+  finish({ ok: true, detail: null })
+  await waitFor(() => expect(screen.getByRole('switch', { name: 'Ask questions out loud' })).toBeEnabled())
+})
+
+test('a failed set with an empty detail shows the fallback', async () => {
+  const bridge = voiceBridge({ setVoiceEnabled: vi.fn(async () => ({ ok: false, detail: '' })) })
+  show(off, latency([]), bridge)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Ask questions out loud' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent("Voice didn't turn on. Try again.")
 })
 
 test('a failed set shows its detail and the switch stays off', async () => {

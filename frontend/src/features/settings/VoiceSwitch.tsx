@@ -14,9 +14,19 @@ const OUT_OF_MEMORY = 'Docker ran out of memory for voice. Give Docker more memo
 
 /** The "Ask questions out loud" switch, the only part of Voice that needs the desktop app. It turns the voice program
  * on or off, shows the latest progress line while it turns on, and says why when Docker killed the program for memory. */
-export function VoiceSwitch({ voice, stage }: { voice: VoiceBridge; stage: VoiceStatus['stage'] | undefined }) {
+export function VoiceSwitch({
+  voice,
+  stage,
+  enabled,
+  onEnabledChange: setEnabled,
+}: {
+  voice: VoiceBridge
+  stage: VoiceStatus['stage'] | undefined
+  /** The saved setting, null until it is read. The parent shows it beside the program's stage. */
+  enabled: boolean | null
+  onEnabledChange: (value: boolean) => void
+}) {
   const queryClient = useQueryClient()
-  const [enabled, setEnabled] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
   const [line, setLine] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +52,7 @@ export function VoiceSwitch({ voice, stage }: { voice: VoiceBridge; stage: Voice
     return () => {
       current = false
     }
-  }, [voice])
+  }, [voice, setEnabled])
 
   useEffect(() => voice.onVoiceProgress(setLine), [voice])
 
@@ -62,7 +72,7 @@ export function VoiceSwitch({ voice, stage }: { voice: VoiceBridge; stage: Voice
         refreshStatus()
       } else {
         if (wanted.current === value) setEnabled(!value)
-        setError(result.detail ?? "Voice didn't turn on. Try again.")
+        setError(result.detail || "Voice didn't turn on. Try again.")
       }
     } catch (reason: unknown) {
       console.warn('turning voice on or off failed', reason)
@@ -81,7 +91,7 @@ export function VoiceSwitch({ voice, stage }: { voice: VoiceBridge; stage: Voice
     try {
       const result = await voice.removeVoiceModels()
       if (result.ok) refreshStatus()
-      else setError(result.detail ?? "The voice models didn't come off. Try again.")
+      else setError(result.detail || "The voice models didn't come off. Try again.")
     } catch (reason: unknown) {
       console.warn('removing voice models failed', reason)
       setError("The voice models didn't come off. Try again.")
@@ -123,7 +133,13 @@ export function VoiceSwitch({ voice, stage }: { voice: VoiceBridge; stage: Voice
       {enabled === null ? (
         <p className={cn('text-sm text-muted-foreground', delayedIn)}>Loading…</p>
       ) : (
-        <Switch id="ask-out-loud" aria-describedby="ask-out-loud-help" checked={enabled} onCheckedChange={(value) => void change(value)} />
+        <Switch
+          id="ask-out-loud"
+          aria-describedby="ask-out-loud-help"
+          checked={enabled}
+          disabled={busy}
+          onCheckedChange={(value) => void change(value)}
+        />
       )}
     </div>
   )

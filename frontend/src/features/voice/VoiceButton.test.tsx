@@ -71,7 +71,7 @@ it('cannot be started while typed chat is busy, but can always be turned off', a
 })
 
 it.each([
-  ['off', 'Turn voice on in Settings → Voice'],
+  ['off', "Voice isn't running. Turn it on in Settings → Voice."],
   ['downloading', 'Voice is getting ready'],
   ['loading', 'Voice is getting ready'],
 ] as const)('is disabled with a tooltip while the stage is %s', async (stage, tooltip) => {
@@ -86,6 +86,25 @@ it("is disabled with the program's detail as the tooltip when it failed", async 
   const button = await screen.findByRole('button', { name: 'Ask out loud' })
   await waitFor(() => expect(button).toHaveAttribute('title', 'The speech model could not be checked.'))
   expect(button).toBeDisabled()
+})
+
+it("says the status is unavailable when the status read fails", async () => {
+  vi.spyOn(api, 'voiceStatus').mockRejectedValue(new Error('network down'))
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <VoiceButton voice={voice()} />
+    </QueryClientProvider>,
+  )
+  const button = await screen.findByRole('button', { name: 'Ask out loud' })
+  await waitFor(() => expect(button).toHaveAttribute('title', 'Voice status unavailable. Try again in a moment.'))
+  expect(button).toBeDisabled()
+})
+
+it('a failed program with an empty detail gets the fallback tooltip', async () => {
+  renderWith({ ready: false, stage: 'failed', detail: '' }, (p) => <VoiceButton {...p} />, voice())
+  const button = await screen.findByRole('button', { name: 'Ask out loud' })
+  await waitFor(() => expect(button).toHaveAttribute('title', 'Voice failed to start.'))
 })
 
 it('is enabled and has no tooltip when ready', async () => {

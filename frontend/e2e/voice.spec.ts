@@ -95,7 +95,7 @@ test('with voice off the button says where to turn it on, and typed chat still w
 
   const button = page.getByRole('button', { name: 'Ask out loud' })
   await expect(button).toBeDisabled()
-  await expect(button).toHaveAttribute('title', 'Turn voice on in Settings → Voice')
+  await expect(button).toHaveAttribute('title', "Voice isn't running. Turn it on in Settings → Voice.")
   await expect(page.getByText('Listening', { exact: true })).toBeHidden()
 
   const answer = await ask(page, 'What is the method?')

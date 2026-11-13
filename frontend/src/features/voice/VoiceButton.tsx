@@ -14,11 +14,12 @@ const LABEL: Record<VoiceState, string> = {
   speaking: 'Speaking, press to turn off',
 }
 
-/** Why the button can't be used yet, per stage. Undefined while the first status read is in flight. */
-function notReadyTooltip(status: VoiceStatus | undefined): string | undefined {
+/** Why the button can't be used yet, per stage. A failed status read says so instead of "getting ready" forever. */
+function notReadyTooltip(status: VoiceStatus | undefined, statusFailed: boolean): string | undefined {
   if (status?.stage === 'ready') return undefined
-  if (status?.stage === 'off') return 'Turn voice on in Settings → Voice'
-  if (status?.stage === 'failed') return status.detail ?? 'Voice failed to start.'
+  if (statusFailed) return 'Voice status unavailable. Try again in a moment.'
+  if (status?.stage === 'off') return "Voice isn't running. Turn it on in Settings → Voice."
+  if (status?.stage === 'failed') return status.detail || 'Voice failed to start.'
   return 'Voice is getting ready'
 }
 
@@ -31,8 +32,8 @@ type Props = {
 /** The microphone toggle for the question box. While it is on, "Listening" stays visible so the reader knows.
  * It can only be turned on once the voice program is ready; an open microphone can always be turned off. */
 export function VoiceButton({ voice, disabled }: Props) {
-  const status = useVoiceStatus().data
-  const tooltip = notReadyTooltip(status)
+  const statusQuery = useVoiceStatus()
+  const tooltip = notReadyTooltip(statusQuery.data, statusQuery.isError)
   return (
     <>
       {voice.on && (

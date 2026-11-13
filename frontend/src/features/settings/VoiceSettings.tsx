@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useVoiceLatency, useVoiceStatus } from '@/api/queries'
 import type { VoiceLatencyGroup, VoicePercentiles, VoiceStatus } from '@/api/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -75,9 +76,18 @@ const STAGE_MESSAGE: Record<Exclude<VoiceStatus['stage'], 'failed'>, string> = {
   ready: 'Voice is ready.',
 }
 
-/** What the voice program is doing now, in words. A failure shows the program's own detail. */
-function stageMessage(status: VoiceStatus): string {
-  if (status.stage === 'failed') return status.detail ?? 'Voice failed to start.'
+/** The API's own text for a program that is off by choice: not shown as a reason of its own. */
+const API_OFF = 'Voice is off. Turn it on in Settings → Voice.'
+const NOT_RUNNING = "Voice isn't running yet. If this lasts, turn voice off and on again."
+
+/** What the voice program is doing now, in words. A failure or an off program shows the program's own detail; an off
+ * program with the switch on is not running, which the switch itself contradicts. */
+function stageMessage(status: VoiceStatus, switchOn: boolean): string {
+  if (status.stage === 'failed') return status.detail || 'Voice failed to start.'
+  if (status.stage === 'off') {
+    if (status.detail && status.detail !== API_OFF) return status.detail
+    return switchOn ? NOT_RUNNING : STAGE_MESSAGE.off
+  }
   return STAGE_MESSAGE[status.stage]
 }
 
@@ -87,6 +97,7 @@ export function VoiceSettings() {
   const status = useVoiceStatus()
   const latency = useVoiceLatency()
   const voice = useVoiceBridge()
+  const [switchOn, setSwitchOn] = useState<boolean | null>(null)
   const groups = latency.data?.groups
 
   return (
@@ -97,7 +108,7 @@ export function VoiceSettings() {
       <p className="text-sm text-muted-foreground">Ask questions out loud and hear the answer. Here is how fast it has been.</p>
 
       {voice ? (
-        <VoiceSwitch voice={voice} stage={status.data?.stage} />
+        <VoiceSwitch voice={voice} stage={status.data?.stage} enabled={switchOn} onEnabledChange={setSwitchOn} />
       ) : (
         <p className="text-sm">
           To use voice, run <code className="rounded bg-muted px-1 py-0.5 text-xs">docker compose --profile voice up -d</code> in
@@ -107,7 +118,7 @@ export function VoiceSettings() {
 
       {status.data && (
         <p role="status" className="text-sm font-medium">
-          {stageMessage(status.data)}
+          {stageMessage(status.data, switchOn === true)}
         </p>
       )}
       {status.isError && (
