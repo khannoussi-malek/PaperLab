@@ -147,10 +147,11 @@ test('no discard footer when nothing was discarded', async () => {
 })
 
 test('a too-long draft disables Start and says so', async () => {
-  vi.mocked(api.draftReviewEstimate).mockResolvedValue({ ...estimate, too_long: true })
+  vi.mocked(api.draftReviewEstimate).mockResolvedValue({ ...estimate, too_long: true, parts: 7 })
   show()
   expect(await screen.findByText('The draft is too long to review, even in parts.')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Start review' })).toBeDisabled()
+  expect(screen.queryByText(/reviewed in 7 parts/)).toBeNull()  // no parts line for a draft that can't be reviewed
 })
 
 test('Close closes the dialog without starting', async () => {

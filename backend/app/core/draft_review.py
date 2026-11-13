@@ -108,8 +108,8 @@ def _input_tokens(mode: Mode, tokens: list[int]) -> int:
 
 
 def modes_for(parts: int) -> tuple[str, ...]:
-    """A draft in several parts gets the light review only: a full review of several parts (up to 18 calls a part
-    and round) could outrun DRAFT_REVIEW_JOB_TIMEOUT."""
+    """A draft in several parts gets the light review only: a full review adds 3 reviewer calls a part to each of its
+    2 rounds, on top of its 24 skeptic calls a round, and could outrun DRAFT_REVIEW_JOB_TIMEOUT."""
     return tuple(MODES) if parts == 1 else ("light",)
 
 
