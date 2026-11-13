@@ -3,11 +3,19 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import delete
 
 from app.core import mcp_activity
 from app.models import McpActivity
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture(autouse=True)
+async def empty_log(session):
+    """Tests that run a real MCP server process commit log rows to the test database; start from an empty log, inside
+    this test's rolled-back transaction."""
+    await session.execute(delete(McpActivity))
 
 
 async def add_row(session, *, tool: str, at: datetime, is_write: bool = False) -> None:
