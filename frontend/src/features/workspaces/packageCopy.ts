@@ -16,8 +16,9 @@ export const PDFS_TOO_LARGE =
 export const packageErrorMessage = (code: string): string =>
   REFUSALS[code] ?? "Couldn't import this package. Try again.";
 
-/** The line shown once a package is imported; the skipped PDFs are named only when there are some. */
+/** The line shown once a package is imported; the chat answers and the skipped PDFs are named only when there are some. */
 export function importResultLine(result: PackageImportResult): string {
-  const line = `Imported "${result.name}": ${result.added} papers added, ${result.matched} already in your library, ${result.notes} notes.`;
+  const answers = result.answers > 0 ? `, ${result.answers} chat answers` : "";
+  const line = `Imported "${result.name}": ${result.added} papers added, ${result.matched} already in your library, ${result.notes} notes${answers}.`;
   return result.pdfs_skipped > 0 ? `${line} ${result.pdfs_skipped} PDFs skipped.` : line;
 }

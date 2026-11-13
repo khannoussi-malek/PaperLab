@@ -324,8 +324,8 @@ export const zoteroZipUrl = (workspaceId: string) =>
 export const notesZipUrl = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}/notes.zip`
 
 /** The workspace as one `.paperlab` file; PDFs are in it only with `pdfs`. */
-export const packageUrl = (workspaceId: string, pdfs: boolean) =>
-  `/api/workspaces/${encodeURIComponent(workspaceId)}/package?pdfs=${pdfs}`
+export const packageUrl = (workspaceId: string, pdfs: boolean, answers: boolean) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/package?pdfs=${pdfs}&answers=${answers}`
 
 /** The screening record an imported package carried, as JSON. */
 export const packageRecordUrl = (workspaceId: string) =>
@@ -344,6 +344,7 @@ export type PackageImportResult = {
   notes: number
   pdfs_skipped: number
   has_record: boolean
+  answers: number
 }
 
 export type NotesImportResult = {
@@ -456,9 +457,9 @@ export const api = {
   /** Whether a workspace carries a screening record. */
   hasPackageRecord: (workspaceId: string) =>
     request<PackageRecordExists>(packageRecordExistsUrl(workspaceId)).then((body) => body.exists),
-  /** Resolves when the package, with its PDFs when `pdfs`, would export and import; a 409 ApiError when it is too large. */
-  checkPackage: (workspaceId: string, pdfs: boolean) =>
-    request<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}/package/check?pdfs=${pdfs}`),
+  /** Resolves when the package, with its PDFs when `pdfs` and its chat answers when `answers`, would export and import; a 409 ApiError when it is too large. */
+  checkPackage: (workspaceId: string, pdfs: boolean, answers: boolean) =>
+    request<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}/package/check?pdfs=${pdfs}&answers=${answers}`),
   createWorkspace: (name: string) => request<Workspace>('/api/workspaces', sendJson('POST', { name })),
   renameWorkspace: (id: string, name: string) =>
     request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),

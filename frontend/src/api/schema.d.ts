@@ -1038,7 +1038,8 @@ export interface paths {
         };
         /**
          * Export Package
-         * @description The workspace as one `.paperlab` file (M35a): PDFs included with `pdfs=true`. 404 unknown workspace.
+         * @description The workspace as one `.paperlab` file (M35a): PDFs included with `pdfs=true`, chat answers with `answers` (M35b2,
+         *     on by default). 404 unknown workspace.
          */
         get: operations["export_package_api_workspaces__workspace_id__package_get"];
         put?: never;
@@ -1058,8 +1059,8 @@ export interface paths {
         };
         /**
          * Check Package
-         * @description 204 when the package (with its PDFs when `pdfs`) would export and import; 409 package_too_large_with_pdfs when
-         *     it would be over the import cap. 404 unknown workspace.
+         * @description 204 when the package (with its PDFs when `pdfs`, and its answers when `answers`) would export and import; 409
+         *     package_too_large_with_pdfs when it would be over the import cap. 404 unknown workspace.
          */
         get: operations["check_package_api_workspaces__workspace_id__package_check_get"];
         put?: never;
@@ -10649,6 +10650,7 @@ export interface operations {
         parameters: {
             query?: {
                 pdfs?: boolean;
+                answers?: boolean;
             };
             header?: never;
             path: {
@@ -10682,6 +10684,7 @@ export interface operations {
         parameters: {
             query?: {
                 pdfs?: boolean;
+                answers?: boolean;
             };
             header?: never;
             path: {

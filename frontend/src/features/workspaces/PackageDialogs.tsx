@@ -30,8 +30,10 @@ export function PackageExportDialog({
   onClose: () => void;
 }) {
   const [pdfs, setPdfs] = useState(false);
+  const [answers, setAnswers] = useState(true);
   const checkboxId = useId();
-  const fits = usePackageFits(workspace.id, pdfs);
+  const answersId = useId();
+  const fits = usePackageFits(workspace.id, pdfs, answers);
   const tooLarge =
     fits.error instanceof ApiError && fits.error.code === "package_too_large_with_pdfs";
   return (
@@ -57,6 +59,17 @@ export function PackageExportDialog({
             Without PDFs the file is small, and papers arrive as details only.
           </p>
           {tooLarge && <p role="alert" className="text-sm text-destructive">{PDFS_TOO_LARGE}</p>}
+          <div className="mt-2 flex items-center gap-2">
+            <Checkbox
+              id={answersId}
+              checked={answers}
+              onCheckedChange={(checked) => setAnswers(checked === true)}
+            />
+            <Label htmlFor={answersId}>Include chat answers</Label>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Answers keep their cited passages, so their citations still open after import.
+          </p>
         </div>
         {tooLarge ? (
           <Button disabled className="self-start">
@@ -64,7 +77,7 @@ export function PackageExportDialog({
           </Button>
         ) : (
           <Button asChild className="self-start">
-            <a href={packageUrl(workspace.id, pdfs)} download>
+            <a href={packageUrl(workspace.id, pdfs, answers)} download>
               Download package
             </a>
           </Button>

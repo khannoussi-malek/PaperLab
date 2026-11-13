@@ -106,7 +106,8 @@ export const keys = {
   paperTagsOfPaper: (id: string) => ['papers', id, 'tags'] as const,
   workspaceNotes: (id: string) => ['workspaces', id, 'notes'] as const,
   packageRecord: (id: string) => ['workspaces', id, 'package-record'] as const,
-  packageCheck: (id: string, pdfs: boolean) => ['workspaces', id, 'package-check', pdfs] as const,
+  packageCheck: (id: string, pdfs: boolean, answers: boolean) =>
+    ['workspaces', id, 'package-check', pdfs, answers] as const,
   searchRuns: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'runs'] as const,
   evidenceCards: (workspaceId: string) => ['workspaces', workspaceId, 'evidence-cards'] as const,
   evidenceCard: (paperId: string) => ['papers', paperId, 'evidence-card'] as const,
@@ -440,10 +441,10 @@ export const usePackageRecord = (workspaceId: string) =>
   useQuery({ queryKey: keys.packageRecord(workspaceId), queryFn: () => api.hasPackageRecord(workspaceId) })
 
 /** Whether the package, with its PDFs when `pdfs`, fits the import cap: a 409 ApiError when it does not. */
-export const usePackageFits = (workspaceId: string, pdfs: boolean) =>
+export const usePackageFits = (workspaceId: string, pdfs: boolean, answers: boolean) =>
   useQuery({
-    queryKey: keys.packageCheck(workspaceId, pdfs),
-    queryFn: () => api.checkPackage(workspaceId, pdfs),
+    queryKey: keys.packageCheck(workspaceId, pdfs, answers),
+    queryFn: () => api.checkPackage(workspaceId, pdfs, answers),
     enabled: pdfs,
     retry: false, // a 409 is the answer, not a failure to retry
   })
