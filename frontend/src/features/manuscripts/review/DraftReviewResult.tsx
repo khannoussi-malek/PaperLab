@@ -18,6 +18,9 @@ export function DraftReviewResult({ review }: { review: DraftReview }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">{runSummary(review)}</p>
+      {(review.counts.parts ?? 1) > 1 && (
+        <p className="text-sm">{`Reviewed in ${review.counts.parts} parts. A reviewer saw one part at a time, so an issue may already be handled in another part.`}</p>
+      )}
       {review.issues.length === 0
         ? <p className="text-sm">{NO_ISSUES}</p>
         : (

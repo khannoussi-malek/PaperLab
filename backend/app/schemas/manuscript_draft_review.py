@@ -54,6 +54,7 @@ class DraftReviewState(BaseModel):
 
 class ModeEstimate(BaseModel):
     mode: Literal["light", "full"]
+    parts: int
     likely_calls: int
     max_calls: int
     approx_input_tokens: int
@@ -62,4 +63,5 @@ class ModeEstimate(BaseModel):
 class DraftReviewEstimate(BaseModel):
     paper_chars: int
     too_long: bool
+    parts: int
     modes: list[ModeEstimate]

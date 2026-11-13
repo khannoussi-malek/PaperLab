@@ -16,6 +16,34 @@ FILES = {
 PAPER, USED = di.assemble(FILES, "main.tex")
 
 
+def claims(tag, n):
+    return " ".join(f"{tag} claim {i} says that method {i} beats baseline {i} on every single task." for i in range(n))
+
+
+# two sections of about 25,000 characters each: 50,000 in all, so two parts
+LONG_FILES = {
+    "main.tex": "\\begin{document}\n\\section{One}\n"
+    + claims("Alpha", 300)
+    + "\n\\section{Two}\n"
+    + claims("Beta", 300)
+    + "\n\\end{document}\n"
+}
+LONG_PAPER, LONG_USED = di.assemble(LONG_FILES, "main.tex")
+LONG_PARTS = di.split_parts(LONG_PAPER)
+NOTE = (
+    "[Part {p} of 2 of the paper. The other parts are reviewed separately, "
+    "so something missing here may be in another part.]\n\n"
+)
+
+
+def claim_issue(tag, i):
+    return item(
+        i,
+        summary=f"{tag} claim {i} has no figure",
+        evidence_quote=f"{tag} claim {i} says that method {i} beats baseline {i}",
+    )
+
+
 def item(i, **kw):
     return {
         "severity": "major",
@@ -48,14 +76,14 @@ class Routed:
         yield reply if isinstance(reply, str) else json.dumps(reply)
 
 
-async def run(llm, mode="light", stops_at=None):
+async def run(llm, mode="light", stops_at=None, paper=PAPER, used=USED):
     seen = []
 
     async def progress(stage, done):
         seen.append((stage, done))
         return stops_at is None or len(seen) <= stops_at
 
-    return await dr.review(PAPER, USED, llm=llm, progress=progress, mode=mode), seen
+    return await dr.review(paper, used, llm=llm, progress=progress, mode=mode), seen
 
 
 def issues(lo, hi):
@@ -65,7 +93,79 @@ def issues(lo, hi):
 def test_the_call_numbers_come_from_the_mode_table():
     assert (dr.max_calls("light"), dr.max_calls("full")) == (11, 54)
     assert (dr.likely_calls("light"), dr.likely_calls("full")) == (11, 42)
-    assert dr.estimates(1000)[1]["approx_input_tokens"] > dr.estimates(1000)[0]["approx_input_tokens"]
+    assert dr.estimates(PAPER)[1]["approx_input_tokens"] > dr.estimates(PAPER)[0]["approx_input_tokens"]
+    assert (dr.max_calls("light", 2), dr.max_calls("full", 2)) == (14, 60)
+    assert (dr.likely_calls("light", 2), dr.likely_calls("full", 2)) == (14, 48)
+    assert [(m["mode"], m["parts"]) for m in dr.estimates(LONG_PAPER)] == [("light", 2)]  # light only, see modes_for
+    assert dr.estimates(PAPER)[0]["parts"] == 1 and dr.modes_for(1) == ("light", "full")
+
+
+async def test_a_short_paper_is_sent_exactly_as_before_with_no_part_note():
+    llm = Routed()
+    result, _ = await run(llm)
+    for n in range(3):
+        lens = dr.LENSES[n]
+        system, prompt = llm.calls[n]
+        assert prompt == dr.PROMPT_TEMPLATE.format(lens_name=lens.name, lens_focus=lens.focus, paper=PAPER)
+    assert "[Part" not in "".join(prompt for _, prompt in llm.calls) and result.counts["parts"] == 1
+
+
+async def test_a_long_draft_is_read_by_each_lens_once_per_part():
+    llm = Routed()
+    result, seen = await run(llm, paper=LONG_PAPER, used=LONG_USED)
+    prompts = [prompt for _, prompt in llm.calls]
+    assert len(LONG_PARTS) == 2 and len(prompts) == 6 == result.calls and result.counts["parts"] == 2
+    assert seen[0][0] == "Reviewer 1 of 3: Ideas and definitions, part 1 of 2"
+    assert seen[1][0] == "Reviewer 1 of 3: Ideas and definitions, part 2 of 2"
+    for n, prompt in enumerate(prompts):
+        p = n % 2
+        assert prompt.count(NOTE.format(p=p + 1)) == 1 and LONG_PARTS[p] in prompt
+        assert LONG_PAPER not in prompt and LONG_PARTS[1 - p] not in prompt
+
+
+async def test_an_issue_is_verified_against_the_part_its_quote_is_in():
+    llm = Routed({"issues": []}, {"issues": [claim_issue("Beta", 3)]})  # lens 1: part 1 nothing, part 2 one issue
+    result, _ = await run(llm, paper=LONG_PAPER, used=LONG_USED)
+    skeptic = llm.calls[6][1]  # six reviewer calls, then the one skeptic
+    assert "Beta claim 3" in skeptic and "Alpha claim" not in skeptic and NOTE.format(p=2) in skeptic
+    assert [i["summary"] for i in result.issues] == ["Beta claim 3 has no figure"]
+
+
+async def test_an_issue_whose_quote_is_not_in_its_own_part_is_dropped_and_the_run_finishes():
+    stray = claim_issue("Alpha", 3)  # raised from part 2, but its quote stands in part 1 only
+    result, _ = await run(Routed({"issues": []}, {"issues": [stray]}), paper=LONG_PAPER, used=LONG_USED)
+    assert result.issues == [] and result.counts["dropped_quote"] == 1 and result.calls == 6
+
+
+async def test_a_cancel_after_the_fourth_call_of_a_long_draft_stops_before_the_fifth():
+    llm = Routed()
+    with pytest.raises(dr.Cancelled):
+        await run(llm, paper=LONG_PAPER, used=LONG_USED, stops_at=4)
+    assert len(llm.calls) == 4
+
+
+async def test_a_long_draft_in_full_mode_makes_exactly_the_cap_when_both_rounds_run():
+    # each round: 6 reviewers (3 lenses x 2 parts) and 8 new issues x 3 angles = 30 calls; nothing is refuted
+    def reply(tag, lo, hi):
+        return {"issues": [claim_issue(tag, i) for i in range(lo, hi)]}
+
+    llm = Routed(
+        reply("Alpha", 0, 4),
+        reply("Beta", 0, 4),
+        {},
+        {},
+        {},
+        {},
+        reply("Alpha", 4, 8),
+        reply("Beta", 4, 8),
+        {},
+        {},
+        {},
+        {},
+    )
+    result, _ = await run(llm, mode="full", paper=LONG_PAPER, used=LONG_USED)
+    assert len(llm.calls) == result.calls == dr.max_calls("full", 2) == 60
+    assert result.counts["rounds_run"] == 2 and len(result.issues) == 16
 
 
 async def test_light_three_lenses_each_get_the_whole_paper_then_one_skeptic_per_issue():

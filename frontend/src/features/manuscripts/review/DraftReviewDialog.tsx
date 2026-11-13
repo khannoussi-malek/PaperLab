@@ -119,6 +119,12 @@ function StartControls({ estimate, estimateFailed, mode, again, busy, onMode, on
   const label = mode === 'full' ? 'Start full review' : again ? 'Start again' : 'Start review'
   return (
     <>
+      {estimate.parts > 1 && !estimate.too_long && (
+        <div className="space-y-1 text-sm">
+          <p>{`Long draft: reviewed in ${estimate.parts} parts, one section group at a time.`}</p>
+          <p className="text-muted-foreground">A draft this long gets the light review only.</p>
+        </div>
+      )}
       <fieldset className="space-y-2">
         <legend className="mb-1 text-sm font-medium">How deep to review</legend>
         {estimate.modes.map((m: DraftEstimate) => (

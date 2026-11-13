@@ -6,10 +6,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select, update
-from test_draft_review import Routed, issues
+from test_draft_review import LONG_FILES, Routed, issues
 from test_manuscript_papers import setup
 
 from app.core import draft_review, manuscripts, queue
+from app.core import draft_review_issues as di
 from app.core import manuscript_draft_review as mdr
 from app.core.errors import Conflict, InvalidInput
 from app.models import LLMConnection, LLMModel, Manuscript
@@ -135,14 +136,41 @@ async def test_file_order_survives_the_database(session, arq):
     "body, reason",
     [
         ("\\begin{document}\nToo short.\n\\end{document}", "paper_too_short"),
-        ("\\begin{document}\n" + "word " * 9000 + "\n\\end{document}", "paper_too_long"),
+        ("\\begin{document}\n" + "w" * 160_001 + "\n\\end{document}", "paper_too_long"),
     ],
+    ids=["too_short", "too_long"],
 )
 async def test_start_refuses_a_paper_too_short_or_long(session, body, reason):
     m = await doc(session, body)
-    with pytest.raises(InvalidInput, match=reason):
+    with pytest.raises(InvalidInput, match=reason) as caught:
         await go(session, m)
+    if reason == "paper_too_long":
+        assert caught.value.details == {
+            "detail": "The draft is too long to review, even in parts.",
+            "limit": 160_000,
+        }
     assert await rows(session, m.id) == []
+
+
+async def test_a_long_draft_is_accepted_and_queued_with_its_parts_counted(session, arq):
+    m = await doc(session, LONG_FILES["main.tex"])
+    out = await go(session, m)
+    assert (out["calls_max"], out["status"]) == (14, "queued")
+    est = await mdr.estimate(session, m.id)
+    # light only: a full review of several parts could outrun the job's time limit
+    modes = [(x["mode"], x["parts"]) for x in est["modes"]]
+    assert (est["parts"], est["too_long"], modes) == (2, False, [("light", 2)])
+
+
+async def test_a_long_draft_gets_the_light_review_only(session, arq):
+    m = await doc(session, LONG_FILES["main.tex"])
+    for confirm in (False, True):
+        with pytest.raises(InvalidInput, match="full_one_part") as caught:
+            await go(session, m, mode="full", confirm_full=confirm)
+        assert caught.value.details["detail"] == (
+            "A draft this long gets the light review only. The full review needs a draft under 40,000 characters."
+        )
+    assert arq.jobs == []
 
 
 async def test_start_refuses_a_missing_main_file_and_a_running_review(session):
@@ -201,13 +229,14 @@ async def test_estimate_gives_both_modes_and_makes_no_model_call(session, arq):
     m = await doc(session)
     est = await mdr.estimate(session, m.id)
     assert est["too_long"] is False and est["paper_chars"] >= 200
-    assert est["modes"] == draft_review.estimates(est["paper_chars"])
+    paper, _ = di.assemble({"main.tex": BODY}, "main.tex")
+    assert est["modes"] == draft_review.estimates(paper) and est["parts"] == 1
     light, full = est["modes"]
     assert (light["likely_calls"], light["max_calls"]) == (11, 11)
     assert (full["likely_calls"], full["max_calls"]) == (42, 54)
     assert full["approx_input_tokens"] > light["approx_input_tokens"]
     assert arq.jobs == [] and await rows(session, m.id) == []
-    big = await doc(session, "\\begin{document}\n" + "word " * 9000 + "\n\\end{document}\n")
+    big = await doc(session, "\\begin{document}\n" + "w" * 160_001 + "\n\\end{document}\n")
     assert (await mdr.estimate(session, big.id))["too_long"] is True
 
 

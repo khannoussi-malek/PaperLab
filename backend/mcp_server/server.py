@@ -975,7 +975,9 @@ async def start_draft_review(
     issue. It runs in the background on the owner's model; poll get_draft_review. mode "light" (default) is 3
     reviewers and 1 skeptic per issue, one round, at most 11 model calls. mode "full" is 3 skeptics per issue and up
     to 2 rounds, about 42 and at most 54 calls: it answers full_needs_confirm with the estimate until the owner agreed
-    and you pass confirm_full=true. It never edits the draft and never writes wording: every issue has a severity, the
+    and you pass confirm_full=true. A draft over 40,000 characters (up to 160,000) is read in parts split at its
+    sections, 3 reviewer calls per part, light mode only: full answers full_one_part. It never edits the draft and
+    never writes wording: every issue has a severity, the
     section, a summary, an exact quote of the draft with its file and line, and a close criterion (what an edit must
     satisfy). Fix the draft yourself. A remote model needs confirm_remote=true after the owner agreed. It answers
     review_running while one is live, and paper_too_short or paper_too_long when the draft cannot be reviewed."""

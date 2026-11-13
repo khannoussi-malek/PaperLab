@@ -10,7 +10,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import draft_review, llm_connections, manuscripts, queue
-from app.core.draft_review_issues import MAX_PAPER_CHARS, MIN_PAPER_CHARS, assemble
+from app.core.draft_review_issues import MAX_TOTAL_CHARS, MIN_PAPER_CHARS, assemble, split_parts
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.manuscript_missing_keys import load_texts
 from app.models import ManuscriptDraftReview as Row
@@ -55,7 +55,12 @@ async def _paper(session: AsyncSession, mid: uuid.UUID) -> tuple[str, dict[str, 
 async def estimate(session: AsyncSession, mid: uuid.UUID) -> dict:
     paper, _ = await _paper(session, mid)
     chars = len(paper)
-    return {"paper_chars": chars, "too_long": chars > MAX_PAPER_CHARS, "modes": draft_review.estimates(chars)}
+    return {
+        "paper_chars": chars,
+        "too_long": chars > MAX_TOTAL_CHARS,
+        "parts": len(split_parts(paper)),
+        "modes": draft_review.estimates(paper),
+    }
 
 
 async def start(
@@ -67,13 +72,22 @@ async def start(
     paper, used = await _paper(session, mid)
     if len(paper) < MIN_PAPER_CHARS:
         raise InvalidInput("paper_too_short", detail="There is not enough text to review yet.")
-    if len(paper) > MAX_PAPER_CHARS:
-        raise InvalidInput("paper_too_long", detail="The draft is too long to review at once.", limit=MAX_PAPER_CHARS)
+    if len(paper) > MAX_TOTAL_CHARS:
+        raise InvalidInput(
+            "paper_too_long", detail="The draft is too long to review, even in parts.", limit=MAX_TOTAL_CHARS
+        )
+    parts = len(split_parts(paper))
+    if mode not in draft_review.modes_for(parts):
+        raise InvalidInput(
+            "full_one_part",
+            detail="A draft this long gets the light review only. "
+            "The full review needs a draft under 40,000 characters.",
+        )
     if mode == "full" and not confirm_full:  # the long run is asked for twice, like confirm_large elsewhere
         raise Conflict(
             "full_needs_confirm",
-            likely_calls=draft_review.likely_calls("full"),
-            max_calls=draft_review.max_calls("full"),
+            likely_calls=draft_review.likely_calls("full", parts),
+            max_calls=draft_review.max_calls("full", parts),
         )
     old = await session.scalars(select(Row).where(Row.manuscript_id == mid).execution_options(populate_existing=True))
     if any(_live(r) for r in old):
@@ -83,7 +97,7 @@ async def start(
         manuscript_id=mid,
         mode=mode,
         status="queued",
-        calls_max=draft_review.max_calls(mode),
+        calls_max=draft_review.max_calls(mode, parts),
         source=paper,
         # an array of [path, raw text] in the order the files went into the paper: JSONB would lose the key order
         inputs={"files": [[path, raw] for path, raw in used.items()]},
