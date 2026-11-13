@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { api, type ChatModel } from '@/api/client'
+import { api, type ChatModel, type ChatScope } from '@/api/client'
 
 const mocks = vi.hoisted(() => ({
   startMicrophone: vi.fn(),
@@ -54,10 +54,10 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-function renderPanel() {
+function renderPanel(scope: ChatScope = { kind: 'paper', id: 'p1' }) {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <ChatPanel scope={{ kind: 'paper', id: 'p1' }} onCite={vi.fn()} onPromoted={vi.fn()} />
+      <ChatPanel scope={scope} onCite={vi.fn()} onPromoted={vi.fn()} />
     </QueryClientProvider>,
   )
 }
@@ -78,4 +78,15 @@ it('lets the reader type again after the microphone is turned off in the middle 
   await waitFor(() => expect(question).toBeDisabled())
   fireEvent.click(screen.getByRole('button', { name: 'Thinking, press to turn off' }))
   await waitFor(() => expect(question).toBeEnabled())
+})
+
+it("offers voice in a paper's and a workspace's chat but not in a search hit's, which the voice server can't answer", async () => {
+  const { unmount } = renderPanel({ kind: 'workspace', id: 'w1' })
+  expect(await screen.findByRole('button', { name: 'Ask out loud' })).toBeInTheDocument()
+  unmount()
+  vi.mocked(api.voiceStatus).mockClear()
+  renderPanel({ kind: 'hit', id: 'h1', workspaceId: 'w1' })
+  await screen.findByRole('button', { name: 'Ask' })
+  expect(screen.queryByRole('button', { name: 'Ask out loud' })).toBeNull()
+  expect(api.voiceStatus).not.toHaveBeenCalled()
 })

@@ -354,7 +354,8 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
               }
             }}
           />
-          <VoiceButton voice={voice} disabled={typedBusy || unusable} />
+          {/* The voice server answers paper and workspace chats only; a search hit's chat stays typed. */}
+          {scope.kind !== 'hit' && <VoiceButton voice={voice} disabled={typedBusy || unusable} />}
           <Button type="submit" size="icon-sm" aria-label="Ask" className={pressable} disabled={closed || !question.trim()}>
             <ArrowUp aria-hidden />
           </Button>
