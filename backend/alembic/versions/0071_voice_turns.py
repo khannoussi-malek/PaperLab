@@ -1,7 +1,7 @@
 """Voice turns: the timing of each spoken question, kept after its paper is deleted.
 
-Revision ID: 0067
-Revises: 0066
+Revision ID: 0071
+Revises: 0070
 """
 
 import sqlalchemy as sa
@@ -9,8 +9,8 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from alembic import op
 
-revision = "0067"
-down_revision = "0066"
+revision = "0071"
+down_revision = "0070"
 branch_labels = None
 depends_on = None
 
