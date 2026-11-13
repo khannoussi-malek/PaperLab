@@ -5,7 +5,17 @@ PaperLab's additions still import."""
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, StrictStr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 from app.models import NoteKind, Provenance
 
@@ -101,3 +111,53 @@ class NotesDoc(_Shape):
 
 class TagsDoc(_Shape):
     tags: list[TagRow]
+
+
+class SnapshotRow(_Shape):
+    label: StrictStr
+    paper: StrictStr
+    page: StrictInt
+    section: Text = None
+    text: StrictStr
+    from_abstract: StrictBool
+
+
+MAX_SLOTS = 500  # far above any answer's sources; bounds what a crafted package makes the import allocate
+
+
+def _is_slot(label: str, slots: int) -> bool:
+    return label[:1] == "C" and label[1:].isdigit() and 1 <= int(label[1:]) <= slots
+
+
+class AnswerRow(_Shape):
+    question: Text = None
+    content: StrictStr
+    model: StrictStr
+    connection_name: Text = None
+    prompt_version: StrictInt
+    skill_label: Text = None
+    skill_version: StrictInt | None = None
+    whole_paper: StrictBool
+    notes_used: StrictInt | None = None
+    notes_total: StrictInt | None = None
+    created_at: StrictStr
+    slots: Annotated[StrictInt, Field(ge=0, le=MAX_SLOTS)]
+    cited: list[StrictStr]
+    snapshot: list[SnapshotRow]
+
+    @field_validator("created_at")
+    @classmethod
+    def _is_a_timestamp(cls, value: str) -> str:
+        datetime.fromisoformat(value)  # ValueError becomes a ValidationError
+        return value
+
+    @model_validator(mode="after")
+    def _labels_are_slots(self):
+        labels = [*self.cited, *(entry.label for entry in self.snapshot)]
+        if not all(_is_slot(label, self.slots) for label in labels):
+            raise ValueError("a label names a citation slot the answer does not have")
+        return self
+
+
+class AnswersDoc(_Shape):
+    answers: list[AnswerRow]

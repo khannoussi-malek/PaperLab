@@ -9,10 +9,11 @@ import pytest
 from sqlalchemy import select
 
 from app.config import settings
-from app.core import citations_bundle_read, notes, papers, prisma_export, tags, workspace_package, workspaces
+from app.core import chat, citations_bundle_read, notes, papers, prisma_export, tags, workspace_package, workspaces
+from app.core.chunking import ChunkDraft
 from app.core.errors import Conflict, NotFound
 from app.core.notes import Anchor
-from app.models import LLMConnection, Note, PaperSources, Workspace, note_papers
+from app.models import Chunk, LLMConnection, LLMOutput, Note, PaperSources, Workspace, note_papers
 from app.models.workspace_search import SearchRunEligibility
 from tests.screening_pool import make_pool
 
@@ -24,8 +25,8 @@ SECRET_HOST = "http://secret-host.example:9999"
 SECRET_EMAIL = "owner-secret@example.org"
 
 
-async def _export(session, workspace_id, *, pdfs: bool) -> zipfile.ZipFile:
-    file = await workspace_package.export_package(session, workspace_id, pdfs=pdfs)
+async def _export(session, workspace_id, *, pdfs: bool, **kwargs) -> zipfile.ZipFile:
+    file = await workspace_package.export_package(session, workspace_id, pdfs=pdfs, **kwargs)
     return zipfile.ZipFile(io.BytesIO(file.read()))
 
 
@@ -64,6 +65,92 @@ async def _seeded(session, pdf_dir):
     return ws, alpha, beta, human, ai
 
 
+ANSWER = "Sleep helps [C2], and [C1] agrees."
+ALPHA_TEXT, BETA_TEXT = "Alpha says yes.", "Beta says so too."
+
+
+def _draft(text: str, page: int) -> ChunkDraft:
+    return ChunkDraft(ordinal=0, page=page, bbox=[[72.0, 100.0, 300.0, 120.0]], section_title=None, text=text)
+
+
+async def cited_answer(session, ws, alpha, beta) -> uuid.UUID:
+    """A workspace chat answer citing a passage of each seeded paper (C1 on alpha p.1, C2 on beta p.2), saved as chat
+    saves it, with a skill and a model."""
+    await papers.replace_chunks(session, alpha.id, [_draft(ALPHA_TEXT, 1)])
+    await papers.replace_chunks(session, beta.id, [_draft(BETA_TEXT, 2)])
+    sources = await chat.chunk_sources(session, Chunk.paper_id == alpha.id)
+    sources += await chat.chunk_sources(session, Chunk.paper_id == beta.id)
+    prepared = chat.Prepared(
+        sources=sources, system="", prompt="", whole_paper=False, skill_label="Plain English", skill_version=2
+    )
+    return await chat.save_answer(
+        session, chat.Scope(workspace_id=ws.id), "Does sleep help?", prepared, ANSWER, "qwen3:8b", "Ollama"
+    )
+
+
+async def test_a_workspace_answer_exports_with_its_snapshot_under_package_keys(session, pdf_dir):
+    ws, alpha, beta, *_ = await _seeded(session, pdf_dir)
+    output_id = await cited_answer(session, ws, alpha, beta)
+    zf = await _export(session, ws.id, pdfs=False)
+    keys = {row["title"]: row["key"] for row in _json(zf, "papers.json")["papers"]}
+    [answer] = _json(zf, "answers.json")["answers"]
+    saved = await session.get(LLMOutput, output_id)
+    assert (answer["question"], answer["content"], answer["model"], answer["connection_name"]) == (
+        "Does sleep help?", ANSWER, "qwen3:8b", "Ollama",
+    )  # fmt: skip
+    assert (answer["skill_label"], answer["skill_version"], answer["prompt_version"]) == (
+        "Plain English", 2, chat.CHAT_PROMPT_VERSION,
+    )  # fmt: skip
+    assert (answer["whole_paper"], answer["notes_used"], answer["notes_total"]) == (False, None, None)
+    assert answer["created_at"] == saved.created_at.isoformat()
+    assert (answer["slots"], answer["cited"]) == (2, ["C2", "C1"])  # in the order the answer cites them
+    passage = {"section": None, "from_abstract": False}
+    assert answer["snapshot"] == [
+        {"label": "C1", "paper": keys["Alpha study"], "page": 1, "text": ALPHA_TEXT} | passage,
+        {"label": "C2", "paper": keys["Beta study"], "page": 2, "text": BETA_TEXT} | passage,
+    ]
+    assert str(alpha.id).encode() not in zf.read("answers.json")  # the paper's own id stays in the library
+    counts = _json(zf, "manifest.json")["counts"]
+    assert (counts["answers"], counts["answers_skipped"]) == (1, 0)
+
+
+async def test_an_answer_saved_before_m33_or_a_paper_answer_is_left_out_and_the_first_is_counted(session, pdf_dir):
+    ws, alpha, beta, *_ = await _seeded(session, pdf_dir)
+    session.add(
+        LLMOutput(workspace_id=ws.id, kind="chat", question="old", content="old [C1]", model="m", prompt_version=1)
+    )
+    mine = {"kind": "chat", "question": "mine", "content": "mine", "model": "m", "prompt_version": 1}
+    session.add(LLMOutput(paper_id=alpha.id, source_snapshot=[], **mine))
+    await session.commit()
+    zf = await _export(session, ws.id, pdfs=False)
+    assert _json(zf, "answers.json") == {"answers": []}
+    assert _json(zf, "manifest.json")["counts"] == {
+        "papers": 2,
+        "notes": 2,
+        "pdfs": 0,
+        "answers": 0,
+        "answers_skipped": 1,
+    }
+
+
+async def test_answers_false_leaves_answers_json_out(session, pdf_dir):
+    ws, alpha, beta, *_ = await _seeded(session, pdf_dir)
+    await cited_answer(session, ws, alpha, beta)
+    zf = await _export(session, ws.id, pdfs=False, answers=False)
+    assert "answers.json" not in zf.namelist()
+    assert _json(zf, "manifest.json")["counts"]["answers"] == 0
+
+
+async def test_the_download_route_takes_the_answers_choice(client, session, pdf_dir):
+    ws, alpha, beta, *_ = await _seeded(session, pdf_dir)
+    await cited_answer(session, ws, alpha, beta)
+    with_answers = await client.get(f"/api/workspaces/{ws.id}/package", params={"answers": "true"})
+    without = await client.get(f"/api/workspaces/{ws.id}/package", params={"answers": "false"})
+    assert "answers.json" in zipfile.ZipFile(io.BytesIO(with_answers.content)).namelist()
+    assert "answers.json" not in zipfile.ZipFile(io.BytesIO(without.content)).namelist()
+    assert (await client.get(f"/api/workspaces/{ws.id}/package/check", params={"answers": "false"})).status_code == 204
+
+
 async def test_manifest_names_the_format_and_the_workspace(session, pdf_dir):
     ws, *_ = await _seeded(session, pdf_dir)
     zf = await _export(session, ws.id, pdfs=False)
@@ -77,7 +164,7 @@ async def test_manifest_names_the_format_and_the_workspace(session, pdf_dir):
         "inclusion_criteria": "RCTs",
         "exclusion_criteria": "Animal studies",
     }
-    assert manifest["counts"] == {"papers": 2, "notes": 2, "pdfs": 0}
+    assert manifest["counts"] == {"papers": 2, "notes": 2, "pdfs": 0, "answers": 0, "answers_skipped": 0}
 
 
 async def test_papers_are_keyed_and_carry_their_details(session, pdf_dir):
@@ -223,7 +310,8 @@ async def test_pdfs_over_the_import_cap_are_refused_at_export(session, pdf_dir, 
         await workspace_package.export_package(session, ws.id, pdfs=True)
     with pytest.raises(Conflict, match="package_too_large_with_pdfs"):
         await workspace_package.check_export(session, ws.id, pdfs=True)
-    await workspace_package.check_export(session, ws.id, pdfs=False)  # without PDFs the cap does not apply
+    with pytest.raises(Conflict, match="^package_too_large$"):  # without PDFs it's the same cap, worded without them
+        await workspace_package.check_export(session, ws.id, pdfs=False)
     monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 200 * 1024 * 1024)
     await workspace_package.check_export(session, ws.id, pdfs=True)
 
@@ -233,5 +321,6 @@ async def test_the_api_refuses_an_oversize_package_before_it_is_downloaded(clien
     monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 100)
     refused = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "true"})
     assert refused.status_code == 409 and refused.json()["detail"] == "package_too_large_with_pdfs"
-    fine = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "false"})
+    monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 200 * 1024 * 1024)
+    fine = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "true"})
     assert fine.status_code == 204

@@ -9,6 +9,7 @@ const result = {
   notes: 5,
   pdfs_skipped: 0,
   has_record: true,
+  answers: 0,
 };
 
 test("the import result line uses the fixed wording", () => {
@@ -20,6 +21,18 @@ test("the import result line uses the fixed wording", () => {
 test("the result line adds the skipped PDFs only when there are some", () => {
   expect(importResultLine({ ...result, pdfs_skipped: 2 })).toBe(
     'Imported "Sepsis review": 3 papers added, 2 already in your library, 5 notes. 2 PDFs skipped.',
+  );
+});
+
+test("the result line names the chat answers when there are some", () => {
+  expect(importResultLine({ ...result, answers: 4 })).toBe(
+    'Imported "Sepsis review": 3 papers added, 2 already in your library, 5 notes, 4 chat answers.',
+  );
+});
+
+test("the chat answers come before the skipped PDFs in the result line", () => {
+  expect(importResultLine({ ...result, answers: 4, pdfs_skipped: 2 })).toBe(
+    'Imported "Sepsis review": 3 papers added, 2 already in your library, 5 notes, 4 chat answers. 2 PDFs skipped.',
   );
 });
 
@@ -42,4 +55,8 @@ test("an unknown failure gets the generic line, never the raw code", () => {
   expect(packageErrorMessage("boom_internal")).toBe(
     "Couldn't import this package. Try again.",
   );
+});
+
+test("one chat answer is named in the singular", () => {
+  expect(importResultLine({ ...result, answers: 1 })).toContain(", 1 chat answer.");
 });

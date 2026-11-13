@@ -27,6 +27,7 @@ const imported: PackageImportResult = {
   notes: 5,
   pdfs_skipped: 0,
   has_record: true,
+  answers: 0,
 };
 
 test("the export dialog links to the package without PDFs by default", () => {
@@ -35,16 +36,42 @@ test("the export dialog links to the package without PDFs by default", () => {
   expect(box.getAttribute("aria-checked")).toBe("false");
   expect(screen.getByText("Without PDFs the file is small, and papers arrive as details only.")).toBeTruthy();
   const link = screen.getByRole("link", { name: "Download package" });
-  expect(link.getAttribute("href")).toBe("/api/workspaces/w1/package?pdfs=false");
+  expect(link.getAttribute("href")).toBe("/api/workspaces/w1/package?pdfs=false&answers=true");
   expect(link.hasAttribute("download")).toBe(true);
+});
+
+test("chat answers are included by default, with the fixed help text", () => {
+  wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
+  const box = screen.getByRole("checkbox", { name: "Include chat answers" });
+  expect(box.getAttribute("aria-checked")).toBe("true");
+  expect(
+    screen.getByText("Answers keep their cited passages, so their citations still open after import."),
+  ).toBeTruthy();
+});
+
+test("unticking Include chat answers takes answers=false into the download", () => {
+  wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Include chat answers" }));
+  expect(screen.getByRole("link", { name: "Download package" }).getAttribute("href")).toBe(
+    "/api/workspaces/w1/package?pdfs=false&answers=false",
+  );
 });
 
 test("ticking Include PDFs changes the download to the one with PDFs", () => {
   wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
   fireEvent.click(screen.getByRole("checkbox", { name: "Include PDFs" }));
   expect(screen.getByRole("link", { name: "Download package" }).getAttribute("href")).toBe(
-    "/api/workspaces/w1/package?pdfs=true",
+    "/api/workspaces/w1/package?pdfs=true&answers=true",
   );
+});
+
+test("the PDFs size check carries the answers choice, and follows it", async () => {
+  const check = vi.spyOn(api, "checkPackage").mockResolvedValue(undefined);
+  wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Include PDFs" }));
+  await waitFor(() => expect(check).toHaveBeenCalledWith("w1", true, true));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Include chat answers" }));
+  await waitFor(() => expect(check).toHaveBeenCalledWith("w1", true, false));
 });
 
 test("picking a file posts it, shows the result line, then opens the new workspace", async () => {
@@ -103,9 +130,9 @@ test("a package that fits with its PDFs keeps its download", async () => {
   const check = vi.spyOn(api, "checkPackage").mockResolvedValue(undefined);
   wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
   fireEvent.click(screen.getByRole("checkbox", { name: "Include PDFs" }));
-  await waitFor(() => expect(check).toHaveBeenCalledWith("w1", true));
+  await waitFor(() => expect(check).toHaveBeenCalledWith("w1", true, true));
   expect(screen.getByRole("link", { name: "Download package" }).getAttribute("href")).toBe(
-    "/api/workspaces/w1/package?pdfs=true",
+    "/api/workspaces/w1/package?pdfs=true&answers=true",
   );
 });
 
@@ -131,4 +158,11 @@ test("the workspace row menu opens the export dialog", async () => {
   fireEvent.pointerDown(trigger);
   fireEvent.click(await screen.findByRole("menuitem", { name: "Export package…" }));
   expect(await screen.findByRole("dialog", { name: "Export package" })).toBeTruthy();
+});
+
+test("a workspace too large even without PDFs says so plainly and offers no download", async () => {
+  vi.spyOn(api, "checkPackage").mockRejectedValue(new ApiError("package_too_large", 409, { detail: "package_too_large" }));
+  wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
+  expect(await screen.findByText("This workspace is too large to export as one package.")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Download package" })).toBeNull();
 });

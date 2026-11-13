@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { workspaceHref } from "@/lib/route";
-import { importResultLine, packageErrorMessage, PDFS_TOO_LARGE } from "./packageCopy";
+import { importResultLine, packageErrorMessage, PDFS_TOO_LARGE, PACKAGE_TOO_LARGE } from "./packageCopy";
 
 /** "Export package…" from a workspace's row menu: one `.paperlab` file, with its PDFs only when ticked. */
 export function PackageExportDialog({
@@ -30,10 +30,12 @@ export function PackageExportDialog({
   onClose: () => void;
 }) {
   const [pdfs, setPdfs] = useState(false);
+  const [answers, setAnswers] = useState(true);
   const checkboxId = useId();
-  const fits = usePackageFits(workspace.id, pdfs);
-  const tooLarge =
-    fits.error instanceof ApiError && fits.error.code === "package_too_large_with_pdfs";
+  const answersId = useId();
+  const fits = usePackageFits(workspace.id, pdfs, answers);
+  const sizeCode = fits.error instanceof ApiError ? fits.error.code : null;
+  const tooLarge = sizeCode === "package_too_large_with_pdfs" || sizeCode === "package_too_large";
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
@@ -56,7 +58,22 @@ export function PackageExportDialog({
           <p className="text-sm text-muted-foreground">
             Without PDFs the file is small, and papers arrive as details only.
           </p>
-          {tooLarge && <p role="alert" className="text-sm text-destructive">{PDFS_TOO_LARGE}</p>}
+          {tooLarge && (
+            <p role="alert" className="text-sm text-destructive">
+              {sizeCode === "package_too_large" ? PACKAGE_TOO_LARGE : PDFS_TOO_LARGE}
+            </p>
+          )}
+          <div className="mt-2 flex items-center gap-2">
+            <Checkbox
+              id={answersId}
+              checked={answers}
+              onCheckedChange={(checked) => setAnswers(checked === true)}
+            />
+            <Label htmlFor={answersId}>Include chat answers</Label>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Answers keep their cited passages, so their citations still open after import.
+          </p>
         </div>
         {tooLarge ? (
           <Button disabled className="self-start">
@@ -64,7 +81,7 @@ export function PackageExportDialog({
           </Button>
         ) : (
           <Button asChild className="self-start">
-            <a href={packageUrl(workspace.id, pdfs)} download>
+            <a href={packageUrl(workspace.id, pdfs, answers)} download>
               Download package
             </a>
           </Button>
