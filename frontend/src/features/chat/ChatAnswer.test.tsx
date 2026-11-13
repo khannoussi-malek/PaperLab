@@ -114,3 +114,18 @@ it('a whole-paper answer over one passage says "1 chunk"', () => {
   render(<ChatAnswer {...base} wholePaper sources={[source(1)]} segments={[{ kind: 'text', text: 'x' }]} />)
   expect(screen.getByText('Whole paper · 1 chunk')).toBeInTheDocument()
 })
+
+describe('ChatAnswer skill chip', () => {
+  const footer = { model: 'qwen3', connectionName: 'Ollama', promptVersion: 2 }
+
+  it('shows the label of the skill the answer ran with, beside the AI mark', () => {
+    render(<ChatAnswer {...base} footer={{ ...footer, skillLabel: 'Limits' }} />)
+    expect(screen.getByText('Limits')).toBeInTheDocument()
+  })
+
+  it('shows no chip when no skill ran', () => {
+    render(<ChatAnswer {...base} footer={{ ...footer, skillLabel: null }} />)
+    expect(screen.queryByText('Limits')).toBeNull()
+    expect(screen.getByText(/qwen3/)).toBeInTheDocument()
+  })
+})

@@ -58,6 +58,7 @@ async def test_a_brief_streams_like_a_chat_answer_and_is_saved(client, session, 
         "connection_name": "Fake",
         "prompt_version": 1,
         "cited": ["C1"],
+        "skill_label": None,  # a brief shares chat's done event and never runs a skill
     }
     assert (output.kind, output.lens, output.content) == ("brief", "key_ideas", FAKE_ANSWER)
     assert fake_llm.calls[0][0] == briefs.SYSTEM_PROMPT

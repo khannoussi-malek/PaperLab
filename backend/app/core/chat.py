@@ -11,7 +11,7 @@ from itertools import accumulate
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import prompts, workspaces
+from app.core import prompts, skills, workspaces
 from app.core.errors import Conflict, NotFound
 from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
 from app.core.papers import get_paper
@@ -87,6 +87,8 @@ class Prepared:
     prompt_version: int = CHAT_PROMPT_VERSION
     notes: list[NoteSource] = field(default_factory=list)  # N{i} is notes[i-1]
     notes_total: int | None = None  # every note in the paper or workspace
+    skill_label: str | None = None  # the skill the question ran with, copied onto the answer (M17)
+    skill_version: int | None = None
 
     @property
     def notes_used(self) -> int | None:
@@ -282,7 +284,9 @@ def format_notes_block(notes: list[NoteView], papers: dict[uuid.UUID, Paper]) ->
     return "\n".join(lines), used
 
 
-async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, question: str, embedder) -> Prepared:
+async def _prepare_workspace(
+    session: AsyncSession, workspace_id: uuid.UUID, question: str, embedder, skill: skills.SkillView | None = None
+) -> Prepared:
     """Retrieved passages across the workspace's papers plus all its notes, trimmed. No whole-paper skip.
 
     Raises NotFound, or Conflict("workspace_empty" | "search_not_set_up" | "search_rebuilding" |
@@ -308,17 +312,27 @@ async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, que
     )
     return Prepared(
         sources=sources,
-        system=WORKSPACE_SYSTEM_PROMPT,
+        system=skills.compose(WORKSPACE_SYSTEM_PROMPT, skill),
         prompt=prompt,
         whole_paper=False,
         prompt_version=WORKSPACE_PROMPT_VERSION,
         notes=used,
         notes_total=len(every_note),
+        **_skill_fields(skill),
     )
 
 
+def _skill_fields(skill: skills.SkillView | None) -> dict:
+    return {} if skill is None else {"skill_label": skill.label, "skill_version": skill.version}
+
+
 async def prepare(
-    session: AsyncSession, paper_id: uuid.UUID | Scope, question: str, embedder=None, thread: Thread | None = None
+    session: AsyncSession,
+    paper_id: uuid.UUID | Scope,
+    question: str,
+    embedder=None,
+    thread: Thread | None = None,
+    skill: skills.SkillView | None = None,
 ) -> Prepared:
     """A workspace scope goes to _prepare_workspace. For a paper: small papers go whole, in reading order; larger ones
     send the nearest chunks that fit SMALL_PAPER_CHARS. The paper's notes follow, newest first, as in workspace chat.
@@ -333,7 +347,7 @@ async def prepare(
         if thread is not None:
             # ponytail: follow-ups are measured on paper chat first; workspace chat gets them if they earn their keep.
             raise ValueError("follow-ups are paper chat only for now")
-        return await _prepare_workspace(session, scope.workspace_id, question, embedder)
+        return await _prepare_workspace(session, scope.workspace_id, question, embedder, skill)
     paper_id = scope.paper_id
     paper = await get_paper(session, paper_id)
     if paper.status not in (PaperStatus.READY, PaperStatus.EMBEDDING):  # embedding: retrieve answers from its words
@@ -366,11 +380,12 @@ async def prepare(
     )
     return Prepared(
         sources=sources,
-        system=SYSTEM_PROMPT,
+        system=skills.compose(SYSTEM_PROMPT, skill),
         prompt=prompt,
         whole_paper=whole_paper,
         notes=used,
         notes_total=len(every_note),
+        **_skill_fields(skill),
     )
 
 
@@ -404,6 +419,8 @@ async def save_answer(
         prompt_version=prepared.prompt_version,
         whole_paper=prepared.whole_paper,
         parent_id=parent_id,
+        skill_label=prepared.skill_label,
+        skill_version=prepared.skill_version,
     )
     session.add(output)
     await session.commit()

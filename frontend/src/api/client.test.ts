@@ -243,3 +243,42 @@ describe('api.setReading and api.triageEvents', () => {
     expect(JSON.parse(init.body as string)).toEqual({ reason: 'related_work' })
   })
 })
+
+describe('skills API', () => {
+  const fetchMock = () => vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}', { status: 200 }))
+  const lastCall = (spy: ReturnType<typeof fetchMock>) => {
+    const [url, init] = spy.mock.calls.at(-1)! as [string, RequestInit | undefined]
+    return { url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body as string) : undefined }
+  }
+
+  afterEach(() => vi.restoreAllMocks())
+
+  it('lists skills for a scope, with hidden ones only when asked', async () => {
+    const spy = fetchMock()
+    await api.listSkills('paper')
+    expect(lastCall(spy).url).toBe('/api/skills?scope=paper')
+    await api.listSkills(undefined, true)
+    expect(lastCall(spy).url).toBe('/api/skills?include_hidden=true')
+    await api.listSkills()
+    expect(lastCall(spy).url).toBe('/api/skills')
+  })
+
+  it('creates, updates (PUT), deletes, resets and sets defaults on the skill routes', async () => {
+    const spy = fetchMock()
+    const body = { label: 'Limits', description: '', scope: 'paper' as const, instructions: 'Name the limits.' }
+    await api.createSkill(body)
+    expect(lastCall(spy)).toEqual({ url: '/api/skills', method: 'POST', body })
+    await api.updateSkill('custom:1', { label: 'Renamed', is_listed: false })
+    expect(lastCall(spy)).toEqual({ url: '/api/skills/custom:1', method: 'PUT', body: { label: 'Renamed', is_listed: false } })
+    await api.deleteSkill('custom:1')
+    expect(lastCall(spy)).toMatchObject({ url: '/api/skills/custom:1', method: 'DELETE' })
+    await api.resetSkill('builtin:limits')
+    expect(lastCall(spy)).toMatchObject({ url: '/api/skills/builtin:limits/reset', method: 'POST' })
+    await api.setSkillDefault('builtin:limits', 'workspace', true)
+    expect(lastCall(spy)).toEqual({
+      url: '/api/skills/builtin:limits/default',
+      method: 'POST',
+      body: { scope: 'workspace', on: true },
+    })
+  })
+})

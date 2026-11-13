@@ -1,7 +1,7 @@
 import { ArrowUp, CornerDownRight, MessageSquareText, Settings2, X } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ChatScope, ChatSource, Note, NoteSource, ChatAnswer as SavedAnswer } from '@/api/client'
-import { useChatHistory, useChatModels, usePromoteNote } from '@/api/queries'
+import { useChatHistory, useChatModels, usePromoteNote, useSkills } from '@/api/queries'
 import { pressable } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ import { promoteInPart } from './noteBlocks'
 import { promoteErrorMessage, type PromoteDraft } from './promote'
 import { saveButtonPosition } from './saveButton'
 import { SaveAsNoteButton } from './SaveAsNoteButton'
+import { SkillPicker } from './SkillPicker'
+import { resolveSkill } from './skillChoice'
 import { ProblemAlert } from './ProblemAlert'
 import { threadOrder } from './threads'
 import { useChatStream } from './useChatStream'
@@ -77,9 +79,14 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
       ? pick
       : loadChatModel(browserStorage(), chatModels.data)
     : null
+  // The skill the reader picked this session; undefined until they pick (the kind's default), null for No skill.
+  // A search hit's chat has no skills, so its question sends none.
+  const skills = useSkills(scope.kind === 'hit' ? 'paper' : scope.kind, false, scope.kind !== 'hit')
+  const [skillPick, setSkillPick] = useState<string | null | undefined>(undefined)
+  const skillId = scope.kind === 'hit' ? null : resolveSkill(skills.data ?? [], scope.kind, skillPick)
   // The saved answer the next question follows up (paper chat only); null asks it on its own.
   const [followingId, setFollowingId] = useState<string | null>(null)
-  const typed = useChatStream(scope, modelId, (parentId, next) =>
+  const typed = useChatStream(scope, modelId, skillId, (parentId, next) =>
     // Only while the chip still names the answer that question followed: × pressed mid-stream stays pressed.
     setFollowingId((current) => (current === parentId ? next : current)),
   )
@@ -238,7 +245,12 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
         footer={
           // A spoken answer's saved id arrives before its model; the footer waits for the saved copy.
           stream.done?.model
-            ? { model: stream.done.model, connectionName: stream.done.connection_name, promptVersion: stream.done.prompt_version }
+            ? {
+                model: stream.done.model,
+                connectionName: stream.done.connection_name,
+                promptVersion: stream.done.prompt_version,
+                skillLabel: stream.done.skill_label,
+              }
             : null
         }
         pending={busy}
@@ -286,7 +298,12 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
               notesUsed={answer.notes_used}
               notesTotal={answer.notes_total}
               segments={splitCitations(answer.content, knownLabels(answer))}
-              footer={{ model: answer.model, connectionName: answer.connection_name, promptVersion: answer.prompt_version }}
+              footer={{
+                model: answer.model,
+                connectionName: answer.connection_name,
+                promptVersion: answer.prompt_version,
+                skillLabel: answer.skill_label,
+              }}
               paperLabel={paperLabel}
               onCite={onCite}
               followUp={scope.kind !== 'workspace' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
@@ -361,8 +378,9 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
           </Button>
         </div>
         {chatModels.data && chatModels.data.length > 0 && (
-          <div className="flex">
+          <div className="flex flex-wrap gap-2">
             <ModelPicker models={chatModels.data} value={modelId} onChange={pickModel} />
+            {scope.kind !== 'hit' && skills.data && <SkillPicker skills={skills.data} value={skillId} onChange={setSkillPick} />}
           </div>
         )}
         {voice.problem && (

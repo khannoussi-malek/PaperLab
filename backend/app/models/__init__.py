@@ -29,6 +29,7 @@ from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
 from app.models.references import ExternalRef, NoteEmbedding, paper_references
 from app.models.saved_search import SavedSearch
 from app.models.setup import Setup
+from app.models.skill import Skill
 from app.models.tag import WorkspaceTag, hit_tags, paper_tags
 from app.models.triage_event import TriageEvent
 from app.models.voice_turn import VoiceTurn
@@ -71,6 +72,7 @@ __all__ = [
     "NoteKind",
     "Provenance",
     "SavedSearch",
+    "Skill",
     "Setup",
     "TriageEvent",
     "VoiceTurn",

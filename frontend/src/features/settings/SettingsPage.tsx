@@ -1,4 +1,4 @@
-import { Bot, BookOpen, GlassWater, Mic, MonitorCog, Plug, Search, type LucideIcon } from 'lucide-react'
+import { Bot, BookOpen, GlassWater, Mic, MonitorCog, Plug, Search, Sparkles, type LucideIcon } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { railItem } from '@/components/nav'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { EmbeddingSettings } from './EmbeddingSettings'
 import { GlassSettings } from './GlassSettings'
 import { useDesktop } from './desktop'
 import { ModelsSettings } from './ModelsSettings'
+import { SkillsSettings } from './SkillsSettings'
 import { PaperSourcesSettings } from './PaperSourcesSettings'
 import { VoiceSettings } from './VoiceSettings'
 
@@ -16,6 +17,7 @@ type Section = { id: SettingsSection; label: string; icon: LucideIcon }
 
 const SECTIONS: Section[] = [
   { id: 'models', label: 'Model connections', icon: Bot },
+  { id: 'skills', label: 'Skills', icon: Sparkles },
   { id: 'sources', label: 'Paper sources', icon: BookOpen },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'glass', label: 'Glass', icon: GlassWater },
@@ -99,6 +101,7 @@ export function SettingsPage() {
         {/* Glass is the one exception: its sliders sit beside a live preview, which needs the room. */}
         <div className={cn('flex flex-1 flex-col gap-8', current === 'glass' ? 'max-w-6xl' : 'max-w-3xl')}>
           {current === 'models' && <ModelsSettings />}
+          {current === 'skills' && <SkillsSettings />}
           {current === 'sources' && <PaperSourcesSettings />}
           {current === 'search' && <EmbeddingSettings />}
           {current === 'glass' && <GlassSettings />}

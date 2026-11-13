@@ -29,7 +29,7 @@ type Props = {
   notesTotal: number | null
   segments: Segment[]
   /** Set once the answer is saved: the model label is only known then. */
-  footer: { model: string; connectionName: string | null; promptVersion: number } | null
+  footer: { model: string; connectionName: string | null; promptVersion: number; skillLabel: string | null } | null
   /** The saved answer's `llm_outputs` id; absent while it streams. */
   outputId?: string
   /** The answer this one follows up. `reply` indents it under the first question of its thread. */
@@ -255,6 +255,11 @@ function AnswerMeta({ footer, sources, notes, wholePaper, cited, pending, descri
           <span className="sr-only">{aiLabel}</span>
         </span>
       </Hint>
+      {footer?.skillLabel && (
+        <Badge variant="outline" className="max-w-40 shrink-0 truncate" title={footer.skillLabel}>
+          {footer.skillLabel}
+        </Badge>
+      )}
       {sources !== null && (
         <ul className="chat-sources flex min-w-0 flex-1 flex-wrap gap-1" aria-label="Sources">
           {wholePaper ? (

@@ -9,8 +9,8 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
-from app.core import chat, hit_chat, notes
-from app.core.errors import Conflict
+from app.core import chat, hit_chat, notes, skills
+from app.core.errors import Conflict, InvalidInput
 from app.db import SessionLocal
 from app.providers.base import LLM, LLMError, LLMUnavailable
 from app.schemas.chat import (
@@ -34,10 +34,14 @@ router = APIRouter(tags=["chat"])
 
 
 async def _prepare(
-    session: AsyncSession, scope: chat.Scope, question: str, thread: chat.Thread | None = None
+    session: AsyncSession,
+    scope: chat.Scope,
+    question: str,
+    thread: chat.Thread | None = None,
+    skill: skills.SkillView | None = None,
 ) -> chat.Prepared:
     """Runs before the stream starts: once an SSE response has begun, an exception only drops the connection."""
-    prepared = await chat.prepare(session, scope, question, thread=thread)
+    prepared = await chat.prepare(session, scope, question, thread=thread, skill=skill)
     # End the transaction now. The LLM stream can take minutes and must not hold a pooled connection.
     await session.commit()
     return prepared
@@ -45,13 +49,15 @@ async def _prepare(
 
 async def prepare_answer(paper_id: uuid.UUID, payload: ChatRequest, session: SessionDep) -> chat.Prepared:
     thread = None if payload.parent_id is None else await chat.load_thread(session, paper_id, payload.parent_id)
-    return await _prepare(session, chat.Scope(paper_id=paper_id), payload.question, thread)
+    skill = await skills.resolve(session, payload.skill_id, "paper")
+    return await _prepare(session, chat.Scope(paper_id=paper_id), payload.question, thread, skill)
 
 
 async def prepare_workspace_answer(workspace_id: uuid.UUID, payload: ChatRequest, session: SessionDep) -> chat.Prepared:
     if payload.parent_id is not None:
         raise Conflict("follow_ups_paper_only")  # D62: until workspace follow-ups are measured
-    return await _prepare(session, chat.Scope(workspace_id=workspace_id), payload.question)
+    skill = await skills.resolve(session, payload.skill_id, "workspace")
+    return await _prepare(session, chat.Scope(workspace_id=workspace_id), payload.question, skill=skill)
 
 
 PreparedDep = Annotated[chat.Prepared, Depends(prepare_answer)]
@@ -119,6 +125,7 @@ async def stream_output(
         connection_name=llm.connection_name,
         prompt_version=prepared.prompt_version,
         cited=cited,
+        skill_label=prepared.skill_label,
     )
     yield ServerSentEvent(event="done", data=done)
 
@@ -174,6 +181,7 @@ def to_answer(answer: chat.Answer) -> ChatAnswer:
         notes_total=output.notes_total,
         parent_id=output.parent_id,
         saved_notes=[SavedNoteOut(index=s.index, note_id=s.note_id, paper_ids=s.paper_ids) for s in answer.saved_notes],
+        skill_label=output.skill_label,
     )
 
 
@@ -210,6 +218,8 @@ class HitPrepared:
 async def prepare_hit_answer(
     workspace_id: uuid.UUID, hit_id: uuid.UUID, payload: ChatRequest, session: SessionDep
 ) -> HitPrepared:
+    if payload.skill_id is not None:  # hit chat keeps its own prompt; no skill runs here (M17 §1)
+        raise InvalidInput("skill_not_here")
     context = await hit_chat.load(session, workspace_id, hit_id)
     if context.source == "abstract":
         prepared = hit_chat.prepare_abstract(context, payload.question, payload.parent_id)

@@ -96,6 +96,9 @@ export type ResolvedData = components['schemas']['ResolvedDataOut']
 export type ResolvedDataset = components['schemas']['ResolvedDatasetOut']
 export type ResolvedCell = components['schemas']['ResolvedCellOut']
 export type ChatModel = components['schemas']['ChatModelOut']
+export type Skill = components['schemas']['SkillOut']
+export type SkillCreate = components['schemas']['SkillCreate']
+export type SkillUpdate = components['schemas']['SkillUpdate']
 export type LLMConnection = components['schemas']['ConnectionOut']
 export type LLMConnectionCreate = components['schemas']['ConnectionCreate']
 export type LLMConnectionUpdate = components['schemas']['ConnectionUpdate']
@@ -485,10 +488,33 @@ export const api = {
   /**
    * The raw response: on success its body is the SSE stream that `useChatStream` reads. `modelId` null: the default.
    * `parentId`: the saved answer this question follows up (paper chat only); null for a question on its own.
+   * `skillId`: the skill the question runs with (null: No skill). A search hit's chat has no skills, so it sends none.
    */
-  askChat: (scope: ChatScope, question: string, modelId: string | null, parentId: string | null, signal?: AbortSignal) =>
-    fetch(chatUrl(scope), { ...sendJson('POST', { question, model_id: modelId, parent_id: parentId }), signal }),
+  askChat: (scope: ChatScope, question: string, modelId: string | null, parentId: string | null, skillId: string | null, signal?: AbortSignal) =>
+    fetch(chatUrl(scope), {
+      ...sendJson('POST', {
+        question,
+        model_id: modelId,
+        parent_id: parentId,
+        ...(scope.kind === 'hit' ? {} : { skill_id: skillId }),
+      }),
+      signal,
+    }),
   listChatModels: () => request<ChatModel[]>('/api/llm/models'),
+  /** `scope` narrows to the skills a chat of that kind can use; hidden ones come back only with `includeHidden`. */
+  listSkills: (scope?: 'paper' | 'workspace', includeHidden?: boolean) => {
+    const params = new URLSearchParams()
+    if (scope) params.set('scope', scope)
+    if (includeHidden) params.set('include_hidden', 'true')
+    const query = params.toString()
+    return request<Skill[]>(`/api/skills${query ? `?${query}` : ''}`)
+  },
+  createSkill: (body: SkillCreate) => request<Skill>('/api/skills', sendJson('POST', body)),
+  updateSkill: (id: string, body: SkillUpdate) => request<Skill>(`/api/skills/${id}`, sendJson('PUT', body)),
+  deleteSkill: (id: string) => request<void>(`/api/skills/${id}`, { method: 'DELETE' }),
+  resetSkill: (id: string) => request<Skill>(`/api/skills/${id}/reset`, { method: 'POST' }),
+  setSkillDefault: (id: string, scope: 'paper' | 'workspace', on: boolean) =>
+    request<Skill>(`/api/skills/${id}/default`, sendJson('POST', { scope, on })),
   listConnections: () => request<LLMConnection[]>('/api/llm/connections'),
   createConnection: (body: LLMConnectionCreate) => request<LLMConnection>('/api/llm/connections', sendJson('POST', body)),
   updateConnection: (id: string, body: LLMConnectionUpdate) =>

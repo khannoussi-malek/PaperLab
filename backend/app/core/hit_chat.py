@@ -95,7 +95,7 @@ def remember(
     answer = ChatAnswer(
         id=uuid.uuid4(), question=question, content=content, model=model, connection_name=connection_name,
         prompt_version=HIT_PROMPT_VERSION, created_at=datetime.now(timezone.utc), whole_paper=False, sources=[],
-        notes=[], notes_used=None, notes_total=None, parent_id=parent_id, saved_notes=[],
+        notes=[], notes_used=None, notes_total=None, parent_id=parent_id, saved_notes=[], skill_label=None,
     )
     answers = HISTORY.setdefault(hit_id, [])
     answers.append(answer)
