@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -398,6 +398,8 @@ async def reset(session: AsyncSession, skill_id: str) -> SkillView:
 async def set_default(session: AsyncSession, skill_id: str, kind: ChatKind, on: bool) -> SkillView:
     """Moves the default of one chat kind in one transaction: the old holder is unset first, as llm_connections
     set_default does, so the partial unique index never sees two. Raises Conflict("skill_scope")."""
+    # Two tabs at once: the lock serialises the unset-then-set, so the second request never meets the index's error.
+    await session.execute(text("SELECT pg_advisory_xact_lock(hashtext('skills_default'))"))
     view = await get_view(session, skill_id)
     if view.scope not in COVERED_KINDS[kind]:
         raise Conflict("skill_scope")

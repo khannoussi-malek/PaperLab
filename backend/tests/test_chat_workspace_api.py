@@ -79,6 +79,7 @@ async def test_workspace_chat_streams_sources_with_notes_then_tokens_then_done(c
         "output_id": str(output.id), "model": "fake", "connection_name": "Fake",
         "prompt_version": chat.WORKSPACE_PROMPT_VERSION,
         "cited": ["C1", "C2", "N1"],
+        "skill_label": None,
     }
     assert events[-1][1] == done
     assert (output.paper_id, output.question, output.content) == (None, "Compare the methods", FAKE_WORKSPACE_ANSWER)

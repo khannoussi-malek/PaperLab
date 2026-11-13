@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
     model_id: uuid.UUID | None = None  # a model from GET /api/llm/models; None asks the default
     parent_id: uuid.UUID | None = None  # the answer this question follows up; paper chat only
+    skill_id: str | None = None  # the skill picked for this question; None runs the base prompt alone (M17)
 
 
 class ChatSource(BaseModel):
@@ -60,6 +61,7 @@ class DoneEvent(BaseModel):
     connection_name: str
     prompt_version: int
     cited: list[str]  # C labels first-cited first, then N labels first-cited first
+    skill_label: str | None  # the skill that ran, as it was named then; None with no skill
 
 
 class ErrorEvent(BaseModel):
@@ -90,6 +92,7 @@ class ChatAnswer(BaseModel):
     notes_total: int | None
     parent_id: uuid.UUID | None  # the answer this one follows up; null for a question asked on its own
     saved_notes: list[SavedNoteOut]  # its suggested notes already saved, by block
+    skill_label: str | None  # the skill that ran, copied when the answer was written; null with no skill
 
 
 class PromoteRequest(BaseModel):

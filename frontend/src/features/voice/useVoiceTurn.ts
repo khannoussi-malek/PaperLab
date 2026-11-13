@@ -196,7 +196,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
 
   function onSaved(s: Session, outputId: string) {
     s.lastSaved = outputId
-    const done = { output_id: outputId, model: '', connection_name: '', prompt_version: 0, cited: [] }
+    const done = { output_id: outputId, model: '', connection_name: '', prompt_version: 0, cited: [], skill_label: null }
     setStream((prev) => (prev.status === 'idle' ? prev : { ...prev, done }))
     void latest.current.invalidateHistory()
   }

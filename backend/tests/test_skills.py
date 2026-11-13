@@ -255,6 +255,16 @@ async def test_two_sequential_default_moves_leave_one_holder_and_no_error(sessio
     assert holders == 1
 
 
+async def test_two_sequential_default_moves_per_kind_leave_one_holder_each(session):
+    await skills.set_default(session, "builtin:study-type", "paper", True)
+    await skills.set_default(session, "builtin:plain-explanation", "paper", True)
+    await skills.set_default(session, "builtin:check-evaluation", "workspace", True)
+    await skills.set_default(session, "builtin:unstated-limits", "workspace", True)
+    paper_holders = await session.scalar(select(func.count()).select_from(Skill).where(Skill.is_paper_default))
+    workspace_holders = await session.scalar(select(func.count()).select_from(Skill).where(Skill.is_workspace_default))
+    assert (paper_holders, workspace_holders) == (1, 1)
+
+
 async def test_each_chat_kind_has_its_own_default(session):
     await skills.set_default(session, "builtin:study-type", "paper", True)
     await skills.set_default(session, "builtin:check-evaluation", "workspace", True)
