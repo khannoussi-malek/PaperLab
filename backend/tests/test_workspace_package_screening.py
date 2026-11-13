@@ -428,3 +428,19 @@ async def test_nul_characters_are_stripped_from_imported_strings(session, pdf_di
     tampered = _rewrite(package, {"manifest.json": json.dumps(manifest).encode()})
     report = await workspace_package.import_package(session, tampered)
     assert (await session.get(Workspace, report.workspace_id)).name == "Sleep review"
+
+
+async def test_a_held_paper_without_its_pdf_skips_the_full_text_compare_and_is_not_refused(session, pdf_dir):
+    ws, rows = await screened(session, pdf_dir)
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    await workspaces.delete(session, ws.id)
+    for paper in rows["alpha"], rows["beta"], rows["gamma"]:  # this library keeps the papers, but not their PDFs
+        held = await session.get(Paper, paper.id)
+        held.file_path = None
+    await session.flush()
+
+    report = await workspace_package.import_package(session, package)  # an import never changes a matched paper
+
+    assert report.hits > 0
+    for paper in rows["alpha"], rows["beta"]:
+        assert (await session.get(Paper, paper.id)).file_path is None

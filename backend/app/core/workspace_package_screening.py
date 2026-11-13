@@ -11,7 +11,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
-from sqlalchemy import any_, bindparam, select
+from sqlalchemy import any_, bindparam, func, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -544,5 +544,26 @@ async def counts_match(session, workspace_id: uuid.UUID, expected: dict, full_te
     except Exception:
         logger.warning("the rebuilt screening of %s could not be counted", workspace_id, exc_info=True)
         return False
+    # The full-text totals are compared only when the package carried every retrieved PDF AND they all ended up here.
+    # A paper the library already held without its PDF keeps none (an import never changes a matched paper), so its
+    # retrieval count differs for a reason that isn't a broken package: skip, never refuse.
+    if full_text and await _retrieved_without_pdf(session, workspace_id):
+        full_text = False
     fields = SHARED_TOTALS + (RETRIEVAL_TOTALS if full_text else ())
     return all(actual[name] == expected[name] for name in fields)
+
+
+async def _retrieved_without_pdf(session, workspace_id: uuid.UUID) -> bool:
+    """Whether a retrieved, relevant hit of this workspace points at a paper with no PDF on this library's side."""
+    missing = await session.scalar(
+        select(func.count())
+        .select_from(WorkspaceSearchHit)
+        .join(Paper, Paper.id == WorkspaceSearchHit.paper_id)
+        .where(
+            WorkspaceSearchHit.workspace_id == workspace_id,
+            WorkspaceSearchHit.stage1_status == "relevant",
+            WorkspaceSearchHit.acquisition_status.in_(prisma_export.RETRIEVED),
+            Paper.file_path.is_(None),
+        )
+    )
+    return bool(missing)
