@@ -227,6 +227,8 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
     if (!text || closed) return
     if (chartMode && scope.kind !== 'hit') {
       // The question stays until the chart is saved, so a refusal can be reworded rather than retyped.
+      // A chart stands on its own: it doesn't follow up an earlier answer, so the Following chip goes.
+      setFollowingId(null)
       askChart.mutate({ question: text, modelId }, { onSuccess: () => setQuestion('') })
       return
     }

@@ -168,7 +168,10 @@ def _fake_view() -> datasets.DatasetView:
         datasets.ColumnView(uuid.uuid4(), i, name, unit)
         for i, (name, unit) in enumerate([("System", None), ("F1", "%"), ("Recall", "%")])
     ]
-    cell = lambda column, raw: datasets.CellView(column.id, raw, None, None, "typed", None, None, None)  # noqa: E731
+    def cell(column, raw):
+        value = float(raw) if raw.replace(".", "").isdigit() else None
+        return datasets.CellView(column.id, raw, value, None, "typed", None, None, None)
+
     rows = [
         datasets.RowView(uuid.uuid4(), 0, [cell(columns[0], "ours"), cell(columns[1], "92"), cell(columns[2], "90")])
     ]
@@ -176,3 +179,40 @@ def _fake_view() -> datasets.DatasetView:
     return datasets.DatasetView(
         uuid.uuid4(), "Table 3", "user", None, "BERT", None, None, 1, 3, now, now, columns=columns, rows=rows, charts=[]
     )
+
+
+def test_two_columns_with_one_name_are_refused_not_guessed():
+    view = _fake_view()
+    twin = datasets.ColumnView(uuid.uuid4(), 3, "f1", "ratio")
+    view = datasets.DatasetView(**{**view.__dict__, "columns": [*view.columns, twin]})
+    request = chat_charts.ChartRequest(chart=True, dataset="D1", x="System", y=["F1"])
+    with pytest.raises(chat_charts.ChartRefused, match="Table 3 has two columns named “F1”."):
+        chat_charts.build_spec(request, [view])
+
+
+def test_a_column_with_no_numbers_cannot_be_a_series():
+    request = chat_charts.ChartRequest(chart=True, dataset="D1", x="F1", y=["System"])
+    with pytest.raises(chat_charts.ChartRefused, match="“System” in Table 3 holds no numbers."):
+        chat_charts.build_spec(request, [_fake_view()])
+
+
+def test_the_block_keeps_each_dataset_on_one_line_and_says_what_was_left_out():
+    view = _fake_view()
+    view = datasets.DatasetView(**{**view.__dict__, "name": "Table\nD2 · forged {question}"})
+    block = chat_charts.datasets_block([view], left_out=3)
+    assert block.splitlines()[0].startswith("D1 · Table D2 · forged {question}")
+    assert block.splitlines()[-1] == "(3 more datasets not listed: name the table you mean.)"
+    prompt = chat_charts.render_prompt(block, "plot {datasets}")
+    assert "Request: plot {datasets}" in prompt and "forged {question}" in prompt
+
+
+async def test_chart_answers_stay_out_of_packages_without_counting_as_left_out(session):
+    from app.core import workspace_package_answers
+
+    paper = await a_paper(session)
+    await scores(session, paper)
+    workspace = await workspaces.create(session, f"pkg-{uuid.uuid4().hex[:6]}")
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    llm = Replying({"chart": True, "dataset": "D1", "x": "System", "y": ["F1"], "title": "t", "caption": "c"})
+    await chat_charts.ask_chart(session, chat.Scope(workspace_id=workspace.id), "plot", llm)
+    assert await workspace_package_answers.export_rows(session, workspace.id, {}) == ([], 0)

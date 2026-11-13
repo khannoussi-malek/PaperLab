@@ -533,14 +533,14 @@ export const api = {
     request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'PUT' }),
   detachChart: (noteId: string, chartId: string) =>
     request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'DELETE' }),
+  /** A chart of the scope's captured data, saved as a chat answer (M14); rejects with the reason nothing was drawn. */
+  askChartAnswer: (scope: ChatScope, question: string, modelId: string | null) =>
+    request<{ output_id: string }>(`${chatUrl(scope)}/chart`, sendJson('POST', { question, model_id: modelId })),
   /**
    * The raw response: on success its body is the SSE stream that `useChatStream` reads. `modelId` null: the default.
    * `parentId`: the saved answer this question follows up (paper chat only); null for a question on its own.
    * `skillId`: the skill the question runs with (null: No skill). A search hit's chat has no skills, so it sends none.
    */
-  /** A chart of the scope's captured data, saved as a chat answer (M14); rejects with the reason nothing was drawn. */
-  askChartAnswer: (scope: ChatScope, question: string, modelId: string | null) =>
-    request<{ output_id: string }>(`${chatUrl(scope)}/chart`, sendJson('POST', { question, model_id: modelId })),
   askChat: (scope: ChatScope, question: string, modelId: string | null, parentId: string | null, skillId: string | null, signal?: AbortSignal) =>
     fetch(chatUrl(scope), {
       ...sendJson('POST', {

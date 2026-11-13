@@ -3,6 +3,7 @@ ids and checks the result with the chart spec a saved chart uses, so a chart in 
 wrote. The answer is saved as a chat answer with `chart_spec` set, so history, threads and provenance need nothing new.
 """
 
+import re
 import uuid
 from typing import Literal
 
@@ -37,24 +38,45 @@ def _label(index: int) -> str:
     return f"D{index + 1}"
 
 
-def datasets_block(views: list[datasets.DatasetView]) -> str:
+def _flat(text: str) -> str:
+    """Paper text on one line, so a cell or a name can't start a dataset line of its own."""
+    return " ".join(text.split())
+
+
+def datasets_block(views: list[datasets.DatasetView], left_out: int = 0) -> str:
     lines = []
     for index, view in enumerate(views):
-        columns = ", ".join(c.name + (f" ({c.unit})" if c.unit else "") for c in view.columns)
-        first = ", ".join(cell.raw for cell in view.rows[0].cells) if view.rows else "no rows"
-        source = f" ({view.paper_title})" if view.paper_title else ""
-        lines.append(
-            f"{_label(index)} · {view.name}{source} · {view.row_count} rows · columns: {columns} · first row: {first}"
-        )
+        columns = ", ".join(_flat(c.name) + (f" ({_flat(c.unit)})" if c.unit else "") for c in view.columns)
+        first = ", ".join(_flat(cell.raw) for cell in view.rows[0].cells) if view.rows else "no rows"
+        source = f" ({_flat(view.paper_title)})" if view.paper_title else ""
+        head = f"{_label(index)} · {_flat(view.name)}{source} · {view.row_count} rows"
+        lines.append(f"{head} · columns: {columns} · first row: {first}")
+    if left_out:
+        lines.append(f"({left_out} more datasets not listed: name the table you mean.)")
     return "\n".join(lines)
+
+
+def render_prompt(block: str, question: str) -> str:
+    """One pass, so a placeholder inside a cell or the question is left as written."""
+    values = {"datasets": block, "question": question}
+    return re.sub(r"\{(datasets|question)\}", lambda m: values[m.group(1)], PROMPT_TEMPLATE)
 
 
 def _column(view: datasets.DatasetView, name: str) -> datasets.ColumnView:
     wanted = name.strip().casefold()
-    for column in view.columns:
-        if column.name.strip().casefold() == wanted:
-            return column
-    raise ChartRefused(f"{view.name} has no column “{name}”.")
+    matches = [column for column in view.columns if column.name.strip().casefold() == wanted]
+    if len(matches) > 1:
+        raise ChartRefused(f"{view.name} has two columns named “{name}”. Rename one in its Data tab.")
+    if not matches:
+        raise ChartRefused(f"{view.name} has no column “{name}”.")
+    return matches[0]
+
+
+def _numeric(view: datasets.DatasetView, column: datasets.ColumnView) -> datasets.ColumnView:
+    index = view.columns.index(column)
+    if not any(index < len(row.cells) and row.cells[index].value is not None for row in view.rows):
+        raise ChartRefused(f"“{column.name}” in {view.name} holds no numbers.")
+    return column
 
 
 def build_spec(request: ChartRequest, views: list[datasets.DatasetView]) -> SeriesChart:
@@ -65,7 +87,7 @@ def build_spec(request: ChartRequest, views: list[datasets.DatasetView]) -> Seri
     if not request.y:
         raise ChartRefused("The chart names no column to draw.")
     x = _column(view, request.x) if request.x else None
-    ys = [_column(view, name) for name in request.y]
+    ys = [_numeric(view, _column(view, name)) for name in request.y]
     spec = {
         "type": request.type,
         "series": [
@@ -89,7 +111,7 @@ def build_spec(request: ChartRequest, views: list[datasets.DatasetView]) -> Seri
         raise ChartRefused(f"That chart can't be drawn: {exc.errors()[0]['msg']}.") from exc
 
 
-async def _scope_datasets(session: AsyncSession, scope: chat.Scope) -> list[datasets.DatasetView]:
+async def _scope_datasets(session: AsyncSession, scope: chat.Scope) -> tuple[list[datasets.DatasetView], int]:
     if scope.paper_id is not None:
         await get_paper(session, scope.paper_id)  # 404 for an unknown paper, not "no datasets"
         paper_ids = [scope.paper_id]
@@ -98,16 +120,17 @@ async def _scope_datasets(session: AsyncSession, scope: chat.Scope) -> list[data
         paper_ids = [p.id for p in await workspaces.papers(session, scope.workspace_id)]
     summaries = [s for paper_id in paper_ids for s in await datasets.list_datasets(session, paper_id)]
     summaries.sort(key=lambda s: (s.paper_title or "", s.name))
-    return [await datasets.get_dataset(session, s.id) for s in summaries[:MAX_DATASETS]]
+    views = [await datasets.get_dataset(session, s.id) for s in summaries[:MAX_DATASETS]]
+    return views, len(summaries) - len(views)
 
 
 async def ask_chart(session: AsyncSession, scope: chat.Scope, question: str, llm) -> uuid.UUID:
     """Saves and returns a chart answer, or raises ChartRefused with a sentence the reader can act on."""
-    views = await _scope_datasets(session, scope)
+    views, left_out = await _scope_datasets(session, scope)
     if not views:
         raise InvalidInput("no_datasets")
     await session.commit()  # the model can take minutes: hold no transaction meanwhile
-    prompt = PROMPT_TEMPLATE.replace("{datasets}", datasets_block(views)).replace("{question}", question)
+    prompt = render_prompt(datasets_block(views, left_out), question)
     request = await ask_json(llm, SYSTEM_PROMPT, prompt, ChartRequest)
     if request is None:
         raise ChartRefused("The model couldn't turn the reply into a chart. Try naming the table and its columns.")
