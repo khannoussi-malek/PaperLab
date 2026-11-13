@@ -114,7 +114,7 @@ class AnswerPassageOut(BaseModel):
     section: str | None
     text: str | None  # null when not recorded
     # current: still in the paper. changed: the text is no longer in it. not_recorded: nothing was kept to check.
-    state: Literal["current", "changed", "not_recorded"]
+    state: Literal["current", "changed", "not_recorded", "not_kept", "paper_removed"]
 
 
 class AnswerProvenanceOut(BaseModel):

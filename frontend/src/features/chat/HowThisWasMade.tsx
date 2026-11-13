@@ -10,6 +10,8 @@ const STATE_TEXT: Record<AnswerPassage['state'], string> = {
   current: 'Still in the paper',
   changed: 'No longer matches the paper',
   not_recorded: 'Not recorded for answers saved before this was added.',
+  not_kept: "PaperLab didn't keep a copy of this passage.",
+  paper_removed: 'The paper was removed from your library.',
 }
 const OUT_OF_DATE = 'Some passages this answer cited have changed since. Ask again for a current answer.'
 const MCP_NOTE = 'Added from Claude Desktop.'

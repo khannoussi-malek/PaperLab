@@ -78,6 +78,8 @@ describe('HowThisWasMade', () => {
           { label: 'C1', paper_id: PAPER, paper_title: 'Paper A', page: 4, section: null, text: 'x', state: 'current' },
           { label: 'C2', paper_id: PAPER, paper_title: 'Paper B', page: 7, section: null, text: 'y', state: 'changed' },
           { label: 'C3', paper_id: null, paper_title: null, page: null, section: null, text: null, state: 'not_recorded' },
+          { label: 'C4', paper_id: PAPER, paper_title: 'Paper A', page: 9, section: null, text: null, state: 'not_kept' },
+          { label: 'C5', paper_id: PAPER, paper_title: null, page: 2, section: null, text: 'z', state: 'paper_removed' },
         ],
       }),
     )
@@ -89,6 +91,8 @@ describe('HowThisWasMade', () => {
     expect(screen.getByText('No longer matches the paper')).toBeInTheDocument()
     expect(screen.getByText('C3')).toBeInTheDocument()
     expect(screen.getByText('Not recorded for answers saved before this was added.')).toBeInTheDocument()
+    expect(screen.getByText("PaperLab didn't keep a copy of this passage.")).toBeInTheDocument()
+    expect(screen.getByText('The paper was removed from your library.')).toBeInTheDocument()
   })
 
   it('shows the out-of-date banner only when a cited passage changed', async () => {

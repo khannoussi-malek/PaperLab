@@ -206,7 +206,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   // since until then no page exists to draw it on or scroll to.
   useEffect(() => {
     if (!flash || !doc) return
-    scrollToElement('.chunk-flash', 'center')
+    // A passage with no boxes (a citation whose chunk a re-ingest replaced) still takes the reader to its page.
+    if (flash.rects.length === 0) scrollToPage(flash.page)
+    else scrollToElement('.chunk-flash', 'center')
     const timer = window.setTimeout(() => setFlash(null), FLASH_MS)
     return () => window.clearTimeout(timer)
   }, [flash, doc])

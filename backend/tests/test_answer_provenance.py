@@ -7,11 +7,11 @@ from sqlalchemy import select, update
 from test_chat import chunks_of, make_paper
 from test_sections import paper_with_headings
 
-from app.core import answer_provenance, briefs, chat, papers
+from app.core import answer_provenance, briefs, chat, papers, workspaces
 from app.core.chunking import ChunkDraft
 from app.core.errors import NotFound
 from app.core.retrieval import RetrievedChunk
-from app.models import LLMOutput, Note, Paper, Provenance
+from app.models import Chunk, LLMOutput, Note, Paper, Provenance
 
 pytestmark = pytest.mark.anyio
 
@@ -201,7 +201,7 @@ async def test_an_answer_saved_before_m33_with_its_chunks_still_there_shows_them
     assert [(p.label, p.state, p.text) for p in view.passages] == [("C2", "current", "two")]
 
 
-async def test_a_workspace_answer_citing_40_passages_keeps_the_first_30_and_marks_the_rest_not_recorded(session):
+async def test_a_workspace_answer_citing_40_passages_keeps_the_first_30_and_marks_the_rest_not_kept(session):
     texts = [f"passage {n}" for n in range(1, 41)]
     paper = await make_paper(session, texts)
     output_id = await answer_citing(session, paper.id, " ".join(f"[C{n}]" for n in range(1, 41)))
@@ -213,8 +213,8 @@ async def test_a_workspace_answer_citing_40_passages_keeps_the_first_30_and_mark
     assert [p.state for p in view.passages[:30]] == ["current"] * 30
     assert view.passages[29].text == "passage 30"
     assert [(p.label, p.state, p.page) for p in view.passages[30:32]] == [
-        ("C31", "not_recorded", 31),
-        ("C32", "not_recorded", 32),
+        ("C31", "not_kept", 31),  # saved today: past the cap, not "saved before this was added"
+        ("C32", "not_kept", 32),
     ]
     assert view.passages[31].text is None
 
@@ -264,3 +264,35 @@ async def test_a_brief_citation_whose_chunk_was_replaced_keeps_its_page(session)
 
     assert brief.sources[0] is None
     assert (brief.replaced[0].page, brief.replaced[0].paper_id) == (1, paper.id)
+
+
+async def test_a_removed_paper_is_said_so_and_does_not_make_the_answer_out_of_date(session):
+    # Only a workspace answer outlives a paper it cited: a paper's own answers are deleted with it.
+    kept, removed = await make_paper(session, ["one"]), await make_paper(session, ["two"])
+    space = await workspaces.create(session, f"Provenance {uuid.uuid4().hex[:8]}")
+    for paper in (kept, removed):
+        await workspaces.add_paper(session, space.id, paper.id)
+    scope = chat.Scope(workspace_id=space.id)
+    sources = await chat.chunk_sources(session, Chunk.paper_id.in_([kept.id, removed.id]))
+    prepared = chat.Prepared(sources=sources, system="", prompt="", whole_paper=False)
+    output_id = await chat.save_answer(session, scope, "why?", prepared, "[C1] [C2]", "m", "Ollama")
+    await session.delete(await session.get(Paper, removed.id))
+    await session.flush()
+
+    view = await answer_provenance.provenance(session, output_id)
+
+    states = {p.paper_id: p.state for p in view.passages}
+    assert states == {kept.id: "current", removed.id: "paper_removed"}
+    assert view.out_of_date is False
+
+
+async def test_an_ai_output_that_keeps_no_snapshot_says_not_kept_not_saved_before(session):
+    paper = await make_paper(session, ["one", "two"])
+    output_id = await answer_citing(session, paper.id, "Because [C1].")
+    output = await session.get(LLMOutput, output_id)
+    output.kind, output.source_snapshot = "check", None  # a claim check's row: no snapshot by design
+    await papers.replace_chunks(session, paper.id, drafts(["one", "two"]))
+
+    view = await answer_provenance.provenance(session, output_id)
+
+    assert [(p.label, p.state) for p in view.passages] == [("C1", "not_kept")]

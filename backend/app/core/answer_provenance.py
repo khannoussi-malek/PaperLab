@@ -18,6 +18,8 @@ from app.core.retrieval import RetrievedChunk
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance
 
 CURRENT, CHANGED, NOT_RECORDED = "current", "changed", "not_recorded"
+NOT_KEPT, PAPER_REMOVED = "not_kept", "paper_removed"
+SNAPSHOT_KINDS = frozenset({"chat", "brief"})  # the rows save_answer and save_brief snapshot (M33)
 MAX_SNAPSHOT_PASSAGES = 30
 MAX_SNAPSHOT_CHARS = 2_000
 
@@ -141,7 +143,10 @@ def _passage(label, output, chunk, entry, texts, titles) -> AnswerPassage:
     if entry is not None:
         # The snapshot's text is in the paper when its squashed form is in the paper's squashed chunk text.
         paper_id = uuid.UUID(entry["paper_id"])
-        state = CURRENT if _squash(entry["text"]) in texts.get(paper_id, "") else CHANGED
+        if paper_id not in titles:  # the paper left the library: nothing to compare with, and not a change
+            state = PAPER_REMOVED
+        else:
+            state = CURRENT if _squash(entry["text"]) in texts.get(paper_id, "") else CHANGED
         if chunk is not None:
             return AnswerPassage(
                 label, paper_id, titles.get(paper_id), chunk.page, chunk.section_title, chunk.text, state
@@ -153,12 +158,14 @@ def _passage(label, output, chunk, entry, texts, titles) -> AnswerPassage:
         return AnswerPassage(
             label, chunk.paper_id, titles.get(chunk.paper_id), chunk.page, chunk.section_title, chunk.text, CURRENT
         )
-    # Not in the snapshot (past its cap, or saved before M33 and gone): nothing recorded to compare with.
+    # Not in the snapshot. Saved before M33: "not recorded". Past the snapshot's cap, or a kind of AI output that
+    # keeps no snapshot (a claim check, note suggestions): "not kept". Neither is ever guessed.
+    pre_snapshot = output.source_snapshot is None and output.kind in SNAPSHOT_KINDS
+    state = NOT_RECORDED if pre_snapshot else NOT_KEPT
     if chunk is None:
-        return AnswerPassage(label, None, None, None, None, None, NOT_RECORDED)
-    return AnswerPassage(
-        label, chunk.paper_id, titles.get(chunk.paper_id), chunk.page, chunk.section_title, None, NOT_RECORDED
-    )
+        return AnswerPassage(label, None, None, None, None, None, state)
+    title = titles.get(chunk.paper_id)
+    return AnswerPassage(label, chunk.paper_id, title, chunk.page, chunk.section_title, None, state)
 
 
 async def note_provenance(session: AsyncSession, note_id: uuid.UUID) -> AnswerProvenance | McpNote:

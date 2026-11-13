@@ -3609,7 +3609,7 @@ export interface components {
              * State
              * @enum {string}
              */
-            state: "current" | "changed" | "not_recorded";
+            state: "current" | "changed" | "not_recorded" | "not_kept" | "paper_removed";
         };
         /**
          * AnswerProvenanceOut
