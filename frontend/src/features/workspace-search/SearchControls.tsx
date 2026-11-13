@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { errorText } from './schedule'
 import type { SearchRunCreate, SearchRunSource } from '@/api/client'
+import { READ_ONLY_TEXT } from '@/lib/errorWords'
+import { useReadOnlyWorkspace } from '../workspaces/readOnlyContext'
 
 // Search/discovery sources only (spec §6) — mirrors the backend's SearchSource Literal. Unpaywall is DOI-only PDF
 // enrichment, never fanned out to by search_batch, so it's excluded here regardless of its own settings switch
@@ -44,6 +46,7 @@ export function SearchControls({
   error?: string
 }) {
   const [query, setQuery] = useState('')
+  const readOnly = useReadOnlyWorkspace()
   const [yearFrom, setYearFrom] = useState('')
   const [yearTo, setYearTo] = useState('')
   const paperSources = usePaperSources()
@@ -99,7 +102,8 @@ export function SearchControls({
       ) : (
         <Button
           onClick={() => onStart({ query, filters, sources: enabledSources!, query_overrides: {} })}
-          disabled={!query || !enabledSources || enabledSources.length === 0 || yearsReversed}
+          disabled={readOnly || !query || !enabledSources || enabledSources.length === 0 || yearsReversed}
+          title={readOnly ? READ_ONLY_TEXT : undefined}
         >
           Start
         </Button>

@@ -23,6 +23,8 @@ import { WorkspacePapers } from './WorkspacePapers'
 import { countsLine } from './workspaceMeta'
 import { useStepCounts } from './useStepCounts'
 import { WorkspaceTabBar } from './WorkspaceTabBar'
+import { MakeEditableBanner } from './MakeEditable'
+import { ReadOnlyContext } from './readOnlyContext'
 
 // Every tab stays mounted, so each keeps its scroll position across a switch, and fades in each time it is shown,
 // like the reader's panels. `text-base` undoes TabsContent's `text-sm`.
@@ -54,6 +56,7 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
   useEffect(() => headingRef.current?.focus(), [])
 
   return (
+    <ReadOnlyContext.Provider value={workspace.data?.read_only === true}>
     <AppShell
       fills
       title={
@@ -91,6 +94,7 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
       {workspace.data === null && (
         <p className="text-muted-foreground">This workspace doesn't exist. It may have been deleted.</p>
       )}
+      {workspace.data?.read_only && <MakeEditableBanner workspace={workspace.data} />}
       {workspace.data && (
         <Tabs value={tab} onValueChange={(value) => showTab(value as WorkspaceTab)} className="min-h-0 min-w-0 flex-1 gap-4">
           <WorkspaceTabBar active={tab} counts={{ ...stepCounts, tree: toSnowball, papers: workspace.data.paper_count, notes: workspace.data.note_count }} />
@@ -142,5 +146,6 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
         </Tabs>
       )}
     </AppShell>
+    </ReadOnlyContext.Provider>
   )
 }

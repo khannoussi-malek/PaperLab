@@ -463,6 +463,7 @@ export const api = {
   renameWorkspace: (id: string, name: string) =>
     request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),
   deleteWorkspace: (id: string) => request<void>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+  makeWorkspaceEditable: (id: string) => request<Workspace>(`/api/workspaces/${id}/make-editable`, { method: 'POST' }),
   listTags: (ws: string) => request<TagSummary[]>(`/api/workspaces/${ws}/tags`),
   paperTags: (ws: string) => request<Record<string, string[]>>(`/api/workspaces/${ws}/paper-tags`),
   tagsOfPaper: (paperId: string) => request<PaperTagGroup[]>(`/api/papers/${paperId}/tags`),

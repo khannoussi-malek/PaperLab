@@ -8,6 +8,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input'
 import { plural } from '@/features/charts/chartMeta'
 import { tagErrorText } from './tagErrors'
+import { READ_ONLY_TEXT } from '@/lib/errorWords'
+import { useReadOnlyWorkspace } from './readOnlyContext'
 
 type Props = {
   workspaceId: string
@@ -26,6 +28,7 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted, focusAf
   const deleted = useRef(false)
   const rename = useRenameTag(workspaceId)
   const del = useDeleteTag(workspaceId)
+  const readOnly = useReadOnlyWorkspace()
 
   function close() {
     setDialog(null)
@@ -50,8 +53,8 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted, focusAf
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => { setName(tag.name); setDialog('rename') }}>Rename</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setDialog('delete')}>Delete</DropdownMenuItem>
+          <DropdownMenuItem disabled={readOnly} title={readOnly ? READ_ONLY_TEXT : undefined} onSelect={() => { setName(tag.name); setDialog('rename') }}>Rename</DropdownMenuItem>
+          <DropdownMenuItem disabled={readOnly} title={readOnly ? READ_ONLY_TEXT : undefined} onSelect={() => setDialog('delete')}>Delete</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

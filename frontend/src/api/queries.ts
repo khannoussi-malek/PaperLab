@@ -426,6 +426,15 @@ export const useWorkspace = (id: string) =>
     select: (workspaces) => workspaces.find((workspace) => workspace.id === id) ?? null,
   })
 
+/** Turns an imported (read-only) workspace into a normal one, for good. The workspace list is what the page reads from. */
+export function useMakeWorkspaceEditable() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.makeWorkspaceEditable(id),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.workspaces }),
+  })
+}
+
 /** Whether a workspace carries a screening record from an imported package. */
 export const usePackageRecord = (workspaceId: string) =>
   useQuery({ queryKey: keys.packageRecord(workspaceId), queryFn: () => api.hasPackageRecord(workspaceId) })
