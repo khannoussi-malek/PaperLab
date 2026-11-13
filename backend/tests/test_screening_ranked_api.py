@@ -157,3 +157,13 @@ async def test_the_ranked_order_can_narrow_to_a_saved_searchs_new_finds(client, 
     })).json()
     assert [item["id"] for item in body["items"]] == [str(hits[4].id), str(hits[2].id)]
     assert body["total_unscreened"] == 2
+
+
+async def test_another_workspaces_saved_search_narrows_to_nothing(client, session):
+    from app.core import saved_searches
+
+    workspace, _ = await make_pool(session, [(POSITIVE, "relevant"), (NEGATIVE, "not_relevant"), ("x", None)])
+    other, _ = await make_pool(session, [("y", None)])
+    theirs = await saved_searches.create(session, other.id, query="q", schedule="0 2 * * *", timezone="UTC")
+    resp = await client.get(_url(workspace), params={"saved_search_id": str(theirs.id)})
+    assert resp.status_code == 200 and (resp.json()["items"], resp.json()["total_unscreened"]) == ([], 0)
