@@ -3,6 +3,7 @@
 import io
 import json
 import zipfile
+from contextlib import asynccontextmanager
 
 import pytest
 from conftest import FakeArq
@@ -140,7 +141,7 @@ async def test_the_reference_already_in_the_library_is_reused(session, pdf_dir):
     assert reused["delta study"] != original_ref["delta study"]
 
 
-async def test_an_imported_screening_is_inert(session, pdf_dir):  # Review Focus 3
+async def test_an_imported_screening_is_inert(session, pdf_dir, monkeypatch):  # Review Focus 3
     ws, rows = await screened(session, pdf_dir)
     package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
     await workspaces.delete(session, ws.id)
@@ -154,11 +155,18 @@ async def test_an_imported_screening_is_inert(session, pdf_dir):  # Review Focus
             )
         )
     ).one()
-    hits_before = await session.scalar(select(func.count()).select_from(WorkspaceSearchHit))
+    # this workspace only: other tests running in parallel add hits of their own
+    in_workspace = select(func.count()).where(WorkspaceSearchHit.workspace_id == report.workspace_id)
+    hits_before = await session.scalar(in_workspace)
+    @asynccontextmanager
+    async def shared_session():  # the job's own SessionLocal, pointed at this test's session (as worker tests do)
+        yield session
+
+    monkeypatch.setattr(search_worker, "SessionLocal", shared_session)
     await search_worker.run_workspace_search({}, str(run.id))  # the worker: a run that isn't running does nothing
     await session.refresh(run)
     assert run.status == "exhausted"
-    assert await session.scalar(select(func.count()).select_from(WorkspaceSearchHit)) == hits_before
+    assert await session.scalar(in_workspace) == hits_before
     with pytest.raises(Conflict, match="workspace_read_only"):
         await workspace_search.continue_run(session, report.workspace_id, run.id)
     await workspaces.make_editable(session, report.workspace_id)
