@@ -20,6 +20,7 @@ from app.models.manuscript import (
     ManuscriptSectionReview,
     ManuscriptSnapshot,
 )
+from app.models.mcp_activity import McpActivity, McpSettings
 from app.models.note import Note, NoteKind, Provenance, note_anchors, note_papers
 from app.models.paper import Chunk, Paper, PaperStatus, section_role_overrides
 from app.models.paper_event import PaperEvent
@@ -50,6 +51,8 @@ __all__ = [
     "LLMConnection",
     "LLMModel",
     "LLMOutput",
+    "McpActivity",
+    "McpSettings",
     "Manuscript",
     "ManuscriptCiteKey",
     "ManuscriptClaimCheck",

@@ -9,8 +9,10 @@ nothing in this process may print.
 
 import functools
 import json
+import logging
+import time
 import uuid
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from mcp.server.mcpserver import MCPServer
 from mcp.shared.exceptions import MCPError
@@ -37,6 +39,7 @@ from app.core import (
     manuscript_draft_review,
     manuscript_templates,
     manuscripts,
+    mcp_activity,
     mcp_reads,
     notes,
     novelty,
@@ -50,7 +53,10 @@ from app.core import (
 )
 from app.core.errors import DomainError, error_code
 from app.core.manuscript_checks import doi_service
+from app.core.mcp_activity import WRITES_DISABLED
 from app.db import SessionLocal
+
+logger = logging.getLogger(__name__)
 
 
 class PromptRefused(MCPError, ValueError):
@@ -105,6 +111,34 @@ async def _prompt_targets(
     return None, await _prompt_workspace(session, arguments["workspace"])
 
 
+def _is_read_only(tool) -> bool:
+    return bool(tool.annotations and tool.annotations.read_only_hint)
+
+
+def _outcome(response) -> str:
+    """ok, or the recoverable error code the tool returned (its structured `error`)."""
+    if not getattr(response, "is_error", False):
+        return "ok"
+    error = (getattr(response, "structured_content", None) or {}).get("error")
+    return error if isinstance(error, str) else "failed"
+
+
+async def _changes_allowed() -> bool:
+    async with sessions() as session:
+        return await mcp_activity.writes_enabled(session)
+
+
+async def _log(name: str, arguments: dict, outcome: str, duration_ms: int, is_write: bool) -> None:
+    """Logging never breaks a call: a failure goes to the server log and the call's own result is still returned."""
+    try:
+        async with sessions() as session:
+            await mcp_activity.record(
+                session, tool=name, arguments=arguments, outcome=outcome, duration_ms=duration_ms, is_write=is_write
+            )
+    except Exception:
+        logger.exception("Could not log the MCP call %r", name)
+
+
 class PaperLabMCP(MCPServer):
     """The library's MCPServer with the reader's skills offered as prompts (M17.5). Nothing is cached: every list and
     get reads the skills again, so an edit, hide, reset or delete shows on the next call."""
@@ -136,6 +170,27 @@ class PaperLabMCP(MCPServer):
             description=view.description or view.label,
             messages=[PromptMessage(role="user", content=TextContent(type="text", text=text))],
         )
+
+    async def call_tool(self, name: str, arguments: dict[str, Any], context=None):
+        """Lists every tool call in the activity log (M36). While the owner has turned changes off, a tool that
+        changes the library (any tool not annotated READ_ONLY) is refused before it runs; reads always run."""
+        tool = self._tool_manager.get_tool(name)
+        is_write = tool is not None and mcp_activity.writes(name, arguments, read_only=_is_read_only(tool))
+        if is_write and not await _changes_allowed():
+            await _log(name, arguments, "writes_disabled", 0, True)
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(WRITES_DISABLED))],
+                structured_content=WRITES_DISABLED,
+                is_error=True,
+            )
+        started = time.perf_counter()
+        try:
+            response = await super().call_tool(name, arguments, context)
+        except Exception:
+            await _log(name, arguments, "failed", int((time.perf_counter() - started) * 1000), is_write)
+            raise
+        await _log(name, arguments, _outcome(response), int((time.perf_counter() - started) * 1000), is_write)
+        return response
 
 
 # ponytail: the embedding model loads on the first search (seconds). Warm it up in a lifespan if a first search
@@ -1104,7 +1159,7 @@ async def check_manuscript(
         return await manuscript_agent_checks.check_manuscript(session, manuscript_id, checks)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @recoverable
 async def check_dois(manuscript_id: uuid.UUID) -> doi_service.DoiCheckResult:
     """Use to check each DOI in the manuscript's .bib files against Crossref, the same check as the app's Check DOIs

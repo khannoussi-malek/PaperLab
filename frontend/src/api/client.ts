@@ -134,6 +134,8 @@ export type ReferencePage = components['schemas']['ReferencePageOut']
 export type RefreshOut = components['schemas']['RefreshOut']
 export type McpSetup = components['schemas']['McpSetupOut']
 export type McpCheck = components['schemas']['McpCheckOut']
+export type McpActivity = components['schemas']['ActivityOut']
+export type McpSettings = components['schemas']['WritesSettingOut']
 export type SetupState = components['schemas']['SetupOut']
 export type GraphNode = components['schemas']['GraphNode']
 export type GraphLink = components['schemas']['GraphLink']
@@ -575,6 +577,13 @@ export const api = {
   mcpSetup: () => request<McpSetup>('/api/mcp/setup'),
   /** Starts the MCP server as a client would and reads the library through it. Takes up to 30 s. */
   checkMcpServer: () => request<McpCheck>('/api/mcp/check', { method: 'POST' }),
+  /** The newest tool calls MCP clients made on the library (1-500 rows), newest first. */
+  mcpActivity: () => request<McpActivity[]>('/api/mcp/activity'),
+  /** Empties the activity list. */
+  clearMcpActivity: () => request<void>('/api/mcp/activity', { method: 'DELETE' }),
+  /** Whether Claude may change the library (add, tag, write, delete). On by default. */
+  mcpSettings: () => request<McpSettings>('/api/mcp/settings'),
+  setMcpWrites: (writesEnabled: boolean) => request<McpSettings>('/api/mcp/settings', sendJson('PUT', { writes_enabled: writesEnabled })),
   /** Whether the first-run setup is done: while it isn't, the app opens #/setup on start. */
   setup: () => request<SetupState>('/api/setup'),
   /** Finish and Skip send true; false is for tests. */

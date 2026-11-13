@@ -5,6 +5,7 @@ import { AppShell } from '@/components/AppShell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ClaudeActivity } from './ClaudeActivity'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { useDesktop } from '@/features/settings/desktop'
 import { copyText } from '@/lib/clipboard'
@@ -236,6 +237,8 @@ export function ConnectClaudePage() {
         {check.data?.detail && <ErrorAlert message={check.data.detail} />}
         {check.error && <ErrorAlert message={check.error.message} />}
       </Section>
+
+      <ClaudeActivity />
 
       <Section id="not-working-heading" title="If it doesn't work">
         <ul className="list-disc space-y-1 pl-5 text-sm">

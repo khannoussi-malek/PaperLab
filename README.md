@@ -287,6 +287,8 @@ marked), the tables and numbers you captured, and past chat answers, marked as A
 - It can also run searches and snowballs, read screening suggestions and record the decisions you ask for, build
 evidence cards, check a claim against the papers it cites, and write and compile manuscripts. Each manuscript write
 keeps an earlier version you can restore.
+- The Connect Claude page lists every tool call Claude made, and a switch there turns off its changes (adding,
+tagging, writing, deleting) while it can still search and read.
 - Your skills appear there as prompts too: pick one, give it a paper or a workspace, and Claude works through that
 task with PaperLab's tools. Hidden skills aren't offered.
 
