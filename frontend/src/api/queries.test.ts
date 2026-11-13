@@ -30,6 +30,11 @@ import {
   useSnowball,
   usePatchSearchHit,
   useUploadHitPdf,
+  useCreateSkill,
+  useUpdateSkill,
+  useDeleteSkill,
+  useResetSkill,
+  useSetSkillDefault,
 } from './queries'
 
 const prismaRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma']
@@ -494,5 +499,28 @@ describe('triage events', () => {
     await waitFor(() =>
       expect(invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))).toContain('["papers","p1","triage-events"]')
     )
+  })
+})
+
+describe('skills queries', () => {
+  const skillMutations: [string, () => { mutate: (variables: never) => void; isSuccess: boolean }, unknown][] = [
+    ['useCreateSkill', useCreateSkill as never, { label: 'Limits', description: '', scope: 'paper', instructions: 'x' }],
+    ['useUpdateSkill', useUpdateSkill, { id: 'custom:1', label: 'Renamed' }],
+    ['useDeleteSkill', useDeleteSkill, 'custom:1'],
+    ['useResetSkill', useResetSkill, 'builtin:limits'],
+    ['useSetSkillDefault', useSetSkillDefault, { id: 'builtin:limits', scope: 'paper', on: true }],
+  ]
+  it.each(skillMutations)('%s invalidates every skills query', async (_name, useMutationHook, variables) => {
+    vi.spyOn(api, 'createSkill').mockResolvedValue({} as never)
+    vi.spyOn(api, 'updateSkill').mockResolvedValue({} as never)
+    vi.spyOn(api, 'deleteSkill').mockResolvedValue(undefined)
+    vi.spyOn(api, 'resetSkill').mockResolvedValue({} as never)
+    vi.spyOn(api, 'setSkillDefault').mockResolvedValue({} as never)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useMutationHook(), { wrapper: withQueryClient(client) })
+    result.current.mutate(variables as never)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['skills'] })
   })
 })
