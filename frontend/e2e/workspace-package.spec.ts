@@ -1,4 +1,4 @@
-import { addNote, expect, test } from './fixtures'
+import { addNote, ask, expect, test } from './fixtures'
 
 test('a workspace exported as a package comes back with its note when imported', async ({
   page,
@@ -46,4 +46,30 @@ test('an imported workspace is read-only until it is made editable', async ({ pa
   await expect(banner).toBeHidden()
   const renamed = await request.patch(`/api/workspaces/${imported.id}`, { data: { name: workspaceName } })
   expect(renamed.status()).toBe(200)
+})
+
+test("a workspace's chat answer travels in its package and its citation still opens", async ({
+  page,
+  request,
+  paperId,
+  workspaceId,
+  workspaceName,
+}) => {
+  test.slow() // workspace chat retrieves: the first question can pay for loading the search model
+  expect((await request.put(`/api/workspaces/${workspaceId}/papers/${paperId}`)).status()).toBe(204)
+  await page.goto(`/#/workspaces/${workspaceId}?tab=chat`)
+  await ask(page, 'What do these papers say about the method?', 45_000)
+
+  const file = await (await request.get(`/api/workspaces/${workspaceId}/package?pdfs=false&answers=true`)).body()
+  expect((await request.delete(`/api/workspaces/${workspaceId}`)).status()).toBe(204)
+
+  await page.goto('/')
+  await page.getByLabel('Package file').setInputFiles({ name: 'export.paperlab', mimeType: 'application/zip', buffer: file })
+  await expect(page.getByText(new RegExp(`Imported "${workspaceName}".*1 chat answer\\.`))).toBeVisible()
+
+  const imported = (await (await request.get('/api/workspaces')).json()).find((w: { name: string }) => w.name === workspaceName)
+  await page.goto(`/#/workspaces/${imported.id}?tab=chat`)
+  const answer = page.locator('article.chat-answer[data-output-id]', { hasText: 'What do these papers say about the method?' })
+  await expect(answer).toBeVisible()
+  await expect(answer.locator('.chat-cite').first()).toBeVisible()
 })
