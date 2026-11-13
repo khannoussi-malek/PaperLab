@@ -45,7 +45,8 @@
       "identity": "-",
       "hardenedRuntime": false,
       "extendInfo": {
-        "NSCameraUsageDescription": "PaperLab uses the camera only while Hands mode is on, to follow your hands. The picture stays on this computer."
+        "NSCameraUsageDescription": "PaperLab uses the camera only while Hands mode is on, to follow your hands. The picture stays on this computer.",
+        "NSMicrophoneUsageDescription": "PaperLab uses the microphone only while voice questions are on. Your speech is turned into text on this computer."
       }
     },
     "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },

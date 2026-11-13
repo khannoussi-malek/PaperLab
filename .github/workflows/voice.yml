@@ -1,0 +1,39 @@
+# Checks the voice program on Linux the way PaperLab runs it: the voice image, started with no published port and a
+# 2 GB memory cap, is asked a recorded question over its own network and must hear it and speak. A pull request that
+# changes the voice program, its client or the compose files runs it; so can a manual run. The first start downloads
+# about 600 MB of speech models.
+name: Voice check
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/voice.yml
+      - voice/**
+      - backend/app/providers/speech.py
+      - docker-compose.yml
+      - desktop/docker-compose.yml
+      - frontend/e2e/fixtures/question.wav
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the voice image
+        run: docker build -t paperlab-voice:check voice
+      - name: Start it as the app does
+        run: docker run -d --name voice --memory 2g -v voicemodels:/voice/models paperlab-voice:check
+      - name: Ask the recorded question
+        # --network container:voice: the check shares the program's network, as the api does on the compose network.
+        run: >-
+          docker run --rm --network container:voice -v "$PWD:/w:ro" --entrypoint /voice/.venv/bin/python
+          paperlab-voice:check /w/voice/ci_check.py http://127.0.0.1:8791 /w/frontend/e2e/fixtures/question.wav
+          paper method
+      - name: The voice program's log
+        if: always()
+        run: docker logs voice

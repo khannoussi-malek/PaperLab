@@ -135,6 +135,8 @@ export const keys = {
   connections: ['llm', 'connections'] as const,
   available: (connectionId: string) => ['llm', 'connections', connectionId, 'available'] as const,
   embedding: ['embedding'] as const,
+  voiceStatus: ['voice', 'status'] as const,
+  voiceLatency: ['voice', 'latency'] as const,
   paperSources: ['paper-sources'] as const,
   paperEvents: (id: string) => ['papers', id, 'events'] as const,
   foundPdfs: ['papers', 'found-pdfs'] as const,
@@ -1188,6 +1190,19 @@ export const useEmbeddingStatus = () =>
     queryFn: api.embeddingStatus,
     refetchInterval: (query) => embeddingPollInterval(query.state.data),
   })
+
+/** Whether the voice program is ready. Polls faster while it is still getting ready, then slowly: the chat's voice button reads it too. */
+export const useVoiceStatus = () =>
+  useQuery({
+    queryKey: keys.voiceStatus,
+    queryFn: api.voiceStatus,
+    refetchOnMount: 'always',
+    refetchInterval: (query) => {
+      const stage = query.state.data?.stage
+      return stage === 'downloading' || stage === 'loading' ? 2000 : 10000
+    },
+  })
+export const useVoiceLatency = () => useQuery({ queryKey: keys.voiceLatency, queryFn: api.voiceLatency, refetchOnMount: 'always' })
 
 /** For a stream that isn't a mutation (the search model's download): read the embedding status again. */
 export function useInvalidateEmbedding() {

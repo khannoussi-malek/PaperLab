@@ -8,6 +8,8 @@ text, and normalise each one (OpenAI's, Gemini's and the built-in's already are;
 
 import asyncio
 import threading
+from contextvars import ContextVar
+from time import perf_counter
 
 import numpy as np
 
@@ -110,8 +112,16 @@ async def embed_documents(model: TextEmbedder, texts: list[str]) -> list[list[fl
     return await _encode(model, [model.document_prefix + text for text in texts])
 
 
+# How long the last embed_query in this task took, in ms. A voice turn resets it, runs chat.prepare, and reads it, so
+# prepare and retrieve keep their signatures.
+query_embed_ms: ContextVar[int | None] = ContextVar("query_embed_ms", default=None)
+
+
 async def embed_query(model: TextEmbedder, text: str) -> list[float]:
-    return (await _encode(model, [model.query_prefix + text]))[0]
+    started = perf_counter()
+    vector = (await _encode(model, [model.query_prefix + text]))[0]
+    query_embed_ms.set(round((perf_counter() - started) * 1000))
+    return vector
 
 
 def build(source, transport=None) -> TextEmbedder | None:

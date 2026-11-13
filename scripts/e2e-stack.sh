@@ -9,7 +9,8 @@ cd "$(dirname "$0")/.."
 
 PROJECT=paperlab-e2e
 export API_PORT=8100 FRONTEND_PORT=5280 DB_PORT=5533
-export LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake MODELS_DIR=/models
+export LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake SPEECH_PROVIDER=fake MODELS_DIR=/models
+export COMPOSE_PROFILES="" # set to voice by --live-providers; down and reset always name it, so voice never lingers
 export DEV_RELOAD=1 # the test stack runs the code being worked on; your own stack does not reload
 export COMPOSE_FILE=docker-compose.yml:docker-compose.e2e.yml # memory caps, so a run can't starve your stack
 LIVE_MODELS=paperlab_models # the downloaded search model, copied once (read-only) so specs needing it run
@@ -18,7 +19,8 @@ up() {
   for arg in "$@"; do
     case "$arg" in
       --no-search-model) MODELS_DIR=/models/none ;;
-      --live-providers) LLM_PROVIDER=ollama DISCOVERY_PROVIDER=live ;; # acceptance runs with the real local model
+      # acceptance runs with the real local model and the real voice service (its models download on first start)
+      --live-providers) LLM_PROVIDER=ollama DISCOVERY_PROVIDER=live SPEECH_PROVIDER=sidecar COMPOSE_PROFILES=voice ;;
       *) echo "unknown option: $arg" >&2; exit 2 ;;
     esac
   done
@@ -29,7 +31,7 @@ up() {
   else
     echo "No $LIVE_MODELS volume: the test stack starts without the search model." >&2
   fi
-  docker compose -p "$PROJECT" up -d
+  docker compose -p "$PROJECT" up -d --build --renew-anon-volumes
   i=0
   until curl -sf -o /dev/null "http://localhost:$FRONTEND_PORT/api/llm/models"; do
     i=$((i + 1)); [ "$i" -lt 60 ] || { echo "E2E stack did not answer on :$FRONTEND_PORT" >&2; exit 1; }
@@ -41,8 +43,8 @@ up() {
 
 case "${1:-}" in
   up) shift; up "$@" ;;
-  down) docker compose -p "$PROJECT" rm -sfv && docker compose -p "$PROJECT" down ;; # rm -v: the containers' unnamed volumes (node_modules) go too; named ones stay
-  reset) docker compose -p "$PROJECT" down -v ;;
+  down) docker compose -p "$PROJECT" --profile voice rm -sfv && docker compose -p "$PROJECT" --profile voice down ;; # rm -v: the containers' unnamed volumes (node_modules) go too; named ones stay
+  reset) docker compose -p "$PROJECT" --profile voice down -v ;;
   status) docker compose -p "$PROJECT" ps ;;
   exec) shift; docker compose -p "$PROJECT" exec -T "$@" ;;
   *) sed -n '2,6p' "$0"; exit 2 ;;

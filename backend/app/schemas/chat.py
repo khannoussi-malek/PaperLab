@@ -1,10 +1,14 @@
 import uuid
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
 from app.schemas.papers import Rect
+
+if TYPE_CHECKING:  # core must not import api, and schemas needn't import core at runtime
+    from app.core import chat
+    from app.core.retrieval import RetrievedChunk
 
 
 class ChatRequest(BaseModel):
@@ -96,3 +100,29 @@ class PromoteRequest(BaseModel):
 
 class SaveSuggestion(BaseModel):
     index: int = Field(ge=0)  # the answer's :::note block, from 0
+
+
+def to_sources(chunks: "list[RetrievedChunk | None]") -> list[ChatSource | None]:
+    return [
+        None
+        if c is None
+        else ChatSource(
+            label=f"C{i}",
+            chunk_id=c.id,
+            paper_id=c.paper_id,
+            page=c.page,
+            section=c.section,
+            bbox=c.bbox,
+            from_abstract=c.from_abstract,
+        )
+        for i, c in enumerate(chunks, start=1)
+    ]
+
+
+def to_notes(notes: "list[chat.NoteSource | None]") -> list[NoteSource | None]:
+    return [
+        None
+        if n is None
+        else NoteSource(label=f"N{i}", note_id=n.id, paper_id=n.paper_id, page=n.page, provenance=n.provenance)
+        for i, n in enumerate(notes, start=1)
+    ]

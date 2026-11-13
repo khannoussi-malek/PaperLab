@@ -19,7 +19,7 @@ from sqlalchemy.pool import NullPool
 from app.api import chat as chat_api
 from app.api.deps import get_transport, resolve_check_llm, resolve_llm, resolve_llm_by_model_id
 from app.config import settings
-from app.core import discovery, queue
+from app.core import discovery, queue, voice_turn
 from app.db import get_session
 from app.main import create_app
 from app.models import Author, LLMConnection, LLMModel, Paper, PaperEvent, PaperSources
@@ -333,6 +333,7 @@ def answers_in_test_transaction(session, monkeypatch):
         yield session
 
     monkeypatch.setattr(chat_api, "SessionLocal", test_session)
+    monkeypatch.setattr(voice_turn, "SessionLocal", test_session)
 
 
 @pytest.fixture

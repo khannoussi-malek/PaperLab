@@ -21,3 +21,28 @@ export function desktopBridge(scope: object): PaperlabDesktop | null {
 export function useDesktop(): PaperlabDesktop | null {
   return desktopBridge(globalThis)
 }
+
+/** The voice methods the desktop app's preload adds to the same bridge (desktop/src/preload.ts). An app older than voice
+ * has the four methods of PaperlabDesktop and none of these, so Settings falls back to the compose-flag instructions. */
+export type VoiceBridge = {
+  getVoiceEnabled(): Promise<boolean>
+  setVoiceEnabled(value: boolean): Promise<{ ok: boolean; detail: string | null }>
+  /** Each progress line of turning voice on; the returned function stops listening. */
+  onVoiceProgress(callback: (line: string) => void): () => void
+  removeVoiceModels(): Promise<{ ok: boolean; detail: string | null }>
+  voiceOutOfMemory(): Promise<boolean>
+}
+
+const VOICE_METHODS = ['getVoiceEnabled', 'setVoiceEnabled', 'onVoiceProgress', 'removeVoiceModels', 'voiceOutOfMemory'] as const
+
+/** The voice bridge on `scope`, or null when any of its five methods is missing (an older desktop app, or a browser). */
+export function voiceBridge(scope: object): VoiceBridge | null {
+  const candidate = (scope as { paperlabDesktop?: Partial<VoiceBridge> }).paperlabDesktop
+  const isComplete = candidate !== undefined && VOICE_METHODS.every((method) => typeof candidate[method] === 'function')
+  return isComplete ? (candidate as VoiceBridge) : null
+}
+
+/** The voice bridge for this page, or null. Like useDesktop, it never changes while the page lives. */
+export function useVoiceBridge(): VoiceBridge | null {
+  return voiceBridge(globalThis)
+}

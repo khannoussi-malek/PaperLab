@@ -209,6 +209,8 @@ async function dumpTo(bin: string, args: string[], env: NodeJS.ProcessEnv, path:
 
 export type DockerOptions = { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; signal?: AbortSignal }
 
+const VOICE_VOLUME = 'paperlab-app_voicemodels'
+
 /** The docker commands the launch runs, each logged with its exit code. `signal` ends a running one (the window closed
  * during startup); stop() never takes it, since it runs after. */
 export function makeDocker(bin: string, run: Runner, stack: StackInfo, log: Log, options: DockerOptions = {}) {
@@ -219,8 +221,12 @@ export function makeDocker(bin: string, run: Runner, stack: StackInfo, log: Log,
     log(`docker ${args.join(' ')} → ${result.timedOut ? 'timed out' : `exit ${result.code}`}`)
     return result
   }
-  const compose = (args: string[], timeoutMs: number | null, onLine?: (line: string) => void, abortable = true) =>
-    docker(['compose', '-f', file, ...args], timeoutMs, onLine, abortable)
+  /** `profiled` names the voice profile. Only the voice commands and stop name it: the core stack never does, so a
+   * voice image that can't be pulled or started cannot stop PaperLab from starting. */
+  const compose = (args: string[], timeoutMs: number | null, onLine?: (line: string) => void, abortable = true, profiled = false) =>
+    docker(['compose', '-f', file, ...(profiled ? ['--profile', 'voice'] : []), ...args], timeoutMs, onLine, abortable)
+  const voiceCompose = (args: string[], timeoutMs: number | null, onLine?: (line: string) => void) =>
+    compose(args, timeoutMs, onLine, true, true)
   return {
     info: () => docker(['info', '--format', '{{.OSType}}'], LIMITS.info),
     composeVersion: () => docker(['compose', 'version', '--short'], LIMITS.version),
@@ -229,7 +235,30 @@ export function makeDocker(bin: string, run: Runner, stack: StackInfo, log: Log,
     startDatabase: () => compose(['up', '-d', '--wait', 'db'], LIMITS.up),
     up: () => compose(['up', '-d'], LIMITS.up),
     logs: (services: string[]) => compose(['logs', '--no-color', '--tail', '20', ...services], LIMITS.info),
-    stop: () => compose(['stop'], LIMITS.stop, undefined, false),
+    // Always names the profile: a profiled service is only stopped when its profile is active (Review focus 5).
+    stop: () => compose(['stop'], LIMITS.stop, undefined, false, true),
+    /** Pulls the voice image (progress to onLine), then starts only the voice service, if the pull worked. */
+    voiceOn: async (onLine: (line: string) => void): Promise<Result> => {
+      const pulled = await voiceCompose(['pull', 'voice'], LIMITS.pull, onLine)
+      if (pulled.code !== 0 || pulled.timedOut) return pulled
+      return voiceCompose(['up', '-d', 'voice'], LIMITS.up)
+    },
+    /** Starts the voice service on the stack's own file. Compose pulls its image when it is missing, so an updated app
+     * gets the new voice image here. */
+    voiceStart: (): Promise<Result> => voiceCompose(['up', '-d', 'voice'], LIMITS.up),
+    /** Stops the voice container, then removes it; a failed stop is returned as it is. */
+    voiceOff: async (): Promise<Result> => {
+      const stopped = await voiceCompose(['stop', 'voice'], LIMITS.stop)
+      if (stopped.code !== 0 || stopped.timedOut) return stopped
+      return voiceCompose(['rm', '-f', 'voice'], LIMITS.stop)
+    },
+    removeVoiceModels: () => docker(['volume', 'rm', VOICE_VOLUME], LIMITS.info),
+    /** True when Docker's out-of-memory killer ended the voice container (the last one, if several). */
+    voiceOutOfMemory: async (): Promise<boolean> => {
+      const id = (await voiceCompose(['ps', '-a', '-q', 'voice'], LIMITS.info)).stdout.trim().split(/\s+/).at(-1)
+      if (!id) return false
+      return (await docker(['inspect', '-f', '{{.State.OOMKilled}}', id], LIMITS.info)).stdout.trim() === 'true'
+    },
     imageTags: () => docker(['image', 'ls', IMAGE, '--format', '{{.Tag}}'], LIMITS.info),
     removeImage: (tag: string) => docker(['image', 'rm', `${IMAGE}:${tag}`], LIMITS.info),
     dumpTo: (path: string) =>

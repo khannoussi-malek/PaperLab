@@ -3,7 +3,8 @@ Chat's implementations are in providers/llm.py, built per question by build_llm;
 (providers/embedding.BuiltIn) and the connection-based ones (providers/http_embedders), built by embedding.build."""
 
 from collections.abc import AsyncIterator
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Literal, Protocol
 
 
 class LLMUnavailable(Exception):
@@ -47,4 +48,34 @@ class TextEmbedder(Protocol):
 
     async def encode(self, texts: list[str]) -> list[list[float]]:
         """One vector per text, in order. The texts already carry their prefix."""
+        ...
+
+
+class SpeechUnavailable(Exception):
+    """The voice program can't be reached or failed. The message is shown to the reader."""
+
+
+SpeechStage = Literal["downloading", "loading", "ready", "failed"]
+
+
+@dataclass(frozen=True)
+class SpeechHealth:
+    """Where the voice program is: downloading or loading its models, ready, or failed (detail says why)."""
+
+    ready: bool
+    stage: SpeechStage
+    detail: str | None = None
+
+
+class Speech(Protocol):
+    async def health(self) -> SpeechHealth:
+        """The voice program's stage. Raises SpeechUnavailable when unreachable."""
+        ...
+
+    async def transcribe(self, samples: bytes) -> str:
+        """Raw little-endian float32, 16 kHz mono, to text."""
+        ...
+
+    async def speak(self, text: str) -> tuple[bytes, int]:
+        """Raw float32 samples and their sample rate."""
         ...

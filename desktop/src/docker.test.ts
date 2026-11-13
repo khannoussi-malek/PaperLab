@@ -21,6 +21,7 @@ import {
 
 const HOME = '/Users/reader'
 const STACK = { dataDir: '/data/PaperLab data', version: '0.1.0', port: 5190 }
+const FILE = '/data/PaperLab data/docker-compose.yml'
 const result = (more: Partial<Result> = {}): Result => ({ code: 0, stdout: '', stderr: '', timedOut: false, ...more })
 const only = (...paths: string[]) => (path: string) => paths.includes(path)
 
@@ -220,10 +221,10 @@ describe('makeDocker', () => {
     await docker.stop()
     expect(await docker.imagePresent()).toBe(false)
 
-    const file = '/data/PaperLab data/docker-compose.yml'
+    const file = FILE
     expect(calls.map(({ args, timeoutMs }) => [args, timeoutMs])).toEqual([
       [`compose -f ${file} up -d`, 300_000],
-      [`compose -f ${file} stop`, 30_000],
+      [`compose -f ${file} --profile voice stop`, 30_000],
       [`image inspect ${IMAGE}:0.1.0`, 15_000],
     ])
     expect(calls[0].env.PAPERLAB_DIR).toBe('/data/PaperLab data')
@@ -231,7 +232,7 @@ describe('makeDocker', () => {
     expect(calls[1].signal).toBeUndefined() // stop runs after a close has ended the launch
     expect(lines).toEqual([
       `docker compose -f ${file} up -d → exit 0`,
-      `docker compose -f ${file} stop → exit 0`,
+      `docker compose -f ${file} --profile voice stop → exit 0`,
       `docker image inspect ${IMAGE}:0.1.0 → exit 1`,
     ])
   })
@@ -248,5 +249,104 @@ describe('makeDocker', () => {
       ['compose pull', null],
       ['compose up -d --wait db', 300_000],
     ])
+  })
+
+  it('stop always names the voice profile, even with voice off, since a profiled service is only stopped when its profile is named', async () => {
+    const { run, calls } = recorded()
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    await docker.stop()
+
+    expect(calls.map(({ args }) => args)).toEqual([`compose -f ${FILE} --profile voice stop`])
+  })
+
+  it('core commands never name the voice profile, so a voice problem cannot block them', async () => {
+    const { run, calls } = recorded()
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    await docker.pull(() => {})
+    await docker.startDatabase()
+    await docker.up()
+    await docker.logs(['api'])
+
+    expect(calls.map(({ args }) => args)).toEqual([
+      `compose -f ${FILE} pull`,
+      `compose -f ${FILE} up -d --wait db`,
+      `compose -f ${FILE} up -d`,
+      `compose -f ${FILE} logs --no-color --tail 20 api`,
+    ])
+  })
+
+  it('voiceStart starts only the voice service under its profile, and compose pulls its image if it is missing', async () => {
+    const { run, calls } = recorded()
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    await docker.voiceStart()
+
+    expect(calls.map(({ args, timeoutMs }) => [args, timeoutMs])).toEqual([[`compose -f ${FILE} --profile voice up -d voice`, 300_000]])
+  })
+
+  it('voiceOn pulls the voice service, then starts only that service', async () => {
+    const { run, calls } = recorded()
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    const reply = await docker.voiceOn(() => {})
+
+    expect(reply.code).toBe(0)
+    expect(calls.map(({ args, timeoutMs }) => [args, timeoutMs])).toEqual([
+      [`compose -f ${FILE} --profile voice pull voice`, null],
+      [`compose -f ${FILE} --profile voice up -d voice`, 300_000],
+    ])
+  })
+
+  it('voiceOn does not start the service after a failed pull, and names the failure', async () => {
+    const { run, calls } = recorded((args) => (args.includes('pull') ? { code: 1, stderr: 'denied\n' } : {}))
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    const reply = await docker.voiceOn(() => {})
+
+    expect(calls).toHaveLength(1)
+    expect(reply).toMatchObject({ code: 1 })
+    expect(lastLine(reply)).toBe('denied')
+  })
+
+  it('turning voice off stops the container, then removes it', async () => {
+    const { run, calls } = recorded()
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    await docker.voiceOff()
+
+    expect(calls.map(({ args }) => args)).toEqual([
+      `compose -f ${FILE} --profile voice stop voice`,
+      `compose -f ${FILE} --profile voice rm -f voice`,
+    ])
+  })
+
+  it('removeVoiceModels removes the app volume, and only that one', async () => {
+    const { run, calls } = recorded()
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    await docker.removeVoiceModels()
+
+    expect(calls.map(({ args }) => args)).toEqual(['volume rm paperlab-app_voicemodels'])
+  })
+
+  it('voiceOutOfMemory reads the OOMKilled state of the voice container', async () => {
+    const { run, calls } = recorded((args) => (args.includes('ps') ? { stdout: 'abc123\n' } : { stdout: 'true\n' }))
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    expect(await docker.voiceOutOfMemory()).toBe(true)
+    expect(calls.map(({ args }) => args)).toEqual([
+      `compose -f ${FILE} --profile voice ps -a -q voice`,
+      'inspect -f {{.State.OOMKilled}} abc123',
+    ])
+  })
+
+  it('voiceOutOfMemory is false when there is no voice container', async () => {
+    const { run, calls } = recorded()
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    expect(await docker.voiceOutOfMemory()).toBe(false)
+    expect(calls).toHaveLength(1)
   })
 })

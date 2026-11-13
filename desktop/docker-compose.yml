@@ -97,9 +97,21 @@ services:
     # A paper's ingest and re-embed, one paper at a time: ten at once ran the worker out of memory.
     command: ["arq", "app.workers.settings.IngestWorkerSettings"]
 
+  # Speech to text and text to speech for voice questions. Optional: the desktop app starts it with
+  # `--profile voice` when Settings → Voice is on; from a shell, `docker compose --profile voice up -d`. No ports: only
+  # the api reaches it, as http://voice:8791. Its models (about 600 MB) download into voicemodels on first start.
+  # The image contains espeak-ng (GPL-3.0); see voice/NOTICE.
+  voice:
+    image: ghcr.io/khannoussi-malek/paperlab-voice:${PAPERLAB_VERSION:-dev}
+    profiles: ["voice"]
+    volumes: [voicemodels:/voice/models]
+    mem_limit: 2g
+    restart: on-failure
+
 # The library. The project name and these volume names are where it lives: releases never rename them.
 volumes:
   pgdata:
   pdfs:
   redisdata:
   models:
+  voicemodels:

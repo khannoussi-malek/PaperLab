@@ -16,6 +16,7 @@ import { navigationFor, startupAction, type StartupAction } from './navigation'
 import { readSettings, settingsFile, updateSettings, type Settings } from './settings'
 import { autoStartFor, launch, viewFor, writeFiles, type Deps, type Screen } from './stack'
 import { checkForUpdate, type Update } from './updates'
+import { removeModels, setVoice, startVoiceIfOn, withVoiceLock } from './voice'
 
 // Tests only: a data folder of their own. Otherwise Electron's userData (spec §5), which also keys the single-instance
 // lock. Must run before anything reads the path.
@@ -120,7 +121,10 @@ async function start() {
   if (screen.kind !== 'ready' || win === null) return
   await win.loadURL(screen.url).catch((error: unknown) => log(`loading PaperLab: ${String(error)}`))
   openPendingLink()
-  if (docker !== null) void afterReady(docker)
+  if (docker !== null) {
+    void startVoiceIfOn(settings, docker, log)
+    void afterReady(docker)
+  }
 }
 
 /** Step 8: older versions' images go, then (packaged only) the update check. Failures are logged, never shown. */
@@ -252,6 +256,30 @@ function fromPaperLab(event: IpcMainInvokeEvent): boolean {
   }
 }
 
+/** Settings → Voice (voice.ts decides what each step means; this wires it to Docker and the sender's window). */
+function handleVoice() {
+  ipcMain.handle('paperlab:voice:get', (event) => {
+    if (!fromPaperLab(event)) throw new Error('refused')
+    return settings.voiceEnabled
+  })
+  ipcMain.handle('paperlab:voice:set', async (event, value: unknown) => {
+    if (!fromPaperLab(event) || typeof value !== 'boolean') throw new Error('refused')
+    const bin = locateDocker()
+    const progress = (line: string) => event.sender.send('paperlab:voice:progress', line)
+    return withVoiceLock(() => setVoice(bin === null ? null : dockerAt(bin), value, progress, (on) => setSettings({ voiceEnabled: on })))
+  })
+  ipcMain.handle('paperlab:voice:remove-models', async (event) => {
+    if (!fromPaperLab(event)) throw new Error('refused')
+    const bin = locateDocker()
+    return withVoiceLock(() => removeModels(bin === null ? null : dockerAt(bin), settings.voiceEnabled))
+  })
+  ipcMain.handle('paperlab:voice:oom', async (event) => {
+    if (!fromPaperLab(event)) throw new Error('refused')
+    const bin = locateDocker()
+    return bin === null ? false : dockerAt(bin).voiceOutOfMemory()
+  })
+}
+
 function handleSwitches() {
   ipcMain.handle('paperlab:get', (event, name: unknown) => {
     if (!fromPaperLab(event) || !isSwitch(name)) throw new Error('refused')
@@ -334,6 +362,7 @@ if (!app.requestSingleInstanceLock()) {
   })
   app.on('window-all-closed', () => app.quit())
   handleSwitches()
+  handleVoice()
   void app.whenReady().then(() => {
     createWindow()
     syncTray()

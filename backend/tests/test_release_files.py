@@ -17,7 +17,8 @@ def test_the_build_context_leaves_out_every_env_file_and_every_local_folder():
     """Docker reads these patterns from the context root: a bare `.env` or `node_modules` would still let
     frontend/.env* and frontend/node_modules into the image (spec §3)."""
     patterns = set((ROOT / ".dockerignore").read_text().split())
-    required = {"**/.env", "**/.env.*", "**/node_modules", "**/.venv", ".git", "docs", "desktop", "website", "frontend/dist"}
+    required = {"**/.env", "**/.env.*", "**/node_modules", "**/.venv", ".git", "docs", "desktop", "website"}
+    required |= {"frontend/dist", "voice/models"}  # voice/.venv is covered by **/.venv; the models are ~115 MB
 
     assert required <= patterns
     assert {".env", "node_modules", ".venv"} & patterns == set()
@@ -27,6 +28,14 @@ def test_the_image_builds_the_frontend_from_the_committed_api_types_and_serves_i
     dockerfile = (ROOT / "Dockerfile").read_text()
 
     assert "RUN npx tsc -b && npx vite build" in dockerfile
+    assert dockerfile.index("RUN node scripts/copy-voice-assets.mjs") < dockerfile.index(
+        "RUN npx tsc -b && npx vite build"
+    )
+    # the script warns and exits 0 on a missing asset (for dev), so the release image must fail here instead
+    assert "RUN test -f public/voice/silero_vad_v5.onnx" in dockerfile
+    assert dockerfile.index("RUN test -f public/voice/silero_vad_v5.onnx") > dockerfile.index(
+        "RUN node scripts/copy-voice-assets.mjs"
+    )
     assert "npm run build" not in dockerfile  # its prebuild regenerates the types from a running API
     assert "FRONTEND_DIST=/app/web" in dockerfile
     assert dockerfile.index("COPY --from=deps /venv /venv") < dockerfile.index("COPY backend/ ./")  # venv, then code
@@ -47,7 +56,7 @@ def test_the_release_stack_runs_the_published_image_and_pinned_databases():
     services = release["services"]
 
     assert release["name"] == "paperlab-app"
-    assert set(services) == {"db", "redis", "migrate", "api", "worker", "ingest-worker"}
+    assert set(services) == {"db", "redis", "migrate", "api", "worker", "ingest-worker", "voice"}
     assert services["db"]["image"] == "pgvector/pgvector:0.8.6-pg16"
     assert services["redis"]["image"] == "redis:7.4.11-alpine"
     assert [services[name]["image"] for name in ("migrate", *APP_SERVICES)] == [APP_IMAGE] * 4
@@ -55,7 +64,8 @@ def test_the_release_stack_runs_the_published_image_and_pinned_databases():
     for name, service in services.items():
         assert "build" not in service, name
         # Nothing starts with the computer: on-failure brings a crashed worker back, but never on Docker's own start.
-        assert service.get("restart", "no") == ("on-failure" if name in WORKERS else "no"), name
+        # voice too: a crash comes back, and a failed download stays up and says why instead of exiting.
+        assert service.get("restart", "no") == ("on-failure" if name in (*WORKERS, "voice") else "no"), name
         assert all(volume.split(":")[0] in release["volumes"] for volume in service.get("volumes", [])), name
 
 
@@ -86,7 +96,7 @@ def test_the_library_lives_in_named_volumes_and_redis_keeps_its_queue():
     release = compose("desktop/docker-compose.yml")
     services = release["services"]
 
-    assert set(release["volumes"]) == {"pgdata", "pdfs", "redisdata", "models"}
+    assert set(release["volumes"]) == {"pgdata", "pdfs", "redisdata", "models", "voicemodels"}
     assert services["redis"]["command"] == ["redis-server", "--appendonly", "yes"]
     assert services["redis"]["volumes"] == ["redisdata:/data"]
     for name in APP_SERVICES:
@@ -126,10 +136,30 @@ def test_a_version_tag_releases_and_a_change_to_the_release_files_is_a_dry_run()
         "desktop/**",
         "Dockerfile",
         ".dockerignore",
+        "voice/**",
     ]
-    # release.yml is the only workflow that builds the app; pages.yml publishes the website, homebrew.yml the cask.
+    # release.yml is the only workflow that builds the app; pages.yml publishes the website, homebrew.yml the cask,
+    # voice.yml checks the voice program on Linux.
     workflows = sorted(path.name for path in (ROOT / ".github/workflows").iterdir())
-    assert workflows == ["homebrew.yml", "pages.yml", "release.yml"]
+    assert workflows == ["homebrew.yml", "pages.yml", "release.yml", "voice.yml"]
+
+
+def test_the_voice_check_runs_the_real_program_on_linux_for_every_voice_change():
+    check = yaml.safe_load((ROOT / ".github/workflows/voice.yml").read_text())
+    assert check[True]["pull_request"]["paths"] == [
+        ".github/workflows/voice.yml",
+        "voice/**",
+        "backend/app/providers/speech.py",
+        "docker-compose.yml",
+        "desktop/docker-compose.yml",
+        "frontend/e2e/fixtures/question.wav",
+    ]
+    assert "workflow_dispatch" in check[True]
+    job = check["jobs"]["check"]
+    assert job["runs-on"] == "ubuntu-latest"
+    assert check.get("permissions") == {"contents": "read"}
+    text = (ROOT / ".github/workflows/voice.yml").read_text()
+    assert "voice/ci_check.py" in text and "frontend/e2e/fixtures/question.wav" in text
 
 
 def test_images_build_natively_per_architecture_and_are_tagged_with_the_version_only():
@@ -137,10 +167,19 @@ def test_images_build_natively_per_architecture_and_are_tagged_with_the_version_
     legs = jobs["image"]["strategy"]["matrix"]["include"]
     text = (ROOT / ".github/workflows/release.yml").read_text()
 
-    assert [(leg["platform"], leg["runner"]) for leg in legs] == [
-        ("linux/amd64", "ubuntu-latest"),
-        ("linux/arm64", "ubuntu-24.04-arm"),
+    assert [(leg["image"], leg["context"], leg["platform"], leg["runner"]) for leg in legs] == [
+        ("paperlab", ".", "linux/amd64", "ubuntu-latest"),
+        ("paperlab", ".", "linux/arm64", "ubuntu-24.04-arm"),
+        ("paperlab-voice", "voice", "linux/amd64", "ubuntu-latest"),
+        ("paperlab-voice", "voice", "linux/arm64", "ubuntu-24.04-arm"),
     ]
+    assert (
+        jobs["image"]["env"]["IMAGE"]
+        == jobs["manifest"]["env"]["IMAGE"]
+        == "ghcr.io/khannoussi-malek/${{ matrix.image }}"
+    )
+    assert jobs["manifest"]["strategy"]["matrix"]["image"] == ["paperlab", "paperlab-voice"]
+    assert 'grep -q "paperlab-voice:' in text  # the two-command install names the voice image of its version too
     assert jobs["image"]["permissions"] == {"contents": "read", "packages": "write"}
     assert jobs["release"]["permissions"] == {"contents": "write"}
     assert re.search(r"paperlab:latest|:latest\b", text) is None

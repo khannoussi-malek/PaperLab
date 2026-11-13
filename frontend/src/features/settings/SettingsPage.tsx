@@ -1,4 +1,4 @@
-import { Bot, BookOpen, GlassWater, MonitorCog, Plug, Search, type LucideIcon } from 'lucide-react'
+import { Bot, BookOpen, GlassWater, Mic, MonitorCog, Plug, Search, type LucideIcon } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { railItem } from '@/components/nav'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { GlassSettings } from './GlassSettings'
 import { useDesktop } from './desktop'
 import { ModelsSettings } from './ModelsSettings'
 import { PaperSourcesSettings } from './PaperSourcesSettings'
+import { VoiceSettings } from './VoiceSettings'
 
 type Section = { id: SettingsSection; label: string; icon: LucideIcon }
 
@@ -18,6 +19,7 @@ const SECTIONS: Section[] = [
   { id: 'sources', label: 'Paper sources', icon: BookOpen },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'glass', label: 'Glass', icon: GlassWater },
+  { id: 'voice', label: 'Voice', icon: Mic },
   { id: 'desktop', label: 'Desktop app', icon: MonitorCog },
   { id: 'claude', label: 'Connect Claude', icon: Plug },
 ]
@@ -100,6 +102,7 @@ export function SettingsPage() {
           {current === 'sources' && <PaperSourcesSettings />}
           {current === 'search' && <EmbeddingSettings />}
           {current === 'glass' && <GlassSettings />}
+          {current === 'voice' && <VoiceSettings />}
           {current === 'desktop' && <DesktopSettings />}
           {current === 'claude' && <ConnectClaudeSection />}
         </div>

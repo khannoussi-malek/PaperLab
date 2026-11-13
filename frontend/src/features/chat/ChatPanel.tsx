@@ -21,6 +21,8 @@ import { SaveAsNoteButton } from './SaveAsNoteButton'
 import { ProblemAlert } from './ProblemAlert'
 import { threadOrder } from './threads'
 import { useChatStream } from './useChatStream'
+import { useVoiceTurn } from '@/features/voice/useVoiceTurn'
+import { VoiceButton } from '@/features/voice/VoiceButton'
 
 const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
 // How close to the bottom (px) still counts as "at the bottom", so a streaming answer keeps the list following it.
@@ -77,10 +79,25 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
     : null
   // The saved answer the next question follows up (paper chat only); null asks it on its own.
   const [followingId, setFollowingId] = useState<string | null>(null)
-  const { stream, ask, retry } = useChatStream(scope, modelId, (parentId, next) =>
+  const typed = useChatStream(scope, modelId, (parentId, next) =>
     // Only while the chip still names the answer that question followed: × pressed mid-stream stays pressed.
     setFollowingId((current) => (current === parentId ? next : current)),
   )
+  const voice = useVoiceTurn(scope, modelId)
+  // Which of the two asked last: the live answer shows that one's stream.
+  const [liveSource, setLiveSource] = useState<'typed' | 'voice'>('typed')
+  const voiceAsked = voice.stream.status === 'sources'
+  const [wasVoiceAsked, setWasVoiceAsked] = useState(false)
+  if (voiceAsked !== wasVoiceAsked) {
+    setWasVoiceAsked(voiceAsked)
+    if (voiceAsked) setLiveSource('voice')
+  }
+  const stream = liveSource === 'voice' ? voice.stream : typed.stream
+  const { retry } = typed
+  function ask(text: string, parentId: string | null = null) {
+    setLiveSource('typed')
+    return typed.ask(text, parentId)
+  }
   const [question, setQuestion] = useState('')
   const streamSource = stream.source
   useEffect(() => {
@@ -98,11 +115,14 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
   const followRef = useRef(true)
   const answers = history.data ?? []
   const busy = stream.status === 'sources' || stream.status === 'streaming'
+  const typedBusy = typed.stream.status === 'sources' || typed.stream.status === 'streaming'
   const noModels = chatModels.data?.length === 0
   // `isPending`: the first models fetch hasn't settled yet, so modelId is still null. Once it fails, isPending
   // clears and asking stays open with no model id, which the API answers with the owner's default; the composer
   // says so instead of leaving an empty gap where the dropdown was.
-  const closed = busy || unavailable !== undefined || noModels || chatModels.isPending
+  const unusable = unavailable !== undefined || noModels || chatModels.isPending
+  // A spoken question or its answer under way holds the box too: two answers at once would share one live slot.
+  const closed = busy || voice.state === 'thinking' || voice.state === 'speaking' || unusable
   // A saved answer comes back in the history, so the live copy hides instead of showing twice.
   const showLive = stream.status !== 'idle' && !answers.some((answer) => answer.id === stream.done?.output_id)
   const { placed, liveAt, liveReply } = threadOrder(answers, showLive ? stream.parentId : null)
@@ -216,7 +236,10 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
         notesTotal={stream.notesTotal}
         segments={stream.segments}
         footer={
-          stream.done && { model: stream.done.model, connectionName: stream.done.connection_name, promptVersion: stream.done.prompt_version }
+          // A spoken answer's saved id arrives before its model; the footer waits for the saved copy.
+          stream.done?.model
+            ? { model: stream.done.model, connectionName: stream.done.connection_name, promptVersion: stream.done.prompt_version }
+            : null
         }
         pending={busy}
         animate
@@ -331,6 +354,8 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
               }
             }}
           />
+          {/* The voice server answers paper and workspace chats only; a search hit's chat stays typed. */}
+          {scope.kind !== 'hit' && <VoiceButton voice={voice} disabled={typedBusy || unusable} />}
           <Button type="submit" size="icon-sm" aria-label="Ask" className={pressable} disabled={closed || !question.trim()}>
             <ArrowUp aria-hidden />
           </Button>
@@ -339,6 +364,11 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
           <div className="flex">
             <ModelPicker models={chatModels.data} value={modelId} onChange={pickModel} />
           </div>
+        )}
+        {voice.problem && (
+          <p role="alert" className="px-1 text-xs text-destructive">
+            {voice.problem}
+          </p>
         )}
         {chatModels.isError && <p className="px-1 text-xs text-muted-foreground">Couldn’t load your models; using the default.</p>}
         {noModels && (

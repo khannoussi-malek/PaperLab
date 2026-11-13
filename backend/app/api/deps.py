@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery, llm_connections
 from app.db import get_session
-from app.providers.base import LLM
+from app.providers.base import LLM, Speech
 from app.providers.llm import build_llm
+from app.providers.speech import build_speech
 from app.schemas.chat import ChatRequest
 from app.schemas.checks import CheckRequest
 
@@ -22,6 +23,13 @@ def get_transport() -> httpx.AsyncBaseTransport | None:
 
 
 TransportDep = Annotated[httpx.AsyncBaseTransport | None, Depends(get_transport)]
+
+
+def resolve_speech(transport: TransportDep) -> Speech:
+    return build_speech(transport)
+
+
+SpeechDep = Annotated[Speech, Depends(resolve_speech)]
 
 
 async def resolve_llm(payload: ChatRequest, session: SessionDep, transport: TransportDep) -> LLM:

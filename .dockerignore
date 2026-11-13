@@ -21,3 +21,4 @@ frontend/playwright-report
 backend/evals/results
 
 backend/.tools
+voice/models

@@ -1,0 +1,12 @@
+PaperLab voice program: third-party notice
+
+This image contains espeak-ng, licensed under GPL-3.0-or-later. It is pulled in through
+phonemizer and kokoro-onnx (via espeakng-loader), which the voice program uses to turn text
+into speech sounds.
+
+PaperLab (Apache-2.0) does not link to espeak-ng. PaperLab talks to this program over HTTP
+only, and the program is a separate, optional container that the reader turns on.
+
+Sources:
+- This program: https://github.com/khannoussi-malek/PaperLab/tree/main/voice
+- espeak-ng: https://github.com/espeak-ng/espeak-ng

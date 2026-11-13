@@ -1,0 +1,18 @@
+# Optional speech program for PaperLab voice questions. Runs in its own container on
+# every system (see Dockerfile); the API reaches it over HTTP. Mac developers may run it natively.
+#
+# Licence note: kokoro-onnx pulls in phonemizer and espeak-ng, both GPL. PaperLab
+# is Apache-2.0, so they stay in this separate, optional program that talks over
+# HTTP and is installed by uv on the reader's machine. They never enter the app
+# image or the desktop build. A judgement call for the owner, not legal advice.
+[project]
+name = "paperlab-voice"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = ["fastapi", "uvicorn", "faster-whisper", "kokoro-onnx", "numpy"]
+
+[dependency-groups]
+dev = ["pytest", "httpx"]
+
+[tool.uv]
+package = false

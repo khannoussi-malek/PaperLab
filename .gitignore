@@ -23,3 +23,5 @@ backend/evals/longdocs/
 backend/evals/long-documents.md
 # Demo video project (captures, review log, sources, render code): local only; the video is embedded in README
 demo-video/
+voice/.venv/
+voice/models/
