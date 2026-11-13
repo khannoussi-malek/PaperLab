@@ -11,8 +11,9 @@ import unicodedata
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 from app.core.enrichment import ARXIV_DOI_PREFIX, abstract_text, normalize_doi, short_id
 from app.core.source_types import PREPRINT_SERVERS, source_type_of
@@ -472,6 +473,49 @@ def from_openaire(entry: Mapping[str, Any]) -> Candidate | None:
     )
 
 
+OPENREVIEW_SITE = "https://openreview.net"
+OPENREVIEW_SUBMISSION_SUFFIXES = ("/-/Submission", "/-/Blind_Submission")
+
+
+def _openreview_value(field: Any) -> Any:
+    """API v2 wraps each content value in {"value": ...}; a plain value (the older shape) passes through."""
+    return field.get("value") if isinstance(field, Mapping) else field
+
+
+def _is_openreview_submission(entry: Mapping[str, Any], venue_id: Any) -> bool:
+    """Reviews, comments and decisions share the search endpoint: keep a note only when its invitation is a
+    submission's. A note with no invitations at all is kept when it carries a venue id."""
+    invitations = entry.get("invitations") or []
+    if invitations:
+        return any(str(invitation).endswith(OPENREVIEW_SUBMISSION_SUFFIXES) for invitation in invitations)
+    return bool(venue_id)
+
+
+def from_openreview(entry: Mapping[str, Any]) -> Candidate | None:
+    """An entry from providers/openreview.py. None for a note that isn't a submission (reviews, comments and
+    decisions are dropped here), or one with no title or forum id. Blind submissions have no authors, so the list
+    is empty. The PDF is OpenReview's own /pdf/ link, made absolute. `cdate` is milliseconds since the epoch, read in
+    UTC for the year."""
+    content = entry.get("content") or {}
+    title = _openreview_value(content.get("title"))
+    forum = entry.get("forum")
+    if not title or not forum or not _is_openreview_submission(entry, _openreview_value(content.get("venueid"))):
+        return None
+    authors = _openreview_value(content.get("authors"))
+    cdate = entry.get("cdate")
+    pdf = _openreview_value(content.get("pdf"))
+    return Candidate(
+        title=title,
+        authors=[a for a in authors if isinstance(a, str)][:MAX_AUTHORS] if isinstance(authors, list) else [],
+        year=datetime.fromtimestamp(cdate / 1000, tz=UTC).year if isinstance(cdate, int | float) else None,
+        venue=_openreview_value(content.get("venue")) or None,
+        external_ids={"openreview": forum},
+        abstract=_clean_markup(_openreview_value(content.get("abstract"))),
+        pdf_urls=ordered_pdf_urls(None, urljoin(OPENREVIEW_SITE, pdf) if pdf else None),
+        sources=("openreview",),
+    )
+
+
 def from_iacr_eprint(entry: Mapping[str, Any]) -> Candidate:
     """An entry from providers/iacr_eprint.py's own fetch_page(). The bare eprint id (e.g. "2026/2368")
     is extracted from the OAI identifier ("oai:eprint.iacr.org:2026/2368") and becomes this source's own
@@ -557,6 +601,7 @@ def _ids(candidate: Candidate) -> set[str]:
         "hal": candidate.external_ids.get("hal"),
         "doaj": candidate.external_ids.get("doaj"),
         "openaire": candidate.external_ids.get("openaire"),
+        "openreview": candidate.external_ids.get("openreview"),
         "iacr_eprint": candidate.external_ids.get("iacr_eprint"),
         "biorxiv": candidate.external_ids.get("biorxiv"),
         "medrxiv": candidate.external_ids.get("medrxiv"),
@@ -592,7 +637,8 @@ def _combined(records: list[Candidate]) -> Candidate:
             "arxiv": arxiv_id, "openalex": first_id("openalex"), "semantic_scholar": first_id("semantic_scholar"),
             "core": first_id("core"), "pubmed": first_id("pubmed"), "pmc": first_id("pmc"),
             "zenodo": first_id("zenodo"), "hal": first_id("hal"), "doaj": first_id("doaj"),
-            "openaire": first_id("openaire"), "iacr_eprint": first_id("iacr_eprint"),
+            "openaire": first_id("openaire"), "openreview": first_id("openreview"),
+            "iacr_eprint": first_id("iacr_eprint"),
             "biorxiv": first_id("biorxiv"), "medrxiv": first_id("medrxiv"),
         }.items()
         if v

@@ -1,10 +1,21 @@
 import httpx
 import pytest
 
-from app.providers import arxiv, biorxiv, core_ac, crossref, doaj, iacr_eprint, openaire, openalex, unpaywall
+from app.providers import (
+    arxiv,
+    biorxiv,
+    core_ac,
+    crossref,
+    doaj,
+    iacr_eprint,
+    openaire,
+    openalex,
+    openreview,
+    unpaywall,
+)
 from app.providers.http import retrying
 
-PROVIDERS = [arxiv, biorxiv, core_ac, crossref, doaj, iacr_eprint, openaire, openalex, unpaywall]
+PROVIDERS = [arxiv, biorxiv, core_ac, crossref, doaj, iacr_eprint, openaire, openalex, openreview, unpaywall]
 
 
 def test_a_real_transport_retries_a_failed_connection_and_a_test_one_is_kept():

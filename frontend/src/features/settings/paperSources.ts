@@ -21,6 +21,7 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
   biorxiv: 'Biology preprints from bioRxiv, synced periodically in the background. Free, no key needed.',
   medrxiv: 'Medical preprints from medRxiv, synced periodically in the background. Free, no key needed.',
   dblp: 'Computer-science publications, venues and authors. Free, no key needed; no PDFs.',
+  openreview: 'Conference submissions on OpenReview, found by title. Free, no key needed. Off by default: it overlaps the other sources.',
 }
 
 /** The "May cost money" badge plus its price line, for sources that can charge even without a key. Only OpenAlex

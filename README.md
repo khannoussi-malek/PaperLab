@@ -345,6 +345,7 @@ None of these sources receive PDFs, notes or a paper's text.
 DBLP is off by default. When enabled, Find papers and Workspace Search send DBLP search title words
 and pagination parameters, never PDFs, notes, contact email or API keys. DBLP supplies no PDFs; existing
 arXiv and Unpaywall resolution still applies.
+OpenReview is off by default and receives the search text, a title filter and paging, never an email or key.
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
 free link found. Importing from Zotero fetches free copies exactly like adding a paper by DOI; it's on by default and
 you can turn it off for an import. None of them send a paper's text.
