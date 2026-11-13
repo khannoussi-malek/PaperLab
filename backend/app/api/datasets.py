@@ -3,8 +3,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Form, Response, UploadFile
 
-from app.api.deps import SessionDep
-from app.core import capture, datasets
+from app.api.deps import LLMByModelIdDep, SessionDep
+from app.core import capture, datasets, number_suggest
 from app.core.numbers import find_numbers
 from app.schemas.datasets import (
     DatasetCreate,
@@ -16,6 +16,8 @@ from app.schemas.datasets import (
     NumberCandidateOut,
     NumberCandidatesRequest,
     NumberCreate,
+    NumberSuggestionsOut,
+    NumberSuggestRequest,
     TablePreviewOut,
     TablePreviewRequest,
 )
@@ -31,8 +33,19 @@ async def preview_table(paper_id: uuid.UUID, payload: TablePreviewRequest, sessi
 @router.post("/api/papers/{paper_id}/numbers", status_code=201)
 async def add_number(paper_id: uuid.UUID, payload: NumberCreate, session: SessionDep) -> NumberAddedOut:
     return await capture.add_number(
-        session, paper_id, payload.label, payload.raw, payload.unit, payload.page, payload.bbox
+        session, paper_id, payload.label, payload.raw, payload.unit, payload.page, payload.bbox,
+        suggested=payload.suggested,
     )
+
+
+@router.post("/api/papers/{paper_id}/numbers/suggestions")
+async def suggest_numbers(
+    paper_id: uuid.UUID, payload: NumberSuggestRequest, session: SessionDep, llm: LLMByModelIdDep
+) -> NumberSuggestionsOut:
+    """The section's numbers a model found, each kept only when its quote is in the section and holds the value (D33).
+    Nothing is saved; `?model_id=` picks the model. 422 unknown_section."""
+    found = await number_suggest.suggest(session, paper_id, payload.section_title, llm)
+    return NumberSuggestionsOut.model_validate(found)
 
 
 @router.post("/api/numbers/candidates")

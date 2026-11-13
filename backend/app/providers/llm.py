@@ -319,6 +319,23 @@ def fake_diagram_reply(prompt: str) -> str:
     return "\n".join(["<tikz>", head, *nodes, *arrows, "\\end{tikzpicture}", "</tikz>"])
 
 
+def fake_number_suggest_reply(prompt: str) -> str:
+    """Up to three numbers of the section, each with its sentence (at most 25 words) as the quote (D33)."""
+    from app.core.numbers import find_numbers  # providers never import core at module level
+
+    text = prompt.split("\n\n", 1)[-1]
+    found = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        words = sentence.split()[:25]
+        quote = " ".join(words).rstrip(".")
+        candidates = find_numbers(quote)
+        if candidates and len(found) < 3:
+            raw = candidates[0].raw
+            found.append({"label": f"Number {len(found) + 1}", "value": raw, "unit": candidates[0].unit_hint or "",
+                          "quote": quote})
+    return json.dumps({"numbers": found})
+
+
 def fake_chart_reply(prompt: str) -> str:
     """A bar of D1's second column by its first, read from the datasets block the chart prompt lists (M14)."""
     first = next((line for line in prompt.splitlines() if line.startswith("D1 · ")), None)
@@ -419,6 +436,7 @@ class FakeLLM:
         from app.core.draft_review import VERIFY_SYSTEM_PROMPT as DRAFT_VERIFY_SYSTEM_PROMPT
         from app.core.evidence_cards import SYSTEM_PROMPT as EVIDENCE_CARD_SYSTEM_PROMPT
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
+        from app.core.number_suggest import SYSTEM_PROMPT as NUMBER_SUGGEST_SYSTEM_PROMPT
         from app.core.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
         from app.core.screening_suggest import SYSTEM_PROMPT_V2 as SCREENING_SYSTEM_PROMPT_V2
         from app.core.section_review import SYSTEM_PROMPT as SECTION_REVIEW_SYSTEM_PROMPT
@@ -444,6 +462,8 @@ class FakeLLM:
             tokens = [fake_claim_detect_reply(prompt)]
         elif system == SECTION_REVIEW_SYSTEM_PROMPT:
             tokens = [fake_section_review_reply(prompt)]
+        elif system == NUMBER_SUGGEST_SYSTEM_PROMPT:
+            tokens = [fake_number_suggest_reply(prompt)]
         elif system == CHART_SYSTEM_PROMPT:
             tokens = [fake_chart_reply(prompt)]
         elif system == DIAGRAM_SYSTEM_PROMPT:
