@@ -42,7 +42,7 @@ export function LensPanel({ paperId, reader, hasPdf }: Props) {
             saved={briefs.data?.find((brief) => brief.lens === lens.id) ?? null}
             stream={stream}
             onGenerate={() => void generate(lens.id, lens.label)}
-            onCite={(source) => reader.jump(source.page, source.bbox)}
+            onCite={(source) => reader.jump(source.page, source.bbox ?? [])}
           />
         )
       )}

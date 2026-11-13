@@ -20,12 +20,12 @@ const workspace = { id: 'w1', paper_count: 1, note_count: 0 } as Workspace
 
 test('a cited abstract opens its paper, never a page-0 jump', () => {
   render(<WorkspaceChat workspace={workspace} onShowNotes={vi.fn()} />)
-  cite.onCite!({ label: 'C1', chunk_id: CHUNK, paper_id: PAPER, page: 0, section: 'Abstract', bbox: [], from_abstract: true })
+  cite.onCite!({ label: 'C1', chunk_id: CHUNK, paper_id: PAPER, page: 0, section: 'Abstract', bbox: [], from_abstract: true, replaced: false })
   expect(window.location.hash).toBe(`#/papers/${PAPER}`)
 })
 
 test('a cited passage of a PDF still jumps to its page', () => {
   render(<WorkspaceChat workspace={workspace} onShowNotes={vi.fn()} />)
-  cite.onCite!({ label: 'C1', chunk_id: CHUNK, paper_id: PAPER, page: 3, section: null, bbox: [], from_abstract: false })
+  cite.onCite!({ label: 'C1', chunk_id: CHUNK, paper_id: PAPER, page: 3, section: null, bbox: [], from_abstract: false, replaced: false })
   expect(window.location.hash).toBe(`#/papers/${PAPER}?chunk=${CHUNK}&page=3`)
 })

@@ -9,11 +9,12 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
-from app.core import chat, hit_chat, notes, skills
+from app.core import answer_provenance, chat, hit_chat, notes, skills
 from app.core.errors import Conflict, InvalidInput
 from app.db import SessionLocal
 from app.providers.base import LLM, LLMError, LLMUnavailable
 from app.schemas.chat import (
+    AnswerProvenanceOut,
     ChatAnswer,
     ChatRequest,
     DoneEvent,
@@ -24,6 +25,7 @@ from app.schemas.chat import (
     SourcesEvent,
     TokenEvent,
     to_notes,
+    to_provenance,
     to_sources,
 )
 from app.schemas.notes import NoteOut
@@ -175,7 +177,7 @@ def to_answer(answer: chat.Answer) -> ChatAnswer:
         prompt_version=output.prompt_version,
         created_at=output.created_at,
         whole_paper=output.whole_paper,
-        sources=to_sources(answer.sources),
+        sources=to_sources(answer.sources, answer.replaced),
         notes=to_notes(answer.notes),
         notes_used=output.notes_used,
         notes_total=output.notes_total,
@@ -193,6 +195,12 @@ async def history(paper_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
 @router.get("/api/workspaces/{workspace_id}/chat")
 async def workspace_history(workspace_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
     return [to_answer(answer) for answer in await chat.list_answers(session, chat.Scope(workspace_id=workspace_id))]
+
+
+@router.get("/api/llm-outputs/{output_id}/provenance")
+async def output_provenance(output_id: uuid.UUID, session: SessionDep) -> AnswerProvenanceOut:
+    """How an answer or a brief was made, and where each cited passage stands now (M33). 404 answer_not_found."""
+    return to_provenance(await answer_provenance.provenance(session, output_id))
 
 
 @router.post("/api/chat/answers/{output_id}/notes", status_code=201)

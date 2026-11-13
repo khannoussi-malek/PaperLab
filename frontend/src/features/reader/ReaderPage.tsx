@@ -658,7 +658,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           <NotesPanel
             paperId={paperId}
             hasPdf={!noPdf}
-            onCite={(source) => flashChunk(source.page, source.bbox)}
+            onCite={(source) => flashChunk(source.page, source.bbox ?? [])}
             hasAbstract={Boolean(paper.data?.abstract)}
             wholePaperDraft={wholePaperDraft}
             onNewPaperNote={newPaperNote}
@@ -695,7 +695,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 ? focusNote({ id: source.note_id })
                 : source.from_abstract
                   ? scrollToElement('.paper-abstract', 'center')
-                  : flashChunk(source.page, source.bbox)
+                  : flashChunk(source.page, source.bbox ?? [])
             }
             onPromoted={showPromotedNote}
           />

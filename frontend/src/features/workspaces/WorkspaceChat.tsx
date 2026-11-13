@@ -31,7 +31,7 @@ export function WorkspaceChat({ workspace, onShowNotes }: Props) {
     window.location.hash =
       'note_id' in source
         ? noteHref(source.paper_id, source.note_id)
-        : source.from_abstract
+        : source.from_abstract || source.chunk_id === null
           ? readerHref(source.paper_id)
           : chunkHref(source.paper_id, source.chunk_id, source.page)
   }

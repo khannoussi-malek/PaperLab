@@ -116,7 +116,7 @@ test('a chat citation of the abstract brings the abstract into view', () => {
   const scrolled = vi.fn()
   Element.prototype.scrollIntoView = scrolled
   render(<ReaderPage paperId={ID} tab="chat" target={null} />)
-  state.onCite!({ label: 'C1', chunk_id: 'c', paper_id: ID, page: 0, section: 'Abstract', bbox: [], from_abstract: true })
+  state.onCite!({ label: 'C1', chunk_id: 'c', paper_id: ID, page: 0, section: 'Abstract', bbox: [], from_abstract: true, replaced: false })
   expect(scrolled).toHaveBeenCalled()
   expect(scrolled.mock.contexts[0]).toBe(screen.getByText('Sleep helps memory consolidation.'))
 })

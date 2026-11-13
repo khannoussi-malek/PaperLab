@@ -59,7 +59,7 @@ export function AskPanel({ workspaceId, node }: { workspaceId: string; node: Pro
         scope={scope}
         onSource={(s) => setRead({ id: node.id, source: s })}
         onCite={(source) => {
-          window.location.hash = 'note_id' in source ? noteHref(source.paper_id, source.note_id) : source.from_abstract ? readerHref(source.paper_id) : chunkHref(source.paper_id, source.chunk_id, source.page)
+          window.location.hash = 'note_id' in source ? noteHref(source.paper_id, source.note_id) : source.from_abstract || source.chunk_id === null ? readerHref(source.paper_id) : chunkHref(source.paper_id, source.chunk_id, source.page)
         }}
         onPromoted={() => sileo.success({ title: 'Saved as a note' })}
       />

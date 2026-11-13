@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from app.schemas.papers import Rect
 
 if TYPE_CHECKING:  # core must not import api, and schemas needn't import core at runtime
-    from app.core import chat
+    from app.core import answer_provenance, chat
     from app.core.retrieval import RetrievedChunk
 
 
@@ -20,12 +20,13 @@ class ChatRequest(BaseModel):
 
 class ChatSource(BaseModel):
     label: str  # "C1": the marker the answer cites
-    chunk_id: uuid.UUID
+    chunk_id: uuid.UUID | None  # null when replaced: the passage's chunk is gone (M33)
     paper_id: uuid.UUID  # workspace chat cites several papers
     page: int
     section: str | None
-    bbox: list[Rect]
+    bbox: list[Rect] | None  # null when replaced: the page opens with no box
     from_abstract: bool  # a paper saved without a PDF: cite it as "abstract only", never by page
+    replaced: bool  # a re-ingest replaced the chunk; the snapshot still says where the passage was (M33)
 
 
 class NoteSource(BaseModel):
@@ -105,21 +106,94 @@ class SaveSuggestion(BaseModel):
     index: int = Field(ge=0)  # the answer's :::note block, from 0
 
 
-def to_sources(chunks: "list[RetrievedChunk | None]") -> list[ChatSource | None]:
-    return [
-        None
-        if c is None
-        else ChatSource(
-            label=f"C{i}",
-            chunk_id=c.id,
-            paper_id=c.paper_id,
-            page=c.page,
-            section=c.section,
-            bbox=c.bbox,
-            from_abstract=c.from_abstract,
-        )
-        for i, c in enumerate(chunks, start=1)
-    ]
+class AnswerPassageOut(BaseModel):
+    label: str  # "C1": the marker the answer cites
+    paper_id: uuid.UUID | None  # null when not recorded and the chunk is gone
+    paper_title: str | None
+    page: int | None
+    section: str | None
+    text: str | None  # null when not recorded
+    # current: still in the paper. changed: the text is no longer in it. not_recorded: nothing was kept to check.
+    state: Literal["current", "changed", "not_recorded"]
+
+
+class AnswerProvenanceOut(BaseModel):
+    """How an answer was made (M33). Computed on request, never on the history lists."""
+
+    model: str
+    connection_name: str | None
+    prompt_version: int
+    skill_label: str | None
+    created_at: datetime
+    out_of_date: bool  # a cited passage changed since the answer was written
+    passages: list[AnswerPassageOut]
+
+
+class McpNoteOut(BaseModel):
+    """A note an MCP client added: the view says where it came from and nothing more."""
+
+    source: Literal["claude_desktop"]
+
+
+def to_sources(
+    chunks: "list[RetrievedChunk | None]", replaced: "list[chat.SnapshotPassage | None]" = ()
+) -> list[ChatSource | None]:
+    """A missing chunk is a replaced source when the snapshot kept its passage (M33): page and paper, no box."""
+    fallbacks = list(replaced) or [None] * len(chunks)
+    sources: list[ChatSource | None] = []
+    for i, (c, kept) in enumerate(zip(chunks, fallbacks), start=1):
+        if c is not None:
+            sources.append(
+                ChatSource(
+                    label=f"C{i}",
+                    chunk_id=c.id,
+                    paper_id=c.paper_id,
+                    page=c.page,
+                    section=c.section,
+                    bbox=c.bbox,
+                    from_abstract=c.from_abstract,
+                    replaced=False,
+                )
+            )
+        elif kept is not None:
+            sources.append(
+                ChatSource(
+                    label=f"C{i}",
+                    chunk_id=None,
+                    paper_id=kept.paper_id,
+                    page=kept.page,
+                    section=kept.section,
+                    bbox=None,
+                    from_abstract=kept.from_abstract,
+                    replaced=True,
+                )
+            )
+        else:
+            sources.append(None)
+    return sources
+
+
+def to_provenance(view: "answer_provenance.AnswerProvenance") -> AnswerProvenanceOut:
+    return AnswerProvenanceOut(
+        model=view.model,
+        connection_name=view.connection_name,
+        prompt_version=view.prompt_version,
+        skill_label=view.skill_label,
+        created_at=view.created_at,
+        out_of_date=view.out_of_date,
+        passages=[
+            AnswerPassageOut(
+                label=p.label,
+                paper_id=p.paper_id,
+                paper_title=p.paper_title,
+                page=p.page,
+                section=p.section,
+                text=p.text,
+                state=p.state,
+            )
+            for p in view.passages
+        ],
+    )
 
 
 def to_notes(notes: "list[chat.NoteSource | None]") -> list[NoteSource | None]:
