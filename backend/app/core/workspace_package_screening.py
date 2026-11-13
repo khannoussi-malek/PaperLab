@@ -7,15 +7,19 @@ stats and last errors pass redact().
 The import side (`rebuild`) is added below this export half."""
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import datetime
 
-from sqlalchemy import any_, bindparam, select
+from sqlalchemy import any_, bindparam, func, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import search_run_results
+from app.core import prisma_export, search_run_results
+from app.core.candidates import Candidate, normal_title
 from app.core.redact import redact
+from app.core.workspace_search import _find_or_create_external_ref
 from app.models import Paper
 from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
 from app.models.references import ExternalRef
@@ -254,3 +258,249 @@ def document(live: Live, workspace: Workspace, run_keys: dict, labels: dict, pap
             "screening_ranked_used": workspace.screening_ranked_used,
         },
     }
+
+
+# ---- import (M35c Task 2) ----
+#
+# The rebuild adds rows only and runs inside the import's transaction. Its runs are finished (`exhausted`, every cursor
+# exhausted), so nothing fetches for them; the workspace stays read-only; no saved search is linked. The count check
+# then reads the rebuilt screening back through prisma_export and compares it with the package's prisma.json.
+
+SHARED_TOTALS = (
+    "identified",
+    "identified_databases",
+    "duplicates_removed",
+    "stage1_screened",
+    "stage1_excluded",
+    "stage1_excluded_by_reason",
+    "sought",
+    "citation_searching",
+)  # decided by the hits' own rows: checked whatever the package holds
+RETRIEVAL_TOTALS = (
+    "not_retrieved",
+    "stage2_assessed",
+    "stage2_excluded",
+    "stage2_excluded_by_reason",
+    "included",
+)  # decided by the full text: checked only when every retrieved paper has its PDF here
+
+
+def is_v2(screening: dict) -> bool:
+    return "version" in screening
+
+
+def _keys(rows: list[dict], what: str) -> set[str]:
+    keys = [row["key"] for row in rows]
+    if len(set(keys)) != len(keys):
+        raise ValueError(f"a {what} key is repeated")
+    return set(keys)
+
+
+def _named(value: str | None, keys: set[str], *, optional: bool = False) -> None:
+    if value is None and optional:
+        return
+    if value not in keys:
+        raise ValueError(f"{value!r} is not a key the package holds")
+
+
+def check_references(doc: dict, paper_keys: set[str]) -> None:
+    """Every key the screening names is a key the package holds, and every branch names exactly one target. A
+    ValueError otherwise: the import refuses the package as package_invalid."""
+    runs, hits = _keys(doc["runs"], "run"), _keys(doc["hits"], "hit")
+    for run in doc["runs"]:
+        for seed in _seeds(run):
+            if not all(v is None or isinstance(v, str) for v in (seed.get("hit"), seed.get("paper"))):
+                raise ValueError("a snowball seed names a non-string key")
+    for hit in doc["hits"]:
+        _named(hit["run"], runs)
+        _named(hit["paper"], paper_keys, optional=True)
+        _named(hit["seed_paper"], paper_keys, optional=True)
+    for row in doc["eligibility"]:
+        _named(row["paper"], paper_keys)
+        _named(row["run"], runs)
+    for link in doc["links"]:
+        _named(link["child_hit"], hits)
+        _named(link["parent_hit"], hits, optional=True)
+        _named(link["parent_paper"], paper_keys, optional=True)
+        _named(link["run"], runs)
+    for branch in doc["branches"]:
+        if (branch["hit"] is None) == (branch["paper"] is None):
+            raise ValueError("a branch names one hit or one paper")
+        _named(branch["hit"], hits, optional=True)
+        _named(branch["paper"], paper_keys, optional=True)
+
+
+def _when(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value) if value else None
+
+
+def _candidate(hit: dict) -> Candidate:
+    return Candidate(
+        title=hit["title"], authors=list(hit["authors"] or []), year=hit["year"], venue=hit["venue"],
+        doi=hit["doi"], abstract=hit["abstract"], external_ids=dict(hit["external_ids"] or {}),
+        source_type=hit["source_type"], published_doi=hit["published_doi"], published_venue=hit["published_venue"],
+    )  # fmt: skip
+
+
+def _seeds(run: dict) -> list[dict]:
+    """A run's snowball seeds as the package has them. A ValueError when they are not a list of objects."""
+    snowball = run["stats"].get("snowball")
+    if snowball is None:
+        return []
+    seeds = snowball.get("seeds", []) if isinstance(snowball, dict) else None
+    if not isinstance(seeds, list) or not all(isinstance(seed, dict) for seed in seeds):
+        raise ValueError("a run's snowball seeds are malformed")
+    return seeds
+
+
+def _stats_in(stats: dict, hit_ids: dict[str, uuid.UUID]) -> dict:
+    """A run's stats with fresh seed ids; a seed's hit is its rebuilt hit's id (or None when it has none)."""
+    snowball = stats.get("snowball")
+    if snowball is None:
+        return dict(stats)
+    seeds = []
+    for seed in snowball.get("seeds", []):
+        hit = hit_ids.get(seed.get("hit"))
+        rest = {k: v for k, v in seed.items() if k not in ("id", "hit", "paper", "hit_id")}
+        seeds.append(rest | {"id": str(uuid.uuid4()), "hit_id": str(hit) if hit else None})
+    return dict(stats) | {"snowball": {**snowball, "seeds": seeds}}
+
+
+async def _place_hit(session, workspace_id, hit, run_ids, paper_ids, hit_ids) -> uuid.UUID | None:
+    """One hit with its reference found or created. None when the workspace already holds that reference (a package
+    that names one paper twice): the count check then refuses the package."""
+    ref = await _find_or_create_external_ref(session, _candidate(hit))
+    ai, stage1 = hit["ai_suggestion"] or {}, hit["stage1"]
+    row = {
+        "id": hit_ids[hit["key"]], "workspace_id": workspace_id, "run_id": run_ids[hit["run"]],
+        "external_ref_id": ref.id, "source_method": hit["source_method"],
+        "seed_paper_id": paper_ids.get(hit["seed_paper"]), "snowball_round": hit["snowball_round"],
+        "normalized_title": normal_title(hit["title"]), "first_seen_at": _when(hit["first_seen_at"]),
+        "stage1_status": stage1["status"], "stage1_exclude_reason": stage1["exclude_reason"],
+        "stage1_note": stage1["note"], "stage1_decided_at": _when(hit["stage1_decided_at"]),
+        "priority": hit["priority"], "topic_fit": hit["topic_fit"], "acquisition_status": hit["acquisition_status"],
+        "paper_id": paper_ids.get(hit["paper"]), "suggestion": ai.get("suggestion"),
+        "suggestion_reason": ai.get("reason"), "suggestion_note": ai.get("note"), "suggestion_model": ai.get("model"),
+        "suggestion_relevance": ai.get("relevance"), "suggestion_confidence": ai.get("confidence"),
+        "suggestion_quotes": ai.get("quotes"), "suggestion_flags": ai.get("flags"),
+        "suggestion_prompt_version": ai.get("prompt_version"), "suggested_at": _when(ai.get("suggested_at")),
+    }  # fmt: skip
+    return await session.scalar(
+        pg_insert(WorkspaceSearchHit)
+        .values(row)
+        .on_conflict_do_nothing(index_elements=["workspace_id", "external_ref_id"])
+        .returning(WorkspaceSearchHit.id)
+    )
+
+
+def _cursor_rows(runs: list[dict], run_ids: dict[str, uuid.UUID]) -> list[dict]:
+    return [
+        {
+            "run_id": run_ids[run["key"]],
+            "source": c["source"],
+            "cursor_json": c["cursor"],
+            "exhausted": True,
+            "last_error": c["last_error"],
+        }
+        for run in runs
+        for c in run["cursors"]
+    ]
+
+
+async def rebuild(session, doc: dict, workspace, paper_ids: dict[str, uuid.UUID]) -> None:
+    """Adds the package's screening to `workspace` (flushed; its papers are in `paper_ids`, every key the package
+    holds). Rows only: the caller owns the commit."""
+    workspace.screening_ranked_used = doc["workspace"]["screening_ranked_used"]
+    workspace.screening_criteria = doc["workspace"]["screening_criteria"]
+    run_ids = {run["key"]: uuid.uuid4() for run in doc["runs"]}
+    hit_ids = {hit["key"]: uuid.uuid4() for hit in doc["hits"]}
+    for run in doc["runs"]:
+        session.add(WorkspaceSearchRun(
+            id=run_ids[run["key"]], workspace_id=workspace.id, query_text=run["query"],
+            query_overrides_json=run["query_overrides"] or {}, filters_json=run["filters"],
+            sources_json=run["sources"], status="exhausted", started_at=_when(run["started_at"]),
+            stopped_at=_when(run["stopped_at"]), stats_json=_stats_in(run["stats"], hit_ids),
+        ))  # fmt: skip
+    await session.flush()
+    if cursors := _cursor_rows(doc["runs"], run_ids):
+        await session.execute(pg_insert(WorkspaceSearchCursor).values(cursors).on_conflict_do_nothing())
+    placed: dict[str, uuid.UUID] = {}
+    for hit in doc["hits"]:
+        if (new_id := await _place_hit(session, workspace.id, hit, run_ids, paper_ids, hit_ids)) is not None:
+            placed[hit["key"]] = new_id
+    await session.flush()
+    await _insert_rows(
+        session,
+        SearchRunEligibility,
+        [
+            {
+                "paper_id": paper_ids[row["paper"]],
+                "search_run_id": run_ids[row["run"]],
+                "stage2_status": row["stage2_status"],
+                "stage2_exclude_reason": row["exclude_reason"],
+                "assessed_at": _when(row["assessed_at"]),
+            }
+            for row in doc["eligibility"]
+        ],
+    )
+    await _insert_rows(
+        session,
+        WorkspaceHitLink,
+        [
+            {
+                "workspace_id": workspace.id,
+                "child_hit_id": placed[link["child_hit"]],
+                "parent_hit_id": placed.get(link["parent_hit"]),
+                "parent_paper_id": paper_ids.get(link["parent_paper"]),
+                "run_id": run_ids[link["run"]],
+                "kind": link["kind"],
+            }
+            for link in doc["links"]
+            if link["child_hit"] in placed and (link["parent_hit"] is None or link["parent_hit"] in placed)
+        ],
+    )
+    await _insert_rows(
+        session,
+        WorkspaceBranchState,
+        [
+            {
+                "workspace_id": workspace.id,
+                "hit_id": placed.get(b["hit"]) if b["hit"] else None,
+                "paper_id": paper_ids.get(b["paper"]) if b["paper"] else None,
+                "state": b["state"],
+                "directions": b["directions"] or [],
+                "reason": b["reason"],
+                "set_by": b["set_by"],
+            }
+            for b in doc["branches"]
+            if (placed.get(b["hit"]) if b["hit"] else paper_ids.get(b["paper"])) is not None
+        ],
+    )
+
+
+async def _insert_rows(session, model, rows: list[dict]) -> None:
+    if rows:
+        await session.execute(pg_insert(model).values(rows).on_conflict_do_nothing())
+
+
+async def _full_text_rebuilt(session, workspace_id: uuid.UUID) -> bool:
+    """False when a hit that counts as retrieved has a paper with no full text here (the package left its PDF out, or
+    the library's own copy has none): the retrieval totals can't be reproduced, so they are not checked."""
+    retrieved = select(WorkspaceSearchHit.paper_id).where(
+        WorkspaceSearchHit.workspace_id == workspace_id,
+        WorkspaceSearchHit.stage1_status == "relevant",
+        WorkspaceSearchHit.acquisition_status.in_(prisma_export.RETRIEVED),
+        WorkspaceSearchHit.paper_id.is_not(None),
+    )
+    missing = await session.scalar(
+        select(func.count()).select_from(Paper).where(Paper.id.in_(retrieved), Paper.file_path.is_(None))
+    )
+    return not missing
+
+
+async def counts_match(session, workspace_id: uuid.UUID, expected: dict) -> bool:
+    """True when prisma_export on the rebuilt workspace gives the package's numeric totals (see SHARED_TOTALS and
+    RETRIEVAL_TOTALS). Flush first: prisma_export reads what this session has written."""
+    actual = asdict(await prisma_export.prisma_export(session, workspace_id, None))
+    fields = SHARED_TOTALS + (RETRIEVAL_TOTALS if await _full_text_rebuilt(session, workspace_id) else ())
+    return all(actual[name] == expected[name] for name in fields)

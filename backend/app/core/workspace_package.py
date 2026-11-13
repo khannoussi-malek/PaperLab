@@ -50,7 +50,15 @@ from app.core.citations_bundle import SPOOL_BYTES
 from app.core.citations_import import CitationsImportError
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
-from app.core.workspace_package_shapes import AnswersDoc, Manifest, NotesDoc, PapersDoc, TagsDoc
+from app.core.workspace_package_shapes import (
+    AnswersDoc,
+    Manifest,
+    NotesDoc,
+    PapersDoc,
+    PrismaTotals,
+    ScreeningV2,
+    TagsDoc,
+)
 from app.models import Chunk, Note, Paper, PaperStatus, Workspace, WorkspaceTag, note_anchors
 from app.models.tag import paper_tags
 from app.models.workspace import workspace_papers
@@ -359,6 +367,17 @@ def _answer_rows(zf: zipfile.ZipFile) -> list[dict]:
     return _shaped(AnswersDoc, _json(zf, "answers.json"))["answers"]
 
 
+def _check_screening_v2(screening: dict, prisma: dict, paper_keys: set[str]) -> None:
+    """A version 2 screening takes its shape, names only keys the package holds, and prisma.json carries the totals
+    the count check reads."""
+    _shaped(ScreeningV2, screening)
+    _shaped(PrismaTotals, prisma)
+    try:
+        workspace_package_screening.check_references(screening, paper_keys)
+    except ValueError:
+        raise InvalidInput(INVALID) from None
+
+
 def _read(zf: zipfile.ZipFile) -> _Package:
     """Every member, checked: the manifest first (a file without one, or of another format, is refused before anything
     else is read). Each JSON member must take the shape its model describes."""
@@ -379,6 +398,8 @@ def _read(zf: zipfile.ZipFile) -> _Package:
     screening, prisma = _json(zf, "screening.json"), _json(zf, "prisma.json")
     if not isinstance(screening, dict) or not isinstance(prisma, dict):
         raise InvalidInput(INVALID)
+    if workspace_package_screening.is_v2(screening):
+        _check_screening_v2(screening, prisma, {row["key"] for row in papers_rows})
     _made_on(manifest)
     return _Package(zf, manifest, papers_rows, notes_rows, tag_rows, screening, prisma, _answer_rows(zf))
 
@@ -561,19 +582,23 @@ async def _papers_into(session, pkg, workspace_id, held, alias, written, queued)
     library: set[uuid.UUID] = set()
     added = skipped = 0
     for rec in pkg.papers:
-        key = rec["key"]
+        key, member = rec["key"], rec.get("member", True)  # a non-member is a paper the screening names only
         if key in alias:
             paper_id = ids[alias[key]]
         elif key in held:
             paper_id = held[key]
-            library.add(paper_id)
+            if member:
+                library.add(paper_id)
         else:
             paper, was_skipped = await _new_paper(session, pkg, rec, written, queued)
-            paper_id, added, skipped = paper.id, added + 1, skipped + int(was_skipped)
+            paper_id = paper.id
+            if member:
+                added, skipped = added + 1, skipped + int(was_skipped)
         ids[key] = paper_id
-        await session.execute(
-            insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
-        )
+        if member:
+            await session.execute(
+                insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
+            )
     return ids, added, len(library), skipped
 
 
@@ -676,7 +701,13 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
         await _tags_into(session, workspace.id, pkg.tags, ids)
         note_count = await _notes_into(session, pkg.notes, ids)
         answer_count = await workspace_package_answers.write_rows(session, workspace.id, pkg.answers, ids)
-        await _record_into(pkg, workspace.id, written)
+        if workspace_package_screening.is_v2(pkg.screening):
+            await workspace_package_screening.rebuild(session, pkg.screening, workspace, ids)
+            await session.flush()
+            if not await workspace_package_screening.counts_match(session, workspace.id, pkg.prisma):
+                raise InvalidInput(INVALID, detail="screening counts don't match")
+        else:
+            await _record_into(pkg, workspace.id, written)
         await session.commit()
     except BaseException:
         await session.rollback()
@@ -688,7 +719,8 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
             await queue.enqueue(job, arg)
         except Exception:
             logger.exception("could not queue %s for paper %s; it stays uploaded until it is queued again", job, arg)
-    return ImportReport(workspace.id, name, added, matched, note_count, skipped, True, answer_count)
+    has_record = not workspace_package_screening.is_v2(pkg.screening)
+    return ImportReport(workspace.id, name, added, matched, note_count, skipped, has_record, answer_count)
 
 
 async def import_package(session: AsyncSession, data: bytes | IO[bytes]) -> ImportReport:

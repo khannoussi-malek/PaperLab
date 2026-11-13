@@ -511,7 +511,7 @@ async def screened(session, pdf_dir):
             WorkspaceBranchState(workspace_id=ws.id, paper_id=beta.id, state="stopped", set_by="owner"),
         ]
     )
-    await session.flush()
+    await session.commit()
     return ws, {
         "alpha": alpha,
         "beta": beta,

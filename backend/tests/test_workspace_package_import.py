@@ -164,12 +164,19 @@ async def test_round_trip_recreates_workspace_papers_notes_highlights_and_tags(s
     assert ("ingest_paper", str(rows["Beta study"].id)) not in jobs.jobs
 
 
-async def test_the_screening_record_is_kept_for_download(session, pdf_dir, client):
+async def test_the_screening_record_is_kept_for_download(session, pdf_dir, client):  # a version 1 package
+    report = await _import(session, _package(name=f"Record {RUN}"))
+    response = await client.get(f"/api/workspaces/{report.workspace_id}/package-record")
+    assert response.status_code == 200 and set(response.json()) == {"screening", "prisma"}
+
+
+async def test_a_version_2_package_keeps_no_record_because_its_screening_is_live(session, pdf_dir, client):
     ws, *_ = await _seeded(session, pdf_dir)
     package = (await workspace_package.export_package(session, ws.id, pdfs=False)).read()
     report = await _import(session, package)
+    assert report.has_record is False
     response = await client.get(f"/api/workspaces/{report.workspace_id}/package-record")
-    assert response.status_code == 200 and set(response.json()) == {"screening", "prisma"}
+    assert response.status_code == 404
     plain = await client.get(f"/api/workspaces/{ws.id}/package-record")
     assert plain.status_code == 404
 

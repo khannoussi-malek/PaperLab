@@ -19,7 +19,6 @@ from app.api.deps import get_discovery
 from app.core import papers, queue, saved_searches, schedules, tags, workspace_package, workspace_search, workspaces
 from app.core.errors import Conflict, NotFound
 from app.models import Workspace
-from tests.test_workspace_package_export import _seeded
 from tests.test_workspace_package_import import _package, _paper
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -281,8 +280,9 @@ async def test_the_api_lists_read_only_on_each_workspace(client, session, pdf_di
 
 
 async def test_an_import_makes_a_read_only_workspace_that_keeps_its_record(client, session, pdf_dir):
-    exported = await workspace_package.export_package(session, (await _seeded(session, pdf_dir))[0].id, pdfs=False)
-    report = await workspace_package.import_package(session, exported.read())
+    """A version 1 package (no live screening): its record is kept. A version 2 package keeps none (its screening is
+    live, see test_workspace_package_screening)."""
+    report = await workspace_package.import_package(session, _package(name=f"Locked {uuid.uuid4().hex[:6]}"))
     ws = await session.get(Workspace, report.workspace_id)
     assert ws.read_only is True
 
