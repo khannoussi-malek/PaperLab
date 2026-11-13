@@ -7,7 +7,7 @@ import {
   packageUrl,
   type Workspace,
 } from "@/api/client";
-import { usePackageRecord, useImportPackage } from "@/api/queries";
+import { usePackageFits, usePackageRecord, useImportPackage } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { workspaceHref } from "@/lib/route";
-import { importResultLine, packageErrorMessage } from "./packageCopy";
+import { importResultLine, packageErrorMessage, PDFS_TOO_LARGE } from "./packageCopy";
 
 /** "Export package…" from a workspace's row menu: one `.paperlab` file, with its PDFs only when ticked. */
 export function PackageExportDialog({
@@ -31,6 +31,9 @@ export function PackageExportDialog({
 }) {
   const [pdfs, setPdfs] = useState(false);
   const checkboxId = useId();
+  const fits = usePackageFits(workspace.id, pdfs);
+  const tooLarge =
+    fits.error instanceof ApiError && fits.error.code === "package_too_large_with_pdfs";
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
@@ -53,12 +56,19 @@ export function PackageExportDialog({
           <p className="text-sm text-muted-foreground">
             Without PDFs the file is small, and papers arrive as details only.
           </p>
+          {tooLarge && <p role="alert" className="text-sm text-destructive">{PDFS_TOO_LARGE}</p>}
         </div>
-        <Button asChild className="self-start">
-          <a href={packageUrl(workspace.id, pdfs)} download>
+        {tooLarge ? (
+          <Button disabled className="self-start">
             Download package
-          </a>
-        </Button>
+          </Button>
+        ) : (
+          <Button asChild className="self-start">
+            <a href={packageUrl(workspace.id, pdfs)} download>
+              Download package
+            </a>
+          </Button>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -77,6 +87,12 @@ export function PackageRecordLink({ workspaceId }: { workspaceId: string }) {
   );
 }
 
+/** The copy's code for a refused import: a 413 is the body cap, whatever sentence the server sent with it. */
+function importErrorCode(error: unknown): string {
+  if (!(error instanceof ApiError)) return "";
+  return error.status === 413 ? "package_too_large" : error.code;
+}
+
 /** "Import package…" on the workspaces list: a hidden file input behind the button. A new workspace opens on success. */
 export function ImportPackageButton() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -90,9 +106,7 @@ export function ImportPackageButton() {
       },
       onError: (error) =>
         sileo.error({
-          title: packageErrorMessage(
-            error instanceof ApiError ? error.code : "",
-          ),
+          title: packageErrorMessage(importErrorCode(error)),
         }),
     });
   }

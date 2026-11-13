@@ -331,6 +331,11 @@ export const packageUrl = (workspaceId: string, pdfs: boolean) =>
 export const packageRecordUrl = (workspaceId: string) =>
   `/api/workspaces/${encodeURIComponent(workspaceId)}/package-record`
 
+/** Whether that record is kept, without downloading it. */
+const packageRecordExistsUrl = (workspaceId: string) => `${packageRecordUrl(workspaceId)}/exists`
+
+export type PackageRecordExists = { exists: boolean }
+
 export type PackageImportResult = {
   workspace_id: string
   name: string
@@ -448,15 +453,12 @@ export const api = {
     form.append('file', file)
     return request<PackageImportResult>('/api/workspaces/import-package', { method: 'POST', body: form })
   },
-  /** Whether a workspace carries a screening record: a 404 means it doesn't. */
+  /** Whether a workspace carries a screening record. */
   hasPackageRecord: (workspaceId: string) =>
-    request<unknown>(packageRecordUrl(workspaceId)).then(
-      () => true,
-      (error: unknown) => {
-        if (error instanceof ApiError && error.status === 404) return false
-        throw error
-      },
-    ),
+    request<PackageRecordExists>(packageRecordExistsUrl(workspaceId)).then((body) => body.exists),
+  /** Resolves when the package, with its PDFs when `pdfs`, would export and import; a 409 ApiError when it is too large. */
+  checkPackage: (workspaceId: string, pdfs: boolean) =>
+    request<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}/package/check?pdfs=${pdfs}`),
   createWorkspace: (name: string) => request<Workspace>('/api/workspaces', sendJson('POST', { name })),
   renameWorkspace: (id: string, name: string) =>
     request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),

@@ -8,6 +8,10 @@ const REFUSALS: Record<string, string> = {
   package_invalid: "This package is damaged or incomplete.",
 };
 
+/** The export dialog's words when a package with its PDFs would be over the import cap. */
+export const PDFS_TOO_LARGE =
+  "With its PDFs this package would be over 200 MB, more than PaperLab can import. Export it without PDFs.";
+
 /** A refused import in words; the server's code is never shown. */
 export const packageErrorMessage = (code: string): string =>
   REFUSALS[code] ?? "Couldn't import this package. Try again.";

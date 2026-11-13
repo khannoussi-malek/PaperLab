@@ -75,6 +75,40 @@ test("a refused package shows its code in words and opens nothing", async () => 
   expect(window.location.hash).toBe("#/");
 });
 
+test("an upload over the body cap says the package is too large", async () => {
+  vi.spyOn(api, "importPackage").mockRejectedValue(new ApiError("Upload too big", 413, { detail: "Upload too big" }));
+  const toast = vi.spyOn(sileo, "error").mockReturnValue("" as never);
+  wrap(<ImportPackageButton />);
+  fireEvent.change(screen.getByLabelText("Package file"), {
+    target: { files: [new File(["x"], "big.paperlab")] },
+  });
+  await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "This package is too large to import." }));
+});
+
+test("a package that is too large with its PDFs says so and offers no download", async () => {
+  vi.spyOn(api, "checkPackage").mockRejectedValue(
+    new ApiError("package_too_large_with_pdfs", 409, { detail: "package_too_large_with_pdfs" }),
+  );
+  wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Include PDFs" }));
+  expect(
+    await screen.findByText(
+      "With its PDFs this package would be over 200 MB, more than PaperLab can import. Export it without PDFs.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Download package" })).toBeNull();
+});
+
+test("a package that fits with its PDFs keeps its download", async () => {
+  const check = vi.spyOn(api, "checkPackage").mockResolvedValue(undefined);
+  wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Include PDFs" }));
+  await waitFor(() => expect(check).toHaveBeenCalledWith("w1", true));
+  expect(screen.getByRole("link", { name: "Download package" }).getAttribute("href")).toBe(
+    "/api/workspaces/w1/package?pdfs=true",
+  );
+});
+
 test("the screening record link appears only when the workspace has one", async () => {
   const has = vi.spyOn(api, "hasPackageRecord").mockResolvedValue(true);
   wrap(<PackageRecordLink workspaceId="w2" />);

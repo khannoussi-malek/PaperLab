@@ -106,6 +106,7 @@ export const keys = {
   paperTagsOfPaper: (id: string) => ['papers', id, 'tags'] as const,
   workspaceNotes: (id: string) => ['workspaces', id, 'notes'] as const,
   packageRecord: (id: string) => ['workspaces', id, 'package-record'] as const,
+  packageCheck: (id: string, pdfs: boolean) => ['workspaces', id, 'package-check', pdfs] as const,
   searchRuns: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'runs'] as const,
   evidenceCards: (workspaceId: string) => ['workspaces', workspaceId, 'evidence-cards'] as const,
   evidenceCard: (paperId: string) => ['papers', paperId, 'evidence-card'] as const,
@@ -428,6 +429,15 @@ export const useWorkspace = (id: string) =>
 /** Whether a workspace carries a screening record from an imported package. */
 export const usePackageRecord = (workspaceId: string) =>
   useQuery({ queryKey: keys.packageRecord(workspaceId), queryFn: () => api.hasPackageRecord(workspaceId) })
+
+/** Whether the package, with its PDFs when `pdfs`, fits the import cap: a 409 ApiError when it does not. */
+export const usePackageFits = (workspaceId: string, pdfs: boolean) =>
+  useQuery({
+    queryKey: keys.packageCheck(workspaceId, pdfs),
+    queryFn: () => api.checkPackage(workspaceId, pdfs),
+    enabled: pdfs,
+    retry: false, // a 409 is the answer, not a failure to retry
+  })
 
 /** Imports a `.paperlab` file as a new workspace; the workspace list refreshes with it. */
 export function useImportPackage() {
