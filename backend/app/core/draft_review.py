@@ -107,6 +107,12 @@ def _input_tokens(mode: Mode, tokens: list[int]) -> int:
     return sum(len(LENSES) * sum(tokens) + n * len(spec.angles) * max(tokens) for n in spec.expected)
 
 
+def modes_for(parts: int) -> tuple[str, ...]:
+    """A draft in several parts gets the light review only: a full review of several parts (up to 18 calls a part
+    and round) could outrun DRAFT_REVIEW_JOB_TIMEOUT."""
+    return tuple(MODES) if parts == 1 else ("light",)
+
+
 def estimates(paper: str) -> list[dict]:
     tokens = [len(part) // 4 + PROMPT_TOKENS for part in split_parts(paper)]
     return [
@@ -117,7 +123,7 @@ def estimates(paper: str) -> list[dict]:
             "max_calls": max_calls(m, len(tokens)),
             "approx_input_tokens": _input_tokens(m, tokens),
         }
-        for m in MODES
+        for m in modes_for(len(tokens))
     ]
 
 

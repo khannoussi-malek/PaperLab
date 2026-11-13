@@ -156,11 +156,21 @@ async def test_a_long_draft_is_accepted_and_queued_with_its_parts_counted(sessio
     m = await doc(session, LONG_FILES["main.tex"])
     out = await go(session, m)
     assert (out["calls_max"], out["status"]) == (14, "queued")
-    with pytest.raises(Conflict, match="full_needs_confirm") as caught:
-        await go(session, m, mode="full", confirm_full=False)
-    assert (caught.value.details["likely_calls"], caught.value.details["max_calls"]) == (48, 60)
     est = await mdr.estimate(session, m.id)
-    assert (est["parts"], est["too_long"], [x["parts"] for x in est["modes"]]) == (2, False, [2, 2])
+    # light only: a full review of several parts could outrun the job's time limit
+    modes = [(x["mode"], x["parts"]) for x in est["modes"]]
+    assert (est["parts"], est["too_long"], modes) == (2, False, [("light", 2)])
+
+
+async def test_a_long_draft_gets_the_light_review_only(session, arq):
+    m = await doc(session, LONG_FILES["main.tex"])
+    for confirm in (False, True):
+        with pytest.raises(InvalidInput, match="full_one_part") as caught:
+            await go(session, m, mode="full", confirm_full=confirm)
+        assert caught.value.details["detail"] == (
+            "A draft this long gets the light review only. The full review needs a draft under 40,000 characters."
+        )
+    assert arq.jobs == []
 
 
 async def test_start_refuses_a_missing_main_file_and_a_running_review(session):

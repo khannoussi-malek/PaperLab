@@ -96,7 +96,8 @@ def test_the_call_numbers_come_from_the_mode_table():
     assert dr.estimates(PAPER)[1]["approx_input_tokens"] > dr.estimates(PAPER)[0]["approx_input_tokens"]
     assert (dr.max_calls("light", 2), dr.max_calls("full", 2)) == (14, 60)
     assert (dr.likely_calls("light", 2), dr.likely_calls("full", 2)) == (14, 48)
-    assert [m["parts"] for m in dr.estimates(LONG_PAPER)] == [2, 2] and dr.estimates(PAPER)[0]["parts"] == 1
+    assert [(m["mode"], m["parts"]) for m in dr.estimates(LONG_PAPER)] == [("light", 2)]  # light only, see modes_for
+    assert dr.estimates(PAPER)[0]["parts"] == 1 and dr.modes_for(1) == ("light", "full")
 
 
 async def test_a_short_paper_is_sent_exactly_as_before_with_no_part_note():

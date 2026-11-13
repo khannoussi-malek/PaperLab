@@ -77,6 +77,12 @@ async def start(
             "paper_too_long", detail="The draft is too long to review, even in parts.", limit=MAX_TOTAL_CHARS
         )
     parts = len(split_parts(paper))
+    if mode not in draft_review.modes_for(parts):
+        raise InvalidInput(
+            "full_one_part",
+            detail="A draft this long gets the light review only. "
+            "The full review needs a draft under 40,000 characters.",
+        )
     if mode == "full" and not confirm_full:  # the long run is asked for twice, like confirm_large elsewhere
         raise Conflict(
             "full_needs_confirm",
