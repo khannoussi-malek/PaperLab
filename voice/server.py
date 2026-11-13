@@ -1,11 +1,15 @@
-"""PaperLab's optional voice program: speech to text and text to speech on the Mac host.
+"""PaperLab's optional voice program: speech to text and text to speech.
 
-Docker on a Mac has no GPU or Neural Engine, so the API calls this over HTTP (like Ollama).
+It runs in its own container (or natively on a Mac developer's machine); the API calls it over HTTP.
 """
 import hashlib
+import os
 import shutil
+import threading
 import time
+import traceback
 import urllib.request
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +21,9 @@ from pydantic import BaseModel
 
 HERE = Path(__file__).parent
 PORT = 8791
+HOST = os.environ.get("VOICE_HOST", "127.0.0.1")
+MODELS_DIR = Path(os.environ.get("VOICE_MODELS_DIR", HERE / "models"))
+os.environ.setdefault("HF_HOME", str(MODELS_DIR / "hf"))  # before faster_whisper is imported
 MAX_UTTERANCE_BYTES = 16000 * 4 * 60  # one minute of 16 kHz float32
 VOICE = "af_heart"
 SAMPLE_RATE = 24000  # Kokoro's
@@ -31,6 +38,7 @@ MODEL_FILES = {
 
 whisper = None
 kokoro = None
+STATE = {"stage": "downloading", "detail": None}  # stage: downloading, loading, ready, failed
 
 
 def transcribe(audio: np.ndarray) -> str:
@@ -43,7 +51,35 @@ def synthesize(text: str) -> tuple[np.ndarray, int]:
     return np.asarray(samples, dtype=np.float32), rate
 
 
-app = FastAPI()
+def set_state(stage: str, detail: str | None = None) -> None:
+    global STATE
+    STATE = {"stage": stage, "detail": detail}
+
+
+def require_ready() -> None:
+    if STATE["stage"] != "ready":
+        raise HTTPException(503, "Voice is still getting ready.")
+
+
+def prepare() -> None:
+    try:
+        set_state("downloading")
+        ensure_model_files()
+        set_state("loading")
+        load_models()
+        set_state("ready")
+    except (Exception, SystemExit) as e:
+        traceback.print_exc()
+        set_state("failed", str(e))
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    threading.Thread(target=prepare, daemon=True).start()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.middleware("http")
@@ -56,11 +92,18 @@ async def refuse_browsers(request: Request, call_next):
 
 @app.get("/health")
 def health() -> dict:
-    return {"ready": True, "stt": "whisper-small-int8", "tts": "kokoro-int8"}
+    return {
+        "ready": STATE["stage"] == "ready",
+        "stage": STATE["stage"],
+        "detail": STATE["detail"],
+        "stt": "whisper-small-int8",
+        "tts": "kokoro-int8",
+    }
 
 
 @app.post("/transcribe")
 async def transcribe_route(request: Request) -> dict:
+    require_ready()
     body = await request.body()
     if len(body) > MAX_UTTERANCE_BYTES:
         raise HTTPException(413, "Audio is longer than a minute.")
@@ -75,6 +118,7 @@ class Speak(BaseModel):
 
 @app.post("/speak")
 async def speak_route(body: Speak) -> Response:
+    require_ready()
     if not body.text.strip():
         raise HTTPException(422, "Nothing to say.")
     try:
@@ -87,13 +131,13 @@ async def speak_route(body: Speak) -> Response:
 
 
 def ensure_model_files() -> None:
-    (HERE / "models").mkdir(exist_ok=True)
-    missing = [n for n in MODEL_FILES if not (HERE / "models" / n).exists()]
-    free = shutil.disk_usage(HERE).free
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    missing = [n for n in MODEL_FILES if not (MODELS_DIR / n).exists()]
+    free = shutil.disk_usage(MODELS_DIR).free
     if missing and free < MIN_FREE_BYTES:
         raise SystemExit(f"Not enough disk space to download the voice models: {free / 1024**3:.1f} GB free, 3 GB needed.")
     for name, (sha, megabytes) in MODEL_FILES.items():
-        path = HERE / "models" / name
+        path = MODELS_DIR / name
         if not path.exists():
             print(f"Downloading {name} (about {megabytes} MB)...", flush=True)
             urllib.request.urlretrieve(RELEASE + name, path)
@@ -107,10 +151,9 @@ def load_models() -> None:
     from faster_whisper import WhisperModel
     from kokoro_onnx import Kokoro
 
-    ensure_model_files()
     print("Loading models (the first run downloads Whisper small, about 460 MB)...", flush=True)
     whisper = WhisperModel("small", device="cpu", compute_type="int8", cpu_threads=4)
-    kokoro = Kokoro(str(HERE / "models/kokoro-v1.0.int8.onnx"), str(HERE / "models/voices-v1.0.bin"))
+    kokoro = Kokoro(str(MODELS_DIR / "kokoro-v1.0.int8.onnx"), str(MODELS_DIR / "voices-v1.0.bin"))
     start = time.perf_counter()
     transcribe(np.zeros(16000, dtype=np.float32))
     synthesize("Ready.")
@@ -118,5 +161,4 @@ def load_models() -> None:
 
 
 if __name__ == "__main__":
-    load_models()
-    uvicorn.run(app, host="127.0.0.1", port=PORT)
+    uvicorn.run(app, host=HOST, port=PORT)

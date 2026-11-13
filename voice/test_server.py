@@ -1,8 +1,22 @@
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 import server
+
+HEALTH_FIELDS = {"stt": "whisper-small-int8", "tts": "kokoro-int8"}
+
+
+@pytest.fixture(autouse=True)
+def ready_state(monkeypatch):
+    monkeypatch.setattr(server, "STATE", {"stage": "ready", "detail": None}, raising=False)
 
 
 @pytest.fixture
@@ -13,7 +27,59 @@ def client(monkeypatch):
 
 
 def test_health_reports_ready(client):
-    assert client.get("/health").json() == {"ready": True, "stt": "whisper-small-int8", "tts": "kokoro-int8"}
+    assert client.get("/health").json() == {"ready": True, "stage": "ready", "detail": None, **HEALTH_FIELDS}
+
+
+def test_health_says_downloading_before_ready(client, monkeypatch):
+    monkeypatch.setattr(server, "STATE", {"stage": "downloading", "detail": None})
+    body = client.get("/health").json()
+    assert body["ready"] is False and body["stage"] == "downloading"
+
+
+@pytest.mark.parametrize("route", ["/transcribe", "/speak"])
+def test_work_routes_refuse_with_503_until_ready(client, monkeypatch, route):
+    monkeypatch.setattr(server, "STATE", {"stage": "loading", "detail": None})
+    r = client.post(route, content=bytes(8)) if route == "/transcribe" else client.post(route, json={"text": "Hi."})
+    assert r.status_code == 503 and r.json() == {"detail": "Voice is still getting ready."}
+
+
+def test_a_failed_prepare_keeps_serving_and_says_why(client, monkeypatch):
+    def no_disk():
+        raise SystemExit("Not enough disk space to download the voice models: 1.0 GB free, 3 GB needed.")
+
+    monkeypatch.setattr(server, "ensure_model_files", no_disk)
+    server.prepare()
+    body = client.get("/health").json()
+    assert body["stage"] == "failed" and body["ready"] is False
+    assert "Not enough disk space" in body["detail"]
+
+
+def test_a_partial_file_is_replaced_on_next_start(monkeypatch, tmp_path):
+    good = b"the real model bytes"
+    sha = hashlib.sha256(good).hexdigest()
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "fake.bin").write_bytes(b"trunc")
+    monkeypatch.setattr(server, "MODELS_DIR", models)
+    monkeypatch.setattr(server, "MODEL_FILES", {"fake.bin": (sha, 1)})
+    monkeypatch.setattr(server.shutil, "disk_usage", lambda _: type("U", (), {"free": 10 * 1024**3})())
+    monkeypatch.setattr(server.urllib.request, "urlretrieve", lambda url, path: Path(path).write_bytes(good))
+
+    with pytest.raises(SystemExit):
+        server.ensure_model_files()
+    assert not (models / "fake.bin").exists()
+
+    server.ensure_model_files()
+    assert (models / "fake.bin").read_bytes() == good
+
+
+def test_models_dir_and_host_come_from_the_environment(tmp_path):
+    env = {k: v for k, v in os.environ.items() if k != "HF_HOME"}
+    env.update(VOICE_MODELS_DIR="/x", VOICE_HOST="0.0.0.0")
+    code = "import json, os, server; print(json.dumps([str(server.MODELS_DIR), server.HOST, os.environ['HF_HOME']]))"
+    out = subprocess.run([sys.executable, "-c", code], env=env, cwd=Path(server.__file__).parent,
+                         capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout.strip().splitlines()[-1]) == ["/x", "0.0.0.0", "/x/hf"]
 
 
 def test_transcribe_returns_text(client):
@@ -49,7 +115,7 @@ def test_transcribe_refuses_an_empty_body_with_422(client):
 
 def test_a_missing_model_with_too_little_disk_refuses_before_downloading(monkeypatch, tmp_path):
     downloads = []
-    monkeypatch.setattr(server, "HERE", tmp_path)
+    monkeypatch.setattr(server, "MODELS_DIR", tmp_path / "models")
     monkeypatch.setattr(server.shutil, "disk_usage", lambda _: type("U", (), {"free": 1 * 1024**3})())
     monkeypatch.setattr(server.urllib.request, "urlretrieve", lambda *a: downloads.append(a))
     with pytest.raises(SystemExit) as stop:
