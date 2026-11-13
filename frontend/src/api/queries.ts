@@ -445,7 +445,7 @@ export const usePackageFits = (workspaceId: string, pdfs: boolean, answers: bool
   useQuery({
     queryKey: keys.packageCheck(workspaceId, pdfs, answers),
     queryFn: () => api.checkPackage(workspaceId, pdfs, answers),
-    enabled: pdfs,
+    // always: a package too large for the import is refused with or without PDFs (it's cheap without them)
     retry: false, // a 409 is the answer, not a failure to retry
   })
 
