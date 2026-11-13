@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import prompts, skills, workspaces
+from app.core.answer_provenance import snapshot
 from app.core.errors import Conflict, NotFound
 from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
 from app.core.papers import get_paper
@@ -403,6 +404,7 @@ async def save_answer(
     names are copied, so renaming or deleting the connection later never changes the answer."""
     scope = _scope(paper_id)
     source_ids = [s.id for s in prepared.sources]
+    cited = parse_citations(content, len(source_ids))
     output = LLMOutput(
         paper_id=scope.paper_id,
         workspace_id=scope.workspace_id,
@@ -410,7 +412,8 @@ async def save_answer(
         question=question,
         content=content,
         source_chunks=source_ids,
-        cited_chunks=[source_ids[i - 1] for i in parse_citations(content, len(source_ids))],
+        cited_chunks=[source_ids[i - 1] for i in cited],
+        source_snapshot=snapshot(prepared.sources, [f"C{i}" for i in cited]),
         source_notes=[n.id for n in prepared.notes],
         notes_used=prepared.notes_used,
         notes_total=prepared.notes_total,
