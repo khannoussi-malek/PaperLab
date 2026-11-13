@@ -100,6 +100,10 @@ export function ConnectClaudePage() {
           <li>Read and, when you agree, set a workspace's research question and screening criteria.</li>
           <li>Read your notes, in one workspace or on one paper.</li>
           <li>
+            Read a paper's references and citing works (it never fetches them), the tables you captured, and past chat
+            answers, marked as AI.
+          </li>
+          <li>
             Read, create and edit your manuscripts' files, compile them, and read the result and the PDF's text.
             Claude Desktop asks you before each of these until you choose "Always allow". Every change keeps an earlier
             version you can restore in History, which holds the newest 20 Claude edits, and your own history is kept
@@ -115,7 +119,7 @@ export function ConnectClaudePage() {
         <p className="text-sm">
           Passages from your papers, paper details (with your reading pass and decision) and workspace names, and
           every note on a paper, marked as yours or AI. It also receives search results (titles and abstracts), your
-          screening decisions and AI suggestions on them, workspace paper lists, PRISMA counts, and a workspace's research question and screening criteria. When it works on a manuscript it also receives the text of the files it reads and the compile
+          screening decisions and AI suggestions on them, workspace paper lists, PRISMA counts, a workspace's research question and screening criteria, a paper's reference lists, your captured tables, and past chat answers with their passages. When it works on a manuscript it also receives the text of the files it reads and the compile
           output. Claude Desktop and Claude Code send what the tools return to
           Anthropic.
         </p>

@@ -30,6 +30,7 @@ test('says Claude can read, create and edit manuscripts, and that Claude Desktop
   expect(can).toHaveTextContent('newest 20 Claude edits')
   expect(can).toHaveTextContent('restore in History')
   expect(screen.getByRole('region', { name: 'What Claude receives' })).toHaveTextContent('manuscript')
+  expect(screen.getByRole('region', { name: 'What Claude receives' })).toHaveTextContent('past chat answers')
 })
 
 test('the check reports the real tool count', () => {
