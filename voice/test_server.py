@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import os
 import subprocess
@@ -54,23 +55,71 @@ def test_a_failed_prepare_keeps_serving_and_says_why(client, monkeypatch):
     assert "Not enough disk space" in body["detail"]
 
 
-def test_a_partial_file_is_replaced_on_next_start(monkeypatch, tmp_path):
-    good = b"the real model bytes"
-    sha = hashlib.sha256(good).hexdigest()
+GOOD = b"the real model bytes"
+
+
+@pytest.fixture
+def one_model(monkeypatch, tmp_path):
     models = tmp_path / "models"
     models.mkdir()
-    (models / "fake.bin").write_bytes(b"trunc")
     monkeypatch.setattr(server, "MODELS_DIR", models)
-    monkeypatch.setattr(server, "MODEL_FILES", {"fake.bin": (sha, 1)})
+    monkeypatch.setattr(server, "MODEL_FILES", {"fake.bin": (hashlib.sha256(GOOD).hexdigest(), 1)})
     monkeypatch.setattr(server.shutil, "disk_usage", lambda _: type("U", (), {"free": 10 * 1024**3})())
-    monkeypatch.setattr(server.urllib.request, "urlretrieve", lambda url, path: Path(path).write_bytes(good))
+    return models
 
-    with pytest.raises(SystemExit):
-        server.ensure_model_files()
-    assert not (models / "fake.bin").exists()
 
+def serve(monkeypatch, body: bytes, seen: list | None = None):
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def urlopen(url, timeout=None):
+        if seen is not None:
+            seen.append(timeout)
+        return Reply(body)
+
+    monkeypatch.setattr(server.urllib.request, "urlopen", urlopen)
+
+
+def test_an_interrupted_download_is_finished_on_the_next_start(monkeypatch, one_model):
+    (one_model / "fake.bin.part").write_bytes(b"trunc")  # voice was turned off mid-download
+    serve(monkeypatch, GOOD)
     server.ensure_model_files()
-    assert (models / "fake.bin").read_bytes() == good
+    assert (one_model / "fake.bin").read_bytes() == GOOD
+    assert not (one_model / "fake.bin.part").exists()
+
+
+def test_a_bad_model_file_is_downloaded_again_in_the_same_start(monkeypatch, one_model):
+    (one_model / "fake.bin").write_bytes(b"trunc")  # a partial file from before downloads went through .part
+    serve(monkeypatch, GOOD)
+    server.ensure_model_files()
+    assert (one_model / "fake.bin").read_bytes() == GOOD
+
+
+def test_a_download_that_does_not_match_fails_and_leaves_nothing(monkeypatch, one_model):
+    serve(monkeypatch, b"something else")
+    with pytest.raises(SystemExit, match="did not match its checksum"):
+        server.ensure_model_files()
+    assert list(one_model.iterdir()) == []
+
+
+def test_downloads_give_up_on_a_stalled_connection(monkeypatch, one_model):
+    seen: list = []
+    serve(monkeypatch, GOOD, seen)
+    server.ensure_model_files()
+    assert seen == [server.DOWNLOAD_TIMEOUT] and server.DOWNLOAD_TIMEOUT == 60
+
+
+def test_a_failure_with_no_message_still_says_what_failed(monkeypatch):
+    def boom():
+        raise RuntimeError()
+
+    monkeypatch.setattr(server, "ensure_model_files", boom)
+    server.prepare()
+    assert server.STATE == {"stage": "failed", "detail": "RuntimeError"}
 
 
 def test_models_dir_and_host_come_from_the_environment(tmp_path):

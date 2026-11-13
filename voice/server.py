@@ -31,6 +31,7 @@ NO_PHONEMES = "no phonemes"
 RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 # name -> (SHA-256, megabytes)
 MIN_FREE_BYTES = 3 * 1024**3
+DOWNLOAD_TIMEOUT = 60  # seconds without a byte before a model download gives up
 MODEL_FILES = {
     "kokoro-v1.0.int8.onnx": ("6e742170d309016e5891a994e1ce1559c702a2ccd0075e67ef7157974f6406cb", 88),
     "voices-v1.0.bin": ("bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d", 27),
@@ -68,9 +69,9 @@ def prepare() -> None:
         set_state("loading")
         load_models()
         set_state("ready")
-    except (Exception, SystemExit) as e:
+    except (Exception, SystemExit) as e:  # noqa: BLE001 - any failure must reach /health, not kill the thread
         traceback.print_exc()
-        set_state("failed", str(e))
+        set_state("failed", str(e) or type(e).__name__)
 
 
 @asynccontextmanager
@@ -130,20 +131,31 @@ async def speak_route(body: Speak) -> Response:
     return Response(samples.astype("<f4").tobytes(), media_type="application/octet-stream", headers={"X-Sample-Rate": str(rate)})
 
 
+def download(name: str, path: Path) -> None:
+    """Streams one model file into `<name>.part`, then moves it into place only when its checksum matches: a download
+    cut short (voice turned off, a dropped connection) never leaves a file that looks finished."""
+    part = path.with_name(path.name + ".part")
+    print(f"Downloading {name} (about {MODEL_FILES[name][1]} MB)...", flush=True)
+    with urllib.request.urlopen(RELEASE + name, timeout=DOWNLOAD_TIMEOUT) as reply, part.open("wb") as out:
+        shutil.copyfileobj(reply, out)
+    if hashlib.sha256(part.read_bytes()).hexdigest() != MODEL_FILES[name][0]:
+        part.unlink()
+        raise SystemExit(f"{name} did not match its checksum and was deleted. Turn voice off and on to try again.")
+    os.replace(part, path)
+
+
 def ensure_model_files() -> None:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    for name, (sha, _) in MODEL_FILES.items():
+        path = MODELS_DIR / name
+        if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() != sha:
+            path.unlink()  # a partial file from before downloads went through .part
     missing = [n for n in MODEL_FILES if not (MODELS_DIR / n).exists()]
     free = shutil.disk_usage(MODELS_DIR).free
     if missing and free < MIN_FREE_BYTES:
         raise SystemExit(f"Not enough disk space to download the voice models: {free / 1024**3:.1f} GB free, 3 GB needed.")
-    for name, (sha, megabytes) in MODEL_FILES.items():
-        path = MODELS_DIR / name
-        if not path.exists():
-            print(f"Downloading {name} (about {megabytes} MB)...", flush=True)
-            urllib.request.urlretrieve(RELEASE + name, path)
-        if hashlib.sha256(path.read_bytes()).hexdigest() != sha:
-            path.unlink()
-            raise SystemExit(f"{name} did not match its checksum and was deleted. Run it again.")
+    for name in missing:
+        download(name, MODELS_DIR / name)
 
 
 def load_models() -> None:

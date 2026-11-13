@@ -29,6 +29,7 @@ from app.db import SessionLocal
 from app.models.voice_turn import VoiceTurn
 from app.providers.base import LLM, Speech, SpeechUnavailable
 from app.providers.llm import build_llm
+from app.providers.speech import BAD_REPLY
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,8 @@ async def status(speech: SpeechDep) -> VoiceStatus:
     try:
         health = await speech.health()
     except SpeechUnavailable as e:
-        return VoiceStatus(ready=False, stage="off", detail=str(e))
+        # Something answered but not as the voice program does: it's up and broken, not off.
+        return VoiceStatus(ready=False, stage="failed" if str(e) == BAD_REPLY else "off", detail=str(e))
     detail = health.detail or (None if health.ready else "The voice program is still loading its models.")
     return VoiceStatus(ready=health.ready, stage=health.stage, detail=detail)
 

@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from app.api.deps import get_transport
 from app.config import Settings
 from app.providers.base import SpeechHealth, SpeechUnavailable
-from app.providers.speech import FakeSpeech, SidecarSpeech
+from app.providers.speech import BAD_REPLY, FakeSpeech, SidecarSpeech
 
 pytestmark = pytest.mark.anyio
 
@@ -162,3 +162,11 @@ def test_default_speech_url_is_the_voice_service(monkeypatch):
 
 async def test_fake_speech_is_ready():
     assert await FakeSpeech().health() == SpeechHealth(ready=True, stage="ready", detail=None)
+
+
+async def test_status_calls_an_unreadable_reply_failed_not_off(app, client):
+    app.dependency_overrides[get_transport] = lambda: httpx.MockTransport(
+        lambda r: httpx.Response(200, content=b"<html>")
+    )
+    body = (await client.get("/api/voice/status")).json()
+    assert body == {"ready": False, "stage": "failed", "detail": BAD_REPLY}
