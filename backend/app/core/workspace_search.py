@@ -87,7 +87,9 @@ class BatchResult:
     asked: bool = False  # False: every source was cooling down, paused or done, so this pass fetched nothing
 
 
-async def _find_or_create_external_ref(session: AsyncSession, candidate: Candidate) -> ExternalRef:
+async def _find_or_create_external_ref(
+    session: AsyncSession, candidate: Candidate, *, backfill: bool = True
+) -> ExternalRef:
     """The OR-match below can hit more than one row (e.g. one row shares the candidate's DOI, a different row
     shares its semantic_scholar id) — `.first()` on an unordered result would pick one arbitrarily, and a wrong
     pick doesn't just risk a bad backfill (handled below), it attaches this hit to the wrong paper outright
@@ -117,6 +119,8 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
             query = query.order_by((ExternalRef.doi == candidate.doi).is_(True).desc())
         existing = (await session.execute(query)).scalars().first()
     if existing is not None:
+        if not backfill:  # a package import only reads a library reference; it never edits one (M35c M1)
+            return existing
         external_ids = dict(existing.external_ids)
         for source, value in candidate.external_ids.items():
             if source in external_ids:

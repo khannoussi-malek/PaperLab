@@ -345,6 +345,7 @@ export type PackageImportResult = {
   pdfs_skipped: number
   has_record: boolean
   answers: number
+  hits: number
 }
 
 export type NotesImportResult = {

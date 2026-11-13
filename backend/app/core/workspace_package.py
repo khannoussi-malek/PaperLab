@@ -41,6 +41,7 @@ from app.core import (
     search_run_results,
     tags,
     workspace_package_answers,
+    workspace_package_screening,
     workspaces,
 )  # fmt: skip
 from app.core.candidates import Candidate
@@ -49,12 +50,19 @@ from app.core.citations_bundle import SPOOL_BYTES
 from app.core.citations_import import CitationsImportError
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
-from app.core.workspace_package_shapes import AnswersDoc, Manifest, NotesDoc, PapersDoc, TagsDoc
+from app.core.workspace_package_shapes import (
+    AnswersDoc,
+    Manifest,
+    NotesDoc,
+    PapersDoc,
+    PrismaTotals,
+    ScreeningV2,
+    TagsDoc,
+)
 from app.models import Chunk, Note, Paper, PaperStatus, Workspace, WorkspaceTag, note_anchors
-from app.models.references import ExternalRef
 from app.models.tag import paper_tags
 from app.models.workspace import workspace_papers
-from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
+from app.models.workspace_search import WorkspaceSearchRun
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +87,13 @@ def _iso(moment: datetime | None) -> str | None:
     return moment.isoformat() if moment else None
 
 
-def _paper_row(key: str, paper: Paper, pdf: str | None) -> dict:
-    row = {"key": key, **{name: getattr(paper, name) for name in PAPER_FIELDS}, "has_pdf": paper.has_pdf}
+def _paper_row(key: str, paper: Paper, pdf: str | None, member: bool = True) -> dict:
+    row = {
+        "key": key,
+        "member": member,
+        **{name: getattr(paper, name) for name in PAPER_FIELDS},
+        "has_pdf": paper.has_pdf,
+    }
     return row | ({"pdf": pdf} if pdf else {})
 
 
@@ -110,68 +123,12 @@ async def _tags_json(session: AsyncSession, workspace_id: uuid.UUID, keys: dict[
     return [{"name": name, "papers": by_name[name]} for name in sorted(by_name, key=str.lower)]
 
 
-def _ai_suggestion(hit: WorkspaceSearchHit) -> dict | None:
-    if hit.suggestion is None:
-        return None
-    return {
-        "ai": True, "suggestion": hit.suggestion, "reason": hit.suggestion_reason, "note": hit.suggestion_note,
-        "model": hit.suggestion_model, "relevance": hit.suggestion_relevance, "confidence": hit.suggestion_confidence,
-    }  # fmt: skip
-
-
 async def _runs(session: AsyncSession, workspace_id: uuid.UUID) -> tuple[list[WorkspaceSearchRun], dict, dict]:
     """The workspace's runs in start order, their keys (r1…) and their display names."""
     query = select(WorkspaceSearchRun).where(WorkspaceSearchRun.workspace_id == workspace_id)
     runs = list((await session.scalars(query.order_by(WorkspaceSearchRun.started_at, WorkspaceSearchRun.id))).all())
     keys = {run.id: f"r{number}" for number, run in enumerate(runs, start=1)}
     return runs, keys, await search_run_results.run_labels(session, runs)
-
-
-async def _screening_json(session: AsyncSession, workspace_id: uuid.UUID, runs, keys, labels, paper_keys) -> dict:
-    # ponytail: every hit in memory at once; a workspace with hundreds of thousands of hits makes a large file.
-    rows = await session.execute(
-        select(
-            WorkspaceSearchHit, ExternalRef.title, ExternalRef.doi,
-            SearchRunEligibility.stage2_status, SearchRunEligibility.stage2_exclude_reason,
-        )
-        .outerjoin(ExternalRef, WorkspaceSearchHit.external_ref_id == ExternalRef.id)
-        .outerjoin(
-            SearchRunEligibility,
-            (SearchRunEligibility.paper_id == WorkspaceSearchHit.paper_id)
-            & (SearchRunEligibility.search_run_id == WorkspaceSearchHit.run_id),
-        )
-        .where(WorkspaceSearchHit.workspace_id == workspace_id)
-        .order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id)
-    )  # fmt: skip
-    hits = [
-        {
-            "run": keys[hit.run_id],
-            "title": title,
-            "doi": doi,
-            "paper": paper_keys.get(hit.paper_id),
-            "source_method": hit.source_method,
-            "stage1": {
-                "status": hit.stage1_status,
-                "exclude_reason": hit.stage1_exclude_reason,
-                "note": hit.stage1_note,
-            },
-            "stage2": {"status": s2, "exclude_reason": s2_reason} if s2 is not None else None,
-            "ai_suggestion": _ai_suggestion(hit),
-        }
-        for hit, title, doi, s2, s2_reason in rows
-    ]
-    run_rows = [
-        {
-            "key": keys[run.id],
-            "query": labels[run.id],
-            "sources": run.sources_json,
-            "filters": run.filters_json,
-            "status": run.status,
-            "started_at": _iso(run.started_at),
-        }
-        for run in runs
-    ]
-    return {"runs": run_rows, "hits": hits}
 
 
 async def _prisma_json(session: AsyncSession, workspace_id: uuid.UUID, keys: dict) -> dict:
@@ -217,11 +174,15 @@ async def _parts(
         for p in members if pdfs and p.file_path and Path(p.file_path).is_file()
     }  # fmt: skip
     pdf_files = list(pdf_of.values())
+    runs, run_keys, labels = await _runs(session, workspace_id)
+    live = await workspace_package_screening.load(session, workspace_id, runs)
+    outside = await workspace_package_screening.outside_papers(session, live, set(keys))
+    screen_keys = keys | {paper.id: f"p{len(members) + number}" for number, paper in enumerate(outside, start=1)}
     papers_json = {"papers": [
         _paper_row(keys[p.id], p, pdf_of[p.id][0] if p.id in pdf_of else None) for p in members
-    ]}  # fmt: skip
-    runs, run_keys, labels = await _runs(session, workspace_id)
-    screening = await _screening_json(session, workspace_id, runs, run_keys, labels, keys)
+    ] + [_paper_row(screen_keys[p.id], p, None, member=False) for p in outside]}  # fmt: skip
+    workspace_row = await session.get(Workspace, workspace_id)
+    screening = workspace_package_screening.document(live, workspace_row, run_keys, labels, screen_keys)
     prisma = await _prisma_json(session, workspace_id, run_keys)
     note_views = await workspaces.notes(session, workspace_id)
     answer_rows, answers_skipped = (
@@ -304,6 +265,7 @@ class ImportReport:
     pdfs_skipped: int  # a PDF that was too large, not a PDF, or missing from the zip
     has_record: bool  # the screening record was kept for download
     answers: int  # chat answers written to the workspace
+    hits: int  # search results rebuilt from the screening (0 for a package without live screening)
 
 
 @dataclass(frozen=True)
@@ -342,6 +304,17 @@ def _vet(zf: zipfile.ZipFile) -> None:
         raise InvalidInput(UNSAFE) from None
 
 
+def _no_nul(value):
+    """The value with NUL characters removed from every string (Postgres text and JSONB refuse them). A new value."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_no_nul(item) for item in value]
+    if isinstance(value, dict):
+        return {_no_nul(key): _no_nul(item) for key, item in value.items()}
+    return value
+
+
 def _json(zf: zipfile.ZipFile, name: str):
     if name not in zf.NameToInfo:
         raise InvalidInput(INVALID)
@@ -349,7 +322,7 @@ def _json(zf: zipfile.ZipFile, name: str):
     if info.file_size > MAX_JSON_BYTES:
         raise InvalidInput(TOO_LARGE)
     try:
-        return json.loads(zf.read(info))
+        return _no_nul(json.loads(zf.read(info)))
     except (ValueError, OSError, RuntimeError, EOFError, NotImplementedError, zipfile.BadZipFile, zlib.error):
         raise InvalidInput(INVALID) from None
 
@@ -406,6 +379,17 @@ def _answer_rows(zf: zipfile.ZipFile) -> list[dict]:
     return _shaped(AnswersDoc, _json(zf, "answers.json"))["answers"]
 
 
+def _check_screening_v2(screening: dict, prisma: dict, paper_keys: set[str]) -> None:
+    """A version 2 screening takes its shape, names only keys the package holds, and prisma.json carries the totals
+    the count check reads."""
+    _shaped(ScreeningV2, screening)
+    _shaped(PrismaTotals, prisma)
+    try:
+        workspace_package_screening.check_references(screening, paper_keys)
+    except ValueError:
+        raise InvalidInput(INVALID) from None
+
+
 def _read(zf: zipfile.ZipFile) -> _Package:
     """Every member, checked: the manifest first (a file without one, or of another format, is refused before anything
     else is read). Each JSON member must take the shape its model describes."""
@@ -426,6 +410,8 @@ def _read(zf: zipfile.ZipFile) -> _Package:
     screening, prisma = _json(zf, "screening.json"), _json(zf, "prisma.json")
     if not isinstance(screening, dict) or not isinstance(prisma, dict):
         raise InvalidInput(INVALID)
+    if workspace_package_screening.is_v2(screening):
+        _check_screening_v2(screening, prisma, {row["key"] for row in papers_rows})
     _made_on(manifest)
     return _Package(zf, manifest, papers_rows, notes_rows, tag_rows, screening, prisma, _answer_rows(zf))
 
@@ -608,19 +594,23 @@ async def _papers_into(session, pkg, workspace_id, held, alias, written, queued)
     library: set[uuid.UUID] = set()
     added = skipped = 0
     for rec in pkg.papers:
-        key = rec["key"]
+        key, member = rec["key"], rec.get("member", True)  # a non-member is a paper the screening names only
         if key in alias:
             paper_id = ids[alias[key]]
         elif key in held:
             paper_id = held[key]
-            library.add(paper_id)
+            if member:
+                library.add(paper_id)
         else:
             paper, was_skipped = await _new_paper(session, pkg, rec, written, queued)
-            paper_id, added, skipped = paper.id, added + 1, skipped + int(was_skipped)
+            paper_id = paper.id
+            if member:
+                added, skipped = added + 1, skipped + int(was_skipped)
         ids[key] = paper_id
-        await session.execute(
-            insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
-        )
+        if member:
+            await session.execute(
+                insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
+            )
     return ids, added, len(library), skipped
 
 
@@ -723,7 +713,15 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
         await _tags_into(session, workspace.id, pkg.tags, ids)
         note_count = await _notes_into(session, pkg.notes, ids)
         answer_count = await workspace_package_answers.write_rows(session, workspace.id, pkg.answers, ids)
-        await _record_into(pkg, workspace.id, written)
+        hit_count = 0
+        if workspace_package_screening.is_v2(pkg.screening):
+            hit_count = await workspace_package_screening.rebuild(session, pkg.screening, workspace, ids)
+            await session.flush()
+            full_text = workspace_package_screening.full_text_in_package(pkg.screening, pkg.papers)
+            if not await workspace_package_screening.counts_match(session, workspace.id, pkg.prisma, full_text):
+                raise InvalidInput(INVALID, detail="screening counts don't match")
+        else:
+            await _record_into(pkg, workspace.id, written)
         await session.commit()
     except BaseException:
         await session.rollback()
@@ -735,7 +733,10 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
             await queue.enqueue(job, arg)
         except Exception:
             logger.exception("could not queue %s for paper %s; it stays uploaded until it is queued again", job, arg)
-    return ImportReport(workspace.id, name, added, matched, note_count, skipped, True, answer_count)
+    has_record = not workspace_package_screening.is_v2(pkg.screening)
+    return ImportReport(
+        workspace.id, name, added, matched, note_count, skipped, has_record, answer_count, hit_count
+    )
 
 
 async def import_package(session: AsyncSession, data: bytes | IO[bytes]) -> ImportReport:
