@@ -16,6 +16,7 @@ import { navigationFor, startupAction, type StartupAction } from './navigation'
 import { readSettings, settingsFile, updateSettings, type Settings } from './settings'
 import { autoStartFor, launch, viewFor, writeFiles, type Deps, type Screen } from './stack'
 import { checkForUpdate, type Update } from './updates'
+import { removeModels, setVoice } from './voice'
 
 // Tests only: a data folder of their own. Otherwise Electron's userData (spec §5), which also keys the single-instance
 // lock. Must run before anything reads the path.
@@ -52,7 +53,10 @@ function setSettings(patch: Partial<Settings>) {
 
 const locateDocker = () => findDocker(process.platform, DOCKER_ENV, homedir(), usable)
 const dockerAt = (bin: string, signal?: AbortSignal) =>
-  makeDocker(bin, spawnRunner, { dataDir: DATA, version: app.getVersion(), port: settings.port }, log, { signal })
+  makeDocker(bin, spawnRunner, { dataDir: DATA, version: app.getVersion(), port: settings.port }, log, {
+    signal,
+    voice: () => settings.voiceEnabled,
+  })
 
 /** Docker Desktop, opened when Docker isn't running (macOS, Windows). Any other Docker gets the Start Docker screen.
  * Whether `bin` qualifies is `autoStartFor`'s call (stack.ts): it resolves the real path and checks `isDockerDesktop`,
@@ -252,6 +256,30 @@ function fromPaperLab(event: IpcMainInvokeEvent): boolean {
   }
 }
 
+/** Settings → Voice (voice.ts decides what each step means; this wires it to Docker and the sender's window). */
+function handleVoice() {
+  ipcMain.handle('paperlab:voice:get', (event) => {
+    if (!fromPaperLab(event)) throw new Error('refused')
+    return settings.voiceEnabled
+  })
+  ipcMain.handle('paperlab:voice:set', async (event, value: unknown) => {
+    if (!fromPaperLab(event) || typeof value !== 'boolean') throw new Error('refused')
+    const bin = locateDocker()
+    const progress = (line: string) => event.sender.send('paperlab:voice:progress', line)
+    return setVoice(bin === null ? null : dockerAt(bin), value, progress, (on) => setSettings({ voiceEnabled: on }))
+  })
+  ipcMain.handle('paperlab:voice:remove-models', async (event) => {
+    if (!fromPaperLab(event)) throw new Error('refused')
+    const bin = locateDocker()
+    return removeModels(bin === null ? null : dockerAt(bin), settings.voiceEnabled)
+  })
+  ipcMain.handle('paperlab:voice:oom', async (event) => {
+    if (!fromPaperLab(event)) throw new Error('refused')
+    const bin = locateDocker()
+    return bin === null ? false : dockerAt(bin).voiceOutOfMemory()
+  })
+}
+
 function handleSwitches() {
   ipcMain.handle('paperlab:get', (event, name: unknown) => {
     if (!fromPaperLab(event) || !isSwitch(name)) throw new Error('refused')
@@ -334,6 +362,7 @@ if (!app.requestSingleInstanceLock()) {
   })
   app.on('window-all-closed', () => app.quit())
   handleSwitches()
+  handleVoice()
   void app.whenReady().then(() => {
     createWindow()
     syncTray()

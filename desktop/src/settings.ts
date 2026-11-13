@@ -14,6 +14,8 @@ export type Settings = {
   /** The lastVersion a backup has already been taken for this upgrade from (D142): lets a retry skip backing up
    * again over the dump it already took. Cleared once the new version starts. */
   backedUpFrom: string | null
+  /** Voice questions: the voice container runs (Settings → Voice). Off until the owner turns it on. */
+  voiceEnabled: boolean
 }
 
 export const DEFAULTS: Settings = {
@@ -23,6 +25,7 @@ export const DEFAULTS: Settings = {
   dismissedUpdate: null,
   lastVersion: null,
   backedUpFrom: null,
+  voiceEnabled: false,
 }
 
 const isPort = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 65535
@@ -47,6 +50,7 @@ export function parseSettings(text: string): Settings {
     dismissedUpdate: isTextOrNull(raw.dismissedUpdate) ? raw.dismissedUpdate : DEFAULTS.dismissedUpdate,
     lastVersion: isTextOrNull(raw.lastVersion) ? raw.lastVersion : DEFAULTS.lastVersion,
     backedUpFrom: isTextOrNull(raw.backedUpFrom) ? raw.backedUpFrom : DEFAULTS.backedUpFrom,
+    voiceEnabled: typeof raw.voiceEnabled === 'boolean' ? raw.voiceEnabled : DEFAULTS.voiceEnabled,
   }
 }
 

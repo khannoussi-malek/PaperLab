@@ -15,7 +15,25 @@ describe('settings.json', () => {
       dismissedUpdate: null,
       lastVersion: null,
       backedUpFrom: null,
+      voiceEnabled: false,
     })
+  })
+
+  it('voiceEnabled defaults to off and survives a round trip', () => {
+    expect(DEFAULTS.voiceEnabled).toBe(false)
+    const dir = join(dataDir(), 'PaperLab')
+    const written = updateSettings(dir, DEFAULTS, { voiceEnabled: true })
+
+    expect(written.voiceEnabled).toBe(true)
+    expect(readSettings(dir)).toEqual(written)
+    expect(parseSettings('{"voiceEnabled": "yes"}').voiceEnabled).toBe(false)
+  })
+
+  it('an old file without voiceEnabled reads as off, and keeps its other fields', () => {
+    const old = parseSettings('{"port": 5191, "keepRunning": true}')
+
+    expect(old.voiceEnabled).toBe(false)
+    expect(old).toEqual({ ...DEFAULTS, port: 5191, keepRunning: true })
   })
 
   it('gives the defaults for a missing file, an unreadable one, broken JSON and JSON that is not an object', () => {
