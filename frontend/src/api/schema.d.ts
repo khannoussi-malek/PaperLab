@@ -2744,6 +2744,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/numbers/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Numbers
+         * @description The section's numbers a model found, each kept only when its quote is in the section and holds the value (D33).
+         *     Nothing is saved; `?model_id=` picks the model. 422 unknown_section.
+         */
+        post: operations["suggest_numbers_api_papers__paper_id__numbers_suggestions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/numbers/candidates": {
         parameters: {
             query?: never;
@@ -4122,6 +4143,8 @@ export interface components {
                 number,
                 number
             ][] | null;
+            /** Suggested */
+            suggested?: string | null;
         };
         /** CellOut */
         CellOut: {
@@ -4140,7 +4163,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "extracted" | "human";
+            origin: "extracted" | "human" | "llm";
             /** Original Raw */
             original_raw: string | null;
             /** Page */
@@ -6396,6 +6419,43 @@ export interface components {
                 number,
                 number
             ][];
+            /**
+             * Suggested
+             * @default false
+             */
+            suggested: boolean;
+        };
+        /** NumberSuggestRequest */
+        NumberSuggestRequest: {
+            /** Section Title */
+            section_title: string | null;
+        };
+        /** NumberSuggestionOut */
+        NumberSuggestionOut: {
+            /** Label */
+            label: string;
+            /** Raw */
+            raw: string;
+            /** Unit */
+            unit: string;
+            /** Quote */
+            quote: string;
+            /** Page */
+            page: number;
+            /** Bbox */
+            bbox: [
+                number,
+                number,
+                number,
+                number
+            ][];
+        };
+        /** NumberSuggestionsOut */
+        NumberSuggestionsOut: {
+            /** Suggestions */
+            suggestions: components["schemas"]["NumberSuggestionOut"][];
+            /** Dropped */
+            dropped: number;
         };
         /** PackageRecordExists */
         PackageRecordExists: {
@@ -7164,7 +7224,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "extracted" | "human";
+            origin: "extracted" | "human" | "llm";
             /** Original Raw */
             original_raw: string | null;
             /** Page */
@@ -14581,6 +14641,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NumberAddedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_numbers_api_papers__paper_id__numbers_suggestions_post: {
+        parameters: {
+            query?: {
+                model_id?: string | null;
+            };
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NumberSuggestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NumberSuggestionsOut"];
                 };
             };
             /** @description Validation Error */

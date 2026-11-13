@@ -72,6 +72,21 @@ describe('fromDataset', () => {
   })
 })
 
+describe('an AI-suggested cell (D33)', () => {
+  it('keeps what the model wrote through a save, and counts as edited once changed', () => {
+    const dataset = {
+      columns: [{ id: 'col-l', position: 0, name: 'Label', unit: null }],
+      rows: [{ id: 'row-1', position: 0, cells: [
+        { column_id: 'col-l', raw: 'Accuracy', value: null, error: null, origin: 'llm', original_raw: 'Acc', page: null, bbox: null },
+      ] }],
+    } as unknown as Dataset
+    const grid = fromDataset(dataset)
+    expect(grid.rows[0].cells[0].suggested).toBe('Acc')
+    expect(isEdited(grid.rows[0].cells[0])).toBe(true)
+    expect(toGridIn(grid).rows[0].cells[0]).toMatchObject({ raw: 'Accuracy', suggested: 'Acc', extracted: null })
+  })
+})
+
 describe('editing', () => {
   it('changes one cell without touching the grid it came from, and marks an extracted cell edited', () => {
     const grid = fromPreview(preview)

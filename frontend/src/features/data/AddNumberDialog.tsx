@@ -85,7 +85,7 @@ export function AddNumberDialog({ paperId, anchor, onClose }: Props) {
     const untouched = candidate !== undefined && value === fieldsOf(candidate).value && error === fieldsOf(candidate).error
     const raw = untouched ? candidate.raw : error ? `${value} ± ${error}` : value
     try {
-      await addNumber.mutateAsync({ paperId, number: { label, raw, unit, page: anchor.page, bbox: anchor.rects } })
+      await addNumber.mutateAsync({ paperId, number: { label, raw, unit, page: anchor.page, bbox: anchor.rects, suggested: false } })
       onClose()
     } catch {
       // shown in the alert below from addNumber.error

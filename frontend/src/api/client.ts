@@ -90,6 +90,7 @@ export type TablePreview = components['schemas']['TablePreviewOut']
 export type ChartUse = components['schemas']['ChartUseOut']
 export type NumberCandidate = components['schemas']['NumberCandidateOut']
 export type NumberCreate = components['schemas']['NumberCreate']
+export type NumberSuggestions = components['schemas']['NumberSuggestionsOut']
 export type NumberAdded = components['schemas']['NumberAddedOut']
 export type Chart = components['schemas']['ChartOut']
 export type ChartSummary = components['schemas']['ChartSummaryOut']
@@ -498,6 +499,9 @@ export const api = {
     request<NoteSuggestionsOut>(`/api/papers/${paperId}/notes/suggest`, { method: 'POST' }),
   previewTable: (paperId: string, page: number, region: [number, number, number, number]) =>
     request<TablePreview>(`/api/papers/${paperId}/tables/preview`, sendJson('POST', { page, region })),
+  /** A section's numbers a model found, kept only when each quote is in the section and holds its value (D33). */
+  suggestNumbers: (paperId: string, sectionTitle: string | null) =>
+    request<NumberSuggestions>(`/api/papers/${paperId}/numbers/suggestions`, sendJson('POST', { section_title: sectionTitle })),
   addNumber: (paperId: string, number: NumberCreate) =>
     request<NumberAdded>(`/api/papers/${paperId}/numbers`, sendJson('POST', number)),
   numberCandidates: (text: string) => request<NumberCandidate[]>('/api/numbers/candidates', sendJson('POST', { text })),
