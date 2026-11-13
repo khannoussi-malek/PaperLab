@@ -201,23 +201,23 @@ async def test_rows_record_evidence_level_and_confidence(session, tmp_path):
     assert rows[0]["evidence_level"] == "full_text" and rows[0]["confidence"] == "high"
 
 
-async def test_prompt_version_1_runs_the_old_prompt_and_restores_v2(session, tmp_path, capsys):
+async def test_prompt_version_1_runs_the_old_prompt_and_restores_the_current_one(session, tmp_path, capsys):
     paper, cases = await seed(session, tmp_path)
-    v2_system = ev.claims.SYSTEM_PROMPT
+    current = ev.claims.SYSTEM_PROMPT
     llm = Scripted(*REPLIES)
     out = tmp_path / "rows.jsonl"
     assert await ev.execute(session, config(cases), llm, None, out, prompt_version=1) == 0
     assert all("continues a sentence" not in s for s in llm.systems) and llm.systems
     assert {json.loads(line)["prompt_version"] for line in out.read_text().splitlines()} == {1}
     assert "prompt_version=1" in capsys.readouterr().out
-    assert ev.claims.SYSTEM_PROMPT == v2_system and ev.claims.CLAIM_PROMPT_VERSION == 2
+    assert ev.claims.SYSTEM_PROMPT == current and ev.claims.CLAIM_PROMPT_VERSION == 3
 
 
 async def test_an_unknown_prompt_version_is_bad_input(session, tmp_path, capsys):
     paper, cases = await seed(session, tmp_path)
     assert await ev.execute(session, config(cases), Scripted(), None, None, prompt_version=99) == 2
     assert "prompt version 99" in capsys.readouterr().err
-    assert ev.claims.CLAIM_PROMPT_VERSION == 2
+    assert ev.claims.CLAIM_PROMPT_VERSION == 3
 
 
 def test_cli_rejects_a_non_numeric_prompt_version(monkeypatch):

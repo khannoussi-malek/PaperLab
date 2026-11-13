@@ -135,3 +135,26 @@ def test_split_sentences_is_the_span_list_after_the_plain_word_filter():
     expected = [raw for _, _, raw in spans if len(manuscript_sentences.to_plain(raw).split()) >= 4]
     assert [s.raw for s in manuscript_sentences.split_sentences(text)] == expected
     assert expected and len(spans) > len(expected)  # the filter really drops some
+
+
+def test_scoped_plain_marks_this_papers_cite_and_the_others():
+    raw = r"Dense retrievers~\cite{dpr} beat BM25 on NQ \citep[p.~3]{liu, other}, while SPLADE\cite{splade} helps."
+    scoped = manuscript_sentences.scoped_plain
+    assert scoped(raw, "liu") == (
+        "Dense retrievers [other source] beat BM25 on NQ [this paper], while SPLADE [other source] helps."
+    )
+    assert scoped(raw, "dpr").startswith("Dense retrievers [this paper] beat BM25")
+
+
+def test_points_inside_finds_own_section_table_and_figure_refs():
+    inside = manuscript_sentences.points_inside
+    assert inside(r"As Section~\ref{sec:results} shows, fused search wins on every file.")
+    assert inside(r"Fused search wins (\cref{tab:main}) and \autoref{fig:x} plots it.")
+    assert inside(r"See \vref{tab:a} and \Autoref{fig:b} for the numbers.")
+    assert not inside(r"See \href{https://x.org}{the site} for the data.")
+    assert not inside(r"Fused search wins on every file we tried.")
+
+
+def test_to_plain_drops_every_reference_command():
+    plain = to_plain(r"Fused search wins~\cref{tab:main}, \vref{x} and \Autoref{y} show it.")
+    assert "ref" not in plain and "<" not in plain

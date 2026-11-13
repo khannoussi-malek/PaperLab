@@ -21,7 +21,7 @@ from app.models import Chunk, LLMOutput, Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm import build_llm
 
-CLAIM_PROMPT_VERSION = 2
+CLAIM_PROMPT_VERSION = 3
 PASSAGES = 6
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("claim_check", CLAIM_PROMPT_VERSION).split("\n<!-- prompt -->\n")
 OUTPUT_KIND = "claim_check"
@@ -80,6 +80,10 @@ async def _paper(session: AsyncSession, paper_id: uuid.UUID | None, doi: str | N
     return paper
 
 
+SCOPE_MARKS = re.compile(r"\s*\[(?:this paper|other source)\]")  # the reviewer's cite marks: not search words
+# A figure such as 28.95 or 73 sits in a table chunk the vectors rank low; its exact words find it (2026-11-11).
+FIGURE = re.compile(r"(?<![\w.])(?:\d+\.\d+|\d{2,})(?!\w)")
+
 LEAD_CHARS = 300  # how much of a sentence's start, from the chunk before, the verifier is shown
 _SENTENCE_END = re.compile(r"[.!?][\"'”’)\]]*\s+")
 
@@ -134,8 +138,13 @@ async def _passages(
         and await session.scalar(select(func.count()).select_from(Chunk).where(Chunk.paper_id == paper.id))
     )
     if has_chunks:
+        query = SCOPE_MARKS.sub("", claim)
         found = await retrieval.retrieve(
-            session, f"{claim} {quoted_text}" if quoted_text else claim, paper_ids=[paper.id], k=PASSAGES
+            session,
+            f"{query} {quoted_text}" if quoted_text else query,
+            paper_ids=[paper.id],
+            k=PASSAGES,
+            words=True if FIGURE.search(query) else None,
         )
         if found:
             leads, lead_pages = await _leads(session, found)
