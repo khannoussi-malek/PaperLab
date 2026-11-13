@@ -284,7 +284,7 @@ export function HitTable({
     !(sort === 'ranked' ? ranked.isError : isError) &&
     visibleRows.length === 0 && (
       <EmptyState
-        title={filtered ? 'No results match these filters.' : inbox ? 'Nothing new left to screen from this search.' : 'No results yet: run a search above.'}
+        title={filtered ? 'No results match these filters.' : inbox ? 'Nothing new from this search since you last looked.' : 'No results yet: run a search above.'}
         action={
           filtered && (
             <Button

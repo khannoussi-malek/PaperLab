@@ -64,6 +64,22 @@ describe('snowball next staleness', () => {
   })
 })
 
+describe('saved search counts', () => {
+  it('a screening decision refreshes the saved searches, whose "N new" counts unscreened hits', async () => {
+    vi.spyOn(api, 'patchSearchHit').mockResolvedValue({ id: 'h1', stage1_status: 'relevant' } as Hit)
+    vi.spyOn(api, 'bulkPatchSearchHits').mockResolvedValue({ updated: 1 })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    const one = renderHook(() => usePatchSearchHit('ws-1'), { wrapper: withQueryClient(client) }).result
+    const bulk = renderHook(() => useBulkPatchSearchHits('ws-1'), { wrapper: withQueryClient(client) }).result
+    one.current.mutate({ hitId: 'h1', body: { stage1_status: 'relevant' } })
+    bulk.current.mutate({ hit_ids: ['h1'], stage1_status: 'relevant' })
+    await waitFor(() => expect(one.current.isSuccess && bulk.current.isSuccess).toBe(true))
+    const savedCalls = spy.mock.calls.filter(([arg]) => JSON.stringify(arg?.queryKey) === '["workspaces","ws-1","saved-searches"]')
+    expect(savedCalls).toHaveLength(2)
+  })
+})
+
 describe('papersPollInterval', () => {
   it('polls while any paper is still ingesting', () => {
     expect(papersPollInterval([paper('ready'), paper('extracting')])).toBe(PAPERS_POLL_MS)

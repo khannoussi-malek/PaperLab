@@ -47,6 +47,7 @@ import {
   type ScreeningState,
   type ScreeningUpdate,
   type SearchResult,
+  type SavedSearch,
   type SavedSearchCreate,
   type SavedSearchUpdate,
   type SearchRun,
@@ -568,8 +569,14 @@ export function useGenerateEvidenceCard(workspaceId?: string) {
 export const useEditEvidenceCard = (paperId: string, workspaceId?: string) =>
   useRefreshEvidence((changes: EvidenceChange[]) => api.editEvidenceCard(paperId, changes), { paperId, workspaceId })
 
+/** Polls only while one of its runs is going, so "N new" moves when a scheduled run finds something. */
 export const useSavedSearches = (workspaceId: string) =>
-  useQuery({ queryKey: keys.savedSearches(workspaceId), queryFn: () => api.listSavedSearches(workspaceId) })
+  useQuery({
+    queryKey: keys.savedSearches(workspaceId),
+    queryFn: () => api.listSavedSearches(workspaceId),
+    refetchInterval: (query) =>
+      query.state.data?.some((s: SavedSearch) => s.last_run_status === 'running') ? PAPERS_POLL_MS : false,
+  })
 
 function useSavedSearchMutation<V, R>(workspaceId: string, mutationFn: (variables: V) => Promise<R>, alsoRuns = false) {
   const client = useQueryClient()
@@ -889,6 +896,7 @@ export function usePatchSearchHit(workspaceId: string) {
     onSuccess: (hit) => {
       patchHitFields(client, workspaceId, hit.id, hit)
       client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
+      client.invalidateQueries({ queryKey: keys.savedSearches(workspaceId) }) // their "N new" counts unscreened hits
     },
   })
 }
@@ -911,6 +919,7 @@ export function useBulkPatchSearchHits(workspaceId: string) {
         ...(body.priority != null ? { priority: body.priority } : {}),
       })
       client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
+      client.invalidateQueries({ queryKey: keys.savedSearches(workspaceId) }) // their "N new" counts unscreened hits
     },
   })
 }
