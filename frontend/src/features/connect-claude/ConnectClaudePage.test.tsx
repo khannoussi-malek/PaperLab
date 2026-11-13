@@ -17,6 +17,13 @@ vi.mock('@/api/queries', () => ({
     mutate,
   }),
 }))
+vi.mock('./ClaudeActivity', () => ({
+  ClaudeActivity: () => (
+    <section aria-labelledby="activity-test-heading">
+      <h2 id="activity-test-heading">What Claude did</h2>
+    </section>
+  ),
+}))
 vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div> }))
 vi.mock('@/features/settings/desktop', () => ({ useDesktop: () => null }))
 
@@ -37,4 +44,11 @@ test('the check reports the real tool count', () => {
   render(<ConnectClaudePage />)
   fireEvent.click(screen.getByRole('button', { name: 'Check the server' }))
   expect(screen.getByRole('status')).toHaveTextContent('all 60 of its tools')
+})
+
+test('the activity section comes after the setup steps', () => {
+  render(<ConnectClaudePage />)
+  const check = screen.getByRole('region', { name: "Check PaperLab's side" })
+  const activity = screen.getByRole('region', { name: 'What Claude did' })
+  expect(check.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })

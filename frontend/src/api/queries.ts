@@ -154,6 +154,8 @@ export const keys = {
   referencesDirection: (paperId: string, direction: ReferencesDirection) =>
     ['references', paperId, direction] as const,
   mcpSetup: ['mcp', 'setup'] as const,
+  mcpActivity: ['mcp', 'activity'] as const,
+  mcpSettings: ['mcp', 'settings'] as const,
   setup: ['setup'] as const,
   // Its own key: the graph is one payload, refetched when the owner's own links change, not when the library polls.
   graph: ['graph'] as const,
@@ -1425,6 +1427,30 @@ export const useMcpSetup = () => useQuery({ queryKey: keys.mcpSetup, queryFn: ap
 
 /** Connect Claude's server check. Nothing is cached: each click checks again. */
 export const useCheckMcpServer = () => useMutation({ mutationFn: api.checkMcpServer })
+
+/** Connect Claude's activity list refreshes while the page is open, so a call made meanwhile shows up. */
+export const MCP_ACTIVITY_POLL_MS = 10_000
+export const useMcpActivity = () =>
+  useQuery({ queryKey: keys.mcpActivity, queryFn: api.mcpActivity, refetchInterval: MCP_ACTIVITY_POLL_MS })
+
+export const useClearMcpActivity = () => {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: api.clearMcpActivity,
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.mcpActivity }),
+  })
+}
+
+export const useMcpSettings = () => useQuery({ queryKey: keys.mcpSettings, queryFn: api.mcpSettings })
+
+/** The owner's switch for changes from Claude. The answer replaces the cached setting at once. */
+export const useSetMcpWrites = () => {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: api.setMcpWrites,
+    onSuccess: (settings) => client.setQueryData(keys.mcpSettings, settings),
+  })
+}
 
 /** Every library paper and the links between them, in one request (D109): layers and focus need no further calls. */
 export const useLibraryGraph = (workspaceId: string | null) =>

@@ -35,6 +35,7 @@ import {
   useDeleteSkill,
   useResetSkill,
   useSetSkillDefault,
+  useMcpActivity,
 } from './queries'
 
 const prismaRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma']
@@ -522,5 +523,14 @@ describe('skills queries', () => {
     result.current.mutate(variables as never)
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(spy).toHaveBeenCalledWith({ queryKey: ['skills'] })
+  })
+})
+
+describe('useMcpActivity', () => {
+  it('refetches the activity list every 10 seconds while the page is open', () => {
+    const client = new QueryClient()
+    renderHook(() => useMcpActivity(), { wrapper: withQueryClient(client) })
+    const options = client.getQueryCache().find({ queryKey: keys.mcpActivity })?.options as { refetchInterval?: number }
+    expect(options.refetchInterval).toBe(10_000)
   })
 })
