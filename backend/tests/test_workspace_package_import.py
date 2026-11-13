@@ -301,7 +301,7 @@ async def test_a_taken_name_gets_a_number(session, pdf_dir):
     assert (first.name, second.name) == ("Imported review (2)", "Imported review (3)")
 
 
-async def test_an_imported_workspace_is_a_normal_workspace_with_the_import_line(session, pdf_dir):
+async def test_an_imported_workspace_notes_the_package_date_in_its_description(session, pdf_dir):
     report = await _import(session, _package(name="Field notes", description="Mine"))
     ws = await session.get(Workspace, report.workspace_id)
     assert ws.description.startswith("Mine\nImported from a PaperLab package made on 2026-11-01.")
