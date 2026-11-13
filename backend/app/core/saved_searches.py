@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete as delete_rows
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy import update as update_rows
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from app.core import paper_sources, queue, schedules, workspace_search, workspac
 from app.core.errors import InvalidInput, NotFound
 from app.core.source_registry import DISCOVERY_SOURCE_IDS
 from app.models import SavedSearch
-from app.models.workspace_search import WorkspaceSearchRun
+from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 
 FIELDS = ("query", "sources", "year_from", "year_to", "schedule", "timezone", "enabled")
 
@@ -40,6 +40,8 @@ class SavedSearchView:
     last_run_status: str | None
     last_error: str | None
     created_at: datetime
+    seen_at: datetime
+    new_hits: int
 
 
 def _now() -> datetime:
@@ -54,6 +56,20 @@ async def _last_run(session: AsyncSession, saved_search_id: uuid.UUID) -> Worksp
         .limit(1)
     )
     return await session.scalar(query)
+
+
+async def _new_hits(session: AsyncSession, row: SavedSearch) -> int:
+    """Hits this search's runs found since the reader last looked that nobody has screened yet. A hit an earlier
+    search already found keeps its first run, so it never counts as new here."""
+    hit = WorkspaceSearchHit
+    query = (
+        select(func.count())
+        .select_from(hit)
+        .join(WorkspaceSearchRun, hit.run_id == WorkspaceSearchRun.id)
+        .where(WorkspaceSearchRun.saved_search_id == row.id, hit.first_seen_at > row.seen_at,
+               hit.stage1_status.is_(None))
+    )
+    return await session.scalar(query) or 0
 
 
 async def _view(session: AsyncSession, row: SavedSearch) -> SavedSearchView:
@@ -78,6 +94,8 @@ async def _view(session: AsyncSession, row: SavedSearch) -> SavedSearchView:
         last_run_status=last.status if last else None,
         last_error=row.last_error,
         created_at=row.created_at,
+        seen_at=row.seen_at,
+        new_hits=await _new_hits(session, row),
     )
 
 
@@ -121,9 +139,10 @@ async def create(
         schedule=schedules.to_cron("cron", cron=schedule),
         timezone=timezone,
         enabled=True,
+        seen_at=now or _now(),
         **{**values, "query": query.strip()},
     )
-    row.next_run_at = _schedule_next(row, now or _now())  # validates the time zone too
+    row.next_run_at = _schedule_next(row, row.seen_at)  # validates the time zone too
     session.add(row)
     await session.commit()
     return await _view(session, row)
@@ -160,6 +179,17 @@ async def delete(session: AsyncSession, workspace_id: uuid.UUID, saved_search_id
     await _row(session, saved_search_id, workspace_id)
     await session.execute(delete_rows(SavedSearch).where(SavedSearch.id == saved_search_id))
     await session.commit()
+
+
+async def mark_seen(
+    session: AsyncSession, workspace_id: uuid.UUID, saved_search_id: uuid.UUID, now: datetime | None = None
+) -> SavedSearchView:
+    """The reader has looked at what this search found. No write guard: packages carry no saved searches, so a
+    read-only workspace has none, and this is the reader's own place in the list, not workspace content."""
+    row = await _row(session, saved_search_id, workspace_id)
+    row.seen_at = now or _now()
+    await session.commit()
+    return await _view(session, row)
 
 
 async def get(

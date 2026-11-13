@@ -107,3 +107,19 @@ async def test_run_now_with_no_source_is_422(client, base, arq, monkeypatch):
     created = (await client.post(base, json=DAILY)).json()
     resp = await client.post(f"{base}/{created['id']}/run")
     assert resp.status_code == 422 and arq.jobs == []
+
+
+async def test_seen_returns_the_saved_search_with_no_new_hits(client, base):
+    created = (await client.post(base, json=DAILY)).json()
+    assert created["new_hits"] == 0 and created["seen_at"]
+    resp = await client.post(f"{base}/{created['id']}/seen")
+    assert resp.status_code == 200
+    assert resp.json()["new_hits"] == 0 and resp.json()["seen_at"] >= created["seen_at"]
+    assert (await client.post(f"{base}/{uuid.uuid4()}/seen")).status_code == 404
+
+
+async def test_hits_take_a_saved_search_and_a_found_after_filter(client, base, workspace_id):
+    created = (await client.post(base, json=DAILY)).json()
+    resp = await client.get(f"/api/workspaces/{workspace_id}/search/hits",
+                            params={"saved_search_id": created["id"], "found_after": created["seen_at"]})
+    assert resp.status_code == 200 and resp.json()["items"] == []

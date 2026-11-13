@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useDeleteSavedSearch, useRunSavedSearchNow, useSavedSearches, useUpdateSavedSearch } from '@/api/queries'
+import { useDeleteSavedSearch, useMarkSavedSearchSeen, useRunSavedSearchNow, useSavedSearches, useUpdateSavedSearch, type SavedSearchInbox } from '@/api/queries'
 import type { SavedSearch } from '@/api/client'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
@@ -21,15 +21,19 @@ export function SavedSearches({
   workspaceId,
   currentQuery,
   onRunStarted,
+  onShowNew,
 }: {
   workspaceId: string
   currentQuery: string
   onRunStarted: (runId: string) => void
+  /** Opens a saved search's new finds in the result list; the card then marks them seen. */
+  onShowNew: (inbox: SavedSearchInbox) => void
 }) {
   const list = useSavedSearches(workspaceId)
   const update = useUpdateSavedSearch(workspaceId)
   const remove = useDeleteSavedSearch(workspaceId)
   const runNow = useRunSavedSearchNow(workspaceId)
+  const markSeen = useMarkSavedSearchSeen(workspaceId)
   const readOnly = useReadOnlyWorkspace()
   const [editing, setEditing] = useState<Editing>(null)
   const [deleting, setDeleting] = useState<SavedSearch | null>(null)
@@ -56,6 +60,12 @@ export function SavedSearches({
         <div key={s.id} className="grid gap-0.5 rounded-md border px-3 py-2">
           <div className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate font-medium">{s.query}</span>
+            {s.new_hits > 0 && (
+              <Button variant="secondary" size="sm" aria-label={`${s.new_hits} new from ${s.query}`}
+                onClick={() => { onShowNew({ savedSearchId: s.id, query: s.query, since: s.seen_at }); markSeen.mutate(s.id) }}>
+                {s.new_hits} new
+              </Button>
+            )}
             <Switch size="sm" checked={s.enabled} aria-label={`Enabled: ${s.query}`}
               onCheckedChange={(enabled) => update.mutate({ id: s.id, body: { enabled } })} />
             <Button variant="ghost" size="sm" aria-label={`Run now: ${s.query}`} disabled={readOnly || runNow.isPending} title={readOnly ? READ_ONLY_TEXT : undefined} onClick={() => runNow.mutate(s.id, { onSuccess: (r) => onRunStarted(r.id) })}>

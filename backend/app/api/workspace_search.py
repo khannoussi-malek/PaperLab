@@ -2,6 +2,7 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Query, Request, UploadFile
+from pydantic import AwareDatetime
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.core import branches, hit_suggest, screening, snowball_next, workspace_search
@@ -12,13 +13,11 @@ from app.core.prisma_export import prisma_export
 from app.core.queue import INGEST_QUEUE
 from app.core.screening import RANKED_LIMIT_MAX
 from app.schemas.workspace_search import (
-    SuggestHitRequest,
     AcceptSuggestions,
     AcceptSuggestionsOut,
     AcquisitionStatus,
     BranchIn,
     BranchOut,
-    NextItem,
     BulkHitReviewUpdate,
     BulkUpdateOut,
     ClearHitsOut,
@@ -27,6 +26,7 @@ from app.schemas.workspace_search import (
     HitReviewUpdate,
     ImportHitsOut,
     ImportHitsRequest,
+    NextItem,
     PrismaExportOut,
     ProvenanceOut,
     ProvLink,
@@ -40,6 +40,7 @@ from app.schemas.workspace_search import (
     SnowballOut,
     SnowballRequest,
     Stage1Status,
+    SuggestHitRequest,
     SuggestStart,
 )
 
@@ -100,10 +101,11 @@ async def list_hits(
     after: str | None = None, stage1_status: Stage1Status | None = None,
     acquisition_status: AcquisitionStatus | None = None, sort: Literal["ai"] | None = None,
     min_relevance: Annotated[int | None, Query(ge=1, le=5)] = None,
+    saved_search_id: uuid.UUID | None = None, found_after: AwareDatetime | None = None,
 ) -> HitListOut:
     items, next_cursor = await workspace_search.list_hits(
         session, workspace_id, limit, after, stage1_status, acquisition_status,
-        sort=sort, min_relevance=min_relevance,
+        sort=sort, min_relevance=min_relevance, saved_search_id=saved_search_id, found_after=found_after,
     )
     return HitListOut(items=items, next_cursor=next_cursor)
 

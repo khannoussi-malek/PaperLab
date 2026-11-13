@@ -872,6 +872,7 @@ async def list_hits(
     session: AsyncSession, workspace_id, limit: int = 50, after: str | None = None,
     stage1_status: str | None = None, acquisition_status: str | None = None, run_id: uuid.UUID | None = None,
     sort: str | None = None, min_relevance: int | None = None, suggested_only: bool = False,
+    saved_search_id: uuid.UUID | None = None, found_after: datetime | None = None,
 ) -> tuple[list[dict], str | None]:
     """Keyset-paginated hit listing, ordered by (first_seen_at, id) so the cursor is stable even when several
     hits share a first_seen_at timestamp. `tuple_()` on both sides makes SQLAlchemy emit a real SQL row-value
@@ -901,6 +902,11 @@ async def list_hits(
         query = query.where(WorkspaceSearchHit.suggestion.is_not(None))
     if run_id is not None:
         query = query.where(WorkspaceSearchHit.run_id == run_id)
+    if saved_search_id is not None:  # the saved-search inbox (M7.6): hits its own runs found first
+        runs = select(WorkspaceSearchRun.id).where(WorkspaceSearchRun.saved_search_id == saved_search_id)
+        query = query.where(WorkspaceSearchHit.run_id.in_(runs))
+    if found_after is not None:
+        query = query.where(WorkspaceSearchHit.first_seen_at > found_after)
     if acquisition_status:
         query = query.where(WorkspaceSearchHit.acquisition_status == acquisition_status)
     if min_relevance is not None:

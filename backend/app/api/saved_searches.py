@@ -56,3 +56,8 @@ async def delete_saved_search(workspace_id: uuid.UUID, saved_search_id: uuid.UUI
 @router.post("/{saved_search_id}/run", status_code=201)
 async def run_saved_search(workspace_id: uuid.UUID, saved_search_id: uuid.UUID, session: SessionDep) -> SearchRunOut:
     return await workspace_search.run_out(session, await saved_searches.run_now(session, workspace_id, saved_search_id))
+
+
+@router.post("/{saved_search_id}/seen")
+async def mark_saved_search_seen(workspace_id: uuid.UUID, saved_search_id: uuid.UUID, session: SessionDep) -> SavedSearchOut:
+    return SavedSearchOut.model_validate(await saved_searches.mark_seen(session, workspace_id, saved_search_id))

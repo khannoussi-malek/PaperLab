@@ -54,7 +54,7 @@ function mockSavedSearchHooks() {
 
 test('saving a search is disabled on a read-only workspace', () => {
   mockSavedSearchHooks()
-  wrap(true, <SavedSearches workspaceId="w1" currentQuery="" onRunStarted={() => {}} />)
+  wrap(true, <SavedSearches workspaceId="w1" currentQuery="" onRunStarted={() => {}} onShowNew={() => {}} />)
   const button = screen.getByRole('button', { name: 'Save this search…' })
   expect(button.hasAttribute('disabled')).toBe(true)
   expect(button.getAttribute('title')).toBe(READ_ONLY_TEXT)
@@ -62,6 +62,6 @@ test('saving a search is disabled on a read-only workspace', () => {
 
 test('saving a search stays enabled on an editable workspace', () => {
   mockSavedSearchHooks()
-  wrap(false, <SavedSearches workspaceId="w1" currentQuery="" onRunStarted={() => {}} />)
+  wrap(false, <SavedSearches workspaceId="w1" currentQuery="" onRunStarted={() => {}} onShowNew={() => {}} />)
   expect(screen.getByRole('button', { name: 'Save this search…' }).hasAttribute('disabled')).toBe(false)
 })

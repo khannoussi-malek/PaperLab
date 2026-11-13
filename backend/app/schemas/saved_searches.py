@@ -63,3 +63,5 @@ class SavedSearchOut(BaseModel):
     last_run_status: str | None
     last_error: str | None
     created_at: datetime
+    seen_at: datetime
+    new_hits: int

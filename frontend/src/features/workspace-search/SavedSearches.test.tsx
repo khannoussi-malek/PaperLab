@@ -9,13 +9,14 @@ const row: SavedSearch = {
   id: 's1', workspace_id: 'w1', query: 'llm code review', sources: ['arxiv'], year_from: 2022, year_to: null,
   schedule: '0 2 * * *', timezone: 'Europe/Berlin', schedule_kind: 'daily', time: '02:00', weekday: null,
   enabled: true, last_run_at: null, next_run_at: '2026-10-14T00:00:00Z', last_run_id: null, last_run_status: null,
-  last_error: null, created_at: '2026-10-01T00:00:00Z',
+  last_error: null, created_at: '2026-10-01T00:00:00Z', seen_at: '2026-10-02T00:00:00Z', new_hits: 0,
 }
 
 const mutation = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(row), isPending: false, error: null })
 
-function setup(rows: SavedSearch[], onRunStarted = vi.fn()) {
-  const update = mutation(), del = mutation(), create = mutation(), runNow = mutation()
+function setup(rows: SavedSearch[], onRunStarted = vi.fn(), onShowNew = vi.fn()) {
+  const update = mutation(), del = mutation(), create = mutation(), runNow = mutation(), seen = mutation()
+  vi.spyOn(queries, 'useMarkSavedSearchSeen').mockReturnValue(seen as any)
   vi.spyOn(queries, 'useSavedSearches').mockReturnValue({ data: rows } as any)
   vi.spyOn(queries, 'useUpdateSavedSearch').mockReturnValue(update as any)
   vi.spyOn(queries, 'useDeleteSavedSearch').mockReturnValue(del as any)
@@ -24,8 +25,8 @@ function setup(rows: SavedSearch[], onRunStarted = vi.fn()) {
   vi.spyOn(queries, 'usePaperSources').mockReturnValue({
     data: { contact_email: null, sources: [{ id: 'arxiv', name: 'arXiv', enabled: true, has_key: null, key_hint: null }] },
   } as any)
-  render(<SavedSearches workspaceId="w1" currentQuery="typed query" onRunStarted={onRunStarted} />)
-  return { update, del, create, runNow }
+  render(<SavedSearches workspaceId="w1" currentQuery="typed query" onRunStarted={onRunStarted} onShowNew={onShowNew} />)
+  return { update, del, create, runNow, seen, onShowNew }
 }
 
 // Radix Select measures with ResizeObserver and scrolls items into view; jsdom has neither.
@@ -115,7 +116,7 @@ test('a server code shows as a readable message in the dialog', () => {
   const { create } = setup([])
   vi.spyOn(queries, 'useCreateSavedSearch').mockReturnValue({ ...create, error: new Error('invalid_schedule') } as any)
   cleanup()
-  render(<SavedSearches workspaceId="w1" currentQuery="q" onRunStarted={vi.fn()} />)
+  render(<SavedSearches workspaceId="w1" currentQuery="q" onRunStarted={vi.fn()} onShowNew={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: /Save this search/ }))
   expect(screen.getByRole('dialog').textContent).toMatch(/schedule is not valid/)
 })
@@ -134,7 +135,7 @@ test('Run now is disabled while pending', () => {
   setup([row])
   vi.spyOn(queries, 'useRunSavedSearchNow').mockReturnValue({ ...mutation(), isPending: true } as any)
   cleanup()
-  render(<SavedSearches workspaceId="w1" currentQuery="" onRunStarted={vi.fn()} />)
+  render(<SavedSearches workspaceId="w1" currentQuery="" onRunStarted={vi.fn()} onShowNew={vi.fn()} />)
   for (const b of screen.getAllByRole('button', { name: 'Run now: llm code review' })) expect((b as HTMLButtonElement).disabled).toBe(true)
 })
 
@@ -142,7 +143,7 @@ test('a failed Run now shows its error', () => {
   setup([row])
   vi.spyOn(queries, 'useRunSavedSearchNow').mockReturnValue({ ...mutation(), error: new Error('saved_search_not_found') } as any)
   cleanup()
-  render(<SavedSearches workspaceId="w1" currentQuery="" onRunStarted={vi.fn()} />)
+  render(<SavedSearches workspaceId="w1" currentQuery="" onRunStarted={vi.fn()} onShowNew={vi.fn()} />)
   expect(screen.getByRole('alert').textContent).toMatch(/no longer exists/)
 })
 
@@ -167,4 +168,16 @@ test('Weekly shows a weekday select and creates a weekly search', async () => {
 test('saved searches say when there are none', () => {
   setup([])
   expect(screen.getByText('None yet. Save a search to rerun it on a schedule.')).toBeTruthy()
+})
+
+test('with nothing new there is no new button', () => {
+  setup([row])
+  expect(screen.queryByRole('button', { name: /new from/ })).toBeNull()
+})
+
+test('new finds show as a button that opens them and marks them seen', () => {
+  const { seen, onShowNew } = setup([{ ...row, new_hits: 3 }])
+  fireEvent.click(screen.getByRole('button', { name: '3 new from llm code review' }))
+  expect(onShowNew).toHaveBeenCalledWith({ savedSearchId: 's1', query: 'llm code review', since: '2026-10-02T00:00:00Z' })
+  expect(seen.mutate).toHaveBeenCalledWith('s1')
 })
