@@ -4221,6 +4221,12 @@ export interface components {
             saved_notes: components["schemas"]["SavedNoteOut"][];
             /** Skill Label */
             skill_label: string | null;
+            /**
+             * Lens
+             * @default full
+             * @enum {string}
+             */
+            lens: "full" | "key_ideas" | "critical" | "method" | "related";
         };
         /** ChatModelOut */
         ChatModelOut: {
@@ -4807,6 +4813,11 @@ export interface components {
             cited: string[];
             /** Skill Label */
             skill_label: string | null;
+            /**
+             * Lens
+             * @enum {string}
+             */
+            lens: "full" | "key_ideas" | "critical" | "method" | "related";
         };
         /** DownloadDoneEvent */
         DownloadDoneEvent: {
@@ -7997,6 +8008,8 @@ export interface components {
             scope: "paper" | "workspace" | "both";
             /** Instructions */
             instructions: string;
+            /** Lens */
+            lens?: ("full" | "key_ideas" | "critical" | "method" | "related") | null;
         };
         /** SkillDefaultIn */
         SkillDefaultIn: {
@@ -8036,6 +8049,11 @@ export interface components {
              * @enum {string}
              */
             state: "builtin" | "edited" | "custom";
+            /**
+             * Lens
+             * @enum {string}
+             */
+            lens: "full" | "key_ideas" | "critical" | "method" | "related";
         };
         /**
          * SkillUpdate
@@ -8052,6 +8070,8 @@ export interface components {
             instructions?: string | null;
             /** Is Listed */
             is_listed?: boolean | null;
+            /** Lens */
+            lens?: ("full" | "key_ideas" | "critical" | "method" | "related") | null;
         };
         /** SnapshotOut */
         SnapshotOut: {

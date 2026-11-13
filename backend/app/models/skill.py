@@ -20,6 +20,7 @@ class Skill(Base):
     description: Mapped[str | None] = mapped_column(Text)
     scope: Mapped[str | None] = mapped_column(Text)
     instructions: Mapped[str | None] = mapped_column(Text)  # null = the shipped text
+    lens: Mapped[str | None] = mapped_column(Text)  # null = the shipped lens (a bundled skill) or 'full' (a custom one)
     version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
     is_listed: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     is_paper_default: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))

@@ -46,7 +46,8 @@ test('a picked skill is shown on the answer it produced', async ({ page, paperId
   await picker(page).click()
   await page.getByRole('option', { name: 'Check the evaluation' }).click()
   const answer = await ask(page, 'Is the evaluation fair?')
-  await expect(answer.getByText('Check the evaluation', { exact: true })).toBeVisible()  // the chip beside the AI mark
+  // the chip beside the AI mark names the skill and the lens it read through (the fixture paper has a Method section)
+  await expect(answer.getByText('Check the evaluation · Critical check', { exact: true })).toBeVisible()
 })
 
 test('a bundled skill can be edited and reset in Settings', async ({ page }) => {

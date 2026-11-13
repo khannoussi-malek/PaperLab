@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import lenses, prompts
+from app.core import prompts
 from app.core.answer_provenance import snapshot
 from app.core.chat import (
     Prepared,
@@ -20,6 +20,7 @@ from app.core.chat import (
     chunk_sources,
     cut_to_budget,
     format_context,
+    lens_sources,
     parse_citations,
     snapshot_passages,
 )
@@ -54,11 +55,6 @@ class Brief:
     replaced: list[SnapshotPassage | None] = field(default_factory=list)  # per source, from the snapshot (M33)
 
 
-async def _lens_sources(session: AsyncSession, paper_id: uuid.UUID, lens: str) -> list[RetrievedChunk]:
-    found = await lenses.lens_chunks(session, paper_id, lens)
-    return await chunk_sources(session, Chunk.id.in_(found.chunk_ids))
-
-
 async def prepare_brief(session: AsyncSession, paper_id: uuid.UUID, lens: str) -> Prepared:
     """The lens's chunks in reading order, cut to SMALL_PAPER_CHARS without splitting one (whole_paper=False when cut).
 
@@ -71,7 +67,7 @@ async def prepare_brief(session: AsyncSession, paper_id: uuid.UUID, lens: str) -
         raise Conflict("needs_full_text")  # R1: no PDF, no sections, so no lens to brief; said before lens_empty
     if paper.status != PaperStatus.READY:
         raise Conflict("paper_not_ready")
-    every = await _lens_sources(session, paper_id, lens)
+    every = await lens_sources(session, paper_id, lens)
     if not every:
         raise Conflict("lens_empty")
     sources = cut_to_budget(every)
@@ -82,6 +78,7 @@ async def prepare_brief(session: AsyncSession, paper_id: uuid.UUID, lens: str) -
         prompt=prompt,
         whole_paper=len(sources) == len(every),
         prompt_version=BRIEF_PROMPT_VERSION,
+        lens=lens,
     )
 
 
@@ -129,7 +126,7 @@ async def list_briefs(session: AsyncSession, paper_id: uuid.UUID) -> list[Brief]
     # ponytail: re-reads the sections once per briefed lens (at most 4); one paper_lenses read if it shows up
     for lens in (lens for lens in BRIEFABLE if lens in newest):
         output = newest[lens]
-        now = {source.id for source in cut_to_budget(await _lens_sources(session, paper_id, lens))}
+        now = {source.id for source in cut_to_budget(await lens_sources(session, paper_id, lens))}
         found.append(
             Brief(
                 output,

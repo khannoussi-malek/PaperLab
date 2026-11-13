@@ -3,10 +3,11 @@
 import uuid
 
 import pytest
-from sqlalchemy import func, insert, select
+from conftest import unit_vector
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.core import papers, sections
+from app.core import papers, sections, skills
 from app.core.chunking import ChunkDraft
 from app.core.errors import InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Paper, section_role_overrides
@@ -170,3 +171,18 @@ async def test_set_role_refuses_a_paper_without_a_pdf(session):
 
     with pytest.raises(InvalidInput, match="unknown_section"):
         await sections.set_role(session, paper.id, "Abstract", "abstract")
+
+
+SECTIONED = ["Abstract", "1 Introduction", "2 Method", "2 Method", "3 Results", "4 Conclusion"]
+
+
+async def sectioned_paper(session, headings, texts=None) -> tuple[Paper, list[Chunk]]:
+    """A paper whose chunks have section headings (so lenses have roles) and embeddings (so search is set up)."""
+    paper, chunks = await paper_with_headings(session, headings, texts)
+    await session.execute(update(Chunk).where(Chunk.paper_id == paper.id).values(embedding=unit_vector("x")))
+    await session.commit()
+    return paper, chunks
+
+
+async def critical_skill(session):
+    return await skills.get_view(session, "builtin:check-evaluation")

@@ -24,6 +24,7 @@ const base = (overrides: Partial<Skill>): Skill => ({
   description: 'Looks at how the paper tested its claims.',
   scope: 'paper',
   instructions: 'Read the method first.',
+  lens: 'full',
   version: 1,
   is_listed: true,
   is_paper_default: false,
@@ -125,6 +126,7 @@ describe('SkillsSettings actions', () => {
         description: 'Looks at how the paper tested its claims.',
         scope: 'paper',
         instructions: 'Read the method first.',
+  lens: 'full',
       },
     )
   })

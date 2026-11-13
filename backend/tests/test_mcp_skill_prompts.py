@@ -48,6 +48,7 @@ def view_of(**fields) -> skills.SkillView:
         is_paper_default=False,
         is_workspace_default=False,
         state="builtin",
+        lens="full",
     )
     return skills.SkillView(**(base | fields))
 

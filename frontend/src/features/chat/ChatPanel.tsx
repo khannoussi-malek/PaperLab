@@ -250,6 +250,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
                 connectionName: stream.done.connection_name,
                 promptVersion: stream.done.prompt_version,
                 skillLabel: stream.done.skill_label,
+                lens: stream.done.lens,
               }
             : null
         }
@@ -303,6 +304,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
                 connectionName: answer.connection_name,
                 promptVersion: answer.prompt_version,
                 skillLabel: answer.skill_label,
+                lens: answer.lens,
               }}
               paperLabel={paperLabel}
               onCite={onCite}

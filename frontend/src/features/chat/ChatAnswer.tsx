@@ -1,10 +1,11 @@
 import { CornerDownRight, Sparkles } from 'lucide-react'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import type { ChatScope, ChatSource, NoteSource, SavedNote } from '@/api/client'
+import type { ChatScope, ChatSource, LensId, NoteSource, SavedNote } from '@/api/client'
 import { pressable, slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { LENS_LABELS } from '@/features/lenses/lenses'
 import { cn } from '@/lib/utils'
 import { aiMark } from './aiMark'
 import { MARKER, describeSource, splitCitations, type Segment } from './citations'
@@ -30,7 +31,7 @@ type Props = {
   notesTotal: number | null
   segments: Segment[]
   /** Set once the answer is saved: the model label is only known then. */
-  footer: { model: string; connectionName: string | null; promptVersion: number; skillLabel: string | null } | null
+  footer: { model: string; connectionName: string | null; promptVersion: number; skillLabel: string | null; lens: LensId | null } | null
   /** The saved answer's `llm_outputs` id; absent while it streams. */
   outputId?: string
   /** The answer this one follows up. `reply` indents it under the first question of its thread. */
@@ -57,6 +58,9 @@ type Cited = ChatSource | NoteSource
 const CITE_HINT = 'The AI used this passage. Click to see it in the paper.'
 const ABSTRACT_HINT = "The AI used this paper's abstract: it has no PDF yet. Click to see the abstract."
 const NOTE_HINT = 'The AI used this note. Click to see it in the paper.'
+/** The skill's label, then its lens when it reads through one other than the whole paper: "Check the evaluation · Critical check". */
+const skillChip = (skillLabel: string, lens: LensId | null) => (lens && lens !== 'full' ? `${skillLabel} · ${LENS_LABELS[lens]}` : skillLabel)
+
 const hintFor = (source: Cited) => ('note_id' in source ? NOTE_HINT : source.from_abstract ? ABSTRACT_HINT : CITE_HINT)
 
 export function ChatAnswer(props: Props) {
@@ -258,8 +262,8 @@ function AnswerMeta({ footer, sources, notes, wholePaper, cited, pending, descri
         </span>
       </Hint>
       {footer?.skillLabel && (
-        <Badge variant="outline" className="max-w-40 shrink-0 truncate" title={footer.skillLabel}>
-          {footer.skillLabel}
+        <Badge variant="outline" className="max-w-40 shrink-0 truncate" title={skillChip(footer.skillLabel, footer.lens)}>
+          {skillChip(footer.skillLabel, footer.lens)}
         </Badge>
       )}
       {sources !== null && (

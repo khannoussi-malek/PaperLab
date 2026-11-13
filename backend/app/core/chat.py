@@ -11,7 +11,7 @@ from itertools import accumulate
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import prompts, skills, workspaces
+from app.core import lenses, prompts, skills, workspaces
 from app.core.answer_provenance import snapshot
 from app.core.errors import Conflict, NotFound
 from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
@@ -32,6 +32,7 @@ WORKSPACE_SYSTEM_PROMPT, WORKSPACE_PROMPT_TEMPLATE = prompts.load("chat_workspac
 )
 # ponytail: characters stand in for tokens. Revisit with the eval numbers or a model's real context size.
 SMALL_PAPER_CHARS = 24_000
+FULL_LENS = skills.FULL  # a skill whose lens is the whole paper, or no skill: sources as before M16 lens chat
 RETRIEVE_K = 8
 # What a long paper's retrieval hands to cut_to_budget: as many passages as fit what a whole small paper may send. About
 # 12 on real chunks, and on fixed-answer questions 29 of 33 with hybrid against 28 at top 8 (measured 2026-11-04).
@@ -90,6 +91,7 @@ class Prepared:
     notes_total: int | None = None  # every note in the paper or workspace
     skill_label: str | None = None  # the skill the question ran with, copied onto the answer (M17)
     skill_version: int | None = None
+    lens: str = FULL_LENS  # the lens the sources came from; 'full' unless the skill's lens had sections here (M16)
 
     @property
     def notes_used(self) -> int | None:
@@ -140,6 +142,24 @@ class Answer:
 async def chunk_sources(session: AsyncSession, *where) -> list[RetrievedChunk]:
     rows = await session.execute(select(*_SOURCE_COLUMNS).where(*where).order_by(Chunk.ordinal))
     return [_to_chunk(row) for row in rows]
+
+
+async def lens_sources(session: AsyncSession, paper_id: uuid.UUID, lens: str) -> list[RetrievedChunk]:
+    """A lens's chunks in one paper, in reading order: [] when the paper has no sections for the lens."""
+    found = await lenses.lens_chunks(session, paper_id, lens)
+    if not found.chunk_ids:
+        return []
+    return await chunk_sources(session, Chunk.id.in_(found.chunk_ids))
+
+
+def _lens_of(skill: skills.SkillView | None) -> str:
+    return FULL_LENS if skill is None else skill.lens
+
+
+def _fits(sources: list[RetrievedChunk]) -> bool:
+    """Whether every one of `sources` fits the budget together (cut_to_budget keeps an oversized first chunk; this
+    doesn't count it as fitting)."""
+    return bool(sources) and sum(len(source.text) for source in sources) <= SMALL_PAPER_CHARS
 
 
 async def _size(session: AsyncSession, paper_id: uuid.UUID) -> tuple[int, int]:
@@ -298,10 +318,40 @@ def format_notes_block(notes: list[NoteView], papers: dict[uuid.UUID, Paper]) ->
     return "\n".join(lines), used
 
 
+async def _workspace_sources(
+    session: AsyncSession, ready: list[uuid.UUID], question: str, embedder, lens: str
+) -> tuple[list[RetrievedChunk], bool, str]:
+    """(sources, whole, lens used). A skill's lens gives the union of every ready paper's lens chunks: all of them when
+    they fit, else the nearest that fit, drawn from that union. With no lens or no sections, the whole library's
+    passages as before."""
+    lens_chunks: list[RetrievedChunk] = []
+    if lens != FULL_LENS:
+        for paper_id in ready:
+            lens_chunks += await lens_sources(session, paper_id, lens)
+    if _fits(lens_chunks):
+        return lens_chunks, True, lens
+    if lens_chunks:
+        found = await retrieve(
+            session,
+            question,
+            paper_ids=ready,
+            k=RETRIEVE_POOL,
+            embedder=embedder,
+            words=True,
+            chunk_ids=[c.id for c in lens_chunks],
+        )
+        return cut_to_budget(found), False, lens
+    # ponytail: the question is embedded twice, once per search; pass the vector along if it ever shows in the timings.
+    scope = await likely_papers(session, question, ready, embedder)
+    found = await retrieve(session, question, paper_ids=scope, k=RETRIEVE_POOL, embedder=embedder, words=True)
+    return cut_to_budget(found), False, FULL_LENS
+
+
 async def _prepare_workspace(
     session: AsyncSession, workspace_id: uuid.UUID, question: str, embedder, skill: skills.SkillView | None = None
 ) -> Prepared:
-    """Retrieved passages across the workspace's papers plus all its notes, trimmed. No whole-paper skip.
+    """Retrieved passages across the workspace's papers plus all its notes, trimmed. No whole-paper skip, unless a
+    skill's lens fits whole.
 
     Raises NotFound, or Conflict("workspace_empty" | "search_not_set_up" | "search_rebuilding" |
     "embedding_model_changed" | "workspace_not_indexed").
@@ -314,11 +364,7 @@ async def _prepare_workspace(
     embedder = await searchable(session, ready, embedder)
     if not await session.scalar(select(func.count(Chunk.embedding)).where(Chunk.paper_id.in_(ready))):
         raise Conflict("workspace_not_indexed")
-    # ponytail: the question is embedded twice, once per search; pass the vector along if it ever shows in the timings.
-    scope = await likely_papers(session, question, ready, embedder)
-    sources = cut_to_budget(
-        await retrieve(session, question, paper_ids=scope, k=RETRIEVE_POOL, embedder=embedder, words=True)
-    )
+    sources, whole, lens = await _workspace_sources(session, ready, question, embedder, _lens_of(skill))
     every_note = await workspaces.notes(session, workspace_id)
     block, used = format_notes_block(every_note, members)
     prompt = WORKSPACE_PROMPT_TEMPLATE.format(
@@ -328,10 +374,11 @@ async def _prepare_workspace(
         sources=sources,
         system=skills.compose(WORKSPACE_SYSTEM_PROMPT, skill),
         prompt=prompt,
-        whole_paper=False,
+        whole_paper=whole and lens == FULL_LENS,  # the whole lens is not the whole workspace: keep each cite pill
         prompt_version=WORKSPACE_PROMPT_VERSION,
         notes=used,
         notes_total=len(every_note),
+        lens=lens,
         **_skill_fields(skill),
     )
 
@@ -369,16 +416,25 @@ async def prepare(
     chars, embedded = await _size(session, paper_id)
     if chars == 0 and not paper.has_pdf:  # saved without a PDF or an abstract: nothing to answer from, no LLM call
         raise Conflict("no_text")
-    whole_paper = chars <= SMALL_PAPER_CHARS
+    # A skill's lens (M16) replaces the paper: its chunks whole when they fit, else the nearest of them that fit.
+    lens = _lens_of(skill)
+    lens_chunks = await lens_sources(session, paper_id, lens) if lens != FULL_LENS else []
+    lens_fits = _fits(lens_chunks)
+    whole_paper = lens_fits or (not lens_chunks and chars <= SMALL_PAPER_CHARS)
     if not whole_paper:
         # D156's gate before the index: not set up, then rebuilding, then vectors from another model.
         embedder = await searchable(session, [paper_id], embedder)
         if embedded == 0 and paper.status == PaperStatus.READY:  # before M4 or the model: the UI offers Re-index
             raise Conflict("paper_not_indexed")
-    if whole_paper:
+    if lens_fits:
+        sources = lens_chunks
+    elif whole_paper:
         sources = await chunk_sources(session, Chunk.paper_id == paper_id)
     else:
-        found = await retrieve(session, question, paper_ids=[paper_id], k=RETRIEVE_POOL, embedder=embedder)
+        chunk_ids = [c.id for c in lens_chunks] or None  # no lens sections: the whole paper, as before
+        found = await retrieve(
+            session, question, paper_ids=[paper_id], k=RETRIEVE_POOL, embedder=embedder, chunk_ids=chunk_ids
+        )
         if thread is None:
             sources = cut_to_budget(found)
             if not sources:  # no vectors yet and no matching word: the model would answer from nothing
@@ -396,9 +452,10 @@ async def prepare(
         sources=sources,
         system=skills.compose(SYSTEM_PROMPT, skill),
         prompt=prompt,
-        whole_paper=whole_paper,
+        whole_paper=whole_paper and not lens_chunks,  # the whole lens is not the whole paper
         notes=used,
         notes_total=len(every_note),
+        lens=lens if lens_chunks else FULL_LENS,
         **_skill_fields(skill),
     )
 
@@ -437,6 +494,7 @@ async def save_answer(
         parent_id=parent_id,
         skill_label=prepared.skill_label,
         skill_version=prepared.skill_version,
+        lens=prepared.lens,
     )
     session.add(output)
     await session.commit()

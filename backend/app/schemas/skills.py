@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.core.lenses import LensId
+
 Scope = Literal["paper", "workspace", "both"]
 ChatKind = Literal["paper", "workspace"]
 
@@ -19,6 +21,7 @@ class SkillOut(BaseModel):
     is_paper_default: bool
     is_workspace_default: bool
     state: Literal["builtin", "edited", "custom"]
+    lens: LensId  # the lens the skill's answers read through; 'full' is the whole paper
 
 
 class SkillCreate(BaseModel):
@@ -28,6 +31,7 @@ class SkillCreate(BaseModel):
     description: str = ""
     scope: Scope
     instructions: str
+    lens: LensId | None = None  # omitted: 'full'
 
 
 class SkillUpdate(BaseModel):
@@ -40,6 +44,7 @@ class SkillUpdate(BaseModel):
     scope: Scope | None = None
     instructions: str | None = None
     is_listed: bool | None = None
+    lens: LensId | None = None
 
 
 class SkillDefaultIn(BaseModel):

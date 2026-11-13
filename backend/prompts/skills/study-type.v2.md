@@ -3,7 +3,8 @@ slug: study-type
 label: What kind of study is this?
 description: Names the paper's aim and kind of study, and what to check before believing it. Draws on the community LLM reporting guidelines (llm-guidelines.org)
 scope: paper
-version: 1
+version: 2
+lens: key_ideas
 ---
 Work out what kind of study the paper is before judging any of it.
 

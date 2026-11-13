@@ -5,8 +5,9 @@ import pytest
 from conftest import unit_vector
 from sqlalchemy import delete, insert
 from test_note_papers import paper_only_note
+from test_sections import SECTIONED, sectioned_paper
 
-from app.core import chat, retrieval
+from app.core import chat, retrieval, skills
 from app.core.errors import Conflict, NotFound
 from app.core.notes import Anchor, NoteView
 from app.models import Chunk, LLMOutput, Note, Paper, Workspace, note_anchors, note_papers, workspace_papers
@@ -346,3 +347,40 @@ async def test_workspace_prepare_sends_what_fits_the_budget_not_eight(session, e
     prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "All of them?", embedder)
 
     assert len(prepared.sources) == 12  # 3 from each paper, the per-paper cap
+
+
+async def test_a_workspace_lens_is_the_union_of_its_papers_lens_chunks_when_it_fits(session, embedder):
+    first, first_chunks = await sectioned_paper(session, SECTIONED)
+    second, second_chunks = await sectioned_paper(session, SECTIONED)
+    workspace = await make_workspace(session, [first, second])
+    skill = await skills.get_view(session, "builtin:check-evaluation")
+
+    prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "Is it sound?", embedder, skill=skill)
+
+    expected = {c.id for chunks in (first_chunks, second_chunks) for c in (chunks[2], chunks[3], chunks[4])}
+    assert {s.id for s in prepared.sources} == expected and len(prepared.sources) == 6
+    assert (prepared.whole_paper, prepared.lens) == (False, "critical")  # each passage keeps its own cite pill
+    assert embedder.calls == []
+
+
+async def test_a_workspace_lens_too_big_to_fit_retrieves_among_the_union(session, embedder, monkeypatch):
+    texts = ["Abstract.", "Intro.", "m" * 10_000, "m" * 10_000, "r" * 10_000, "Conclusion."]
+    first, first_chunks = await sectioned_paper(session, SECTIONED, texts)
+    second, second_chunks = await sectioned_paper(session, SECTIONED, texts)
+    workspace = await make_workspace(session, [first, second])
+    skill = await skills.get_view(session, "builtin:check-evaluation")
+    seen = []
+    real_retrieve = chat.retrieve
+
+    async def spy(*args, **kwargs):
+        seen.append(kwargs)
+        return await real_retrieve(*args, **kwargs)
+
+    monkeypatch.setattr(chat, "retrieve", spy)
+
+    prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "Which?", embedder, skill=skill)
+
+    union = {c.id for chunks in (first_chunks, second_chunks) for c in (chunks[2], chunks[3], chunks[4])}
+    assert set(seen[0]["chunk_ids"]) == union
+    assert {s.id for s in prepared.sources} <= union
+    assert (prepared.whole_paper, prepared.lens) == (False, "critical")

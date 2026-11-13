@@ -1,4 +1,4 @@
-import type { Chunk, Lens, Role, Section } from '@/api/client'
+import type { Chunk, Lens, LensId, Role, Section } from '@/api/client'
 import { refusal, type ChatProblem } from '@/features/chat/refusals'
 import type { PdfRect } from '@/features/reader/coords'
 
@@ -14,6 +14,15 @@ export const ROLE_LABEL: Record<Role, string> = {
   conclusion: 'Conclusion',
   back: 'Back matter',
   other: 'Other',
+}
+
+/** Each lens in words, as the backend names it (backend/app/core/lenses.py). Settings' skill editor and the answer chip read it. */
+export const LENS_LABELS: Record<LensId, string> = {
+  full: 'Full paper',
+  key_ideas: 'Key ideas',
+  critical: 'Critical check',
+  method: 'How they did it',
+  related: 'Related work',
 }
 
 /** Where a chunk sits: what fading and jumping need. */

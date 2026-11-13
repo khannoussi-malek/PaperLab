@@ -3,7 +3,8 @@ slug: check-evaluation
 label: Check the evaluation
 description: Whether the numbers measure what they claim to. Criteria drawn from the community LLM reporting guidelines (llm-guidelines.org)
 scope: both
-version: 1
+version: 2
+lens: critical
 ---
 Judge whether the evaluation in the paper or papers you were given supports their claims. Go through each paper in turn, and say where they differ.
 
