@@ -149,7 +149,7 @@ test('no discard footer when nothing was discarded', async () => {
 test('a too-long draft disables Start and says so', async () => {
   vi.mocked(api.draftReviewEstimate).mockResolvedValue({ ...estimate, too_long: true })
   show()
-  expect(await screen.findByText('The draft is too long to review at once.')).toBeInTheDocument()
+  expect(await screen.findByText('The draft is too long to review, even in parts.')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Start review' })).toBeDisabled()
 })
 
@@ -160,4 +160,35 @@ test('Close closes the dialog without starting', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(onClose).toHaveBeenCalled()
   expect(api.startDraftReview).not.toHaveBeenCalled()
+})
+
+test('a draft in several parts shows the estimate line and offers the light review only', async () => {
+  vi.mocked(api.draftReviewEstimate).mockResolvedValue({
+    ...estimate, parts: 3, modes: [{ ...estimate.modes[0], parts: 3, likely_calls: 20, max_calls: 26 }],
+  })
+  show()
+  expect(await screen.findByText('Long draft: reviewed in 3 parts, one section group at a time.')).toBeInTheDocument()
+  expect(screen.getByText('A draft this long gets the light review only.')).toBeInTheDocument()
+  expect(screen.getByRole('radio', { name: /Light/ })).toBeChecked()
+  expect(screen.queryByRole('radio', { name: /Full/ })).toBeNull()
+})
+
+test('a draft in one part shows neither the parts line nor the light-only note', async () => {
+  show()
+  await screen.findByText(/about 42 model calls/)
+  expect(screen.queryByText(/reviewed in \d+ parts/)).toBeNull()
+  expect(screen.queryByText('A draft this long gets the light review only.')).toBeNull()
+})
+
+test('a finished review in several parts says so', async () => {
+  serve(review({ counts: { rounds_run: 1, parts: 3 } }))
+  show()
+  expect(await screen.findByText('Reviewed in 3 parts. A reviewer saw one part at a time, so an issue may already be handled in another part.')).toBeInTheDocument()
+})
+
+test('a finished review in one part shows no parts line', async () => {
+  serve(review({ counts: { rounds_run: 1, parts: 1 } }))
+  show()
+  await screen.findByText('Light, 1 round')
+  expect(screen.queryByText(/Reviewed in/)).toBeNull()
 })

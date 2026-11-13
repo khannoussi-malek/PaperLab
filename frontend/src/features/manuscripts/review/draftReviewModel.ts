@@ -7,7 +7,8 @@ type Severity = DraftReview['issues'][number]['severity']
 
 const REASON: Record<string, string> = {
   paper_too_short: 'There is not enough text to review yet.',
-  paper_too_long: 'The draft is too long to review at once.',
+  paper_too_long: 'The draft is too long to review, even in parts.',
+  full_one_part: 'A draft this long gets the light review only. The full review needs a draft under 40,000 characters.',
   model_unavailable: 'The model could not be reached.',
   model_error: "The model's answer could not be used. Try again.",
   cancelled: 'Cancelled.',

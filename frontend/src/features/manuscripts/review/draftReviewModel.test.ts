@@ -4,7 +4,8 @@ import { discardedCount, isLive, modeText, reasonText, severityLabel, startBody 
 
 test('a failed review reason in plain words; an unknown one is not blamed on the model', () => {
   expect(reasonText('paper_too_short')).toBe('There is not enough text to review yet.')
-  expect(reasonText('paper_too_long')).toBe('The draft is too long to review at once.')
+  expect(reasonText('paper_too_long')).toBe('The draft is too long to review, even in parts.')
+  expect(reasonText('full_one_part')).toBe('A draft this long gets the light review only. The full review needs a draft under 40,000 characters.')
   expect(reasonText('model_unavailable')).toBe('The model could not be reached.')
   expect(reasonText('model_error')).toBe("The model's answer could not be used. Try again.")
   expect(reasonText('cancelled')).toBe('Cancelled.')
