@@ -54,6 +54,18 @@ def test_template_band_is_the_default_and_custom_has_none():
     assert no_targets(run("blueprint.words", files, template="custom")) == [NO_TARGETS]
 
 
+def test_a_target_naming_no_section_explains_itself_without_the_no_targets_note():
+    files = {"blueprint.json": plan(target_words={"Intro": [1, 9]}), "main.tex": f"\\section{{Conclusion}}\n{words(5)}\n"}
+    f = run("blueprint.words", files, template="custom")
+    assert no_targets(f) == [] and [x.message for x in f] == ['target_words names "Intro", but no section has that title.']
+
+
+def test_an_invalid_plan_gives_only_its_own_warning():
+    files = {"blueprint.json": "{not json", "main.tex": f"\\section{{Conclusion}}\n{words(5)}\n"}
+    f = run("blueprint.words", files, template="custom")
+    assert [x.severity for x in f] == ["warning"] and no_targets(f) == []
+
+
 def test_target_naming_no_section_is_info_and_a_second_file_is_read():
     files = {"blueprint.json": plan(target_words={"ghost": [1, 2], "method": [1, 9]}),
              "main.tex": "\\input{sections/m}\n", "sections/m.tex": f"\\section{{Method}}\n{words(3)}\n"}

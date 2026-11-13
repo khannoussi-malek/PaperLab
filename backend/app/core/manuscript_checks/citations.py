@@ -35,12 +35,16 @@ def _hint(key: str, known: Iterable[str]) -> str:
 
 
 def _run(ctx: CheckContext) -> list[Finding]:
-    return [
-        Finding(NAME, "error", m["file"], m["line"],
-                f"Cited key {m['key']} matches no paper in your library or your .bib files, so LaTeX prints [?].",
-                _hint(m["key"], ctx.known_keys))
-        for m in missing_in(sorted(ctx.files.items()), ctx.known_keys)
-    ]
+    known = sorted(ctx.known_keys)
+    hints: dict[str, str] = {}  # one lookup per distinct key: a key cited 40 times is matched once
+    found = []
+    for m in missing_in(sorted(ctx.files.items()), ctx.known_keys):
+        if m["key"] not in hints:
+            hints[m["key"]] = _hint(m["key"], known)
+        found.append(Finding(NAME, "error", m["file"], m["line"],
+                             f"Cited key {m['key']} matches no paper in your library or your .bib files, "
+                             "so LaTeX prints [?].", hints[m["key"]]))
+    return found
 
 
 CHECKS = (Check(NAME, "cheap", "Cited keys that match no paper or .bib entry", _run),)

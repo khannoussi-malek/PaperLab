@@ -1,6 +1,7 @@
 from types import MappingProxyType
 
 from app.core.manuscript_checks.base import CheckContext, ManuscriptInfo
+from app.core.manuscript_checks import citations
 from app.core.manuscript_checks.citations import CHECKS, suggest
 
 INFO = ManuscriptInfo("m", "main.tex", "never", None, None, None)
@@ -60,3 +61,12 @@ def test_suggest_orders_case_then_suffix_then_close_and_caps_at_three():
 def test_suggest_stays_quick_with_a_large_library():
     known = [f"author{i}{2000 + i % 25}topic" for i in range(200)]
     assert suggest("vaswani2017attention", known) == []
+
+
+def test_a_key_cited_many_times_is_matched_once(monkeypatch):
+    calls = []
+    real = citations.suggest
+    monkeypatch.setattr(citations, "suggest", lambda key, known: calls.append(key) or real(key, known))
+    tex = "\\cite{gone2020}. " * 40 + "\\cite{alsogone}"
+    found = run({"main.tex": tex}, known={"gone2020a"})
+    assert len(found) == 41 and sorted(calls) == ["alsogone", "gone2020"]

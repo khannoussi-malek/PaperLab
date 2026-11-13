@@ -93,7 +93,7 @@ def band(spec: BlueprintSpec, section_id: str, template: str) -> Band | None:
 
 _TITLE = re.compile(r"\\title\s*(?:\[[^\]]*\]\s*)?\{")
 _THANKS = re.compile(r"\\thanks\s*\{")
-_BREAK = re.compile(r"\\\\|\\newline\b")
+_BREAK = re.compile(r"\\\\|\\newline\b|~")  # ~ is a non-breaking space
 _ESCAPED = re.compile(r"\\([%&$#_])")
 _LETTERS = re.compile(r"\\[A-Za-z]+\*?")
 

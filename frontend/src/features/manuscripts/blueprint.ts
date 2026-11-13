@@ -36,7 +36,7 @@ export function starterBlueprint(title: string, bands: Record<string, number[]> 
 
 const TITLE = /\\title\s*(?:\[[^\]]*\]\s*)?\{/
 const THANKS = /\\thanks\s*\{/
-const BREAK = /\\\\|\\newline\b/g
+const BREAK = /\\\\|\\newline\b|~/g // ~ is a non-breaking space
 const ESCAPED = /\\([%&$#_])/g
 const LETTERS = /\\[A-Za-z]+\*?/g
 

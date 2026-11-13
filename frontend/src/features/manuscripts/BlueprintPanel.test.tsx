@@ -157,10 +157,18 @@ test('a plan with no targets on a template with no bands says so', async () => {
   expect(await screen.findByText(NO_TARGETS_LINE)).toBeInTheDocument()
 })
 
-test('no such line when the template has bands, or when there are targets', async () => {
+test('no such line when the template has bands', async () => {
   mockTemplates()
   mockFile('blueprint.json', '{"title":"T"}')
   renderPanel({ files: [{ path: 'blueprint.json' }], template: 'article' })
+  expect(await screen.findByText('T')).toBeInTheDocument()
+  expect(screen.queryByText(NO_TARGETS_LINE)).toBeNull()
+})
+
+test('no such line when the plan has its own targets on a template with no bands', async () => {
+  mockTemplates()
+  mockFile('blueprint.json', '{"title":"T","target_words":{"Introduction":[600,900]}}')
+  renderPanel({ files: [{ path: 'blueprint.json' }], template: 'custom' })
   expect(await screen.findByText('T')).toBeInTheDocument()
   expect(screen.queryByText(NO_TARGETS_LINE)).toBeNull()
 })

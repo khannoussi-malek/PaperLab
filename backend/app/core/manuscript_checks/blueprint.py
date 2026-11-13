@@ -33,7 +33,8 @@ def _words(ctx: CheckContext) -> list[Finding]:
     # the body in an \input file is no honest count, so no warning for it
     bands = [(s, bp.band(spec, s.id, ctx.manuscript.template)) for s in sections if s.measurable]
     found = []
-    if bands and all(band is None for _, band in bands):
+    # a target_words key that names no section gets its own finding below, so this one is only for an empty map
+    if bands and not spec.target_words and all(band is None for _, band in bands):
         found.append(Finding(W, "info", bp.PATH, 1,
                              "No section has a word target, so section lengths aren't checked.",
                              'Add targets to target_words in blueprint.json, for example "Introduction": [600, 900].'))

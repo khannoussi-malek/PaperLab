@@ -33,6 +33,7 @@ test.each([
   ['\\title{What Works}', 'What Works'],
   ['\\title[Short]{Long \\\\ Title}', 'Long Title'],
   ['\\title{A\\thanks{Funded by X.} B}', 'A B'],
+  ['\\title{Retrieval~at Scale}', 'Retrieval at Scale'],
   ['% \\title{Old}\n\\title{New}', 'New'],
   ['\\title{\\textbf{Bold} words}', 'Bold words'],
   ['\\title{Foo\\\\ \\large Bar}', 'Foo Bar'],

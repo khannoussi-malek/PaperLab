@@ -72,7 +72,7 @@ export function BlueprintPanel({ manuscriptId, files, mainFile, title, template 
               {plan.targets.map((t) => <li key={t.id}>{`${t.id}: ${t.min} to ${t.max} words`}</li>)}
             </ul>
           )}
-          {plan.targets.length === 0 && templates.isSuccess && bands === undefined && (
+          {plan.targets.length === 0 && templates.isSuccess && (bands === undefined || Object.keys(bands).length === 0) && (
             <p className="text-xs text-muted-foreground">No word targets yet: this template has none. Add them under target_words.</p>
           )}
         </div>
