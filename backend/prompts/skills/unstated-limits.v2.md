@@ -3,7 +3,8 @@ slug: unstated-limits
 label: What didn't they admit?
 description: The stated limitations, then the ones the method implies but the text doesn't raise
 scope: both
-version: 1
+version: 2
+lens: critical
 ---
 Find the limits of the paper or papers you were given, both the ones they state and the ones they don't. Go through each paper in turn.
 

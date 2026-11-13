@@ -15,7 +15,9 @@ BASE = "You are PaperLab. Cite [C1] for every claim."
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
-def bundled(slug="check-evaluation", scope="both", version=1, instructions="Check the numbers.", label="Check it"):
+def bundled(
+    slug="check-evaluation", scope="both", version=1, instructions="Check the numbers.", label="Check it", lens="full"
+):
     return BundledSkill(
         slug=slug,
         label=label,
@@ -23,6 +25,7 @@ def bundled(slug="check-evaluation", scope="both", version=1, instructions="Chec
         scope=scope,
         version=version,
         instructions=instructions,
+        lens=lens,
     )
 
 
@@ -39,6 +42,7 @@ def row(builtin_slug=None, created=0, **fields):
         is_paper_default=False,
         is_workspace_default=False,
         created_at=datetime(2026, 1, 1 + created, tzinfo=timezone.utc),
+        lens=None,
     )
     return SkillRow(**{**defaults, **fields})
 
@@ -48,7 +52,10 @@ def write_skill(folder: Path, name: str, text: str) -> None:
     (folder / name).write_text(text)
 
 
-GOOD = "---\nslug: alpha\nlabel: Alpha\ndescription: A skill\nscope: paper\nversion: 1\n---\nDo the alpha task.\n"
+GOOD = (
+    "---\nslug: alpha\nlabel: Alpha\ndescription: A skill\nscope: paper\nversion: 1\nlens: full\n---\n"
+    "Do the alpha task.\n"
+)
 
 
 # Loader
@@ -63,9 +70,9 @@ def test_the_six_bundled_files_load_in_the_fixed_order():
 
 
 def test_other_files_load_after_the_fixed_order_by_slug(tmp_path):
-    write_skill(tmp_path, "zeta.v1.md", GOOD.replace("alpha", "zeta"))
-    write_skill(tmp_path, "alpha.v1.md", GOOD)
-    write_skill(tmp_path, "study-type.v1.md", GOOD.replace("alpha", "study-type"))
+    write_skill(tmp_path, "zeta.v2.md", GOOD.replace("alpha", "zeta").replace("version: 1", "version: 2"))
+    write_skill(tmp_path, "alpha.v2.md", GOOD.replace("version: 1", "version: 2"))
+    write_skill(tmp_path, "study-type.v2.md", GOOD.replace("alpha", "study-type").replace("version: 1", "version: 2"))
     assert [skill.slug for skill in load_bundled(tmp_path)] == ["study-type", "alpha", "zeta"]
 
 
@@ -73,7 +80,13 @@ def test_a_valid_file_becomes_a_frozen_bundled_skill(tmp_path):
     write_skill(tmp_path, "alpha.v1.md", GOOD)
     (skill,) = load_bundled(tmp_path)
     assert skill == BundledSkill(
-        slug="alpha", label="Alpha", description="A skill", scope="paper", version=1, instructions="Do the alpha task."
+        slug="alpha",
+        label="Alpha",
+        description="A skill",
+        scope="paper",
+        version=1,
+        instructions="Do the alpha task.",
+        lens="full",
     )
 
 
@@ -96,7 +109,7 @@ def test_a_version_in_the_name_that_disagrees_with_the_frontmatter_raises(tmp_pa
         load_bundled(tmp_path)
 
 
-@pytest.mark.parametrize("field", ["slug", "label", "description", "scope", "version"])
+@pytest.mark.parametrize("field", ["slug", "label", "description", "scope", "version", "lens"])
 def test_a_missing_frontmatter_field_raises(tmp_path, field):
     lines = [line for line in GOOD.splitlines() if not line.startswith(f"{field}:")]
     write_skill(tmp_path, "alpha.v1.md", "\n".join(lines) + "\n")
@@ -107,6 +120,12 @@ def test_a_missing_frontmatter_field_raises(tmp_path, field):
 def test_a_bad_scope_raises(tmp_path):
     write_skill(tmp_path, "alpha.v1.md", GOOD.replace("scope: paper", "scope: library"))
     with pytest.raises(ValueError, match="scope"):
+        load_bundled(tmp_path)
+
+
+def test_a_lens_that_is_not_a_lens_id_raises(tmp_path):
+    write_skill(tmp_path, "alpha.v1.md", GOOD.replace("lens: full", "lens: everything"))
+    with pytest.raises(ValueError, match="lens"):
         load_bundled(tmp_path)
 
 
@@ -165,6 +184,27 @@ def test_a_row_overrides_only_the_fields_it_sets():
         "Mine.",
     )
     assert (view.version, view.is_listed, view.is_paper_default, view.state) == (3, False, True, "edited")
+
+
+def test_a_bundled_skill_without_a_row_keeps_its_shipped_lens():
+    (view,) = merge([bundled(lens="critical")], [])
+    assert view.lens == "critical"
+
+
+def test_a_row_lens_overrides_the_shipped_lens_and_keeps_the_text():
+    (view,) = merge([bundled(lens="critical", instructions="Shipped.")], [row("check-evaluation", lens="method")])
+    assert (view.lens, view.instructions, view.version, view.state) == ("method", "Shipped.", 1, "edited")
+
+
+def test_a_row_without_a_lens_keeps_the_shipped_lens():
+    (view,) = merge([bundled(lens="critical")], [row("check-evaluation", label="Renamed")])
+    assert view.lens == "critical"
+
+
+def test_a_custom_skill_is_full_unless_its_row_names_a_lens():
+    (plain,) = merge([], [row(None, label="Plain", scope="paper", instructions="x", lens="full")])
+    (lensed,) = merge([], [row(None, label="Lensed", scope="paper", instructions="x", lens="related")])
+    assert (plain.lens, lensed.lens) == ("full", "related")
 
 
 def test_a_label_only_row_stays_builtin_and_keeps_the_file_version():

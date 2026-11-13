@@ -17,6 +17,7 @@ const skill = (overrides: Partial<Skill> = {}): Skill => ({
   description: 'Looks at how the paper tested its claims.',
   scope: 'paper',
   instructions: 'Read the method first.',
+  lens: 'full',
   version: 1,
   is_listed: true,
   is_paper_default: false,

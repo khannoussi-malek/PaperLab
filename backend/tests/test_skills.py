@@ -102,6 +102,49 @@ async def test_a_label_of_eighty_characters_is_allowed(session):
     assert len(created.label) == 80
 
 
+# lens
+
+
+async def test_each_bundled_skill_lists_its_shipped_lens(session):
+    listed = {v.id: v.lens for v in await skills.list_skills(session, include_hidden=True)}
+    assert listed == {f"builtin:{b.slug}": b.lens for b in skills.BUNDLED}
+    assert listed["builtin:check-evaluation"] == "critical"
+
+
+async def test_a_custom_skill_is_full_unless_it_names_a_lens(session):
+    plain = await make_custom(session, label="Plain lens")
+    lensed = await skills.create(
+        session, label="Lensed", description="", scope="paper", instructions="Do.", lens="method"
+    )
+    assert (plain.lens, lensed.lens) == ("full", "method")
+
+
+async def test_an_unknown_lens_is_invalid_input(session):
+    with pytest.raises(InvalidInput, match="skill_lens_invalid"):
+        await skills.create(session, label="Bad", description="", scope="paper", instructions="Do.", lens="everything")
+    with pytest.raises(InvalidInput, match="skill_lens_invalid"):
+        await skills.update(session, "builtin:check-evaluation", lens="everything")
+
+
+async def test_a_bundled_skill_takes_a_lens_and_reset_gives_the_shipped_one_back(session):
+    changed = await skills.update(session, "builtin:check-evaluation", lens="related")
+    assert (changed.lens, changed.state) == ("related", "edited")
+    reset = await skills.reset(session, "builtin:check-evaluation")
+    assert (reset.lens, reset.state) == ("critical", "builtin")
+
+
+async def test_a_lens_change_keeps_the_version(session):
+    before = await view(session, "builtin:check-evaluation")
+    after = await skills.update(session, "builtin:check-evaluation", lens="related")
+    assert after.version == before.version
+
+
+async def test_a_custom_skill_lens_can_be_changed(session):
+    made = await make_custom(session)
+    changed = await skills.update(session, made.id, lens="key_ideas")
+    assert changed.lens == "key_ideas"
+
+
 # update
 
 
@@ -109,19 +152,19 @@ async def test_the_first_edit_of_a_bundled_skill_inserts_its_row_and_bumps_versi
     assert await row_for(session, "check-evaluation") is None
     edited = await skills.update(session, "builtin:check-evaluation", instructions="Mine.")
     assert await row_for(session, "check-evaluation") is not None
-    assert (edited.instructions, edited.state, edited.version) == ("Mine.", "edited", 2)
+    assert (edited.instructions, edited.state, edited.version) == ("Mine.", "edited", skills.BUNDLED[1].version + 1)
 
 
 async def test_a_second_instructions_change_bumps_version_again(session):
     await skills.update(session, "builtin:check-evaluation", instructions="One.")
     edited = await skills.update(session, "builtin:check-evaluation", instructions="Two.")
-    assert edited.version == 3
+    assert edited.version == skills.BUNDLED[1].version + 2
 
 
 async def test_saving_the_same_instructions_does_not_bump_version(session):
     shipped = (await view(session, "builtin:check-evaluation")).instructions
     unchanged = await skills.update(session, "builtin:check-evaluation", instructions=shipped)
-    assert unchanged.version == 1
+    assert unchanged.version == skills.BUNDLED[1].version
 
 
 async def test_a_label_only_edit_keeps_the_shipped_text_and_version(session):

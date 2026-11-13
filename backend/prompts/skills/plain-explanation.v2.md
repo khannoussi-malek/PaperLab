@@ -3,7 +3,8 @@ slug: plain-explanation
 label: Explain it plainly
 description: The problem, what they did and found, and why it matters, in ordinary words
 scope: paper
-version: 1
+version: 2
+lens: key_ideas
 ---
 Explain the paper to a curious reader from outside its field.
 

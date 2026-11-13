@@ -128,6 +128,7 @@ async def stream_output(
         prompt_version=prepared.prompt_version,
         cited=cited,
         skill_label=prepared.skill_label,
+        lens=prepared.lens,
     )
     yield ServerSentEvent(event="done", data=done)
 
@@ -184,6 +185,7 @@ def to_answer(answer: chat.Answer) -> ChatAnswer:
         parent_id=output.parent_id,
         saved_notes=[SavedNoteOut(index=s.index, note_id=s.note_id, paper_ids=s.paper_ids) for s in answer.saved_notes],
         skill_label=output.skill_label,
+        lens=output.lens,
     )
 
 

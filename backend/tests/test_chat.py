@@ -6,8 +6,9 @@ from conftest import unit_vector
 from sqlalchemy import delete, func, select
 from test_chat_workspace import NOW, add_note
 from test_note_papers import paper_only_note
+from test_sections import SECTIONED, critical_skill, sectioned_paper
 
-from app.core import chat, papers, prompts
+from app.core import chat, papers, prompts, skills
 from app.core.chunking import ChunkDraft
 from app.core.errors import Conflict, NotFound
 from app.core.retrieval import RetrievedChunk
@@ -419,3 +420,65 @@ async def test_prepare_refuses_rather_than_ask_the_model_about_nothing(session, 
 
     with pytest.raises(Conflict, match="^nothing_found_yet$"):
         await chat.prepare(session, paper.id, "what about zebras?", embedder=embedder)
+
+
+async def test_a_lens_that_fits_sends_exactly_its_chunks_in_reading_order(session):
+    paper, chunks = await sectioned_paper(session, SECTIONED)
+    skill = await critical_skill(session)
+
+    prepared = await chat.prepare(session, paper.id, "Is the evaluation sound?", skill=skill)
+
+    assert [s.id for s in prepared.sources] == [chunks[i].id for i in (2, 3, 4)]
+    assert (prepared.whole_paper, prepared.lens) == (True, "critical")
+    assert prepared.system == skills.compose(chat.SYSTEM_PROMPT, skill)
+
+
+async def test_a_lens_too_big_to_fit_retrieves_only_among_its_chunks(session, embedder, monkeypatch):
+    texts = ["Abstract.", "Intro.", "m" * 10_000, "m" * 10_000, "r" * 10_000, "Conclusion."]
+    paper, chunks = await sectioned_paper(session, SECTIONED, texts)
+    lens_ids = [chunks[i].id for i in (2, 3, 4)]
+    seen = []
+    real_retrieve = chat.retrieve
+
+    async def spy(*args, **kwargs):
+        seen.append(kwargs)
+        return await real_retrieve(*args, **kwargs)
+
+    monkeypatch.setattr(chat, "retrieve", spy)
+    embedder.vectors["search_query: Which result?"] = unit_vector(texts[4])
+
+    prepared = await chat.prepare(session, paper.id, "Which result?", embedder, skill=await critical_skill(session))
+
+    assert seen[0]["chunk_ids"] == lens_ids
+    assert prepared.sources and {s.id for s in prepared.sources} <= set(lens_ids)
+    assert (prepared.whole_paper, prepared.lens) == (False, "critical")
+
+
+async def test_a_lens_with_no_sections_answers_from_the_paper_as_today(session):
+    paper, chunks = await sectioned_paper(session, [None, None])
+    skill = await critical_skill(session)
+
+    with_lens = await chat.prepare(session, paper.id, "What is it?", skill=skill)
+    without = await chat.prepare(session, paper.id, "What is it?")
+
+    assert (with_lens.lens, with_lens.whole_paper) == ("full", True)
+    assert [s.id for s in with_lens.sources] == [c.id for c in chunks]
+    assert with_lens.prompt == without.prompt
+
+
+async def test_save_answer_records_the_lens_it_was_written_from(session):
+    paper, _ = await sectioned_paper(session, SECTIONED)
+    prepared = await chat.prepare(session, paper.id, "Is it sound?", skill=await critical_skill(session))
+
+    output_id = await chat.save_answer(session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake")
+
+    assert (await session.get(LLMOutput, output_id)).lens == "critical"
+
+
+async def test_an_answer_without_a_skill_records_the_full_lens(session):
+    paper, _ = await sectioned_paper(session, SECTIONED)
+    prepared = await chat.prepare(session, paper.id, "Is it sound?")
+
+    output_id = await chat.save_answer(session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake")
+
+    assert (await session.get(LLMOutput, output_id)).lens == "full"

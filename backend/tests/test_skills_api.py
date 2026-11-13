@@ -6,6 +6,7 @@ from sqlalchemy import select
 from test_chat_api import make_paper
 from test_chat_workspace_api import make_paper as make_workspace_paper
 from test_chat_workspace_api import make_workspace, query_model  # noqa: F401 (the fixture is a parameter)
+from test_sections import SECTIONED, sectioned_paper
 
 from app.core import chat, skills
 from app.models import LLMOutput
@@ -84,7 +85,7 @@ async def test_put_edits_sent_fields_and_bumps_version_when_instructions_change(
     response = await client.put(f"{BASE}/builtin:check-evaluation", json={"instructions": "A new check."})
     assert response.status_code == 200
     body = response.json()
-    assert (body["state"], body["version"], body["instructions"]) == ("edited", 2, "A new check.")
+    assert (body["state"], body["version"], body["instructions"]) == ("edited", 3, "A new check.")
 
 
 async def test_put_rejects_an_unknown_field_with_422(client):
@@ -252,3 +253,55 @@ async def test_a_hit_chat_that_names_a_skill_is_refused_with_skill_not_here(
 
     assert (response.status_code, response.json()["detail"]) == (422, "skill_not_here")
     assert fake_llm.calls == []
+
+
+# Lenses
+
+
+async def test_create_takes_a_lens_and_returns_it(client):
+    response = await client.post(
+        BASE,
+        json={"label": "Lensed", "description": "d", "scope": "paper", "instructions": "x", "lens": "critical"},
+    )
+    assert (response.status_code, response.json()["lens"]) == (201, "critical")
+
+
+async def test_an_unknown_lens_is_rejected_with_422(client):
+    response = await client.post(
+        BASE,
+        json={"label": "Lensed", "description": "d", "scope": "paper", "instructions": "x", "lens": "everything"},
+    )
+    assert response.status_code == 422
+
+
+async def test_put_changes_a_bundled_skills_lens_and_reset_restores_it(client):
+    changed = await client.put(f"{BASE}/builtin:check-evaluation", json={"lens": "related"})
+    assert (changed.status_code, changed.json()["lens"]) == (200, "related")
+    reset = await client.post(f"{BASE}/builtin:check-evaluation/reset")
+    assert reset.json()["lens"] == "critical"
+
+
+async def test_a_paper_chat_with_a_lens_sends_its_passages_and_records_the_lens(client, session, fake_llm):
+    paper, chunks = await sectioned_paper(session, SECTIONED)
+
+    response = await client.post(
+        f"/api/papers/{paper.id}/chat",
+        json={"question": "Is it sound?", "skill_id": "builtin:check-evaluation"},
+    )
+
+    assert response.status_code == 200
+    done = parse_sse(response.text)[-1][1]
+    assert done["lens"] == "critical"
+    prompt = fake_llm.calls[0][1]
+    assert chunks[2].text in prompt and chunks[4].text in prompt and chunks[0].text not in prompt
+    output = await output_for(session, done["output_id"])
+    assert (output.lens, output.source_chunks) == ("critical", [chunks[i].id for i in (2, 3, 4)])
+
+
+async def test_a_paper_chat_without_a_skill_records_the_full_lens(client, session, fake_llm):
+    paper, _ = await make_paper(session, ["Intro text.", "Method text."])
+
+    done = parse_sse((await client.post(f"/api/papers/{paper.id}/chat", json={"question": "Why?"})).text)[-1][1]
+
+    assert done["lens"] == "full"
+    assert (await output_for(session, done["output_id"])).lens == "full"

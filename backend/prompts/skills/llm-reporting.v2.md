@@ -3,7 +3,8 @@ slug: llm-reporting
 label: Check LLM reporting
 description: Whether a study that used language models could be repeated. Criteria drawn from the community LLM reporting guidelines (llm-guidelines.org)
 scope: both
-version: 1
+version: 2
+lens: method
 ---
 Judge whether someone could repeat the parts of the study done with language models, in the paper or papers you were given. Go through each paper in turn; with several, end with a short comparison of which ones could be repeated and which could not.
 

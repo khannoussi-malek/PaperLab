@@ -15,6 +15,7 @@ from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, InvalidInput, NotFound
+from app.core.lenses import LENSES
 from app.core.prompts import PROMPTS_DIR
 from app.models import Skill
 
@@ -24,7 +25,8 @@ Scope = Literal["paper", "workspace", "both"]
 ChatKind = Literal["paper", "workspace"]
 SCOPES = ("paper", "workspace", "both")
 ORDER = ("study-type", "check-evaluation", "check-validation", "unstated-limits", "llm-reporting", "plain-explanation")
-REQUIRED = ("slug", "label", "description", "scope", "version")
+REQUIRED = ("slug", "label", "description", "scope", "version", "lens")
+FULL = "full"  # the lens that is the whole paper: no lens at all
 FILE_NAME = re.compile(r"(?P<slug>[a-z0-9-]+)\.v(?P<version>\d+)\.md")
 FRONTMATTER = re.compile(r"---\n(?P<meta>.*?)\n---\n(?P<body>.*)", re.DOTALL)
 
@@ -37,6 +39,7 @@ class BundledSkill:
     scope: Scope
     version: int
     instructions: str
+    lens: str  # a LENSES id: the lens the skill's answers read through
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,7 @@ class SkillRow:
     is_paper_default: bool
     is_workspace_default: bool
     created_at: datetime
+    lens: str | None
 
 
 @dataclass(frozen=True)
@@ -68,6 +72,7 @@ class SkillView:
     is_paper_default: bool
     is_workspace_default: bool
     state: Literal["builtin", "edited", "custom"]
+    lens: str
 
 
 def _split(path: Path) -> tuple[dict, str]:
@@ -92,6 +97,8 @@ def _read_bundled(path: Path) -> BundledSkill:
         raise ValueError(f"{path.name}: the name does not match its frontmatter slug and version")
     if meta["scope"] not in SCOPES:
         raise ValueError(f"{path.name}: scope must be one of {', '.join(SCOPES)}")
+    if meta["lens"] not in LENSES:
+        raise ValueError(f"{path.name}: lens must be one of {', '.join(LENSES)}")
     if not body:
         raise ValueError(f"{path.name}: the instruction body is empty")
     return BundledSkill(
@@ -101,6 +108,7 @@ def _read_bundled(path: Path) -> BundledSkill:
         scope=meta["scope"],
         version=int(meta["version"]),
         instructions=body,
+        lens=meta["lens"],
     )
 
 
@@ -139,19 +147,21 @@ def _bundled_view(skill: BundledSkill, row: SkillRow | None) -> SkillView:
             is_paper_default=False,
             is_workspace_default=False,
             state="builtin",
+            lens=skill.lens,
         )
-    edited = row.instructions is not None
+    text_edited = row.instructions is not None  # the version counts text changes only, so a lens change keeps it
     return SkillView(
         id=f"builtin:{skill.slug}",
         label=row.label if row.label is not None else skill.label,
         description=row.description if row.description is not None else skill.description,
         scope=row.scope if row.scope is not None else skill.scope,
-        instructions=row.instructions if edited else skill.instructions,
-        version=row.version if edited else skill.version,
+        instructions=row.instructions if text_edited else skill.instructions,
+        version=row.version if text_edited else skill.version,
         is_listed=row.is_listed,
         is_paper_default=row.is_paper_default,
         is_workspace_default=row.is_workspace_default,
-        state="edited" if edited else "builtin",
+        state="edited" if text_edited or row.lens is not None else "builtin",
+        lens=row.lens if row.lens is not None else skill.lens,
     )
 
 
@@ -167,6 +177,7 @@ def _custom_view(row: SkillRow) -> SkillView:
         is_paper_default=row.is_paper_default,
         is_workspace_default=row.is_workspace_default,
         state="custom",
+        lens=row.lens if row.lens is not None else FULL,
     )
 
 
@@ -201,7 +212,7 @@ def compose(base_system: str, skill: SkillView | None) -> str:
 # Service (async, real rows). Spec §6 and the plan's Task 2 interfaces.
 
 LABEL_MAX, DESCRIPTION_MAX, INSTRUCTIONS_MAX = 80, 200, 8000
-EDITABLE = ("label", "description", "scope", "instructions", "is_listed")
+EDITABLE = ("label", "description", "scope", "instructions", "is_listed", "lens")
 COVERED_KINDS = {"paper": ("paper", "both"), "workspace": ("workspace", "both")}
 
 
@@ -210,6 +221,7 @@ def _clean(
     description: str | None = None,
     scope: str | None = None,
     instructions: str | None = None,
+    lens: str | None = None,
 ) -> dict[str, str]:
     """The stripped values of the fields that were given, after the field limits (InvalidInput)."""
     cleaned: dict[str, str] = {}
@@ -229,6 +241,10 @@ def _clean(
         cleaned["instructions"] = instructions.strip()
         if not 1 <= len(cleaned["instructions"]) <= INSTRUCTIONS_MAX:
             raise InvalidInput("skill_instructions_length", max=INSTRUCTIONS_MAX)
+    if lens is not None:
+        if lens not in LENSES:
+            raise InvalidInput("skill_lens_invalid", lenses=list(LENSES))
+        cleaned["lens"] = lens
     return cleaned
 
 
@@ -247,6 +263,7 @@ async def _rows(session: AsyncSession) -> list[SkillRow]:
             is_paper_default=row.is_paper_default,
             is_workspace_default=row.is_workspace_default,
             created_at=row.created_at,
+            lens=row.lens,
         )
         for row in orm_rows
     ]
@@ -298,7 +315,9 @@ async def _row_or_insert(session: AsyncSession, skill_id: str) -> Skill:
     """A bundled skill's first touch inserts its row; the id has already been checked by get_view."""
     row = await _row_for(session, skill_id)
     if row is None:
-        row = Skill(builtin_slug=skill_id.removeprefix("builtin:"), version=1, is_listed=True)
+        # the row starts at the shipped version, so its first text edit is a version the shipped text never had
+        shipped = next(b.version for b in BUNDLED if b.slug == skill_id.removeprefix("builtin:"))
+        row = Skill(builtin_slug=skill_id.removeprefix("builtin:"), version=shipped, is_listed=True)
         session.add(row)
         await session.flush()
     return row
@@ -323,15 +342,18 @@ async def _lock(session: AsyncSession) -> None:
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext('skills'))"))
 
 
-async def create(session: AsyncSession, *, label: str, description: str, scope: str, instructions: str) -> SkillView:
+async def create(
+    session: AsyncSession, *, label: str, description: str, scope: str, instructions: str, lens: str | None = None
+) -> SkillView:
     await _lock(session)
-    cleaned = _clean(label=label, description=description, scope=scope, instructions=instructions)
+    cleaned = _clean(label=label, description=description, scope=scope, instructions=instructions, lens=lens)
     await _refuse_taken(session, cleaned["label"])
     row = Skill(
         label=cleaned["label"],
         description=cleaned["description"],
         scope=cleaned["scope"],
         instructions=cleaned["instructions"],
+        lens=cleaned.get("lens", FULL),
         version=1,
         is_listed=True,
         is_paper_default=False,
@@ -357,7 +379,7 @@ async def update(session: AsyncSession, skill_id: str, **fields) -> SkillView:
     if "label" in cleaned:
         await _refuse_taken(session, cleaned["label"], exclude_id=skill_id)
     row = await _row_or_insert(session, skill_id)
-    for key in ("label", "description", "scope"):
+    for key in ("label", "description", "scope", "lens"):
         if key in cleaned:
             setattr(row, key, cleaned[key])
     if "scope" in cleaned:
@@ -400,7 +422,7 @@ async def reset(session: AsyncSession, skill_id: str) -> SkillView:
     if row.label is not None:  # the shipped label comes back: refuse it when another skill has taken it since
         shipped = next(b.label for b in BUNDLED if b.slug == row.builtin_slug)
         await _refuse_taken(session, shipped, exclude_id=skill_id)
-    row.label = row.description = row.scope = row.instructions = None
+    row.label = row.description = row.scope = row.instructions = row.lens = None
     row.version += 1
     await session.flush()
     _clear_uncovered_defaults(row, (await get_view(session, skill_id)).scope)

@@ -22,6 +22,7 @@ const custom: Skill = {
   is_paper_default: false,
   is_workspace_default: false,
   state: 'custom',
+  lens: 'full',
 }
 
 let create: ReturnType<typeof mutation>

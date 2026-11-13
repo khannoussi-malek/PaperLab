@@ -101,6 +101,14 @@ async def test_a_paper_without_a_pdf_needs_full_text_before_its_lens_is_called_e
         await briefs.prepare_brief(session, paper.id, "key_ideas")
 
 
+async def test_a_brief_prepares_the_lens_it_is_for(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+
+    prepared = await briefs.prepare_brief(session, paper.id, "key_ideas")
+
+    assert prepared.lens == "key_ideas"
+
+
 async def test_save_brief_stores_its_lens_passages_and_citations(session):
     paper, chunks = await paper_with_headings(session, HEADINGS)
     prepared = await briefs.prepare_brief(session, paper.id, "key_ideas")

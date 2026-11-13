@@ -3,7 +3,8 @@ slug: check-validation
 label: Check the validation
 description: Where the ground truth came from and whether it holds. Criteria drawn from the community LLM reporting guidelines (llm-guidelines.org)
 scope: both
-version: 1
+version: 2
+lens: method
 ---
 Judge where the ground truth in the paper or papers you were given came from, and whether it can be trusted. Go through each paper in turn, and say where they differ.
 

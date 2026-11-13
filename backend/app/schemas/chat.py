@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
+from app.core.lenses import LensId
 from app.schemas.papers import Rect
 
 if TYPE_CHECKING:  # core must not import api, and schemas needn't import core at runtime
@@ -63,6 +64,7 @@ class DoneEvent(BaseModel):
     prompt_version: int
     cited: list[str]  # C labels first-cited first, then N labels first-cited first
     skill_label: str | None  # the skill that ran, as it was named then; None with no skill
+    lens: LensId  # the lens the sources came from; 'full' when the skill has none, or the paper had no sections for it
 
 
 class ErrorEvent(BaseModel):
@@ -94,6 +96,7 @@ class ChatAnswer(BaseModel):
     parent_id: uuid.UUID | None  # the answer this one follows up; null for a question asked on its own
     saved_notes: list[SavedNoteOut]  # its suggested notes already saved, by block
     skill_label: str | None  # the skill that ran, copied when the answer was written; null with no skill
+    lens: LensId = "full"  # the lens the answer's sources came from (M16): 'full' unless a skill's lens applied
 
 
 class PromoteRequest(BaseModel):
