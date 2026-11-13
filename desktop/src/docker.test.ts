@@ -253,16 +253,16 @@ describe('makeDocker', () => {
 
   it('stop always names the voice profile, even with voice off, since a profiled service is only stopped when its profile is named', async () => {
     const { run, calls } = recorded()
-    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {}, voice: () => false })
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
 
     await docker.stop()
 
     expect(calls.map(({ args }) => args)).toEqual([`compose -f ${FILE} --profile voice stop`])
   })
 
-  it('pull includes the voice profile after the file when voice is on', async () => {
+  it('core commands never name the voice profile, so a voice problem cannot block them', async () => {
     const { run, calls } = recorded()
-    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {}, voice: () => true })
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
 
     await docker.pull(() => {})
     await docker.startDatabase()
@@ -270,23 +270,20 @@ describe('makeDocker', () => {
     await docker.logs(['api'])
 
     expect(calls.map(({ args }) => args)).toEqual([
-      `compose -f ${FILE} --profile voice pull`,
-      `compose -f ${FILE} --profile voice up -d --wait db`,
-      `compose -f ${FILE} --profile voice up -d`,
-      `compose -f ${FILE} --profile voice logs --no-color --tail 20 api`,
+      `compose -f ${FILE} pull`,
+      `compose -f ${FILE} up -d --wait db`,
+      `compose -f ${FILE} up -d`,
+      `compose -f ${FILE} logs --no-color --tail 20 api`,
     ])
   })
 
-  it('up has no voice profile when voice is off, and reads the setting at each call', async () => {
+  it('voiceStart starts only the voice service under its profile, and compose pulls its image if it is missing', async () => {
     const { run, calls } = recorded()
-    let on = false
-    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {}, voice: () => on })
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
 
-    await docker.up()
-    on = true
-    await docker.up()
+    await docker.voiceStart()
 
-    expect(calls.map(({ args }) => args)).toEqual([`compose -f ${FILE} up -d`, `compose -f ${FILE} --profile voice up -d`])
+    expect(calls.map(({ args, timeoutMs }) => [args, timeoutMs])).toEqual([[`compose -f ${FILE} --profile voice up -d voice`, 300_000]])
   })
 
   it('voiceOn pulls the voice service, then starts only that service', async () => {

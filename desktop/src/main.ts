@@ -16,7 +16,7 @@ import { navigationFor, startupAction, type StartupAction } from './navigation'
 import { readSettings, settingsFile, updateSettings, type Settings } from './settings'
 import { autoStartFor, launch, viewFor, writeFiles, type Deps, type Screen } from './stack'
 import { checkForUpdate, type Update } from './updates'
-import { removeModels, setVoice } from './voice'
+import { removeModels, setVoice, startVoiceIfOn, withVoiceLock } from './voice'
 
 // Tests only: a data folder of their own. Otherwise Electron's userData (spec §5), which also keys the single-instance
 // lock. Must run before anything reads the path.
@@ -53,10 +53,7 @@ function setSettings(patch: Partial<Settings>) {
 
 const locateDocker = () => findDocker(process.platform, DOCKER_ENV, homedir(), usable)
 const dockerAt = (bin: string, signal?: AbortSignal) =>
-  makeDocker(bin, spawnRunner, { dataDir: DATA, version: app.getVersion(), port: settings.port }, log, {
-    signal,
-    voice: () => settings.voiceEnabled,
-  })
+  makeDocker(bin, spawnRunner, { dataDir: DATA, version: app.getVersion(), port: settings.port }, log, { signal })
 
 /** Docker Desktop, opened when Docker isn't running (macOS, Windows). Any other Docker gets the Start Docker screen.
  * Whether `bin` qualifies is `autoStartFor`'s call (stack.ts): it resolves the real path and checks `isDockerDesktop`,
@@ -124,7 +121,10 @@ async function start() {
   if (screen.kind !== 'ready' || win === null) return
   await win.loadURL(screen.url).catch((error: unknown) => log(`loading PaperLab: ${String(error)}`))
   openPendingLink()
-  if (docker !== null) void afterReady(docker)
+  if (docker !== null) {
+    void startVoiceIfOn(settings, docker, log)
+    void afterReady(docker)
+  }
 }
 
 /** Step 8: older versions' images go, then (packaged only) the update check. Failures are logged, never shown. */
@@ -266,12 +266,12 @@ function handleVoice() {
     if (!fromPaperLab(event) || typeof value !== 'boolean') throw new Error('refused')
     const bin = locateDocker()
     const progress = (line: string) => event.sender.send('paperlab:voice:progress', line)
-    return setVoice(bin === null ? null : dockerAt(bin), value, progress, (on) => setSettings({ voiceEnabled: on }))
+    return withVoiceLock(() => setVoice(bin === null ? null : dockerAt(bin), value, progress, (on) => setSettings({ voiceEnabled: on })))
   })
   ipcMain.handle('paperlab:voice:remove-models', async (event) => {
     if (!fromPaperLab(event)) throw new Error('refused')
     const bin = locateDocker()
-    return removeModels(bin === null ? null : dockerAt(bin), settings.voiceEnabled)
+    return withVoiceLock(() => removeModels(bin === null ? null : dockerAt(bin), settings.voiceEnabled))
   })
   ipcMain.handle('paperlab:voice:oom', async (event) => {
     if (!fromPaperLab(event)) throw new Error('refused')
