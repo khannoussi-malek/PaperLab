@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { api, type VoiceLatency, type VoiceStatus } from '@/api/client'
 import { VoiceSettings } from './VoiceSettings'
+import type { VoiceBridge } from './desktop'
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 const none = { n: 0, median: null, p90: null, p95: null, p99: null }
 const stage = (n: number, median: number | null) => ({ ...none, n, median })
@@ -15,10 +19,23 @@ const empty = {
 }
 const latency = (groups: VoiceLatency['groups']): VoiceLatency => ({ groups })
 const ready = { ready: true, stage: 'ready' as const, detail: null }
+const off = { ready: false, stage: 'off' as const, detail: null }
 
-function show(status: VoiceStatus, data: VoiceLatency) {
+function voiceBridge(over: Partial<VoiceBridge> = {}): VoiceBridge {
+  return {
+    getVoiceEnabled: vi.fn(async () => false),
+    setVoiceEnabled: vi.fn(async () => ({ ok: true, detail: null })),
+    onVoiceProgress: vi.fn(() => () => {}),
+    removeVoiceModels: vi.fn(async () => ({ ok: true, detail: null })),
+    voiceOutOfMemory: vi.fn(async () => false),
+    ...over,
+  }
+}
+
+function show(status: VoiceStatus, data: VoiceLatency = latency([]), bridge?: VoiceBridge) {
   vi.spyOn(api, 'voiceStatus').mockResolvedValue(status)
   vi.spyOn(api, 'voiceLatency').mockResolvedValue(data)
+  if (bridge) vi.stubGlobal('paperlabDesktop', bridge)
   render(
     <QueryClientProvider client={new QueryClient()}>
       <VoiceSettings />
@@ -27,18 +44,28 @@ function show(status: VoiceStatus, data: VoiceLatency) {
 }
 
 test('no turns invites a question out loud', async () => {
-  show(ready, latency([]))
+  show(ready)
   expect(await screen.findByText('Ask a question out loud to see numbers here.')).toBeInTheDocument()
 })
 
-test('a program that is not ready shows why and the command', async () => {
-  show({ ready: false, stage: 'off', detail: 'Voice is off. Turn it on in Settings → Voice.' }, latency([]))
-  expect(await screen.findByText('Voice is off. Turn it on in Settings → Voice.')).toBeInTheDocument()
+test('the stage message says voice is off when it is off', async () => {
+  show(off)
+  expect(await screen.findByText('Voice is off.')).toBeInTheDocument()
 })
 
 test('a ready program says so', async () => {
-  show(ready, latency([]))
-  expect(await screen.findByText('The voice program is ready.')).toBeInTheDocument()
+  show(ready)
+  expect(await screen.findByText('Voice is ready.')).toBeInTheDocument()
+})
+
+test('a failed program shows its detail', async () => {
+  show({ ready: false, stage: 'failed', detail: 'The speech model could not be checked.' })
+  expect(await screen.findByText('The speech model could not be checked.')).toBeInTheDocument()
+})
+
+test('downloading and loading say what is happening', async () => {
+  show({ ready: false, stage: 'downloading', detail: null })
+  expect(await screen.findByText('Getting voice ready: downloading the speech models.')).toBeInTheDocument()
 })
 
 test('the table shows each stage with its count and median, and what lacks turns', async () => {
@@ -76,4 +103,85 @@ test('the first question after turning the microphone on has its own table', asy
   show(ready, latency([{ model: 'qwen', warm: empty, cold, interrupts: 0, false_interrupts: 0 }]))
   expect(await screen.findByText('First question after turning the microphone on')).toBeInTheDocument()
   expect(screen.queryByText(/after the voice program started/)).not.toBeInTheDocument()
+})
+
+test('with a voice bridge it shows the switch with its label and help', async () => {
+  show(off, latency([]), voiceBridge())
+  const sw = await screen.findByRole('switch', { name: 'Ask questions out loud' })
+  expect(sw).toHaveAttribute('aria-checked', 'false')
+  expect(screen.getByText(/Turns your speech into text and reads answers aloud, all on this computer\./)).toBeInTheDocument()
+  expect(screen.queryByText(/docker compose --profile voice/)).not.toBeInTheDocument()
+})
+
+test('without a voice bridge it shows the compose line instead of a switch', async () => {
+  show(off)
+  const line = await screen.findByText(/To use voice, run/)
+  expect(line).toHaveTextContent('To use voice, run docker compose --profile voice up -d in your PaperLab folder.')
+  expect(line.querySelector('code')).toHaveTextContent('docker compose --profile voice up -d')
+  expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+})
+
+test('turning on shows the latest progress line, then the stage', async () => {
+  let progress: (line: string) => void = () => {}
+  let finish: (value: { ok: boolean; detail: string | null }) => void = () => {}
+  const bridge = voiceBridge({
+    onVoiceProgress: vi.fn((cb) => {
+      progress = cb
+      return () => {}
+    }),
+    setVoiceEnabled: vi.fn(() => new Promise<{ ok: boolean; detail: string | null }>((resolve) => (finish = resolve))),
+  })
+  show(off, latency([]), bridge)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Ask questions out loud' }))
+  expect(screen.getByRole('switch', { name: 'Ask questions out loud' })).toBeChecked()
+
+  progress('Downloading model 1 of 2')
+  progress('Downloading model 2 of 2')
+  expect(await screen.findByText('Downloading model 2 of 2')).toBeInTheDocument()
+  expect(screen.queryByText('Downloading model 1 of 2')).not.toBeInTheDocument()
+  finish({ ok: true, detail: null })
+  await waitFor(() => expect(bridge.setVoiceEnabled).toHaveBeenCalledWith(true))
+})
+
+test('a failed set shows its detail and the switch stays off', async () => {
+  const bridge = voiceBridge({
+    setVoiceEnabled: vi.fn(async () => ({ ok: false, detail: 'Docker is not running.' })),
+  })
+  show(off, latency([]), bridge)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Ask questions out loud' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Docker is not running.')
+  expect(screen.getByRole('switch', { name: 'Ask questions out loud' })).not.toBeChecked()
+})
+
+test('out_of_memory_message: says Docker ran out of memory when the program was killed for it', async () => {
+  show(off, latency([]), voiceBridge({ voiceOutOfMemory: vi.fn(async () => true) }))
+  expect(
+    await screen.findByText(
+      'Docker ran out of memory for voice. Give Docker more memory in its settings, then turn voice off and on.',
+    ),
+  ).toBeInTheDocument()
+})
+
+test('the out-of-memory message stays hidden while voice is ready', async () => {
+  show(ready, latency([]), voiceBridge({ voiceOutOfMemory: vi.fn(async () => true) }))
+  await screen.findByText('Voice is ready.')
+  expect(screen.queryByText(/Docker ran out of memory/)).not.toBeInTheDocument()
+})
+
+test('Remove voice models shows only while the switch is off', async () => {
+  show(off, latency([]), voiceBridge())
+  expect(await screen.findByRole('button', { name: 'Remove voice models' })).toBeInTheDocument()
+})
+
+test('Remove voice models is hidden while the switch is on', async () => {
+  show(ready, latency([]), voiceBridge({ getVoiceEnabled: vi.fn(async () => true) }))
+  await screen.findByRole('switch', { name: 'Ask questions out loud' })
+  await waitFor(() => expect(screen.getByRole('switch', { name: 'Ask questions out loud' })).toBeChecked())
+  expect(screen.queryByRole('button', { name: 'Remove voice models' })).not.toBeInTheDocument()
+})
+
+test('a failed remove shows its detail', async () => {
+  show(off, latency([]), voiceBridge({ removeVoiceModels: vi.fn(async () => ({ ok: false, detail: 'The models are in use.' })) }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove voice models' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('The models are in use.')
 })

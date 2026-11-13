@@ -1,7 +1,9 @@
 import { useVoiceLatency, useVoiceStatus } from '@/api/queries'
-import type { VoiceLatencyGroup, VoicePercentiles } from '@/api/client'
+import type { VoiceLatencyGroup, VoicePercentiles, VoiceStatus } from '@/api/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { INTERRUPT_SUSTAIN_MS } from '../voice/constants'
+import { useVoiceBridge } from './desktop'
+import { VoiceSwitch } from './VoiceSwitch'
 
 // The stages in the order a question goes through them, by the field each comes from.
 const STAGES: [keyof VoiceLatencyGroup['warm'], string][] = [
@@ -66,10 +68,25 @@ function interruptLine(group: VoiceLatencyGroup) {
   return `${group.interrupts} ${noun}, ${group.false_interrupts} probably false`
 }
 
-/** The "Voice" section: whether the voice program is ready, and how long each stage of a spoken question has taken. */
+const STAGE_MESSAGE: Record<Exclude<VoiceStatus['stage'], 'failed'>, string> = {
+  off: 'Voice is off.',
+  downloading: 'Getting voice ready: downloading the speech models.',
+  loading: 'Getting voice ready: loading the speech models.',
+  ready: 'Voice is ready.',
+}
+
+/** What the voice program is doing now, in words. A failure shows the program's own detail. */
+function stageMessage(status: VoiceStatus): string {
+  if (status.stage === 'failed') return status.detail ?? 'Voice failed to start.'
+  return STAGE_MESSAGE[status.stage]
+}
+
+/** The "Voice" section: turning voice on (where the desktop app allows it), whether the voice program is ready, and how
+ * long each stage of a spoken question has taken. */
 export function VoiceSettings() {
   const status = useVoiceStatus()
   const latency = useVoiceLatency()
+  const voice = useVoiceBridge()
   const groups = latency.data?.groups
 
   return (
@@ -79,8 +96,19 @@ export function VoiceSettings() {
       </h2>
       <p className="text-sm text-muted-foreground">Ask questions out loud and hear the answer. Here is how fast it has been.</p>
 
+      {voice ? (
+        <VoiceSwitch voice={voice} stage={status.data?.stage} />
+      ) : (
+        <p className="text-sm">
+          To use voice, run <code className="rounded bg-muted px-1 py-0.5 text-xs">docker compose --profile voice up -d</code> in
+          your PaperLab folder.
+        </p>
+      )}
+
       {status.data && (
-        <p className="text-sm font-medium">{status.data.ready ? 'The voice program is ready.' : status.data.detail}</p>
+        <p role="status" className="text-sm font-medium">
+          {stageMessage(status.data)}
+        </p>
       )}
       {status.isError && (
         <Alert variant="destructive" className="border-glass-border">

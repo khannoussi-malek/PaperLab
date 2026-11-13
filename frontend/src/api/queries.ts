@@ -1191,8 +1191,17 @@ export const useEmbeddingStatus = () =>
     refetchInterval: (query) => embeddingPollInterval(query.state.data),
   })
 
-/** Read when the Voice section opens, not on a timer: whether the voice program is ready, and the measured times. */
-export const useVoiceStatus = () => useQuery({ queryKey: keys.voiceStatus, queryFn: api.voiceStatus, refetchOnMount: 'always' })
+/** Whether the voice program is ready. Polls faster while it is still getting ready, then slowly: the chat's voice button reads it too. */
+export const useVoiceStatus = () =>
+  useQuery({
+    queryKey: keys.voiceStatus,
+    queryFn: api.voiceStatus,
+    refetchOnMount: 'always',
+    refetchInterval: (query) => {
+      const stage = query.state.data?.stage
+      return stage === 'downloading' || stage === 'loading' ? 2000 : 10000
+    },
+  })
 export const useVoiceLatency = () => useQuery({ queryKey: keys.voiceLatency, queryFn: api.voiceLatency, refetchOnMount: 'always' })
 
 /** For a stream that isn't a mutation (the search model's download): read the embedding status again. */
