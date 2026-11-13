@@ -21,8 +21,8 @@ test('severity labels for the four levels', () => {
 })
 
 test('each mode estimate in plain words', () => {
-  const light: DraftReviewEstimate['modes'][number] = { mode: 'light', likely_calls: 8, max_calls: 11, approx_input_tokens: 9000 }
-  const full: DraftReviewEstimate['modes'][number] = { mode: 'full', likely_calls: 42, max_calls: 54, approx_input_tokens: 90000 }
+  const light: DraftReviewEstimate['modes'][number] = { mode: 'light', parts: 1, likely_calls: 8, max_calls: 11, approx_input_tokens: 9000 }
+  const full: DraftReviewEstimate['modes'][number] = { mode: 'full', parts: 1, likely_calls: 42, max_calls: 54, approx_input_tokens: 90000 }
   expect(modeText(light)).toBe('Light: up to 11 model calls, about 10 to 15 minutes on a local model.')
   expect(modeText(full)).toBe('Full: about 42 model calls, at most 54, up to an hour or more on a local model.')
 })

@@ -8,9 +8,10 @@ import { DraftReviewDialog } from './DraftReviewDialog'
 const estimate: DraftReviewEstimate = {
   paper_chars: 9000,
   too_long: false,
+  parts: 1,
   modes: [
-    { mode: 'light', likely_calls: 8, max_calls: 11, approx_input_tokens: 9000 },
-    { mode: 'full', likely_calls: 42, max_calls: 54, approx_input_tokens: 90000 },
+    { mode: 'light', parts: 1, likely_calls: 8, max_calls: 11, approx_input_tokens: 9000 },
+    { mode: 'full', parts: 1, likely_calls: 42, max_calls: 54, approx_input_tokens: 90000 },
   ],
 }
 const review = (o: Partial<DraftReview> = {}): DraftReview => ({

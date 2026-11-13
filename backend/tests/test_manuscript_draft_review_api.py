@@ -14,7 +14,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
 ALLOWED = set(
     "id mode status stage calls_done calls_max reason issues refuted counts model ai created_at review "
     "severity section summary quote close_criterion raised_by file line max_calls likely_calls paper_chars "
-    "approx_input_tokens too_long modes".split()
+    "approx_input_tokens too_long modes parts".split()
 )
 BANNED = {"text", "insert", "latex", "code", "tikz", "suggestion", "replacement", "rewrite", "wording"}
 BODY = (
@@ -150,6 +150,6 @@ async def test_a_live_review_answers_409_and_full_needs_a_confirm(client, sessio
 
 
 async def test_a_long_paper_answers_422(client, session):
-    m = await manuscript(session, "\\begin{document}\n" + "word " * 9000 + "\n\\end{document}\n")
+    m = await manuscript(session, "\\begin{document}\n" + "w" * 160_001 + "\n\\end{document}\n")
     refused = await client.post(f"/api/manuscripts/{m.id}/draft-review", json={})
     assert (refused.status_code, refused.json()["detail"]) == (422, "paper_too_long")

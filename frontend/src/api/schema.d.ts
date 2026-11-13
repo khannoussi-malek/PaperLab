@@ -4491,6 +4491,8 @@ export interface components {
             paper_chars: number;
             /** Too Long */
             too_long: boolean;
+            /** Parts */
+            parts: number;
             /** Modes */
             modes: components["schemas"]["ModeEstimate"][];
         };
@@ -5607,6 +5609,8 @@ export interface components {
              * @enum {string}
              */
             mode: "light" | "full";
+            /** Parts */
+            parts: number;
             /** Likely Calls */
             likely_calls: number;
             /** Max Calls */
