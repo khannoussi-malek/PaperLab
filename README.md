@@ -89,6 +89,9 @@ back to the browser.
 
 - Group papers into workspaces (a paper can be in several), see all their notes in one place, and chat with a whole
 workspace: answers cite passages from its papers and your notes.
+- Export a workspace as one `.paperlab` file (its papers, tags, and every note with its highlights, with or without the
+PDFs) and import it on another PaperLab: a supervisor or co-author sees what you saw, and AI notes stay marked AI. Its
+screening record comes along as a file you can read.
 
 **Read and highlight**
 

@@ -17,6 +17,7 @@ import { workspaceHref, type TagMatch, type WorkspaceTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { WorkspaceChat } from './WorkspaceChat'
 import { ExportCitationsMenu } from './ExportCitationsMenu'
+import { PackageRecordLink } from './PackageDialogs'
 import { WorkspaceNotes } from './WorkspaceNotes'
 import { WorkspacePapers } from './WorkspacePapers'
 import { countsLine } from './workspaceMeta'
@@ -72,7 +73,14 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
           {title}
         </h1>
       }
-      actions={workspace.data && <ExportCitationsMenu workspaceId={workspaceId} paperCount={workspace.data.paper_count} />}
+      actions={
+        workspace.data && (
+          <>
+            <PackageRecordLink workspaceId={workspaceId} />
+            <ExportCitationsMenu workspaceId={workspaceId} paperCount={workspace.data.paper_count} />
+          </>
+        )
+      }
       status={workspace.data && countsLine(workspace.data.paper_count, workspace.data.note_count)}
     >
       {workspace.error && (

@@ -282,3 +282,15 @@ describe('skills API', () => {
     })
   })
 })
+
+describe('hasPackageRecord', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('asks the cheap exists route, never the record itself', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ exists: true }), { status: 200 }))
+    expect(await api.hasPackageRecord('w1')).toBe(true)
+    expect(fetchSpy.mock.calls[0][0]).toBe('/api/workspaces/w1/package-record/exists')
+  })
+})

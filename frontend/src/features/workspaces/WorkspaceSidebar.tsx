@@ -1,4 +1,4 @@
-import { EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-react'
+import { EllipsisVertical, PackageOpen, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Workspace } from '@/api/client'
 import { useWorkspaceMutations, useWorkspaces } from '@/api/queries'
@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { workspaceHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { ImportPackageButton, PackageExportDialog } from './PackageDialogs'
 
 const MAX_NAME = 80 // the API's limit
 
@@ -85,6 +86,7 @@ export function WorkspaceSidebar({ activeId }: { activeId: string | null }) {
   const { create, rename, remove } = useWorkspaceMutations()
   const [creating, setCreating] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState<Workspace | null>(null)
   // The API already orders workspaces by name (Postgres collation); no client re-sort.
   const sorted = workspaces.data ?? []
 
@@ -222,6 +224,10 @@ export function WorkspaceSidebar({ activeId }: { activeId: string | null }) {
                       <Pencil aria-hidden />
                       Rename
                     </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setExporting(workspace)}>
+                      <PackageOpen aria-hidden />
+                      Export package…
+                    </DropdownMenuItem>
                     <DropdownMenuItem variant="destructive" onSelect={() => deleteWorkspace(workspace)}>
                       <Trash2 aria-hidden />
                       Delete
@@ -254,6 +260,8 @@ export function WorkspaceSidebar({ activeId }: { activeId: string | null }) {
           New workspace
         </Button>
       )}
+      <ImportPackageButton />
+      {exporting && <PackageExportDialog workspace={exporting} onClose={() => setExporting(null)} />}
     </nav>
   )
 }

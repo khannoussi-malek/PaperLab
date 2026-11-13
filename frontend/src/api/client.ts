@@ -323,6 +323,29 @@ export const zoteroZipUrl = (workspaceId: string) =>
 
 export const notesZipUrl = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}/notes.zip`
 
+/** The workspace as one `.paperlab` file; PDFs are in it only with `pdfs`. */
+export const packageUrl = (workspaceId: string, pdfs: boolean) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/package?pdfs=${pdfs}`
+
+/** The screening record an imported package carried, as JSON. */
+export const packageRecordUrl = (workspaceId: string) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/package-record`
+
+/** Whether that record is kept, without downloading it. */
+const packageRecordExistsUrl = (workspaceId: string) => `${packageRecordUrl(workspaceId)}/exists`
+
+export type PackageRecordExists = { exists: boolean }
+
+export type PackageImportResult = {
+  workspace_id: string
+  name: string
+  added: number
+  matched: number
+  notes: number
+  pdfs_skipped: number
+  has_record: boolean
+}
+
 export type NotesImportResult = {
   created: number
   linked_papers: number
@@ -424,6 +447,18 @@ export const api = {
   setNotePapers: (noteId: string, paperIds: string[]) =>
     request<Note>(`/api/notes/${noteId}/papers`, sendJson('PUT', { paper_ids: paperIds })),
   listWorkspaces: () => request<Workspace[]>('/api/workspaces'),
+  /** A `.paperlab` file as a new workspace. A refusal is an ApiError whose code is a `package_*` one. */
+  importPackage: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<PackageImportResult>('/api/workspaces/import-package', { method: 'POST', body: form })
+  },
+  /** Whether a workspace carries a screening record. */
+  hasPackageRecord: (workspaceId: string) =>
+    request<PackageRecordExists>(packageRecordExistsUrl(workspaceId)).then((body) => body.exists),
+  /** Resolves when the package, with its PDFs when `pdfs`, would export and import; a 409 ApiError when it is too large. */
+  checkPackage: (workspaceId: string, pdfs: boolean) =>
+    request<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}/package/check?pdfs=${pdfs}`),
   createWorkspace: (name: string) => request<Workspace>('/api/workspaces', sendJson('POST', { name })),
   renameWorkspace: (id: string, name: string) =>
     request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),

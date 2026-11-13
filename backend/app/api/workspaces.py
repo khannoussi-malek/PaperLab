@@ -1,20 +1,23 @@
 import uuid
 from dataclasses import asdict
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 
-from app.api.citations import download
+from app.api.citations import CappedBody, download
 from app.api.deps import SessionDep
-from app.core import citations_bundle, notes_markdown, pipeline, tags, workspace_search, workspaces
+from app.core import citations_bundle, notes_markdown, pipeline, tags, workspace_package, workspace_search, workspaces
 from app.core.citations_export import filename_slug
+from app.core.errors import NotFound
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
 from app.schemas.tags import TagApply, TagDeleted, TagOut, TagRename, TagRenamed, TagResultOut
 from app.schemas.workspace_search import EligibilityOut, EligibilityUpdate
-from app.schemas.workspaces import WorkspaceCreate, WorkspaceOut, WorkspaceRename
+from app.schemas.workspaces import PackageRecordExists, WorkspaceCreate, WorkspaceOut, WorkspaceRename
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
+# The package upload is capped as the Zotero import is (api/citations.py).
+imports = APIRouter(tags=["workspaces"], route_class=CappedBody)
 
 
 @router.get("")
@@ -62,7 +65,11 @@ async def list_notes(workspace_id: uuid.UUID, session: SessionDep) -> list[NoteO
 
 @router.patch("/{workspace_id}/papers/{paper_id}/eligibility")
 async def set_eligibility(
-    workspace_id: uuid.UUID, paper_id: uuid.UUID, run: uuid.UUID, payload: EligibilityUpdate, session: SessionDep,
+    workspace_id: uuid.UUID,
+    paper_id: uuid.UUID,
+    run: uuid.UUID,
+    payload: EligibilityUpdate,
+    session: SessionDep,
 ) -> EligibilityOut:
     return await workspace_search.set_eligibility(
         session, workspace_id, paper_id, run, payload.status, payload.exclude_reason
@@ -87,6 +94,54 @@ async def export_citations_zip(
     slug = filename_slug((await workspaces.get(session, workspace_id)).name)
     headers = {"Content-Disposition": f'attachment; filename="{slug}.zip"', "Content-Length": str(size)}
     return StreamingResponse(citations_bundle.chunks(file), media_type="application/zip", headers=headers)
+
+
+@router.get("/{workspace_id}/package")
+async def export_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: bool = False) -> StreamingResponse:
+    """The workspace as one `.paperlab` file (M35a): PDFs included with `pdfs=true`. 404 unknown workspace."""
+    file = await workspace_package.export_package(session, workspace_id, pdfs=pdfs)
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    slug = filename_slug((await workspaces.get(session, workspace_id)).name)
+    headers = {"Content-Disposition": f'attachment; filename="{slug}.paperlab"', "Content-Length": str(size)}
+    return StreamingResponse(citations_bundle.chunks(file), media_type="application/zip", headers=headers)
+
+
+@router.get("/{workspace_id}/package/check", status_code=204)
+async def check_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: bool = False) -> Response:
+    """204 when the package (with its PDFs when `pdfs`) would export and import; 409 package_too_large_with_pdfs when
+    it would be over the import cap. 404 unknown workspace."""
+    await workspace_package.check_export(session, workspace_id, pdfs=pdfs)
+    return Response(status_code=204)
+
+
+@imports.post("/import-package", status_code=201)
+async def import_package(file: UploadFile, session: SessionDep) -> dict:
+    """A `.paperlab` file as a new workspace (M35a). 422 with a package_* code when it is refused."""
+    return asdict(await workspace_package.import_package(session, file.file))
+
+
+@router.get("/{workspace_id}/package-record")
+async def package_record(workspace_id: uuid.UUID, session: SessionDep) -> Response:
+    """The screening record an imported package carried, as JSON. 404 when the workspace has none."""
+    await workspaces.get(session, workspace_id)
+    data = workspace_package.read_record(workspace_id)
+    if data is None:
+        raise NotFound("no_package_record")
+    slug = filename_slug((await workspaces.get(session, workspace_id)).name)
+    return Response(
+        data,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{slug}-screening-record.json"'},
+    )
+
+
+@router.get("/{workspace_id}/package-record/exists")
+async def package_record_exists(workspace_id: uuid.UUID, session: SessionDep) -> PackageRecordExists:
+    """Whether the workspace carries an imported package's screening record, without downloading it."""
+    await workspaces.get(session, workspace_id)
+    return PackageRecordExists(exists=workspace_package.has_record(workspace_id))
 
 
 @router.get("/{workspace_id}/notes.zip")
@@ -134,3 +189,6 @@ async def rename_tag(workspace_id: uuid.UUID, tag_id: uuid.UUID, payload: TagRen
 async def delete_tag(workspace_id: uuid.UUID, tag_id: uuid.UUID, session: SessionDep) -> TagDeleted:
     name, count = await tags.delete_by_id(session, workspace_id, tag_id)
     return TagDeleted(tag=name, papers=count)
+
+
+router.include_router(imports)
