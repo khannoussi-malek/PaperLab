@@ -189,6 +189,8 @@ async def test_a_round_trip_brings_the_answer_back_and_its_citations_open_from_t
     report = await _import(session, package)
 
     assert report.answers == 1
+    # Review Focus 5: the imported workspace is read-only (M35b1), and its answers still read
+    assert (await session.get(Workspace, report.workspace_id)).read_only is True
     [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
     assert (answer.output.question, answer.output.model, answer.output.skill_label) == (
         "Does sleep help?", "qwen3:8b", "Plain English",

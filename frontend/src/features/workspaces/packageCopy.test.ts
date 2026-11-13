@@ -56,3 +56,7 @@ test("an unknown failure gets the generic line, never the raw code", () => {
     "Couldn't import this package. Try again.",
   );
 });
+
+test("one chat answer is named in the singular", () => {
+  expect(importResultLine({ ...result, answers: 1 })).toContain(", 1 chat answer.");
+});
