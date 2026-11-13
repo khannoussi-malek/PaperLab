@@ -9,8 +9,8 @@ import pytest
 from sqlalchemy import select
 
 from app.config import settings
-from app.core import notes, papers, prisma_export, tags, workspace_package, workspaces
-from app.core.errors import NotFound
+from app.core import citations_bundle_read, notes, papers, prisma_export, tags, workspace_package, workspaces
+from app.core.errors import Conflict, NotFound
 from app.core.notes import Anchor
 from app.models import LLMConnection, Note, PaperSources, Workspace, note_papers
 from app.models.workspace_search import SearchRunEligibility
@@ -214,3 +214,24 @@ async def test_a_paper_link_outside_the_workspace_is_not_exported(session, pdf_d
     assert "10.1/out" not in zf.read("notes.json").decode()
     linked = await session.scalars(select(note_papers.c.paper_id).where(note_papers.c.note_id == human.id))
     assert outside.id in set(linked)
+
+
+async def test_pdfs_over_the_import_cap_are_refused_at_export(session, pdf_dir, monkeypatch):  # M35 review M3
+    ws, *_ = await _seeded(session, pdf_dir)
+    monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 100)
+    with pytest.raises(Conflict, match="package_too_large_with_pdfs"):
+        await workspace_package.export_package(session, ws.id, pdfs=True)
+    with pytest.raises(Conflict, match="package_too_large_with_pdfs"):
+        await workspace_package.check_export(session, ws.id, pdfs=True)
+    await workspace_package.check_export(session, ws.id, pdfs=False)  # without PDFs the cap does not apply
+    monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 200 * 1024 * 1024)
+    await workspace_package.check_export(session, ws.id, pdfs=True)
+
+
+async def test_the_api_refuses_an_oversize_package_before_it_is_downloaded(client, session, pdf_dir, monkeypatch):
+    ws, *_ = await _seeded(session, pdf_dir)
+    monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 100)
+    refused = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "true"})
+    assert refused.status_code == 409 and refused.json()["detail"] == "package_too_large_with_pdfs"
+    fine = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "false"})
+    assert fine.status_code == 204

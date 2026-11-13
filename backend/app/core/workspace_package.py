@@ -9,6 +9,8 @@ import asyncio
 import io
 import itertools
 import json
+import logging
+import os
 import shutil
 import tempfile
 import uuid
@@ -18,9 +20,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import IO
+from typing import IO, Callable
 
-from sqlalchemy import select
+from pydantic import BaseModel, ValidationError
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,14 +45,17 @@ from app.core import (
 from app.core.candidates import Candidate
 from app.core.chunking import STRATEGY_VERSION
 from app.core.citations_bundle import SPOOL_BYTES
-from app.core.citations_import import CitationsImportError, ImportEntry
-from app.core.errors import InvalidInput, NotFound
+from app.core.citations_import import CitationsImportError
+from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
-from app.models import Chunk, Note, NoteKind, Paper, PaperStatus, Provenance, Workspace, WorkspaceTag, note_anchors
+from app.core.workspace_package_shapes import Manifest, NotesDoc, PapersDoc, TagsDoc
+from app.models import Chunk, Note, Paper, PaperStatus, Workspace, WorkspaceTag, note_anchors
 from app.models.references import ExternalRef
 from app.models.tag import paper_tags
 from app.models.workspace import workspace_papers
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
+
+logger = logging.getLogger(__name__)
 
 FORMAT = "paperlab-workspace"
 FORMAT_VERSION = 1
@@ -195,9 +201,8 @@ def _dump(value) -> bytes:
     return json.dumps(value, ensure_ascii=False, indent=2).encode()
 
 
-async def export_package(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: bool) -> IO[bytes]:
-    """The workspace as a zip file positioned at 0. Raises NotFound for an unknown workspace. With `pdfs`, each paper
-    whose PDF is on disk is included; a paper whose PDF is missing is listed without one."""
+async def _parts(session: AsyncSession, workspace_id: uuid.UUID, pdfs: bool) -> tuple[dict[str, bytes], list]:
+    """The package's members (name -> bytes) and the PDFs to put in it. Raises NotFound for an unknown workspace."""
     workspace = await session.get(Workspace, workspace_id)
     if workspace is None:
         raise NotFound(f"workspace {workspace_id} not found")
@@ -231,7 +236,31 @@ async def export_package(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs
         "screening.json": _dump(screening),
         "prisma.json": _dump(prisma),
     }
+    return parts, pdf_files
+
+
+def _fits_import(parts: dict[str, bytes], pdf_files: list) -> None:
+    """Refuses a package whose bytes, PDFs included, would be over the import cap (the import counts every member)."""
+    total = sum(len(data) for data in parts.values()) + sum(path.stat().st_size for _, path in pdf_files)
+    if total > citations_bundle_read.MAX_ZIP_BYTES:
+        raise Conflict(TOO_LARGE_WITH_PDFS)
+
+
+async def export_package(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: bool) -> IO[bytes]:
+    """The workspace as a zip file positioned at 0. Raises NotFound for an unknown workspace. With `pdfs`, each paper
+    whose PDF is on disk is included; a paper whose PDF is missing is listed without one. Raises Conflict
+    (package_too_large_with_pdfs) when, with its PDFs, the package would be more than the import takes."""
+    parts, pdf_files = await _parts(session, workspace_id, pdfs)
+    if pdfs:
+        _fits_import(parts, pdf_files)
     return await asyncio.to_thread(_write, parts, pdf_files)
+
+
+async def check_export(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: bool) -> None:
+    """Raises what export_package would for this workspace, without writing the zip (the dialog asks first)."""
+    parts, pdf_files = await _parts(session, workspace_id, pdfs)
+    if pdfs:
+        _fits_import(parts, pdf_files)
 
 
 # ---- import (M35a Task 2) ----
@@ -243,11 +272,10 @@ async def export_package(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs
 UNKNOWN_FORMAT = "package_unknown_format"
 UNSAFE = "package_unsafe"
 TOO_LARGE = "package_too_large"
+TOO_LARGE_WITH_PDFS = "package_too_large_with_pdfs"  # an export that the import would refuse
 INVALID = "package_invalid"
 MAX_JSON_BYTES = 20 * 1024 * 1024
 JSON_MEMBERS = ("manifest.json", "papers.json", "notes.json", "tags.json", "screening.json", "prisma.json")
-PROVENANCES = tuple(p.value for p in Provenance)
-NOTE_KINDS = tuple(k.value for k in NoteKind)
 
 
 @dataclass(frozen=True)
@@ -284,9 +312,14 @@ def _open(data: bytes | IO[bytes]) -> zipfile.ZipFile:
 
 
 def _vet(zf: zipfile.ZipFile) -> None:
-    """citations_bundle_read's zip checks, from the central directory alone; any refusal is package_unsafe."""
+    """citations_bundle_read's zip checks, from the central directory alone. Too many members or too many bytes is
+    package_too_large; any other refusal is package_unsafe."""
+    infos = zf.infolist()
+    too_many = len(infos) > citations_bundle_read.MAX_MEMBERS
+    if too_many or sum(i.file_size for i in infos) > citations_bundle_read.MAX_ZIP_BYTES:
+        raise InvalidInput(TOO_LARGE)
     try:
-        citations_bundle_read._vet(zf.infolist())
+        citations_bundle_read._vet(infos)
     except CitationsImportError:
         raise InvalidInput(UNSAFE) from None
 
@@ -314,43 +347,45 @@ def _made_on(manifest: dict) -> str:
         raise InvalidInput(INVALID) from None
 
 
-def _check_papers(papers_doc) -> list[dict]:
-    rows = papers_doc.get("papers") if isinstance(papers_doc, dict) else None
-    if not isinstance(rows, list):
-        raise InvalidInput(INVALID)
-    keys = [row.get("key") for row in rows if isinstance(row, dict)]
-    if len(keys) != len(rows) or len(set(keys)) != len(keys) or not all(isinstance(k, str) for k in keys):
-        raise InvalidInput(INVALID)
-    if not all(isinstance(row.get("title"), str) and row["title"].strip() for row in rows):
+def _shaped(model: type[BaseModel], doc):
+    """The document, when it takes the shape the model describes; package_invalid otherwise. Never a server error."""
+    try:
+        model.model_validate(doc)
+    except ValidationError:
+        raise InvalidInput(INVALID) from None
+    return doc
+
+
+def _check_papers(doc) -> list[dict]:
+    rows = doc["papers"]
+    keys = [row["key"] for row in rows]
+    if len(set(keys)) != len(keys) or not all(row["title"].strip() for row in rows):
         raise InvalidInput(INVALID)
     return rows
 
 
-def _check_notes(notes_doc, keys: set[str]) -> list[dict]:
-    rows = notes_doc.get("notes") if isinstance(notes_doc, dict) else None
-    if not isinstance(rows, list):
-        raise InvalidInput(INVALID)
+def _check_notes(doc, keys: set[str]) -> list[dict]:
+    rows = doc["notes"]
     for row in rows:
-        if not isinstance(row, dict) or not isinstance(row.get("body"), str):
-            raise InvalidInput(INVALID)
-        if row.get("provenance") not in PROVENANCES or row.get("kind") not in (None, *NOTE_KINDS):
-            raise InvalidInput(INVALID)
         listed = set(row.get("papers") or [])
         highlights = row.get("highlights") or []
-        if not listed <= keys or any(h.get("paper") not in listed for h in highlights):
+        if not listed <= keys or any(h["paper"] not in listed for h in highlights):
             raise InvalidInput(INVALID)
     return rows
 
 
-def _check_tags(tags_doc, keys: set[str]) -> list[dict]:
-    rows = tags_doc.get("tags") if isinstance(tags_doc, dict) else None
-    if not isinstance(rows, list) or not all(isinstance(r, dict) and set(r.get("papers") or []) <= keys for r in rows):
+def _check_tags(doc, keys: set[str]) -> list[dict]:
+    rows = doc["tags"]
+    if not all(set(r.get("papers") or []) <= keys for r in rows):
         raise InvalidInput(INVALID)
     return rows
 
 
 def _read(zf: zipfile.ZipFile) -> _Package:
-    """Every member, checked: the manifest first (a wrong format is refused before anything else is read)."""
+    """Every member, checked: the manifest first (a file without one, or of another format, is refused before anything
+    else is read). Each JSON member must take the shape its model describes."""
+    if "manifest.json" not in zf.NameToInfo:
+        raise InvalidInput(UNKNOWN_FORMAT)
     manifest = _json(zf, "manifest.json")
     if (
         not isinstance(manifest, dict)
@@ -358,16 +393,13 @@ def _read(zf: zipfile.ZipFile) -> _Package:
         or not _supported(manifest.get("format_version"))
     ):
         raise InvalidInput(UNKNOWN_FORMAT)
-    papers_rows = _check_papers(_json(zf, "papers.json"))
+    _shaped(Manifest, manifest)
+    papers_rows = _check_papers(_shaped(PapersDoc, _json(zf, "papers.json")))
     keys = {row["key"] for row in papers_rows}
-    notes_rows = _check_notes(_json(zf, "notes.json"), keys)
-    tag_rows = _check_tags(_json(zf, "tags.json"), keys)
+    notes_rows = _check_notes(_shaped(NotesDoc, _json(zf, "notes.json")), keys)
+    tag_rows = _check_tags(_shaped(TagsDoc, _json(zf, "tags.json")), keys)
     screening, prisma = _json(zf, "screening.json"), _json(zf, "prisma.json")
-    if (
-        not isinstance(screening, dict)
-        or not isinstance(prisma, dict)
-        or not isinstance(manifest.get("workspace"), dict)
-    ):
+    if not isinstance(screening, dict) or not isinstance(prisma, dict):
         raise InvalidInput(INVALID)
     _made_on(manifest)
     return _Package(zf, manifest, papers_rows, notes_rows, tag_rows, screening, prisma)
@@ -392,19 +424,43 @@ def _candidate(rec: dict) -> Candidate:
     )  # fmt: skip
 
 
+def _dois_differ(ours: str | None, theirs: str | None) -> bool:
+    return bool(ours and theirs and ours.lower() != theirs.lower())
+
+
+async def _title_match(session: AsyncSession, rec: dict, candidate: Candidate) -> uuid.UUID | None:
+    """A library paper with the record's title under same_work's author and year rules, whose DOI does not differ from
+    the record's and whose year is the same when both have one. Scans the titles that start with the first word."""
+    first = next(iter(discovery.normal_title(rec["title"]).split()), "")
+    if not first:
+        return None
+    rows = await session.execute(
+        select(Paper.id, Paper.title, Paper.authors, Paper.year, Paper.doi).where(
+            func.lower(Paper.title).startswith(first, autoescape=True)
+        )
+    )
+    ours = {"title": rec["title"], "authors": candidate.authors, "year": candidate.year}
+    for row in rows:
+        if not discovery.same_work(Candidate(row.title, row.authors, row.year), ours):
+            continue
+        if _dois_differ(rec.get("doi"), row.doi):
+            continue
+        if None not in (candidate.year, row.year) and candidate.year != row.year:
+            continue
+        return row.id
+    return None
+
+
 async def _held(session: AsyncSession, rec: dict) -> uuid.UUID | None:
-    """The library paper this one is: DOI, OpenAlex id (discovery.mark_in_library), then PMID or PMCID, then the other
-    version (discovery.held_version), then the same title (the Zotero import's last step)."""
+    """The library paper this one is, found without writing anything: DOI or OpenAlex id (discovery.mark_in_library),
+    then PMID or PMCID, then the same title (_title_match). A matched paper is never changed by an import."""
     candidate = _candidate(rec)
     [marked] = await discovery.mark_in_library(session, [candidate])
     if marked.paper_id is not None:
         return marked.paper_id
     if by_id := await citations_import_apply.held_by_pubmed_ids(session, rec.get("pmid"), rec.get("pmcid")):
         return by_id
-    if (other := await discovery.held_version(session, candidate)) is not None:
-        return other[0]
-    entry = ImportEntry(title=rec["title"], authors=candidate.authors, year=candidate.year)
-    return await citations_import_apply._same_title(session, entry)
+    return await _title_match(session, rec, candidate)
 
 
 async def _resolve(session: AsyncSession, recs: list[dict]) -> tuple[dict[str, uuid.UUID], dict[str, str]]:
@@ -446,10 +502,23 @@ async def _free_name(session: AsyncSession, name: str) -> str:
     raise AssertionError("unreachable")  # itertools.count never ends
 
 
-def _copy_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, path: Path) -> None:
+def _write_atomic(path: Path, write: Callable[[Path], None]) -> None:
+    """Writes to a temp name in the same folder, then moves it into place: a failed write leaves no partial file."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with zf.open(info) as source, path.open("wb") as target:
-        shutil.copyfileobj(source, target)
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        write(tmp)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _copy_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, path: Path) -> None:
+    def write(tmp: Path) -> None:
+        with zf.open(info) as source, tmp.open("wb") as target:
+            shutil.copyfileobj(source, target)
+
+    _write_atomic(path, write)
 
 
 def _pdf_member(zf: zipfile.ZipFile, rec: dict) -> zipfile.ZipInfo | None:
@@ -508,15 +577,18 @@ async def _new_paper(session, pkg: _Package, rec: dict, written: list[Path], que
 
 
 async def _papers_into(session, pkg, workspace_id, held, alias, written, queued) -> tuple[dict, int, int, int]:
-    """Links every package paper to the workspace. Returns (key -> paper id, added, matched, pdfs skipped)."""
+    """Links every package paper to the workspace. Returns (key -> paper id, added, matched, pdfs skipped); matched
+    counts the distinct library papers."""
     ids: dict[str, uuid.UUID] = {}
-    added = matched = skipped = 0
+    library: set[uuid.UUID] = set()
+    added = skipped = 0
     for rec in pkg.papers:
         key = rec["key"]
         if key in alias:
             paper_id = ids[alias[key]]
         elif key in held:
-            paper_id, matched = held[key], matched + 1
+            paper_id = held[key]
+            library.add(paper_id)
         else:
             paper, was_skipped = await _new_paper(session, pkg, rec, written, queued)
             paper_id, added, skipped = paper.id, added + 1, skipped + int(was_skipped)
@@ -524,7 +596,7 @@ async def _papers_into(session, pkg, workspace_id, held, alias, written, queued)
         await session.execute(
             insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
         )
-    return ids, added, matched, skipped
+    return ids, added, len(library), skipped
 
 
 async def _tags_into(session, workspace_id, rows: list[dict], ids: dict) -> None:
@@ -595,6 +667,10 @@ def record_path(workspace_id: uuid.UUID) -> Path:
     return settings.pdf_dir / "packages" / f"{workspace_id}.json"
 
 
+def has_record(workspace_id: uuid.UUID) -> bool:
+    return record_path(workspace_id).is_file()
+
+
 def read_record(workspace_id: uuid.UUID) -> bytes | None:
     """The screening record kept from an imported package, or None when the workspace has none."""
     path = record_path(workspace_id)
@@ -602,8 +678,7 @@ def read_record(workspace_id: uuid.UUID) -> bytes | None:
 
 
 def _write_bytes(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
+    _write_atomic(path, lambda tmp: tmp.write_bytes(data))
 
 
 async def _record_into(pkg: _Package, workspace_id: uuid.UUID, written: list[Path]) -> None:
@@ -613,24 +688,27 @@ async def _record_into(pkg: _Package, workspace_id: uuid.UUID, written: list[Pat
 
 
 async def _write_package(session, pkg: _Package, name: str, held, alias) -> ImportReport:
-    workspace = _workspace_row(pkg, name)
-    session.add(workspace)
-    await session.flush()
     written: list[Path] = []
     queued: list[tuple[str, str]] = []
     try:
+        workspace = _workspace_row(pkg, name)
+        session.add(workspace)
+        await session.flush()
         ids, added, matched, skipped = await _papers_into(session, pkg, workspace.id, held, alias, written, queued)
         await _tags_into(session, workspace.id, pkg.tags, ids)
         note_count = await _notes_into(session, pkg.notes, ids)
         await _record_into(pkg, workspace.id, written)
-        for job, arg in queued:  # queued before the commit, as the Zotero import does: a crash never leaves a paper
-            await queue.enqueue(job, arg)
         await session.commit()
     except BaseException:
         await session.rollback()
         for path in written:
             path.unlink(missing_ok=True)
         raise
+    for job, arg in queued:  # only once the rows are committed, so a worker always finds its paper
+        try:
+            await queue.enqueue(job, arg)
+        except Exception:
+            logger.exception("could not queue %s for paper %s; it stays uploaded until it is queued again", job, arg)
     return ImportReport(workspace.id, name, added, matched, note_count, skipped, has_record=True)
 
 

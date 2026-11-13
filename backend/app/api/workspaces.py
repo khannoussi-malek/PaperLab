@@ -13,7 +13,7 @@ from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
 from app.schemas.tags import TagApply, TagDeleted, TagOut, TagRename, TagRenamed, TagResultOut
 from app.schemas.workspace_search import EligibilityOut, EligibilityUpdate
-from app.schemas.workspaces import WorkspaceCreate, WorkspaceOut, WorkspaceRename
+from app.schemas.workspaces import PackageRecordExists, WorkspaceCreate, WorkspaceOut, WorkspaceRename
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 # The package upload is capped as the Zotero import is (api/citations.py).
@@ -108,6 +108,14 @@ async def export_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: boo
     return StreamingResponse(citations_bundle.chunks(file), media_type="application/zip", headers=headers)
 
 
+@router.get("/{workspace_id}/package/check", status_code=204)
+async def check_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: bool = False) -> Response:
+    """204 when the package (with its PDFs when `pdfs`) would export and import; 409 package_too_large_with_pdfs when
+    it would be over the import cap. 404 unknown workspace."""
+    await workspace_package.check_export(session, workspace_id, pdfs=pdfs)
+    return Response(status_code=204)
+
+
 @imports.post("/import-package", status_code=201)
 async def import_package(file: UploadFile, session: SessionDep) -> dict:
     """A `.paperlab` file as a new workspace (M35a). 422 with a package_* code when it is refused."""
@@ -127,6 +135,13 @@ async def package_record(workspace_id: uuid.UUID, session: SessionDep) -> Respon
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{slug}-screening-record.json"'},
     )
+
+
+@router.get("/{workspace_id}/package-record/exists")
+async def package_record_exists(workspace_id: uuid.UUID, session: SessionDep) -> PackageRecordExists:
+    """Whether the workspace carries an imported package's screening record, without downloading it."""
+    await workspaces.get(session, workspace_id)
+    return PackageRecordExists(exists=workspace_package.has_record(workspace_id))
 
 
 @router.get("/{workspace_id}/notes.zip")

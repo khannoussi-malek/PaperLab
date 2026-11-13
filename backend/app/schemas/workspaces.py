@@ -21,3 +21,7 @@ class WorkspaceOut(BaseModel):
     note_count: int
     created_at: datetime
     description: str | None = None
+
+
+class PackageRecordExists(BaseModel):
+    exists: bool  # whether an imported package's screening record is kept for this workspace

@@ -10,7 +10,7 @@ import pytest
 from conftest import FakeArq
 from sqlalchemy import func, select
 
-from app.core import papers, pipeline, queue, tags, workspace_package, workspaces
+from app.core import citations_bundle_read, discovery, papers, pipeline, queue, tags, workspace_package, workspaces
 from app.core.errors import InvalidInput
 from app.models import Paper, PaperStatus, Workspace, note_papers
 from app.models.workspace import workspace_papers
@@ -238,9 +238,9 @@ async def test_a_symlink_member_is_unsafe(session, pdf_dir):
     await _refused(session, pdf_dir, data, "package_unsafe")
 
 
-async def test_more_than_twenty_thousand_members_is_unsafe(session, pdf_dir):
+async def test_more_than_twenty_thousand_members_is_too_large(session, pdf_dir):
     members = {f"f{i}.txt": b"" for i in range(20_001)}
-    await _refused(session, pdf_dir, _zip(members), "package_unsafe")
+    await _refused(session, pdf_dir, _zip(members), "package_too_large")
 
 
 async def test_an_unknown_format_or_a_newer_version_is_refused(session, pdf_dir):
@@ -340,12 +340,193 @@ async def test_a_failing_write_removes_the_pdfs_it_wrote(session, pdf_dir, monke
     package = _package(papers=[_paper("p1", "Written", has_pdf=True, pdf="pdfs/p1.pdf")], pdfs={"p1": PDF})
 
     async def refuse(*_):
-        raise RuntimeError("queue down")
+        raise RuntimeError("record write failed")
 
-    monkeypatch.setattr(queue, "enqueue", refuse)
+    monkeypatch.setattr(workspace_package, "_record_into", refuse)
     with pytest.raises(RuntimeError):
         await _import(session, package)
     assert not [p for p in _pdf_files(pdf_dir) if p.endswith(".pdf")]
+
+
+# ---- review fixes: a matched paper is never written, matches are strict, nothing is queued early ----
+
+
+async def test_an_import_never_calls_held_version_or_writes_a_matched_paper(session, pdf_dir, monkeypatch):
+    async def refuse(*_args, **_kwargs):
+        raise AssertionError("an import called discovery.held_version")
+
+    monkeypatch.setattr(discovery, "held_version", refuse)
+    lib = await papers.create_metadata_paper(session, {"title": f"Held {RUN}", "doi": f"10.9/held.{RUN}"}, "crossref")
+    await session.commit()
+    package = _package(
+        papers=[
+            _paper("p1", "Held", doi=f"10.9/held.{RUN}", published_doi="10.1/held-pub", published_venue="Journal X"),
+            _paper("p2", "Unmatched"),
+        ]
+    )
+    report = await _import(session, package)
+    assert (report.added, report.matched) == (1, 1)
+    await session.refresh(lib)
+    assert (lib.published_doi, lib.published_venue) == (None, None)
+
+
+async def test_a_failure_after_matching_leaves_the_library_as_it_was(session, pdf_dir, monkeypatch):
+    lib = await papers.create_metadata_paper(session, {"title": f"Kept {RUN}", "doi": f"10.9/kept.{RUN}"}, "crossref")
+    await session.commit()
+    package = _package(
+        papers=[
+            _paper("p1", "Kept", doi=f"10.9/kept.{RUN}", published_doi="10.1/kept-pub", published_venue="Journal Y"),
+            _paper("p2", "Fresh"),
+        ]
+    )
+
+    async def boom(*_):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(workspace_package, "_record_into", boom)
+    with pytest.raises(RuntimeError):
+        await _import(session, package)
+    await session.refresh(lib)
+    assert (lib.published_doi, lib.published_venue) == (None, None)
+
+
+async def test_a_failed_import_queues_no_ingest(session, pdf_dir, jobs, monkeypatch):
+    package = _package(papers=[_paper("p1", "Queued", has_pdf=True, pdf="pdfs/p1.pdf")], pdfs={"p1": PDF})
+    real_record = workspace_package._record_into
+
+    async def record_then_fail_commit(pkg, workspace_id, written):
+        await real_record(pkg, workspace_id, written)  # the ingest is queued by now in the old order
+
+        async def fail_commit():
+            raise RuntimeError("commit failed")
+
+        monkeypatch.setattr(session, "commit", fail_commit)
+
+    monkeypatch.setattr(workspace_package, "_record_into", record_then_fail_commit)
+    with pytest.raises(RuntimeError):
+        await _import(session, package)
+    assert jobs.jobs == []
+
+
+async def test_ingests_are_queued_only_after_the_commit(session, pdf_dir, jobs, monkeypatch):
+    order: list = []
+    real_commit, real_enqueue = session.commit, queue.enqueue
+
+    async def commit():
+        order.append("commit")
+        await real_commit()
+
+    async def enqueue(job, arg):
+        order.append(("enqueue", job))
+        await real_enqueue(job, arg)
+
+    monkeypatch.setattr(session, "commit", commit)
+    monkeypatch.setattr(queue, "enqueue", enqueue)
+    package = _package(papers=[_paper("p1", "Ordered", has_pdf=True, pdf="pdfs/p1.pdf")], pdfs={"p1": PDF})
+    await _import(session, package)
+    assert order == ["commit", ("enqueue", "ingest_paper")]
+
+
+async def test_a_title_match_is_refused_when_the_dois_differ(session, pdf_dir):
+    await papers.create_metadata_paper(
+        session,
+        {"title": f"Same work {RUN}", "authors": ["Jane Smith"], "year": 2020, "doi": f"10.9/one.{RUN}"},
+        "crossref",
+    )
+    report = await _import(session, _package(papers=[_paper("p1", "Same work", doi=f"10.9/two.{RUN}", year=2020)]))
+    assert (report.added, report.matched) == (1, 0)
+
+
+async def test_a_title_match_is_refused_when_the_years_differ(session, pdf_dir):
+    await papers.create_metadata_paper(
+        session, {"title": f"Year work {RUN}", "authors": ["Jane Smith"], "year": 2020}, "crossref"
+    )
+    report = await _import(session, _package(papers=[_paper("p1", "Year work", year=2021)]))
+    assert (report.added, report.matched) == (1, 0)
+
+
+async def test_wrong_json_types_are_package_invalid_never_a_server_error(session, pdf_dir):
+    await _refused(session, pdf_dir, _package(papers=[_paper("p1", "Num", doi=5)]), "package_invalid")
+    await _refused(session, pdf_dir, _package(papers=[_paper("p1", "Str", authors="Jane")]), "package_invalid")
+    await _refused(session, pdf_dir, _package(papers=[_paper("p1", "Year", year="2020")]), "package_invalid")
+    bad_highlight = [{"key": "n1", "body": "x", "provenance": "human", "papers": ["p1"], "highlights": ["oops"]}]
+    await _refused(session, pdf_dir, _package(papers=[_paper("p1", "Hl")], notes=bad_highlight), "package_invalid")
+    bad_moment = [{"key": "n1", "body": "x", "provenance": "human", "created_at": "not a date", "papers": []}]
+    await _refused(session, pdf_dir, _package(notes=bad_moment), "package_invalid")
+    not_an_object = _zip({"manifest.json": _package().__class__ and _manifest_json(), "papers.json": b"[]"})
+    await _refused(session, pdf_dir, not_an_object, "package_invalid")
+
+
+def _manifest_json() -> bytes:
+    manifest = {
+        "format": "paperlab-workspace",
+        "format_version": 1,
+        "created_at": "2026-11-01T10:00:00+00:00",
+        "workspace": {"name": "Imported review"},
+    }
+    return json.dumps(manifest).encode()
+
+
+async def test_a_zip_without_a_manifest_is_not_a_package(session, pdf_dir):
+    await _refused(session, pdf_dir, _zip({"references.bib": b"@article{x}"}), "package_unknown_format")
+
+
+async def test_a_zip_over_the_size_cap_is_too_large_not_unsafe(session, pdf_dir, monkeypatch):
+    monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 100)
+    await _refused(session, pdf_dir, _package(papers=[_paper("p1", "Big", abstract="x" * 200)]), "package_too_large")
+
+
+async def test_a_copy_that_fails_partway_leaves_no_partial_pdf(session, pdf_dir, monkeypatch):
+    package = _package(papers=[_paper("p1", "Partial", has_pdf=True, pdf="pdfs/p1.pdf")], pdfs={"p1": PDF})
+
+    def half_copy(source, target, *_):
+        target.write(source.read(3))
+        raise OSError("disk full")
+
+    monkeypatch.setattr(workspace_package.shutil, "copyfileobj", half_copy)
+    with pytest.raises(OSError):
+        await _import(session, package)
+    assert _pdf_files(pdf_dir) == []
+
+
+async def test_a_failed_workspace_flush_is_rolled_back(session, pdf_dir, monkeypatch):
+    rollbacks: list = []
+    real_rollback = session.rollback
+
+    async def flush_fails(*_args, **_kwargs):
+        raise RuntimeError("flush failed")
+
+    async def record_rollback():
+        rollbacks.append(1)
+        await real_rollback()
+
+    monkeypatch.setattr(session, "flush", flush_fails)
+    monkeypatch.setattr(session, "rollback", record_rollback)
+    with pytest.raises(RuntimeError):
+        await _import(session, _package())
+    assert rollbacks == [1]
+
+
+async def test_matched_counts_library_papers_not_package_papers(session, pdf_dir):
+    await papers.create_metadata_paper(
+        session, {"title": f"Twice held {RUN}", "doi": f"10.9/twice.{RUN}", "openalex_id": f"W2{RUN}"}, "crossref"
+    )
+    package = _package(
+        papers=[
+            _paper("p1", "Twice held", doi=f"10.9/twice.{RUN}"),
+            _paper("p2", "Twice held again", openalex_id=f"W2{RUN}"),
+        ]
+    )
+    report = await _import(session, package)
+    assert (report.added, report.matched) == (0, 1)
+
+
+async def test_the_api_says_whether_a_screening_record_exists(client, session, pdf_dir):
+    ws, *_ = await _seeded(session, pdf_dir)
+    imported = await _import(session, _package(name="Record check"))
+    yes = await client.get(f"/api/workspaces/{imported.workspace_id}/package-record/exists")
+    no = await client.get(f"/api/workspaces/{ws.id}/package-record/exists")
+    assert yes.json() == {"exists": True} and no.json() == {"exists": False}
 
 
 # ---- the API ----
