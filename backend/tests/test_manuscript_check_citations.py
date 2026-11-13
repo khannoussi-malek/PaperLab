@@ -1,7 +1,7 @@
 from types import MappingProxyType
 
-from app.core.manuscript_checks.base import CheckContext, ManuscriptInfo
 from app.core.manuscript_checks import citations
+from app.core.manuscript_checks.base import CheckContext, ManuscriptInfo
 from app.core.manuscript_checks.citations import CHECKS, suggest
 
 INFO = ManuscriptInfo("m", "main.tex", "never", None, None, None)
