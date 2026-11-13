@@ -52,7 +52,7 @@ class FailingSpeech(FakeSpeech):
 
     async def speak(self, text: str):
         if self.spoken:
-            raise SpeechUnavailable("The voice program isn't running. Start it with scripts/voice.sh.")
+            raise SpeechUnavailable("Voice is off. Turn it on in Settings → Voice.")
         return await super().speak(text)
 
 
@@ -76,7 +76,7 @@ class MuteSpeech(FakeSpeech):
 
 class DownSpeech(FakeSpeech):
     async def transcribe(self, samples: bytes) -> str:
-        raise SpeechUnavailable("The voice program isn't running. Start it with scripts/voice.sh.")
+        raise SpeechUnavailable("Voice is off. Turn it on in Settings → Voice.")
 
 
 @pytest.fixture
@@ -202,7 +202,7 @@ async def test_speech_unavailable_at_transcribe_sends_error_and_saves_nothing(ma
 
     assert sent[-1] == {
         "type": "error",
-        "message": "The voice program isn't running. Start it with scripts/voice.sh.",
+        "message": "Voice is off. Turn it on in Settings → Voice.",
         "retryable": True,
     }
     assert "done" not in types(sent) and llm.calls == []
@@ -438,7 +438,7 @@ async def test_speech_failing_mid_answer_sends_error_and_saves_nothing_yet(make_
 
     assert sent[-1] == {
         "type": "error",
-        "message": "The voice program isn't running. Start it with scripts/voice.sh.",
+        "message": "Voice is off. Turn it on in Settings → Voice.",
         "retryable": True,
     }
     assert "done" not in types(sent) and types(sent).count("audio") == 1

@@ -20,3 +20,5 @@ services:
     mem_limit: 3g
   frontend:
     mem_limit: 2g
+  voice:
+    mem_limit: 2g

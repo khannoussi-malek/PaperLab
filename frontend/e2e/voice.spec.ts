@@ -7,7 +7,7 @@ const QUESTION_WAV = fileURLToPath(new URL('./fixtures/question.wav', import.met
 /** What `FakeSpeech` always hears (backend `SPEECH_PROVIDER=fake`). */
 const HEARD = 'What does this paper say?'
 const FAKE_ANSWER = 'Fake answer: the method is described here [C1].'
-const VOICE_DOWN = "The voice program isn't running. Start it with scripts/voice.sh."
+const VOICE_DOWN = "Voice is off. Turn it on in Settings → Voice."
 
 test.beforeEach(async ({ page, llmConnection }) => {
   await pickChatModel(page, llmConnection.modelId)

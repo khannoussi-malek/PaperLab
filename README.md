@@ -200,10 +200,13 @@ the newest answer until you press ×.
 - Ask for notes ("create notes to help me understand the method") and each note the answer suggests shows as a card
 with **Save**. A saved note is marked AI, keeps the answer's exact words, and belongs to the papers it cites.
 - Press the microphone to **ask out loud** and hear the answer. Speak over it and it stops, and only the part you heard
-is saved. Start the voice program with `scripts/voice.sh` and keep it running while you use voice: on first start it downloads its two speech models
-(keep 3 GB of disk free). Your speech is turned into text on your computer and never leaves it. The answer
-still comes from the model you picked in the chat panel. **Settings → Voice** shows how fast each step has been. Wear
-headphones if your speakers feed back into the microphone. It's new, so tell us what feels slow or wrong.
+is saved. Turn it on in **Settings → Voice** in the desktop app, on macOS, Windows or Linux. With the two-command
+install, run `docker compose --profile voice up -d` in your PaperLab folder instead. The first time, it downloads two
+speech models, about 600 MB (keep 3 GB of disk free), and Docker needs about 2 GB more memory while voice is on. Your
+speech is turned into text on your computer and never leaves it. The answer still comes from the model you picked in
+the chat panel. **Settings → Voice** also shows how fast each step has been. Wear headphones if your speakers feed back
+into the microphone. The voice program comes as its own image because it includes espeak-ng, which is GPL-licensed
+(see `voice/NOTICE`). It's new, so tell us what feels slow or wrong.
 
 **Run a systematic review**
 

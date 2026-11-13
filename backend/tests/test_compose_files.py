@@ -27,7 +27,6 @@ def test_dev_stack_ports_are_configurable_with_the_live_defaults():
     }
 
 
-
 def test_the_dev_stack_reloads_code_only_when_asked():
     # A save in the folder the owner's own stack runs from restarted its worker and cancelled their jobs (2026-10-14):
     # reloading is opt-in (DEV_RELOAD=1), and the test stack opts in.
@@ -38,14 +37,15 @@ def test_the_dev_stack_reloads_code_only_when_asked():
     assert "$${DEV_RELOAD:+--reload}" in found["api"]["command"]
     assert "export DEV_RELOAD=1" in (ROOT / "scripts" / "e2e-stack.sh").read_text()
 
+
 SCRIPT = ROOT / "scripts" / "e2e-stack.sh"
 
 
 def test_the_e2e_script_only_ever_drives_the_test_project():
     text = SCRIPT.read_text()
     calls = re.findall(r"docker compose[^\n]*", text)
-    assert calls and all("-p \"$PROJECT\"" in call for call in calls), calls
-    assert 'PROJECT=paperlab-e2e' in text
+    assert calls and all('-p "$PROJECT"' in call for call in calls), calls
+    assert "PROJECT=paperlab-e2e" in text
     assert re.search(r"API_PORT=8100\b", text)
     assert re.search(r"FRONTEND_PORT=5280\b", text)
     assert re.search(r"DB_PORT=5533\b", text)
@@ -61,7 +61,9 @@ def test_a_live_backend_process_killed_for_memory_comes_back():
     # until restarted by hand. on-failure brings it back but, unlike always, never starts it with Docker itself.
     found = services("docker-compose.yml")
     assert {name: found[name].get("restart") for name in ("api", "worker", "ingest-worker")} == {
-        "api": "on-failure", "worker": "on-failure", "ingest-worker": "on-failure",
+        "api": "on-failure",
+        "worker": "on-failure",
+        "ingest-worker": "on-failure",
     }
 
 
@@ -70,7 +72,8 @@ def test_the_test_stack_and_only_the_test_stack_is_memory_capped():
     capped = services("docker-compose.e2e.yml")
     assert set(capped) == set(live)  # every test container has a cap, so its runs can't starve the owner's stack
     assert all(capped[name].get("mem_limit") for name in capped), capped
-    assert not any("mem_limit" in live[name] for name in live)
+    # voice carries its own 2 GB cap everywhere: Whisper and Kokoro must never starve the library's containers.
+    assert not any("mem_limit" in live[name] for name in live if name != "voice")
     assert re.search(r"^export COMPOSE_FILE=docker-compose\.yml:docker-compose\.e2e\.yml\b", SCRIPT.read_text(), re.M)
 
 
@@ -90,3 +93,31 @@ def test_only_the_main_worker_runs_tectonic_as_the_unprivileged_user():
         assert found["worker"]["environment"]["TECTONIC_USER"] == "tex", path
         for name in ("api", "ingest-worker"):
             assert "TECTONIC_USER" not in found[name].get("environment", {}), (path, name)
+
+
+VOICE_FILES = ("docker-compose.yml", "desktop/docker-compose.yml")
+
+
+def test_voice_runs_only_under_its_profile_and_is_never_published():
+    for path in VOICE_FILES:
+        voice = services(path)["voice"]
+        assert voice["profiles"] == ["voice"], path
+        assert voice["mem_limit"] == "2g", path
+        assert voice["restart"] == "on-failure", path
+        assert "ports" not in voice, path  # only the api reaches it, on the compose network
+        assert voice["volumes"] == ["voicemodels:/voice/models"], path
+        assert "voicemodels" in yaml.safe_load((ROOT / path).read_text())["volumes"], path
+
+
+def test_the_app_pulls_the_voice_image_of_its_own_version_and_dev_builds_it():
+    assert services("desktop/docker-compose.yml")["voice"]["image"] == (
+        "ghcr.io/khannoussi-malek/paperlab-voice:${PAPERLAB_VERSION:-dev}"
+    )
+    assert services("docker-compose.yml")["voice"]["build"] == "voice"
+
+
+def test_the_api_finds_the_voice_service_and_a_mac_can_point_it_at_the_native_program():
+    dev = services("docker-compose.yml")["api"]
+    assert dev["environment"]["SPEECH_URL"] == "${SPEECH_URL:-http://voice:8791}"
+    assert "host.docker.internal:host-gateway" in dev["extra_hosts"]  # Linux has no host.docker.internal otherwise
+    assert "SPEECH_URL" not in services("desktop/docker-compose.yml")["api"].get("environment", {})

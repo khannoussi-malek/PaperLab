@@ -10,6 +10,9 @@ x-backend: &backend
     - ./backend:/src
     - pdfs:/data/pdfs
     - models:/models
+  # Ollama, or the native voice program, on the host, on Linux too: Docker Desktop defines this name, Docker Engine
+  # doesn't.
+  extra_hosts: ["host.docker.internal:host-gateway"]
   depends_on:
     db:
       condition: service_healthy
@@ -56,6 +59,9 @@ services:
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       SPEECH_PROVIDER: ${SPEECH_PROVIDER:-sidecar}
+      # The voice service below (docker compose --profile voice up -d). A Mac developer running the native program
+      # (scripts/voice.sh) sets SPEECH_URL=http://host.docker.internal:8791.
+      SPEECH_URL: ${SPEECH_URL:-http://voice:8791}
       DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
       # The compose project (`paperlab`, or `paperlab-e2e` from scripts/e2e-stack.sh). Fake providers refuse to start
       # unless it ends in -e2e (D273).
@@ -105,7 +111,17 @@ services:
       - /app/node_modules
     depends_on: [api]
 
+  # Speech to text and text to speech for voice questions. Optional: only `--profile voice` starts it. No ports: only
+  # the api reaches it, on this network. Its models (about 600 MB) download into voicemodels on first start.
+  voice:
+    build: voice
+    profiles: ["voice"]
+    volumes: [voicemodels:/voice/models]
+    mem_limit: 2g
+    restart: on-failure
+
 volumes:
   pgdata:
   pdfs:
   models:
+  voicemodels:
