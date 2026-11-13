@@ -662,3 +662,14 @@ async def test_the_api_counts_the_answers_it_imported(client, session, pdf_dir):
         "/api/workspaces/import-package", files={"file": ("a.paperlab", package, "application/zip")}
     )
     assert response.status_code == 201 and response.json()["answers"] == 2
+
+
+async def test_an_answer_claiming_too_many_slots_is_package_invalid(session, pdf_dir):
+    from app.core.workspace_package_shapes import MAX_SLOTS
+
+    answer = {"question": "q", "content": "c", "model": "m", "connection_name": None, "prompt_version": 7,
+              "skill_label": None, "skill_version": None, "whole_paper": False, "notes_used": None,
+              "notes_total": None, "created_at": "2026-11-01T00:00:00+00:00", "slots": MAX_SLOTS + 1, "cited": [],
+              "snapshot": []}  # fmt: skip
+    with pytest.raises(InvalidInput, match="package_invalid"):
+        await _import(session, _package(answers=[answer]))

@@ -9,6 +9,7 @@ const REFUSALS: Record<string, string> = {
 };
 
 /** The export dialog's words when a package with its PDFs would be over the import cap. */
+export const PACKAGE_TOO_LARGE = "This workspace is too large to export as one package.";
 export const PDFS_TOO_LARGE =
   "With its PDFs this package would be over 200 MB, more than PaperLab can import. Export it without PDFs.";
 

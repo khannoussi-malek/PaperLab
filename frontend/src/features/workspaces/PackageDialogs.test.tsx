@@ -159,3 +159,10 @@ test("the workspace row menu opens the export dialog", async () => {
   fireEvent.click(await screen.findByRole("menuitem", { name: "Export package…" }));
   expect(await screen.findByRole("dialog", { name: "Export package" })).toBeTruthy();
 });
+
+test("a workspace too large even without PDFs says so plainly and offers no download", async () => {
+  vi.spyOn(api, "checkPackage").mockRejectedValue(new ApiError("package_too_large", 409, { detail: "package_too_large" }));
+  wrap(<PackageExportDialog workspace={workspace} onClose={() => {}} />);
+  expect(await screen.findByText("This workspace is too large to export as one package.")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Download package" })).toBeNull();
+});

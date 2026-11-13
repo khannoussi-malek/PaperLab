@@ -310,7 +310,8 @@ async def test_pdfs_over_the_import_cap_are_refused_at_export(session, pdf_dir, 
         await workspace_package.export_package(session, ws.id, pdfs=True)
     with pytest.raises(Conflict, match="package_too_large_with_pdfs"):
         await workspace_package.check_export(session, ws.id, pdfs=True)
-    await workspace_package.check_export(session, ws.id, pdfs=False)  # without PDFs the cap does not apply
+    with pytest.raises(Conflict, match="^package_too_large$"):  # without PDFs it's the same cap, worded without them
+        await workspace_package.check_export(session, ws.id, pdfs=False)
     monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 200 * 1024 * 1024)
     await workspace_package.check_export(session, ws.id, pdfs=True)
 
@@ -320,5 +321,6 @@ async def test_the_api_refuses_an_oversize_package_before_it_is_downloaded(clien
     monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 100)
     refused = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "true"})
     assert refused.status_code == 409 and refused.json()["detail"] == "package_too_large_with_pdfs"
-    fine = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "false"})
+    monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 200 * 1024 * 1024)
+    fine = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "true"})
     assert fine.status_code == 204

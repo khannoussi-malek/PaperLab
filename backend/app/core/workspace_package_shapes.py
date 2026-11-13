@@ -122,6 +122,9 @@ class SnapshotRow(_Shape):
     from_abstract: StrictBool
 
 
+MAX_SLOTS = 500  # far above any answer's sources; bounds what a crafted package makes the import allocate
+
+
 def _is_slot(label: str, slots: int) -> bool:
     return label[:1] == "C" and label[1:].isdigit() and 1 <= int(label[1:]) <= slots
 
@@ -138,7 +141,7 @@ class AnswerRow(_Shape):
     notes_used: StrictInt | None = None
     notes_total: StrictInt | None = None
     created_at: StrictStr
-    slots: Annotated[StrictInt, Field(ge=0)]
+    slots: Annotated[StrictInt, Field(ge=0, le=MAX_SLOTS)]
     cited: list[StrictStr]
     snapshot: list[SnapshotRow]
 

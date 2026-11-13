@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { workspaceHref } from "@/lib/route";
-import { importResultLine, packageErrorMessage, PDFS_TOO_LARGE } from "./packageCopy";
+import { importResultLine, packageErrorMessage, PDFS_TOO_LARGE, PACKAGE_TOO_LARGE } from "./packageCopy";
 
 /** "Export package…" from a workspace's row menu: one `.paperlab` file, with its PDFs only when ticked. */
 export function PackageExportDialog({
@@ -34,8 +34,8 @@ export function PackageExportDialog({
   const checkboxId = useId();
   const answersId = useId();
   const fits = usePackageFits(workspace.id, pdfs, answers);
-  const tooLarge =
-    fits.error instanceof ApiError && fits.error.code === "package_too_large_with_pdfs";
+  const sizeCode = fits.error instanceof ApiError ? fits.error.code : null;
+  const tooLarge = sizeCode === "package_too_large_with_pdfs" || sizeCode === "package_too_large";
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
@@ -58,7 +58,11 @@ export function PackageExportDialog({
           <p className="text-sm text-muted-foreground">
             Without PDFs the file is small, and papers arrive as details only.
           </p>
-          {tooLarge && <p role="alert" className="text-sm text-destructive">{PDFS_TOO_LARGE}</p>}
+          {tooLarge && (
+            <p role="alert" className="text-sm text-destructive">
+              {sizeCode === "package_too_large" ? PACKAGE_TOO_LARGE : PDFS_TOO_LARGE}
+            </p>
+          )}
           <div className="mt-2 flex items-center gap-2">
             <Checkbox
               id={answersId}

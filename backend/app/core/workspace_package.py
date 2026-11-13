@@ -252,10 +252,13 @@ async def _parts(
 
 
 def _fits_import(parts: dict[str, bytes], pdf_files: list) -> None:
-    """Refuses a package whose bytes, PDFs included, would be over the import cap (the import counts every member)."""
+    """Refuses a package the import would refuse: any JSON member over its cap, or the whole, PDFs included, over the
+    zip cap (the import counts every member)."""
+    if any(len(data) > MAX_JSON_BYTES for data in parts.values()):
+        raise Conflict("package_too_large")
     total = sum(len(data) for data in parts.values()) + sum(path.stat().st_size for _, path in pdf_files)
     if total > citations_bundle_read.MAX_ZIP_BYTES:
-        raise Conflict(TOO_LARGE_WITH_PDFS)
+        raise Conflict(TOO_LARGE_WITH_PDFS if pdf_files else "package_too_large")
 
 
 async def export_package(
@@ -266,16 +269,14 @@ async def export_package(
     (package_too_large_with_pdfs) when, with its PDFs, the package would be more than the import takes. `answers` adds
     the chat answers (answers.json)."""
     parts, pdf_files = await _parts(session, workspace_id, pdfs, answers)
-    if pdfs:
-        _fits_import(parts, pdf_files)
+    _fits_import(parts, pdf_files)
     return await asyncio.to_thread(_write, parts, pdf_files)
 
 
 async def check_export(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: bool, answers: bool = True) -> None:
     """Raises what export_package would for this workspace, without writing the zip (the dialog asks first)."""
     parts, pdf_files = await _parts(session, workspace_id, pdfs, answers)
-    if pdfs:
-        _fits_import(parts, pdf_files)
+    _fits_import(parts, pdf_files)
 
 
 # ---- import (M35a Task 2) ----
