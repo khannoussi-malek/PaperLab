@@ -100,6 +100,9 @@ function scrollToElement(selector: string, block: ScrollLogicalPosition) {
   document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block })
 }
 
+/** A replaced citation (M33) has no passage box left, so it brings its page to the top instead. */
+const scrollToPage = (page: number) => scrollToElement(`[data-page="${page}"]`, 'start')
+
 /** The rects of these notes' highlights on one page. */
 const noteRects = (highlights: PageHighlight[], noteIds: string[]) =>
   highlights.filter((h) => h.noteId !== null && noteIds.includes(h.noteId)).map((h) => h.rect)
@@ -203,7 +206,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   // since until then no page exists to draw it on or scroll to.
   useEffect(() => {
     if (!flash || !doc) return
-    scrollToElement('.chunk-flash', 'center')
+    // A passage with no boxes (a citation whose chunk a re-ingest replaced) still takes the reader to its page.
+    if (flash.rects.length === 0) scrollToPage(flash.page)
+    else scrollToElement('.chunk-flash', 'center')
     const timer = window.setTimeout(() => setFlash(null), FLASH_MS)
     return () => window.clearTimeout(timer)
   }, [flash, doc])
@@ -237,6 +242,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       if (chunk) flashChunk(chunk.page, chunk.bbox)
     } else if (target.kind === 'region') {
       flashChunk(target.page, target.rects)
+    } else if (target.kind === 'page') {
+      scrollToPage(target.page)
     } else {
       if (!notesQuery.data) return
       const note = notesQuery.data.find((n) => n.id === target.id)
@@ -658,7 +665,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           <NotesPanel
             paperId={paperId}
             hasPdf={!noPdf}
-            onCite={(source) => flashChunk(source.page, source.bbox)}
+            onCite={(source) => flashChunk(source.page, source.bbox ?? [])}
             hasAbstract={Boolean(paper.data?.abstract)}
             wholePaperDraft={wholePaperDraft}
             onNewPaperNote={newPaperNote}
@@ -695,7 +702,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 ? focusNote({ id: source.note_id })
                 : source.from_abstract
                   ? scrollToElement('.paper-abstract', 'center')
-                  : flashChunk(source.page, source.bbox)
+                  : source.replaced
+                    ? scrollToPage(source.page)
+                    : flashChunk(source.page, source.bbox ?? [])
             }
             onPromoted={showPromotedNote}
           />

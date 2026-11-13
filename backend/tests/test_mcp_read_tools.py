@@ -2,6 +2,7 @@
 against the real test database (the test's rolled-back transaction)."""
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from mcp_fixtures import *  # noqa: F403
@@ -238,7 +239,16 @@ async def answer_on(session, scope: chat.Scope | uuid.UUID, question: str, sourc
     output_id = await chat.save_answer(
         session, scope, question, prepared, f"Answer to {question} [C1].", "qwen3:8b", "Ollama"
     )
-    return await session.get(LLMOutput, output_id)  # fmt: skip
+    output = await session.get(LLMOutput, output_id)
+    # Rows saved in one transaction share now(): give each its own time, as answers asked one after another have.
+    global _ANSWERS_MADE
+    _ANSWERS_MADE += 1
+    output.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=_ANSWERS_MADE)
+    await session.flush()
+    return output
+
+
+_ANSWERS_MADE = 0
 
 
 async def test_saved_answers_come_newest_first_marked_ai_with_their_sources(session, tmp_path):

@@ -54,7 +54,7 @@ def to_brief(brief: briefs.Brief) -> BriefOut:
         created_at=output.created_at,
         stale=brief.stale,
         partial=not output.whole_paper,
-        sources=to_sources(brief.sources),
+        sources=to_sources(brief.sources, brief.replaced),
     )
 
 

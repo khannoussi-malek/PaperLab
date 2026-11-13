@@ -116,9 +116,22 @@ test('a chat citation of the abstract brings the abstract into view', () => {
   const scrolled = vi.fn()
   Element.prototype.scrollIntoView = scrolled
   render(<ReaderPage paperId={ID} tab="chat" target={null} />)
-  state.onCite!({ label: 'C1', chunk_id: 'c', paper_id: ID, page: 0, section: 'Abstract', bbox: [], from_abstract: true })
+  state.onCite!({ label: 'C1', chunk_id: 'c', paper_id: ID, page: 0, section: 'Abstract', bbox: [], from_abstract: true, replaced: false })
   expect(scrolled).toHaveBeenCalled()
   expect(scrolled.mock.contexts[0]).toBe(screen.getByText('Sleep helps memory consolidation.'))
+})
+
+test('a replaced citation in the paper chat brings its page to the top, not the abstract or the paper top', () => {
+  state.paper = paper({ has_pdf: true, evidence_access: 'full_text' })
+  const page = document.createElement('div')
+  page.dataset.page = '3'
+  document.body.appendChild(page)
+  const scrolled = vi.fn()
+  page.scrollIntoView = scrolled
+  render(<ReaderPage paperId={ID} tab="chat" target={null} />)
+  state.onCite!({ label: 'C1', chunk_id: null, paper_id: ID, page: 3, section: null, bbox: null, from_abstract: false, replaced: true })
+  expect(scrolled).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+  page.remove()
 })
 
 test('a paper with a PDF still opens it, with zoom', () => {

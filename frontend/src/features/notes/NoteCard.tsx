@@ -27,6 +27,7 @@ import { KindSelect } from './KindSelect'
 import { KIND_LABEL, swapTemplate } from './noteKinds'
 import { NoteCharts } from './NoteCharts'
 import { ProvenanceBadge } from './ProvenanceBadge'
+import { HowThisWasMade } from '@/features/chat/HowThisWasMade'
 
 type Props = {
   note: Note
@@ -178,6 +179,7 @@ export function NoteCard({
             )
           )}
           {!compact && <NoteCharts note={note} />}
+          {!compact && note.provenance !== 'human' && <HowThisWasMade noteId={note.id} />}
         </CardContent>
 
         <CardFooter className="flex-wrap justify-end gap-2">

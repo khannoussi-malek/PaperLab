@@ -22,6 +22,9 @@ class LLMOutput(Base):
     # markers then render as plain text.
     source_chunks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
     cited_chunks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
+    # M33: copies of the cited passages, [{label, paper_id, page, section, text, from_abstract}], written with the
+    # answer and never rewritten. NULL for answers saved before M33; [] for an answer that cites nothing.
+    source_snapshot: Mapped[list[dict] | None] = mapped_column(JSONB)
     # A chat answer has exactly one of paper_id / workspace_id (CHECK llm_outputs_chat_scope).
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
     # N{i} is source_notes[i-1]. No FK on array elements: a deleted note renders as plain text.

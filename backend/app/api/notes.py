@@ -6,10 +6,10 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Response, UploadFile
 
 from app.api.deps import LLMByModelIdDep, SessionDep
-from app.core import note_suggestions, notes, notes_markdown
+from app.core import answer_provenance, note_suggestions, notes, notes_markdown
 from app.core.errors import InvalidInput
 from app.providers.base import LLMError, LLMUnavailable
-from app.schemas.chat import PromoteRequest
+from app.schemas.chat import AnswerProvenanceOut, McpNoteOut, PromoteRequest, to_provenance
 from app.schemas.note_suggestions import NoteSuggestionOut, NoteSuggestionsOut
 from app.schemas.notes import FigureNoteCreate, NoteCreate, NoteOut, NotePapersIn, NoteUpdate
 
@@ -20,6 +20,15 @@ router = APIRouter(tags=["notes"])
 @router.get("/api/papers/{paper_id}/notes")
 async def list_paper_notes(paper_id: uuid.UUID, session: SessionDep) -> list[NoteOut]:
     return await notes.list_notes_for_paper(session, paper_id)
+
+
+@router.get("/api/notes/{note_id}/provenance")
+async def note_provenance(note_id: uuid.UUID, session: SessionDep) -> AnswerProvenanceOut | McpNoteOut:
+    """How an AI note was made, from the answer it came from (M33). 404 not_ai for a note a person wrote."""
+    found = await answer_provenance.note_provenance(session, note_id)
+    if isinstance(found, answer_provenance.McpNote):
+        return McpNoteOut(source="claude_desktop")
+    return to_provenance(found)
 
 
 @router.get("/api/notes")

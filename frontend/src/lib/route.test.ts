@@ -10,6 +10,7 @@ import {
   newChartHref,
   noteHref,
   notesHref,
+  pageHref,
   parseRoute,
   readerHref,
   referencesHref,
@@ -301,5 +302,16 @@ describe('manuscript routes', () => {
   it('workspace ?tab=write is allowed', () => {
     const id = '11111111-2222-3333-4444-666666666666'
     expect(parseRoute(workspaceHref(id, 'write'))).toMatchObject({ name: 'workspace', tab: 'write' })
+  })
+})
+
+describe('pageHref', () => {
+  it('opens the reader at a page, with no passage to flash', () => {
+    expect(pageHref(id, 4)).toBe(`#/papers/${id}?page=4`)
+    expect(parseRoute(pageHref(id, 4))).toEqual({ name: 'reader', paperId: id, tab: 'notes', target: { kind: 'page', id: 'page:4', page: 4 } })
+  })
+
+  it('a page that is not a positive whole number opens the paper with no target', () => {
+    expect(parseRoute(`#/papers/${id}?page=0`)).toEqual({ name: 'reader', paperId: id, tab: 'notes', target: null })
   })
 })

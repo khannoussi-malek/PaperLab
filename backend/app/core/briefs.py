@@ -7,13 +7,22 @@ comparison covers a role fix and a re-ingest, with nothing to keep in sync. Brie
 
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import lenses, prompts
-from app.core.chat import Prepared, chunk_sources, cut_to_budget, format_context, parse_citations
+from app.core.answer_provenance import snapshot
+from app.core.chat import (
+    Prepared,
+    SnapshotPassage,
+    chunk_sources,
+    cut_to_budget,
+    format_context,
+    parse_citations,
+    snapshot_passages,
+)
 from app.core.errors import Conflict, InvalidInput
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk
@@ -42,6 +51,7 @@ class Brief:
     output: LLMOutput
     sources: list[RetrievedChunk | None]  # None: a re-ingest replaced that chunk
     stale: bool
+    replaced: list[SnapshotPassage | None] = field(default_factory=list)  # per source, from the snapshot (M33)
 
 
 async def _lens_sources(session: AsyncSession, paper_id: uuid.UUID, lens: str) -> list[RetrievedChunk]:
@@ -86,13 +96,15 @@ async def save_brief(
 ) -> uuid.UUID:
     """The model and connection names are copied, as chat's are, so renaming the connection never changes a brief."""
     source_ids = [s.id for s in prepared.sources]
+    cited = parse_citations(content, len(source_ids))
     output = LLMOutput(
         paper_id=paper_id,
         kind=OUTPUT_KIND,
         lens=lens,
         content=content,
         source_chunks=source_ids,
-        cited_chunks=[source_ids[i - 1] for i in parse_citations(content, len(source_ids))],
+        cited_chunks=[source_ids[i - 1] for i in cited],
+        source_snapshot=snapshot(prepared.sources, [f"C{i}" for i in cited]),
         whole_paper=prepared.whole_paper,
         model=model,
         connection_name=connection_name,
@@ -118,5 +130,12 @@ async def list_briefs(session: AsyncSession, paper_id: uuid.UUID) -> list[Brief]
     for lens in (lens for lens in BRIEFABLE if lens in newest):
         output = newest[lens]
         now = {source.id for source in cut_to_budget(await _lens_sources(session, paper_id, lens))}
-        found.append(Brief(output, [chunks.get(i) for i in output.source_chunks], set(output.source_chunks) != now))
+        found.append(
+            Brief(
+                output,
+                [chunks.get(i) for i in output.source_chunks],
+                set(output.source_chunks) != now,
+                snapshot_passages(output),
+            )
+        )
     return found

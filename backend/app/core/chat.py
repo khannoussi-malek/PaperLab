@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import prompts, skills, workspaces
+from app.core.answer_provenance import snapshot
 from app.core.errors import Conflict, NotFound
 from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
 from app.core.papers import get_paper
@@ -116,11 +117,24 @@ class SavedNote:
 
 
 @dataclass(frozen=True)
+class SnapshotPassage:
+    """A cited passage a re-ingest replaced, as the answer's snapshot kept it: its place, with no box (M33)."""
+
+    paper_id: uuid.UUID
+    page: int
+    section: str | None
+    from_abstract: bool
+
+
+@dataclass(frozen=True)
 class Answer:
     output: LLMOutput
     sources: list[RetrievedChunk | None]  # None: a re-ingest replaced that chunk
     notes: list[NoteSource | None] = field(default_factory=list)  # None: the note was deleted
     saved_notes: list[SavedNote] = field(default_factory=list)  # by block index
+    replaced: list[SnapshotPassage | None] = field(
+        default_factory=list
+    )  # aligned with sources; None: no snapshot of it
 
 
 async def chunk_sources(session: AsyncSession, *where) -> list[RetrievedChunk]:
@@ -403,6 +417,7 @@ async def save_answer(
     names are copied, so renaming or deleting the connection later never changes the answer."""
     scope = _scope(paper_id)
     source_ids = [s.id for s in prepared.sources]
+    cited = parse_citations(content, len(source_ids))
     output = LLMOutput(
         paper_id=scope.paper_id,
         workspace_id=scope.workspace_id,
@@ -410,7 +425,8 @@ async def save_answer(
         question=question,
         content=content,
         source_chunks=source_ids,
-        cited_chunks=[source_ids[i - 1] for i in parse_citations(content, len(source_ids))],
+        cited_chunks=[source_ids[i - 1] for i in cited],
+        source_snapshot=snapshot(prepared.sources, [f"C{i}" for i in cited]),
         source_notes=[n.id for n in prepared.notes],
         notes_used=prepared.notes_used,
         notes_total=prepared.notes_total,
@@ -425,6 +441,20 @@ async def save_answer(
     session.add(output)
     await session.commit()
     return output.id
+
+
+def snapshot_passages(output: LLMOutput) -> list[SnapshotPassage | None]:
+    """One per source, as sources is: the snapshot's passage for C{i+1}, or None where the answer kept none."""
+    by_label = {entry["label"]: entry for entry in output.source_snapshot or []}
+    found = []
+    for number in range(1, len(output.source_chunks) + 1):
+        entry = by_label.get(f"C{number}")
+        found.append(
+            None
+            if entry is None
+            else SnapshotPassage(uuid.UUID(entry["paper_id"]), entry["page"], entry["section"], entry["from_abstract"])
+        )
+    return found
 
 
 async def list_answers(session: AsyncSession, paper_id: uuid.UUID | Scope) -> list[Answer]:
@@ -458,6 +488,7 @@ async def list_answers(session: AsyncSession, paper_id: uuid.UUID | Scope) -> li
         Answer(
             output=o,
             sources=[chunks.get(chunk_id) for chunk_id in o.source_chunks],
+            replaced=snapshot_passages(o),
             # None: the note was deleted, or is no longer linked to a paper in scope (spec §4.3).
             notes=[None if note_id not in by_id else _source(by_id[note_id], members) for note_id in o.source_notes],
             saved_notes=saved_notes.get(o.id, []),

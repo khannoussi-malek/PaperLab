@@ -591,6 +591,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes/{note_id}/provenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Note Provenance
+         * @description How an AI note was made, from the answer it came from (M33). 404 not_ai for a note a person wrote.
+         */
+        get: operations["note_provenance_api_notes__note_id__provenance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notes": {
         parameters: {
             query?: never;
@@ -769,6 +789,26 @@ export interface paths {
          *     follow_ups_paper_only, 404, 409 workspace_empty, search_not_set_up or workspace_not_indexed, 422.
          */
         post: operations["ask_workspace_api_workspaces__workspace_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-outputs/{output_id}/provenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Output Provenance
+         * @description How an answer or a brief was made, and where each cited passage stands now (M33). 404 answer_not_found.
+         */
+        get: operations["output_provenance_api_llm_outputs__output_id__provenance_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3551,6 +3591,49 @@ export interface components {
             /** Quoted Text */
             quoted_text: string;
         };
+        /** AnswerPassageOut */
+        AnswerPassageOut: {
+            /** Label */
+            label: string;
+            /** Paper Id */
+            paper_id: string | null;
+            /** Paper Title */
+            paper_title: string | null;
+            /** Page */
+            page: number | null;
+            /** Section */
+            section: string | null;
+            /** Text */
+            text: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "current" | "changed" | "not_recorded" | "not_kept" | "paper_removed";
+        };
+        /**
+         * AnswerProvenanceOut
+         * @description How an answer was made (M33). Computed on request, never on the history lists.
+         */
+        AnswerProvenanceOut: {
+            /** Model */
+            model: string;
+            /** Connection Name */
+            connection_name: string | null;
+            /** Prompt Version */
+            prompt_version: number;
+            /** Skill Label */
+            skill_label: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Out Of Date */
+            out_of_date: boolean;
+            /** Passages */
+            passages: components["schemas"]["AnswerPassageOut"][];
+        };
         /** AvailableModelsOut */
         AvailableModelsOut: {
             /** Models */
@@ -4043,11 +4126,8 @@ export interface components {
         ChatSource: {
             /** Label */
             label: string;
-            /**
-             * Chunk Id
-             * Format: uuid
-             */
-            chunk_id: string;
+            /** Chunk Id */
+            chunk_id: string | null;
             /**
              * Paper Id
              * Format: uuid
@@ -4063,9 +4143,11 @@ export interface components {
                 number,
                 number,
                 number
-            ][];
+            ][] | null;
             /** From Abstract */
             from_abstract: boolean;
+            /** Replaced */
+            replaced: boolean;
         };
         /** CheckFindingOut */
         CheckFindingOut: {
@@ -5707,6 +5789,17 @@ export interface components {
             tools: string[];
             /** Detail */
             detail: string | null;
+        };
+        /**
+         * McpNoteOut
+         * @description A note an MCP client added: the view says where it came from and nothing more.
+         */
+        McpNoteOut: {
+            /**
+             * Source
+             * @constant
+             */
+            source: "claude_desktop";
         };
         /** McpSetupOut */
         McpSetupOut: {
@@ -9449,6 +9542,37 @@ export interface operations {
             };
         };
     };
+    note_provenance_api_notes__note_id__provenance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerProvenanceOut"] | components["schemas"]["McpNoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_notes_api_notes_get: {
         parameters: {
             query?: {
@@ -9865,6 +9989,37 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    output_provenance_api_llm_outputs__output_id__provenance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                output_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerProvenanceOut"];
                 };
             };
             /** @description Validation Error */

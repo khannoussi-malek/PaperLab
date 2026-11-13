@@ -4,7 +4,8 @@ import type { ChatScope, ProvNode } from '@/api/client'
 import { useSearchHit, useWorkspacePapers } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { ChatPanel } from '@/features/chat/ChatPanel'
-import { chunkHref, noteHref, readerHref } from '@/lib/route'
+import { noteHref } from '@/lib/route'
+import { sourceReaderHref } from '@/features/chat/citations'
 
 const NARROW = '(max-width: 900px)'
 const isNarrow = () => typeof window.matchMedia === 'function' && window.matchMedia(NARROW).matches
@@ -59,7 +60,7 @@ export function AskPanel({ workspaceId, node }: { workspaceId: string; node: Pro
         scope={scope}
         onSource={(s) => setRead({ id: node.id, source: s })}
         onCite={(source) => {
-          window.location.hash = 'note_id' in source ? noteHref(source.paper_id, source.note_id) : source.from_abstract ? readerHref(source.paper_id) : chunkHref(source.paper_id, source.chunk_id, source.page)
+          window.location.hash = 'note_id' in source ? noteHref(source.paper_id, source.note_id) : sourceReaderHref(source)
         }}
         onPromoted={() => sileo.success({ title: 'Saved as a note' })}
       />
