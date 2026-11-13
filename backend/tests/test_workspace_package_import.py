@@ -373,3 +373,14 @@ async def test_the_api_refuses_an_unknown_format_with_its_code(client, session):
         files={"file": ("x.paperlab", _package(format_name="nope"), "application/zip")},
     )
     assert response.status_code == 422 and response.json()["detail"] == "package_unknown_format"
+
+
+async def test_deleting_a_workspace_removes_its_package_record(session, pdf_dir):
+    space = await workspaces.create(session, f"Record {uuid.uuid4().hex[:8]}")
+    record = workspace_package.record_path(space.id)
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text("{}")
+
+    await workspaces.delete(session, space.id)
+
+    assert not record.exists()

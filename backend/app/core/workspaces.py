@@ -109,10 +109,14 @@ async def rename(session: AsyncSession, workspace_id: uuid.UUID, name: str) -> W
 
 
 async def delete(session: AsyncSession, workspace_id: uuid.UUID) -> None:
-    """Memberships and the workspace's chat answers cascade; papers and notes stay."""
+    """Memberships and the workspace's chat answers cascade; papers and notes stay. An imported package's screening
+    record (M35a) goes with it."""
+    from app.core.workspace_package import record_path  # imported here: workspace_package imports this module
+
     await get(session, workspace_id)
     await session.execute(delete_rows(Workspace).where(Workspace.id == workspace_id))
     await session.commit()
+    record_path(workspace_id).unlink(missing_ok=True)
 
 
 async def _membership(session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID) -> Paper:
