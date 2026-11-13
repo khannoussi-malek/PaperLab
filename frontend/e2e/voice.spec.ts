@@ -80,7 +80,7 @@ test("Settings shows the turn's numbers", async ({ page, paperId }) => {
   await expect(savedAnswer(page).locator('.chat-answer-footer')).toContainText('AI · ', { timeout: 45_000 })
 
   await page.goto('/#/settings/voice')
-  await expect(page.getByText('The voice program is ready.')).toBeVisible()
+  await expect(page.getByText('Voice is ready.')).toBeVisible()
   // The turn is in the cold or the warm table: some "Stop talking to first audio" row counts at least one turn.
   const rows = page.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Stop talking to first audio' }) })
   await expect
@@ -88,13 +88,14 @@ test("Settings shows the turn's numbers", async ({ page, paperId }) => {
     .toBeGreaterThanOrEqual(1)
 })
 
-test('with the voice program down the button says what to run, and typed chat still works', async ({ page, paperId }) => {
+test('with voice off the button says where to turn it on, and typed chat still works', async ({ page, paperId }) => {
   await page.route('**/api/voice/status', (route) => route.fulfill({ json: { ready: false, stage: 'off', detail: VOICE_DOWN } }))
   await fakeMicrophone(page, false)
   await openChat(page, paperId)
 
-  await page.getByRole('button', { name: 'Ask out loud' }).click()
-  await expect(page.getByText(VOICE_DOWN)).toBeVisible()
+  const button = page.getByRole('button', { name: 'Ask out loud' })
+  await expect(button).toBeDisabled()
+  await expect(button).toHaveAttribute('title', 'Turn voice on in Settings → Voice')
   await expect(page.getByText('Listening', { exact: true })).toBeHidden()
 
   const answer = await ask(page, 'What is the method?')
