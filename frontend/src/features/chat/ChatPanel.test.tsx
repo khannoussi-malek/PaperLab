@@ -44,7 +44,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(api, 'listChat').mockResolvedValue([])
   vi.spyOn(api, 'listChatModels').mockResolvedValue([model])
-  vi.spyOn(api, 'voiceStatus').mockResolvedValue({ ready: true, detail: null })
+  vi.spyOn(api, 'voiceStatus').mockResolvedValue({ ready: true, stage: 'ready', detail: null })
   mocks.startMicrophone.mockResolvedValue({ stop: async () => {}, echoCancelled: true })
   vi.stubGlobal('WebSocket', FakeSocket)
   vi.stubGlobal('AudioContext', FakeContext)

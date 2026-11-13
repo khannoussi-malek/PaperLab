@@ -6,10 +6,12 @@ import asyncio
 import httpx
 
 from app.config import settings
-from app.providers.base import Speech, SpeechUnavailable
+from app.providers.base import Speech, SpeechHealth, SpeechUnavailable
 
-NOT_RUNNING = "The voice program isn't running. Start it with scripts/voice.sh."
-BAD_REPLY = "The voice program gave an answer PaperLab could not read. Restart it with scripts/voice.sh."
+NOT_RUNNING = "Voice is off. Turn it on in Settings → Voice."
+BAD_REPLY = "The voice program gave an answer PaperLab could not read. Turn voice off and on again in Settings → Voice."
+GETTING_READY = "Voice is still getting ready. Try again in a moment."
+STAGES = ("downloading", "loading", "ready", "failed")
 WORK_TIMEOUT = 60.0
 HEALTH_TIMEOUT = 2.0
 
@@ -25,6 +27,8 @@ class SidecarSpeech:
                 reply = await http.request(method, self.url + path, **kwargs)
             reply.raise_for_status()
         except httpx.HTTPStatusError as e:
+            if e.response.status_code == 503:  # the program is up but still downloading or loading its models
+                raise SpeechUnavailable(GETTING_READY) from e
             raise SpeechUnavailable(f"The voice program failed ({e.response.status_code}).") from e
         except httpx.HTTPError as e:  # connection refused, timeout, dropped reply
             raise SpeechUnavailable(NOT_RUNNING) from e
@@ -38,9 +42,16 @@ class SidecarSpeech:
         except (ValueError, KeyError, TypeError) as e:
             raise SpeechUnavailable(BAD_REPLY) from e
 
-    async def health(self) -> bool:
+    async def health(self) -> SpeechHealth:
         reply = await self._call("GET", "/health", HEALTH_TIMEOUT)
-        return bool(self._field(reply, "ready"))
+        ready = bool(self._field(reply, "ready"))
+        body = reply.json()  # an object: _field just read a key from it
+        # A program from before the stages answers only "ready".
+        stage = body.get("stage", "ready" if ready else "loading")
+        if stage not in STAGES:
+            raise SpeechUnavailable(BAD_REPLY)
+        detail = body.get("detail")
+        return SpeechHealth(ready=ready, stage=stage, detail=detail if isinstance(detail, str) else None)
 
     async def transcribe(self, samples: bytes) -> str:
         reply = await self._call("POST", "/transcribe", WORK_TIMEOUT, content=samples)
@@ -69,8 +80,8 @@ class FakeSpeech:
         self.samples = samples
         self.spoken: list[str] = []
 
-    async def health(self) -> bool:
-        return True
+    async def health(self) -> SpeechHealth:
+        return SpeechHealth(ready=True, stage="ready")
 
     async def transcribe(self, samples: bytes) -> str:
         return self.transcript

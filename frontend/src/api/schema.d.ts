@@ -8153,6 +8153,11 @@ export interface components {
         VoiceStatus: {
             /** Ready */
             ready: boolean;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "off" | "downloading" | "loading" | "ready" | "failed";
             /** Detail */
             detail?: string | null;
         };

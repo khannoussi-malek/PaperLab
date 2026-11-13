@@ -89,7 +89,7 @@ test("Settings shows the turn's numbers", async ({ page, paperId }) => {
 })
 
 test('with the voice program down the button says what to run, and typed chat still works', async ({ page, paperId }) => {
-  await page.route('**/api/voice/status', (route) => route.fulfill({ json: { ready: false, detail: VOICE_DOWN } }))
+  await page.route('**/api/voice/status', (route) => route.fulfill({ json: { ready: false, stage: 'off', detail: VOICE_DOWN } }))
   await fakeMicrophone(page, false)
   await openChat(page, paperId)
 

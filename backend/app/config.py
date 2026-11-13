@@ -51,9 +51,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     # Streaming, so a generous cap costs nothing when unused and never truncates a long answer.
     anthropic_max_tokens: int = 64_000
-    # The voice program on the host (voice/server.py). `fake` swaps it for a scripted one (the E2E stack).
+    # The voice program (voice/server.py): the compose stack's optional `voice` service. A Mac developer running it
+    # natively (scripts/voice.sh) sets SPEECH_URL=http://host.docker.internal:8791. `fake` swaps it for a scripted one
+    # (the E2E stack).
     speech_provider: Literal["sidecar", "fake"] = "sidecar"
-    speech_url: str = "http://host.docker.internal:8791"
+    speech_url: str = "http://voice:8791"
     # Sent as `mailto` on every OpenAlex request. Empty turns OpenAlex off: enrichment then uses only the PDF.
     openalex_mailto: str = ""
     # Sent as `x-api-key` to Semantic Scholar (Similar papers, arXiv lookups, free PDF links). Empty uses its shared,

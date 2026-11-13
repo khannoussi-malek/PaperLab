@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type VoiceLatency } from '@/api/client'
+import { api, type VoiceLatency, type VoiceStatus } from '@/api/client'
 import { VoiceSettings } from './VoiceSettings'
 
 afterEach(() => vi.restoreAllMocks())
@@ -14,9 +14,9 @@ const empty = {
   first_chunk_ms: none, tts_first_ms: none, output_ms: none, total_ms: none, interrupt_stop_ms: none,
 }
 const latency = (groups: VoiceLatency['groups']): VoiceLatency => ({ groups })
-const ready = { ready: true, detail: null }
+const ready = { ready: true, stage: 'ready' as const, detail: null }
 
-function show(status: { ready: boolean; detail: string | null }, data: VoiceLatency) {
+function show(status: VoiceStatus, data: VoiceLatency) {
   vi.spyOn(api, 'voiceStatus').mockResolvedValue(status)
   vi.spyOn(api, 'voiceLatency').mockResolvedValue(data)
   render(
@@ -32,8 +32,8 @@ test('no turns invites a question out loud', async () => {
 })
 
 test('a program that is not ready shows why and the command', async () => {
-  show({ ready: false, detail: "The voice program isn't running. Start it with scripts/voice.sh." }, latency([]))
-  expect(await screen.findByText("The voice program isn't running. Start it with scripts/voice.sh.")).toBeInTheDocument()
+  show({ ready: false, stage: 'off', detail: 'Voice is off. Turn it on in Settings → Voice.' }, latency([]))
+  expect(await screen.findByText('Voice is off. Turn it on in Settings → Voice.')).toBeInTheDocument()
 })
 
 test('a ready program says so', async () => {

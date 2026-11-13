@@ -102,7 +102,7 @@ beforeEach(() => {
   })
   queryClient = new QueryClient()
   vi.spyOn(queryClient, 'invalidateQueries')
-  vi.spyOn(api, 'voiceStatus').mockResolvedValue({ ready: true, detail: null })
+  vi.spyOn(api, 'voiceStatus').mockResolvedValue({ ready: true, stage: 'ready', detail: null })
   vi.spyOn(performance, 'now').mockImplementation(() => now)
   vi.stubGlobal('WebSocket', FakeSocket)
   vi.stubGlobal('AudioContext', FakeContext)
@@ -308,7 +308,7 @@ it('a press after that release starts again', async () => {
 
 it('is starting from the click, before the voice program has answered', async () => {
   let ready!: () => void
-  vi.spyOn(api, 'voiceStatus').mockImplementation(() => new Promise((resolve) => (ready = () => resolve({ ready: true, detail: null }))))
+  vi.spyOn(api, 'voiceStatus').mockImplementation(() => new Promise((resolve) => (ready = () => resolve({ ready: true, stage: 'ready', detail: null }))))
   const hook = renderHook(() => useVoiceTurn(scope, null), { wrapper })
   act(() => void hook.result.current.start())
   expect(hook.result.current.state).toBe('starting')
@@ -463,7 +463,7 @@ it('shows why the microphone did not start and leaves nothing open', async () =>
 })
 
 it('shows the voice status detail and opens nothing when the voice program is down', async () => {
-  vi.spyOn(api, 'voiceStatus').mockResolvedValue({ ready: false, detail: 'Start it with: make voice' })
+  vi.spyOn(api, 'voiceStatus').mockResolvedValue({ ready: false, stage: 'off', detail: 'Start it with: make voice' })
   const { result } = await started()
   expect(result.current.problem).toBe('Start it with: make voice')
   expect(result.current.on).toBe(false)
@@ -608,7 +608,7 @@ const onPaperA = () =>
 
 it('changing scope while the voice status is being checked opens nothing', async () => {
   let ready!: () => void
-  vi.spyOn(api, 'voiceStatus').mockImplementation(() => new Promise((resolve) => (ready = () => resolve({ ready: true, detail: null }))))
+  vi.spyOn(api, 'voiceStatus').mockImplementation(() => new Promise((resolve) => (ready = () => resolve({ ready: true, stage: 'ready', detail: null }))))
   const hook = onPaperA()
   act(() => void hook.result.current.start())
   moveTo(hook)

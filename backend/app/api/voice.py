@@ -51,16 +51,19 @@ CLOSE_FOREIGN_ORIGIN = 4403
 
 class VoiceStatus(BaseModel):
     ready: bool
+    # off: the program can't be reached (voice turned off, or not started).
+    stage: Literal["off", "downloading", "loading", "ready", "failed"]
     detail: str | None = None
 
 
 @router.get("/status")
 async def status(speech: SpeechDep) -> VoiceStatus:
     try:
-        ready = await speech.health()
+        health = await speech.health()
     except SpeechUnavailable as e:
-        return VoiceStatus(ready=False, detail=str(e))
-    return VoiceStatus(ready=ready, detail=None if ready else "The voice program is still loading its models.")
+        return VoiceStatus(ready=False, stage="off", detail=str(e))
+    detail = health.detail or (None if health.ready else "The voice program is still loading its models.")
+    return VoiceStatus(ready=health.ready, stage=health.stage, detail=detail)
 
 
 # The stages Settings shows, in order, by the column each comes from.

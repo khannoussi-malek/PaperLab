@@ -6,12 +6,12 @@ from pydantic import ValidationError
 
 from app.api.deps import get_transport
 from app.config import Settings
-from app.providers.base import SpeechUnavailable
+from app.providers.base import SpeechHealth, SpeechUnavailable
 from app.providers.speech import FakeSpeech, SidecarSpeech
 
 pytestmark = pytest.mark.anyio
 
-NOT_RUNNING = "The voice program isn't running. Start it with scripts/voice.sh."
+NOT_RUNNING = "Voice is off. Turn it on in Settings → Voice."
 
 
 def speech_with(handler) -> SidecarSpeech:
@@ -71,7 +71,7 @@ async def test_status_is_ready_when_health_answers(app, client):
     app.dependency_overrides[get_transport] = lambda: httpx.MockTransport(
         lambda r: httpx.Response(200, json={"ready": True, "stt": "x", "tts": "y"})
     )
-    assert (await client.get("/api/voice/status")).json() == {"ready": True, "detail": None}
+    assert (await client.get("/api/voice/status")).json() == {"ready": True, "stage": "ready", "detail": None}
 
 
 async def test_status_says_how_to_start_the_program_when_it_is_down(app, client):
@@ -79,7 +79,7 @@ async def test_status_says_how_to_start_the_program_when_it_is_down(app, client)
         raise httpx.ConnectError("refused")
 
     app.dependency_overrides[get_transport] = lambda: httpx.MockTransport(handler)
-    assert (await client.get("/api/voice/status")).json() == {"ready": False, "detail": NOT_RUNNING}
+    assert (await client.get("/api/voice/status")).json() == {"ready": False, "stage": "off", "detail": NOT_RUNNING}
 
 
 async def test_status_is_not_ready_when_health_says_so(app, client):
@@ -87,7 +87,7 @@ async def test_status_is_not_ready_when_health_says_so(app, client):
         lambda r: httpx.Response(200, json={"ready": False})
     )
     body = (await client.get("/api/voice/status")).json()
-    assert body["ready"] is False and body["detail"]
+    assert body["ready"] is False and body["stage"] == "loading" and body["detail"]
 
 
 @pytest.mark.parametrize("reply", [{"nope": 1}, "not an object"])
@@ -122,3 +122,43 @@ def test_fake_speech_needs_a_test_stack(monkeypatch):
 async def test_an_empty_speak_reply_is_no_audio_not_a_failure():
     speech = speech_with(lambda r: httpx.Response(200, content=b"", headers={"X-Sample-Rate": "24000"}))
     assert await speech.speak("Hi.") == (b"", 24000)
+
+
+async def test_health_reads_stage_and_detail():
+    reply = {"ready": False, "stage": "downloading", "detail": "Downloading voices-v1.0.bin", "stt": "x", "tts": "y"}
+    health = await speech_with(lambda r: httpx.Response(200, json=reply)).health()
+    assert health == SpeechHealth(ready=False, stage="downloading", detail="Downloading voices-v1.0.bin")
+
+
+@pytest.mark.parametrize(("reply", "stage"), [({"ready": True}, "ready"), ({"ready": False}, "loading")])
+async def test_health_without_stage_is_read_as_ready_or_loading(reply, stage):
+    health = await speech_with(lambda r: httpx.Response(200, json=reply)).health()
+    assert (health.ready, health.stage) == (reply["ready"], stage)
+
+
+async def test_an_unknown_stage_is_unavailable():
+    with pytest.raises(SpeechUnavailable):
+        await speech_with(lambda r: httpx.Response(200, json={"ready": False, "stage": "dancing"})).health()
+
+
+async def test_a_503_during_work_says_getting_ready():
+    with pytest.raises(SpeechUnavailable, match="Voice is still getting ready. Try again in a moment."):
+        reply = httpx.Response(503, json={"detail": "Voice is still getting ready."})
+        await speech_with(lambda r: reply).transcribe(b"")
+
+
+async def test_status_passes_the_stage_through(app, client):
+    app.dependency_overrides[get_transport] = lambda: httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"ready": False, "stage": "failed", "detail": "Not enough disk space."})
+    )
+    body = (await client.get("/api/voice/status")).json()
+    assert body == {"ready": False, "stage": "failed", "detail": "Not enough disk space."}
+
+
+def test_default_speech_url_is_the_voice_service(monkeypatch):
+    monkeypatch.delenv("SPEECH_URL", raising=False)
+    assert Settings().speech_url == "http://voice:8791"
+
+
+async def test_fake_speech_is_ready():
+    assert await FakeSpeech().health() == SpeechHealth(ready=True, stage="ready", detail=None)
