@@ -17,6 +17,9 @@ depends_on = None
 
 UPGRADE = [
     "ALTER TABLE skills ADD COLUMN lens text",
+    # Bundled rows made before 0077 start at 1; the shipped texts are now v2, so a first custom text would record v2
+    # too. Moving them up one keeps a reader's own text a version apart from the shipped one.
+    "UPDATE skills SET version = version + 1 WHERE builtin_slug IS NOT NULL AND instructions IS NULL",
     "ALTER TABLE skills ADD CONSTRAINT skills_lens_known "
     "CHECK (lens IS NULL OR lens IN ('full', 'key_ideas', 'critical', 'method', 'related'))",
 ]

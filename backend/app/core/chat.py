@@ -157,7 +157,9 @@ def _lens_of(skill: skills.SkillView | None) -> str:
 
 
 def _fits(sources: list[RetrievedChunk]) -> bool:
-    return bool(sources) and len(cut_to_budget(sources)) == len(sources)
+    """Whether every one of `sources` fits the budget together (cut_to_budget keeps an oversized first chunk; this
+    doesn't count it as fitting)."""
+    return bool(sources) and sum(len(source.text) for source in sources) <= SMALL_PAPER_CHARS
 
 
 async def _size(session: AsyncSession, paper_id: uuid.UUID) -> tuple[int, int]:
@@ -372,7 +374,7 @@ async def _prepare_workspace(
         sources=sources,
         system=skills.compose(WORKSPACE_SYSTEM_PROMPT, skill),
         prompt=prompt,
-        whole_paper=whole,
+        whole_paper=whole and lens == FULL_LENS,  # the whole lens is not the whole workspace: keep each cite pill
         prompt_version=WORKSPACE_PROMPT_VERSION,
         notes=used,
         notes_total=len(every_note),
@@ -450,7 +452,7 @@ async def prepare(
         sources=sources,
         system=skills.compose(SYSTEM_PROMPT, skill),
         prompt=prompt,
-        whole_paper=whole_paper,
+        whole_paper=whole_paper and not lens_chunks,  # the whole lens is not the whole paper
         notes=used,
         notes_total=len(every_note),
         lens=lens if lens_chunks else FULL_LENS,

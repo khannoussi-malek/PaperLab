@@ -359,7 +359,7 @@ async def test_a_workspace_lens_is_the_union_of_its_papers_lens_chunks_when_it_f
 
     expected = {c.id for chunks in (first_chunks, second_chunks) for c in (chunks[2], chunks[3], chunks[4])}
     assert {s.id for s in prepared.sources} == expected and len(prepared.sources) == 6
-    assert (prepared.whole_paper, prepared.lens) == (True, "critical")
+    assert (prepared.whole_paper, prepared.lens) == (False, "critical")  # each passage keeps its own cite pill
     assert embedder.calls == []
 
 

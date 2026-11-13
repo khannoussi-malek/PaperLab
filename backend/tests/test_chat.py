@@ -429,7 +429,8 @@ async def test_a_lens_that_fits_sends_exactly_its_chunks_in_reading_order(sessio
     prepared = await chat.prepare(session, paper.id, "Is the evaluation sound?", skill=skill)
 
     assert [s.id for s in prepared.sources] == [chunks[i].id for i in (2, 3, 4)]
-    assert (prepared.whole_paper, prepared.lens) == (True, "critical")
+    # the whole lens, not the whole paper: the answer must not say "Whole paper"
+    assert (prepared.whole_paper, prepared.lens) == (False, "critical")
     assert prepared.system == skills.compose(chat.SYSTEM_PROMPT, skill)
 
 
@@ -482,3 +483,9 @@ async def test_an_answer_without_a_skill_records_the_full_lens(session):
     output_id = await chat.save_answer(session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake")
 
     assert (await session.get(LLMOutput, output_id)).lens == "full"
+
+
+def test_a_single_chunk_bigger_than_the_budget_does_not_fit():
+    big = RetrievedChunk(id=uuid.uuid4(), paper_id=uuid.uuid4(), page=1, section=None, bbox=[],
+                         text="x" * (chat.SMALL_PAPER_CHARS + 1))  # fmt: skip
+    assert chat._fits([big]) is False
