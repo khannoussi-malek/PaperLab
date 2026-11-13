@@ -8,7 +8,7 @@ import pytest
 from mcp import Client
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.core import mcp_activity, workspaces
 from app.models import McpActivity, Paper
@@ -17,6 +17,13 @@ from mcp_server import server
 pytestmark = pytest.mark.anyio
 RUN = uuid.uuid4().hex[:8]
 PDF = b"%PDF-1.7\n%an uploaded paper\n"
+
+
+@pytest.fixture(autouse=True)
+async def empty_log(session):
+    """Tests that run a real MCP server process (test_mcp_stdio, test_mcp_check) commit log rows to the test database;
+    start each test from an empty log, inside its own rolled-back transaction."""
+    await session.execute(delete(McpActivity))
 
 
 async def log_rows(session) -> list[mcp_activity.ActivityRow]:
