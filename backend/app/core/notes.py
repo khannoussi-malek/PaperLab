@@ -16,6 +16,7 @@
 """
 
 import asyncio
+import logging
 import re
 import unicodedata
 import uuid
@@ -29,6 +30,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import queue
 from app.core.chunking import join_lines
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.papers import ABSTRACT_PAGE, get_paper, get_paper_file, list_chunks
@@ -131,6 +133,18 @@ def reading_position(note: NoteView, paper_id: uuid.UUID) -> tuple[int, float, f
     return min((a.page, r[1], r[0]) for a in note.anchors if a.paper_id == paper_id for r in a.bbox)
 
 
+async def queue_embed(*note_ids: uuid.UUID) -> None:
+    """Queues the embedding of these notes as ONE job (workers/references.embed_note): an import of many notes is one
+    job, not one per note. Call after the commit that saved their bodies. A queue that is down only logs: the next
+    references fetch embeds them."""
+    if not note_ids:
+        return
+    try:
+        await queue.enqueue("embed_note", [str(note_id) for note_id in note_ids])
+    except Exception:
+        logging.getLogger(__name__).exception("could not queue the embedding of notes %s", note_ids)
+
+
 async def _get_note(session: AsyncSession, note_id: uuid.UUID) -> Note:
     note = await session.get(Note, note_id)
     if note is None:
@@ -227,6 +241,7 @@ async def create_human_note(
     )
     await session.commit()
     await session.refresh(note)
+    await queue_embed(note.id)
     return (await _with_anchors(session, [note]))[0]
 
 
@@ -296,6 +311,7 @@ async def create_paper_note(
     await session.flush()
     await _link(session, note.id, [paper_id])
     await session.commit()
+    await queue_embed(note.id)
     return await _view(session, note)
 
 
@@ -364,6 +380,8 @@ async def update_note(
         await session.execute(update(Note).where(Note.id == note_id).values(**changes, updated_at=func.now()))
         await session.commit()
         await session.refresh(note)
+    if "body" in changes:  # a colour or kind change keeps the vector
+        await queue_embed(note.id)
     return (await _with_anchors(session, [note]))[0]
 
 
@@ -444,6 +462,7 @@ async def promote_llm_fragment(
         await session.execute(insert(note_anchors), [{**row, "note_id": note.id} for row in rows])
     await session.commit()
     await session.refresh(note)
+    await queue_embed(note.id)
     return (await _with_anchors(session, [note]))[0]
 
 
@@ -484,6 +503,7 @@ async def save_suggestion(session: AsyncSession, output_id: uuid.UUID, index: in
     if rows:
         await session.execute(insert(note_anchors), [{**row, "note_id": note.id} for row in rows])
     await session.commit()
+    await queue_embed(note.id)
     return await _view(session, note)
 
 
@@ -668,4 +688,5 @@ async def _add_llm_note(
             )
         )
     await session.commit()
+    await queue_embed(note.id)
     return await _view(session, note)

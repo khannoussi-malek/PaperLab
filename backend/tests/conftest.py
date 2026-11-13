@@ -157,6 +157,14 @@ def arq():
     return FakeArq()
 
 
+@pytest.fixture(autouse=True)
+def no_real_queue(monkeypatch):
+    """Every test starts with a recording fake as the process's queue pool, so code that queues a job (a saved note's
+    embedding, M8.6 C7) never tries to reach Redis, which isn't there in tests. A test that checks its jobs installs
+    its own FakeArq on top, as before."""
+    monkeypatch.setattr(queue, "_pool", FakeArq())
+
+
 def unit_vector(seed: str) -> list[float]:
     """A fixed pseudo-random 768-d unit vector per seed."""
     rng = random.Random(seed)

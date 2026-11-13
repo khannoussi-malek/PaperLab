@@ -326,21 +326,34 @@ async def embed_new(session: AsyncSession, embedder) -> None:
                 .values(title_embedding=vector, title_embed_model=model_name)
             )
         await session.commit()
+    # ponytail: notes are embedded on save (workers/references.embed_note). This re-checks every note at each fetch,
+    # the catch-up for the ones that missed it (a failed enqueue, or no search model then). With thousands of notes
+    # that scan gets slow: index by noted_at, or drop it.
+    await embed_notes(session, embedder)
+
+
+async def embed_notes(session: AsyncSession, embedder, note_ids: list[uuid.UUID] | None = None) -> int:
+    """Vectors for notes that have none, or were edited since or made by another model, under the embedder's name:
+    all of them, or only `note_ids`. Returns how many were embedded. With no search model (embedder None) there are
+    none to make, so 0."""
+    if embedder is None:
+        return 0
+    model_name = embedder.name
     await session.execute(_TAKE_LOCK, {"key": REFERENCES_LOCK})
-    # ponytail: every fetch re-checks every note; with thousands of notes, embed on note save instead.
-    notes = (
-        await session.execute(
-            select(Note.id, Note.body, Note.updated_at)
-            .outerjoin(NoteEmbedding, NoteEmbedding.note_id == Note.id)
-            .where(
-                or_(
-                    NoteEmbedding.note_id.is_(None),
-                    NoteEmbedding.noted_at < Note.updated_at,
-                    NoteEmbedding.embed_model != model_name,
-                )
+    query = (
+        select(Note.id, Note.body, Note.updated_at)
+        .outerjoin(NoteEmbedding, NoteEmbedding.note_id == Note.id)
+        .where(
+            or_(
+                NoteEmbedding.note_id.is_(None),
+                NoteEmbedding.noted_at < Note.updated_at,
+                NoteEmbedding.embed_model != model_name,
             )
         )
-    ).all()
+    )
+    if note_ids is not None:
+        query = query.where(Note.id.in_(note_ids))
+    notes = (await session.execute(query)).all()
     if notes:
         vectors = await embedding.embed_documents(embedder, [body for _, body, _ in notes])
         for (note_id, _, updated_at), vector in zip(notes, vectors):
@@ -348,6 +361,7 @@ async def embed_new(session: AsyncSession, embedder) -> None:
                 NoteEmbedding(note_id=note_id, embedding=vector, embed_model=model_name, noted_at=updated_at)
             )
     await session.commit()
+    return len(notes)
 
 
 # --- listing -----------------------------------------------------------------------------------------------------
