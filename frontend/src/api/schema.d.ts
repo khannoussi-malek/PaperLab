@@ -1741,6 +1741,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/saved-searches/{saved_search_id}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Saved Search Seen */
+        post: operations["mark_saved_search_seen_api_workspaces__workspace_id__saved_searches__saved_search_id__seen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/evidence-card": {
         parameters: {
             query?: never;
@@ -7393,6 +7410,13 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Seen At
+             * Format: date-time
+             */
+            seen_at: string;
+            /** New Hits */
+            new_hits: number;
         };
         /** SavedSearchUpdate */
         SavedSearchUpdate: {
@@ -11383,6 +11407,8 @@ export interface operations {
                 acquisition_status?: ("not_attempted" | "queued" | "imported" | "failed" | "manual" | "awaiting_pdf") | null;
                 sort?: "ai" | null;
                 min_relevance?: number | null;
+                saved_search_id?: string | null;
+                found_after?: string | null;
             };
             header?: never;
             path: {
@@ -12234,6 +12260,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_saved_search_seen_api_workspaces__workspace_id__saved_searches__saved_search_id__seen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                saved_search_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedSearchOut"];
                 };
             };
             /** @description Validation Error */

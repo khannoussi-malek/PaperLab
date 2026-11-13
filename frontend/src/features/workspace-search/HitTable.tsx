@@ -17,6 +17,7 @@ import {
   useSearchHits,
   useSnowball,
   useUploadHitPdf,
+  type SavedSearchInbox,
 } from '@/api/queries'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { loadPanelWidth, panelTrack, savePanelWidth, type PanelLimits } from '@/components/panelWidth'
@@ -79,12 +80,26 @@ function hasPdfOrAbstract(hit: Hit): boolean {
  * found more since the pool was last loaded (the run's own live status is shown elsewhere, SearchTab, unaffected
  * by any of this), and the live "N found so far" count — the raw, pre-dedup total every source has turned up
  * (`totalRawFound`), distinct from "in pool," which is the de-duplicated count of what's actually been loaded. */
-export function HitTable({ workspaceId, run }: { workspaceId: string; run?: SearchRun }) {
-  const [sort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
+export function HitTable({
+  workspaceId,
+  run,
+  inbox,
+  onLeaveInbox,
+}: {
+  workspaceId: string
+  run?: SearchRun
+  /** A saved search's new finds (M7.6): the list narrows to them, in found order. */
+  inbox?: SavedSearchInbox
+  onLeaveInbox?: () => void
+}) {
+  const [chosenSort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
+  // ponytail: the ranked order is the whole pool's, so the inbox shows its few finds in found order instead.
+  const sort: HitSort = inbox && chosenSort === 'ranked' ? 'found' : chosenSort
   const [minRelevance, setMinRelevance] = useState<number | null>(null)
   const { data, isPending, isError, error, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, undefined, {
     sort: sort === 'ai' ? 'ai' : undefined,
     minRelevance: sort === 'ranked' ? undefined : (minRelevance ?? undefined),
+    inbox,
   })
   const acceptSuggestions = useAcceptSuggestions(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
@@ -103,7 +118,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const [bulkReason, setBulkReason] = useState<ExcludeReason | ''>('')
   const [previewWidth, setPreviewWidth] = useState(() => loadPanelWidth(HIT_PREVIEW, browserStorage()))
   useEffect(() => savePanelWidth(HIT_PREVIEW, browserStorage(), previewWidth), [previewWidth])
-  useEffect(() => saveHitSort(browserStorage(), workspaceId, sort), [workspaceId, sort])
+  useEffect(() => saveHitSort(browserStorage(), workspaceId, chosenSort), [workspaceId, chosenSort])
   const ranked = useRankedHits(workspaceId, sort === 'ranked')
 
   const rows = sort === 'ranked' ? (ranked.data?.items ?? []) : (data?.pages.flatMap((page) => page.items) ?? [])
@@ -269,7 +284,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     !(sort === 'ranked' ? ranked.isError : isError) &&
     visibleRows.length === 0 && (
       <EmptyState
-        title={filtered ? 'No results match these filters.' : 'No results yet: run a search above.'}
+        title={filtered ? 'No results match these filters.' : inbox ? 'Nothing new from this search since you last looked.' : 'No results yet: run a search above.'}
         action={
           filtered && (
             <Button
@@ -405,6 +420,14 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           <Button type="button" size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setCheckedIds(new Set())}>
             Clear selection
           </Button>
+        </div>
+      )}
+      {inbox && (
+        <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-sm">
+          <span className="min-w-0 flex-1 truncate">
+            New from “{inbox.query}” since {new Date(inbox.since).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+          </span>
+          <Button type="button" size="sm" variant="ghost" onClick={onLeaveInbox}>Show all results</Button>
         </div>
       )}
       <RankSortBar

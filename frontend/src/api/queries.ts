@@ -47,6 +47,7 @@ import {
   type ScreeningState,
   type ScreeningUpdate,
   type SearchResult,
+  type SavedSearch,
   type SavedSearchCreate,
   type SavedSearchUpdate,
   type SearchRun,
@@ -568,8 +569,14 @@ export function useGenerateEvidenceCard(workspaceId?: string) {
 export const useEditEvidenceCard = (paperId: string, workspaceId?: string) =>
   useRefreshEvidence((changes: EvidenceChange[]) => api.editEvidenceCard(paperId, changes), { paperId, workspaceId })
 
+/** Polls only while one of its runs is going, so "N new" moves when a scheduled run finds something. */
 export const useSavedSearches = (workspaceId: string) =>
-  useQuery({ queryKey: keys.savedSearches(workspaceId), queryFn: () => api.listSavedSearches(workspaceId) })
+  useQuery({
+    queryKey: keys.savedSearches(workspaceId),
+    queryFn: () => api.listSavedSearches(workspaceId),
+    refetchInterval: (query) =>
+      query.state.data?.some((s: SavedSearch) => s.last_run_status === 'running') ? PAPERS_POLL_MS : false,
+  })
 
 function useSavedSearchMutation<V, R>(workspaceId: string, mutationFn: (variables: V) => Promise<R>, alsoRuns = false) {
   const client = useQueryClient()
@@ -593,6 +600,10 @@ export const useDeleteSavedSearch = (workspaceId: string) =>
 /** Resolves with the new run, so the caller can switch the Search tab to it. */
 export const useRunSavedSearchNow = (workspaceId: string) =>
   useSavedSearchMutation(workspaceId, (id: string) => api.runSavedSearchNow(workspaceId, id), true)
+
+/** The reader opened a saved search's new finds: its "N new" count starts again from now. */
+export const useMarkSavedSearchSeen = (workspaceId: string) =>
+  useSavedSearchMutation(workspaceId, (id: string) => api.markSavedSearchSeen(workspaceId, id))
 
 /** Stops a running search run. `stop_run` 409s ("search_run_not_running") when the run already finished naturally
  * right as the user clicked Stop — a harmless race (Minor 5), not a real error, so it's swallowed here: the mutation
@@ -711,24 +722,30 @@ export const useSearchRuns = (workspaceId: string) =>
       query.state.data?.some((r: SearchRunSummary) => r.status === 'running') ? PAPERS_POLL_MS : false,
   })
 
+/** A saved search's new finds: hits its runs found after `since` (its last look when the reader opened them). */
+export type SavedSearchInbox = { savedSearchId: string; query: string; since: string }
+
 /** A run's hits, keyset-paginated; `stage1Status`/`acquisitionStatus` each filter to one status ('all' when omitted). */
 export const useSearchHits = (
   workspaceId: string,
   stage1Status?: string,
   acquisitionStatus?: string,
   /** `sort: 'ai'` orders by the AI score (cursor is then an offset); `minRelevance` keeps scores at or above it. */
-  options: { sort?: 'ai'; minRelevance?: number } = {},
+  /** `inbox` narrows to what one saved search found after `since` (M7.6). */
+  options: { sort?: 'ai'; minRelevance?: number; inbox?: SavedSearchInbox } = {},
 ) =>
   useInfiniteQuery({
     // The default key stays exactly the plain pool's (other code resets it by exact key); only AI/filtered views add a suffix.
     queryKey: [
       ...keys.searchHits(workspaceId, stage1Status ?? 'all', acquisitionStatus ?? 'all'),
       ...(options.sort || options.minRelevance ? [options.sort ?? 'found', options.minRelevance ?? 0] : []),
+      ...(options.inbox ? ['inbox', options.inbox.savedSearchId, options.inbox.since] : []),
     ],
     queryFn: ({ pageParam }) =>
       api.listSearchHits(workspaceId, {
         after: pageParam, limit: 50, stage1_status: stage1Status, acquisition_status: acquisitionStatus,
         sort: options.sort, min_relevance: options.minRelevance,
+        saved_search_id: options.inbox?.savedSearchId, found_after: options.inbox?.since,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
@@ -879,6 +896,7 @@ export function usePatchSearchHit(workspaceId: string) {
     onSuccess: (hit) => {
       patchHitFields(client, workspaceId, hit.id, hit)
       client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
+      client.invalidateQueries({ queryKey: keys.savedSearches(workspaceId) }) // their "N new" counts unscreened hits
     },
   })
 }
@@ -901,6 +919,7 @@ export function useBulkPatchSearchHits(workspaceId: string) {
         ...(body.priority != null ? { priority: body.priority } : {}),
       })
       client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
+      client.invalidateQueries({ queryKey: keys.savedSearches(workspaceId) }) // their "N new" counts unscreened hits
     },
   })
 }

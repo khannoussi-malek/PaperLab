@@ -1015,3 +1015,25 @@ test('while results load, the count says so instead of "0 results"', async () =>
   expect(await screen.findByText(/Loading results…/)).toBeInTheDocument()
   expect(screen.queryByText(/0 results/)).not.toBeInTheDocument()
 })
+
+test('the inbox lists only what a saved search found since the last look, and can go back to every result', async () => {
+  const onLeaveInbox = vi.fn()
+  const inbox = { savedSearchId: 's1', query: 'llm code review', since: '2026-10-02T00:00:00Z' }
+  renderWithClient(<HitTable workspaceId="ws-1" inbox={inbox} onLeaveInbox={onLeaveInbox} />)
+  expect(await pool().findByText('a paper about llms')).toBeInTheDocument()
+  expect(api.listSearchHits).toHaveBeenCalledWith('ws-1', expect.objectContaining({
+    saved_search_id: 's1', found_after: '2026-10-02T00:00:00Z',
+  }))
+  expect(screen.getByText(/New from “llm code review”/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Show all results' }))
+  expect(onLeaveInbox).toHaveBeenCalled()
+})
+
+test('the inbox keeps found order even when the ranked sort was chosen', async () => {
+  localStorage.setItem('paperlab-hit-sort:ws-1', 'ranked')
+  const ranked = vi.spyOn(api, 'rankedSearchHits')
+  const inbox = { savedSearchId: 's1', query: 'q', since: '2026-10-02T00:00:00Z' }
+  renderWithClient(<HitTable workspaceId="ws-1" inbox={inbox} onLeaveInbox={() => {}} />)
+  expect(await pool().findByText('a paper about llms')).toBeInTheDocument()
+  expect(ranked).not.toHaveBeenCalled()
+})

@@ -781,6 +781,8 @@ export const api = {
     request<void>(`/api/workspaces/${workspaceId}/saved-searches/${id}`, { method: 'DELETE' }),
   runSavedSearchNow: (workspaceId: string, id: string) =>
     request<SearchRun>(`/api/workspaces/${workspaceId}/saved-searches/${id}/run`, { method: 'POST' }),
+  markSavedSearchSeen: (workspaceId: string, id: string) =>
+    request<SavedSearch>(`/api/workspaces/${workspaceId}/saved-searches/${id}/seen`, { method: 'POST' }),
   listSearchRuns: (workspaceId: string, limit = 20) =>
     request<SearchRunSummary[]>(`/api/workspaces/${workspaceId}/search/runs?limit=${limit}`),
   getSearchRun: (workspaceId: string, runId: string) =>
@@ -789,6 +791,7 @@ export const api = {
     workspaceId: string,
     params: {
       after?: string; limit?: number; stage1_status?: string; acquisition_status?: string; sort?: 'ai'; min_relevance?: number
+      saved_search_id?: string; found_after?: string
     },
   ) => {
     const entries = Object.entries(params).filter(([, value]) => value !== undefined) as [string, string | number][]

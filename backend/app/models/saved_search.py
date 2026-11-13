@@ -26,3 +26,5 @@ class SavedSearch(Base):
     next_run_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))
+    # When the reader last looked at what this search found: later, still-unscreened hits are its inbox (M7.6).
+    seen_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))

@@ -12,6 +12,7 @@ const hits = vi.hoisted(() => ({
 }))
 vi.mock('@/api/queries', () => ({
   useSnowballNext: () => ({ data: [{}, {}, {}] }),
+  useSavedSearches: () => ({ data: [] }),
   useWorkspace: () => ({ data: { name: 'W', ...counts }, error: null }),
   useSearchHits: (_w: string, stage1?: string, acq?: string) => {
     const entry = hits.byKey[`${stage1 ?? ''}/${acq ?? ''}`] ?? { rows: [] }
