@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { workspaceHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { READ_ONLY_TEXT } from '@/lib/errorWords'
 import { ImportPackageButton, PackageExportDialog } from './PackageDialogs'
 
 const MAX_NAME = 80 // the API's limit
@@ -220,7 +221,7 @@ export function WorkspaceSidebar({ activeId }: { activeId: string | null }) {
                       suppressMenuAutoFocusRef.current = false
                     }}
                   >
-                    <DropdownMenuItem onSelect={() => startRenaming(workspace)}>
+                    <DropdownMenuItem disabled={workspace.read_only} title={workspace.read_only ? READ_ONLY_TEXT : undefined} onSelect={() => startRenaming(workspace)}>
                       <Pencil aria-hidden />
                       Rename
                     </DropdownMenuItem>

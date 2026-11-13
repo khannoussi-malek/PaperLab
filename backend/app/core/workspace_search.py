@@ -379,7 +379,7 @@ async def start_run(
     session: AsyncSession, workspace_id, query_text: str, filters: dict, sources: list[str],
     query_overrides: dict | None = None,
 ) -> WorkspaceSearchRun:
-    await workspaces.get(session, workspace_id)  # raises NotFound if missing
+    await workspaces.require_writable(session, workspace_id)
     years = year_range.parse(filters)  # raises InvalidInput("invalid_years")
     filters = years.as_filters() if years else {}
 
@@ -413,6 +413,7 @@ async def continue_run(session: AsyncSession, workspace_id, run_id) -> Workspace
     """Starts another pass over a stopped, cut-short, paused or failed run: every source that isn't exhausted
     picks up at its stored cursor, so no page is fetched twice. A source that gave up on errors is exhausted and
     stays out; the error count of a live one is kept, only its cooldown and pause are cleared."""
+    await workspaces.require_writable(session, workspace_id)
     run = await get_run(session, run_id, workspace_id)
     if run.status == "running":
         raise Conflict("search_run_already_running")
@@ -493,6 +494,7 @@ async def run_summaries(
 
 async def stop_run(session: AsyncSession, run_id, workspace_id=None) -> WorkspaceSearchRun:
     run = await get_run(session, run_id, workspace_id)
+    await workspaces.require_writable(session, run.workspace_id)
     if run.status != "running":
         # Stopping only applies to a run that's actually in flight — same "doesn't apply to the current state"
         # convention as start_run's own Conflict above, not a silent no-op that could paper over a stale double
@@ -665,6 +667,7 @@ async def snowball(
     Semantic Scholar entirely off (providers.client("semantic_scholar") is None) raises Conflict once, up
     front, mirroring references.fetch()'s "nothing enabled" check — with no source configured at all there's no
     useful per-seed distinction to make (every seed would just land in skipped_seeds for the same reason)."""
+    await workspaces.require_writable(session, workspace_id)
     if providers.client("semantic_scholar") is None:
         raise Conflict("Semantic Scholar is off. Turn it on in Settings → Paper sources to snowball.")
 
@@ -777,6 +780,7 @@ async def set_eligibility(
     own (paper_id, search_run_id) composite PK. Same ownership discipline as review_hit/get_run — confirms both
     the run (get_run, which already raises NotFound on a workspace mismatch or missing run) and the paper
     (workspace_papers membership, same check snowball() above uses) belong to workspace_id before writing."""
+    await workspaces.require_writable(session, workspace_id)
     await get_run(session, run_id, workspace_id)
     member = (await session.execute(
         select(workspace_papers.c.paper_id).where(
@@ -938,6 +942,7 @@ async def get_hit(session: AsyncSession, hit_id, workspace_id) -> dict:
 async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitReviewUpdate") -> dict:
     """Stage-1 screening update for one hit. Scoped to workspace_id (same ownership rule as get_run/stop_run) so a
     hit_id guessed or leaked from another workspace can't be patched through this route."""
+    await workspaces.require_writable(session, workspace_id)
     hit = await session.get(WorkspaceSearchHit, hit_id)
     if hit is None or hit.workspace_id != workspace_id:
         raise NotFound(f"hit {hit_id} not found")
@@ -969,6 +974,7 @@ async def bulk_review_hits(
     """Applies the same stage1_status (and optional reason/priority) to every hit in hit_ids that belongs to
     workspace_id. Hit ids from another workspace are silently excluded from the count, not raised as an error —
     a bulk action naming one bad id shouldn't fail the whole batch."""
+    await workspaces.require_writable(session, workspace_id)
     result = await session.execute(
         select(WorkspaceSearchHit).where(
             WorkspaceSearchHit.id.in_(hit_ids), WorkspaceSearchHit.workspace_id == workspace_id
@@ -1003,7 +1009,7 @@ async def clear_hits(session: AsyncSession, workspace_id: uuid.UUID) -> int:
     workspace whose accumulated search history no longer matters. Papers already pulled into the corpus are
     untouched (their hits are excluded from the delete, same as `import_hits`' own acquisition_status check).
     Run/cursor history is left alone too — this clears the pool a run FED, not the record that the run happened."""
-    await workspaces.get(session, workspace_id)  # raises NotFound if missing
+    await workspaces.require_writable(session, workspace_id)
     result = await session.execute(
         delete(WorkspaceSearchHit).where(
             WorkspaceSearchHit.workspace_id == workspace_id,
@@ -1096,6 +1102,7 @@ async def import_hits(
     Request to enqueue with itself. A hit whose ExternalRef.imported_as is already set (import_reference's own
     bookkeeping, same as ours below) is attached to that existing paper without downloading again, and its
     paper_id is left out of paper_ids so ingest isn't re-enqueued for a paper that already went through it."""
+    await workspaces.require_writable(session, workspace_id)
     query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
     query = (
         query.where(WorkspaceSearchHit.id.in_(hit_ids))
@@ -1207,6 +1214,7 @@ async def upload_hit_pdf(
 
     The %PDF-body check is the trust boundary for this user-uploaded file (spec's Global Constraint): reject
     before touching the already-imported branch too, using the same magic bytes `papers.create_paper` checks."""
+    await workspaces.require_writable(session, workspace_id)
     if not content.startswith(papers.PDF_MAGIC):
         raise InvalidInput("uploaded file is not a PDF")
 

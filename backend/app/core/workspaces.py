@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import delete as delete_rows
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,7 @@ class WorkspaceView:
     note_count: int
     created_at: datetime
     description: str | None = None
+    read_only: bool = False  # M35b1: an imported workspace, until its owner makes it editable
 
 
 def _clean_name(name: str) -> str:
@@ -59,9 +60,28 @@ async def _views(session: AsyncSession, *where) -> list[WorkspaceView]:
         note_count.scalar_subquery().label("note_count"),
         Workspace.created_at,
         Workspace.description,
+        Workspace.read_only,
     )
     rows = await session.execute(query.where(*where).order_by(Workspace.name))
     return [WorkspaceView(*row) for row in rows]
+
+
+async def require_writable(session: AsyncSession, workspace_id: uuid.UUID) -> None:
+    """Every core write for a workspace calls this first. NotFound for an unknown workspace; Conflict
+    ("workspace_read_only") while an imported workspace is still read-only (M35b1)."""
+    read_only = await session.scalar(select(Workspace.read_only).where(Workspace.id == workspace_id))
+    if read_only is None:
+        raise NotFound(f"workspace {workspace_id} not found")
+    if read_only:
+        raise Conflict("workspace_read_only")
+
+
+async def make_editable(session: AsyncSession, workspace_id: uuid.UUID) -> WorkspaceView:
+    """Clears the read-only flag for good (M35b1). Idempotent; NotFound for an unknown workspace."""
+    await get(session, workspace_id)
+    await session.execute(update(Workspace).where(Workspace.id == workspace_id).values(read_only=False))
+    await session.commit()
+    return await get(session, workspace_id)
 
 
 async def get(session: AsyncSession, workspace_id: uuid.UUID) -> WorkspaceView:
@@ -99,7 +119,7 @@ async def create(session: AsyncSession, name: str, description: str | None = Non
 
 
 async def rename(session: AsyncSession, workspace_id: uuid.UUID, name: str) -> WorkspaceView:
-    await get(session, workspace_id)
+    await require_writable(session, workspace_id)
     name = _clean_name(name)
     await _ensure_name_free(session, name, workspace_id)
     workspace = await session.get(Workspace, workspace_id)
@@ -127,6 +147,7 @@ async def _membership(session: AsyncSession, workspace_id: uuid.UUID, paper_id: 
 async def add_paper(session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID) -> None:
     """Idempotent. Raises NotFound for an unknown workspace or paper. A failed search hit for this paper in the
     workspace is retrieved now (M67): every way a paper joins a workspace comes through here."""
+    await require_writable(session, workspace_id)
     paper = await _membership(session, workspace_id, paper_id)
     try:
         # A savepoint: a paper or workspace deleted since the check above (M78) fails only this insert, never the
@@ -145,6 +166,7 @@ async def add_paper(session: AsyncSession, workspace_id: uuid.UUID, paper_id: uu
 
 async def remove_paper(session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID) -> None:
     """Idempotent: removing a paper that isn't a member is not an error."""
+    await require_writable(session, workspace_id)
     paper = await _membership(session, workspace_id, paper_id)
     await session.execute(
         delete_rows(workspace_papers).where(

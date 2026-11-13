@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { tagErrorText } from './tagErrors'
+import { READ_ONLY_TEXT } from '@/lib/errorWords'
+import { useReadOnlyWorkspace } from './readOnlyContext'
 
 type Props = { workspaceId: string; mode: 'add' | 'remove'; paperIds: string[]; onDone: () => void }
 
@@ -16,6 +18,7 @@ export function TagPicker({ workspaceId, mode, paperIds, onDone }: Props) {
   const apply = useApplyTag(workspaceId)
   const remove = useRemoveTag(workspaceId)
   const action = mode === 'add' ? apply : remove
+  const readOnly = useReadOnlyWorkspace()
 
   const present = new Set(paperIds.flatMap((id) => paperTags[id] ?? []))
   const names = tags.map((t) => t.name).filter((name) => mode === 'add' || present.has(name))
@@ -39,7 +42,7 @@ export function TagPicker({ workspaceId, mode, paperIds, onDone }: Props) {
   return (
     <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) action.reset() }}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">{mode === 'add' ? 'Tag…' : 'Remove tag…'}</Button>
+        <Button variant="outline" size="sm" disabled={readOnly} title={readOnly ? READ_ONLY_TEXT : undefined}>{mode === 'add' ? 'Tag…' : 'Remove tag…'}</Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64">
         {/* The list is filtered here, not by cmdk, so "Create" stays visible whatever is typed. */}

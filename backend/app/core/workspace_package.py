@@ -486,7 +486,7 @@ def _workspace_row(pkg: _Package, name: str) -> Workspace:
     row = Workspace(
         name=name, description=description, research_question=meta.get("research_question") or None,
         inclusion_criteria=meta.get("inclusion_criteria") or None,
-        exclusion_criteria=meta.get("exclusion_criteria") or None,
+        exclusion_criteria=meta.get("exclusion_criteria") or None, read_only=True,
     )  # fmt: skip
     row.screening_criteria = screening._criteria_summary(row)
     return row

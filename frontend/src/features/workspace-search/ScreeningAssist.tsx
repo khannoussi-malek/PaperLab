@@ -9,6 +9,8 @@ import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { errorText } from './schedule'
+import { READ_ONLY_TEXT } from '@/lib/errorWords'
+import { useReadOnlyWorkspace } from '../workspaces/readOnlyContext'
 
 const CRITERIA_MAX = 4000
 
@@ -23,6 +25,7 @@ const FIELDS: { key: keyof Fields; label: string; hint: string }[] = [
 export function ScreeningAssist({ workspaceId }: { workspaceId: string }) {
   const state = useScreeningState(workspaceId)
   const save = useSaveScreening(workspaceId)
+  const readOnly = useReadOnlyWorkspace()
   const start = useStartSuggestions(workspaceId)
   const stop = useStopSuggestions(workspaceId)
   const client = useQueryClient()
@@ -91,7 +94,8 @@ export function ScreeningAssist({ workspaceId }: { workspaceId: string }) {
             type="button"
             size="sm"
             variant="outline"
-            disabled={running || draft === null || save.isPending}
+            disabled={readOnly || running || draft === null || save.isPending}
+            title={readOnly ? READ_ONLY_TEXT : undefined}
             onClick={() => save.mutate(fields, { onSuccess: () => setDraft(null) })}
           >
             Save criteria

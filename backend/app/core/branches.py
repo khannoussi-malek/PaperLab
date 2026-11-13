@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import workspaces
 from app.core.errors import InvalidInput, NotFound
 from app.core.hit_links import seed_parent
 from app.models import workspace_papers
@@ -58,6 +59,7 @@ async def set_branch(
 ) -> BranchOut:
     """state=None deletes the decision (undecided). The reason is kept only for "stopped"; directions only for
     "go_further"."""
+    await workspaces.require_writable(session, workspace_id)
     ordered = _validate(hit_id, paper_id, state, directions, reason)
     if state is not None or hit_id is not None:  # clearing a paper's row works even once the paper has left
         await _check_target(session, workspace_id, hit_id, paper_id)

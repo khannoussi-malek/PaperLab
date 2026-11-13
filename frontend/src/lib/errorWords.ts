@@ -1,4 +1,8 @@
+/** The words for a refused write on an imported (read-only) workspace, and on each edit control that is off. */
+export const READ_ONLY_TEXT = 'This workspace is read-only. Make it editable first.'
+
 const WORDS: Record<string, string> = {
+  workspace_read_only: READ_ONLY_TEXT,
   no_free_pdf: 'No free PDF was found for this paper.',
   already_has_pdf: 'This paper already has its PDF.',
   needs_full_text: 'Needs the full text to assess.',

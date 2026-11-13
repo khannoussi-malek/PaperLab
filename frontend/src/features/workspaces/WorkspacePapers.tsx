@@ -14,6 +14,8 @@ import { Hint } from '@/components/Hint'
 import { ExportSelectedMenu } from './ExportSelectedMenu'
 import { TagFilterMenu } from './TagFilterMenu'
 import { TagPicker } from './TagPicker'
+import { READ_ONLY_TEXT } from '@/lib/errorWords'
+import { useReadOnlyWorkspace } from './readOnlyContext'
 import { EmptyState, TabSkeleton } from './TabStates'
 import { TagSidebar } from './TagSidebar'
 import { filterByTags, toggled } from './tagFilter'
@@ -31,6 +33,7 @@ export function WorkspacePapers({
   onTagsChange: (tags: string[], match: TagMatch) => void
 }) {
   const papers = useWorkspacePapers(workspaceId)
+  const readOnly = useReadOnlyWorkspace()
   const tagList = useTags(workspaceId)
   const paperTags = usePaperTags(workspaceId)
   const tagMap = paperTags.data ?? {}
@@ -51,7 +54,7 @@ export function WorkspacePapers({
     <div className="flex flex-col gap-4 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <Hint hint="Pick papers already in your library.">
-          <Button onClick={() => setAdding(true)}>
+          <Button onClick={() => setAdding(true)} disabled={readOnly} title={readOnly ? READ_ONLY_TEXT : undefined}>
             <Plus aria-hidden />
             Add from library
           </Button>

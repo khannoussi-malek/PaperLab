@@ -113,7 +113,7 @@ async def create(
     year_to: int | None = None,
     now: datetime | None = None,
 ) -> SavedSearchView:
-    await workspaces.get(session, workspace_id)
+    await workspaces.require_writable(session, workspace_id)
     values = {"query": query, "sources": list(sources), "year_from": year_from, "year_to": year_to}
     _validate(values)
     row = SavedSearch(
@@ -136,6 +136,7 @@ async def update(
     changes: dict,
     now: datetime | None = None,
 ) -> SavedSearchView:
+    await workspaces.require_writable(session, workspace_id)
     row = await _row(session, saved_search_id, workspace_id)
     unknown = set(changes) - set(FIELDS)
     if unknown:
@@ -155,6 +156,7 @@ async def update(
 
 
 async def delete(session: AsyncSession, workspace_id: uuid.UUID, saved_search_id: uuid.UUID) -> None:
+    await workspaces.require_writable(session, workspace_id)
     await _row(session, saved_search_id, workspace_id)
     await session.execute(delete_rows(SavedSearch).where(SavedSearch.id == saved_search_id))
     await session.commit()
@@ -263,6 +265,7 @@ async def run_due(session: AsyncSession, now: datetime) -> list[uuid.UUID]:
 async def run_now(session: AsyncSession, workspace_id: uuid.UUID, saved_search_id: uuid.UUID) -> WorkspaceSearchRun:
     """Runs it now, outside its schedule (next_run_at stays). Raises InvalidInput with last_error's reason when it
     can't start."""
+    await workspaces.require_writable(session, workspace_id)
     row = await _row(session, saved_search_id, workspace_id)
     run_id = await _start(session, row, _now())
     if run_id is None:

@@ -898,6 +898,26 @@ export interface paths {
         patch: operations["rename_workspace_api_workspaces__workspace_id__patch"];
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/make-editable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make Editable
+         * @description An imported workspace becomes a normal one, for good (M35b1). 404 unknown workspace.
+         */
+        post: operations["make_editable_api_workspaces__workspace_id__make_editable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/papers/{paper_id}": {
         parameters: {
             query?: never;
@@ -8599,6 +8619,8 @@ export interface components {
             created_at: string;
             /** Description */
             description?: string | null;
+            /** Read Only */
+            read_only: boolean;
         };
         /** WorkspaceRename */
         WorkspaceRename: {
@@ -10343,6 +10365,37 @@ export interface operations {
                 "application/json": components["schemas"]["WorkspaceRename"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_editable_api_workspaces__workspace_id__make_editable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

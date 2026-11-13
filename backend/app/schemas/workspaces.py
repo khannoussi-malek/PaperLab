@@ -21,6 +21,7 @@ class WorkspaceOut(BaseModel):
     note_count: int
     created_at: datetime
     description: str | None = None
+    read_only: bool  # an imported workspace until its owner makes it editable (M35b1)
 
 
 class PackageRecordExists(BaseModel):

@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import workspace_search
+from app.core import workspace_search, workspaces
 from app.core.branches import DIRECTIONS
 from app.core.discovery import Providers
 from app.core.hit_links import _runs, _seeds
@@ -63,6 +63,7 @@ async def run_snowball_next(
 ) -> SnowballNextOut:
     """One snowball() call per distinct set of directions left, over the first SNOWBALL_NEXT_BATCH items (oldest
     decision first); results summed. `remaining` is re-read after the runs, so a failed direction counts."""
+    await workspaces.require_writable(session, workspace_id)
     pending = await snowball_next(session, workspace_id)
     groups: dict[tuple[str, ...], list[NextItem]] = {}
     for item in pending[:SNOWBALL_NEXT_BATCH]:

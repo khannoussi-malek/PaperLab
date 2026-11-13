@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import llm_connections, workspace_search
+from app.core import llm_connections, workspace_search, workspaces
 from app.core.errors import Conflict
 from app.core.pipeline import _refuse_remote
 from app.core.screening_suggest import SCREENING_PROMPT_VERSION, suggest
@@ -21,6 +21,7 @@ SUGGEST_TIMEOUT = 60  # seconds
 
 
 async def suggest_one(session: AsyncSession, workspace_id: uuid.UUID, hit_id: uuid.UUID, *, allow_remote: bool) -> dict:
+    await workspaces.require_writable(session, workspace_id)
     hit = await session.get(WorkspaceSearchHit, hit_id)
     await workspace_search.get_hit(session, hit_id, workspace_id)  # NotFound for a missing or foreign hit
     workspace = await session.get(Workspace, workspace_id)

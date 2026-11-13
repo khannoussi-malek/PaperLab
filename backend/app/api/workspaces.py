@@ -35,6 +35,12 @@ async def rename_workspace(workspace_id: uuid.UUID, payload: WorkspaceRename, se
     return await workspaces.rename(session, workspace_id, payload.name)
 
 
+@router.post("/{workspace_id}/make-editable")
+async def make_editable(workspace_id: uuid.UUID, session: SessionDep) -> WorkspaceOut:
+    """An imported workspace becomes a normal one, for good (M35b1). 404 unknown workspace."""
+    return await workspaces.make_editable(session, workspace_id)
+
+
 @router.delete("/{workspace_id}", status_code=204)
 async def delete_workspace(workspace_id: uuid.UUID, session: SessionDep) -> Response:
     await workspaces.delete(session, workspace_id)

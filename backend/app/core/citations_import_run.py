@@ -133,7 +133,7 @@ async def start(
     if workspace_id is not None and new_workspace_name is not None:
         raise InvalidInput("Choose an existing workspace or a new one, not both.")
     if workspace_id is not None:
-        await workspaces.get(session, workspace_id)
+        await workspaces.require_writable(session, workspace_id)
     entries, bundle = _read(name, source)
     with bundle or contextlib.nullcontext():
         made = None

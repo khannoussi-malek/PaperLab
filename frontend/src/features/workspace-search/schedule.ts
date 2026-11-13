@@ -1,3 +1,4 @@
+import { codeInWords } from '@/lib/errorWords'
 import type { SavedSearch } from '@/api/client'
 
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -33,7 +34,7 @@ export const ERRORS: Record<string, string> = {
 }
 
 /** A server error code as a readable sentence (unknown codes pass through). */
-export const errorText = (code: string | undefined) => (code ? (ERRORS[code] ?? code) : null)
+export const errorText = (code: string | undefined) => (code ? (ERRORS[code] ?? codeInWords(code)) : null)
 
 /** "5 minutes ago", "yesterday", "in 2 hours". */
 export function relative(iso: string): string {

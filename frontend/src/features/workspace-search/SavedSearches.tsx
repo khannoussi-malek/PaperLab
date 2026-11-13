@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { SavedSearchDialog } from './SavedSearchDialog'
+import { READ_ONLY_TEXT } from '@/lib/errorWords'
+import { useReadOnlyWorkspace } from '../workspaces/readOnlyContext'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { describeSchedule, describeYears, errorText, relative } from './schedule'
 
@@ -28,6 +30,7 @@ export function SavedSearches({
   const update = useUpdateSavedSearch(workspaceId)
   const remove = useDeleteSavedSearch(workspaceId)
   const runNow = useRunSavedSearchNow(workspaceId)
+  const readOnly = useReadOnlyWorkspace()
   const [editing, setEditing] = useState<Editing>(null)
   const [deleting, setDeleting] = useState<SavedSearch | null>(null)
   const rows = list.data ?? []
@@ -39,7 +42,7 @@ export function SavedSearches({
     <section aria-label="Saved searches" className="grid gap-2 border-b px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
         <h2 className="font-medium">Saved searches</h2>
-        <Button variant="ghost" size="sm" onClick={() => setEditing('new')}>Save this search…</Button>
+        <Button variant="ghost" size="sm" disabled={readOnly} title={readOnly ? READ_ONLY_TEXT : undefined} onClick={() => setEditing('new')}>Save this search…</Button>
       </div>
       {actionError && (
         <Alert variant="destructive">
@@ -55,11 +58,11 @@ export function SavedSearches({
             <span className="min-w-0 flex-1 truncate font-medium">{s.query}</span>
             <Switch size="sm" checked={s.enabled} aria-label={`Enabled: ${s.query}`}
               onCheckedChange={(enabled) => update.mutate({ id: s.id, body: { enabled } })} />
-            <Button variant="ghost" size="sm" aria-label={`Run now: ${s.query}`} disabled={runNow.isPending} onClick={() => runNow.mutate(s.id, { onSuccess: (r) => onRunStarted(r.id) })}>
+            <Button variant="ghost" size="sm" aria-label={`Run now: ${s.query}`} disabled={readOnly || runNow.isPending} title={readOnly ? READ_ONLY_TEXT : undefined} onClick={() => runNow.mutate(s.id, { onSuccess: (r) => onRunStarted(r.id) })}>
               Run now
             </Button>
-            <Button variant="ghost" size="sm" aria-label={`Edit: ${s.query}`} onClick={() => setEditing(s)}>Edit</Button>
-            <Button variant="ghost" size="sm" aria-label={`Delete: ${s.query}`} onClick={() => { setDeleting(s); setLastDeleting(s) }}>Delete</Button>
+            <Button variant="ghost" size="sm" aria-label={`Edit: ${s.query}`} disabled={readOnly} title={readOnly ? READ_ONLY_TEXT : undefined} onClick={() => setEditing(s)}>Edit</Button>
+            <Button variant="ghost" size="sm" aria-label={`Delete: ${s.query}`} disabled={readOnly} title={readOnly ? READ_ONLY_TEXT : undefined} onClick={() => { setDeleting(s); setLastDeleting(s) }}>Delete</Button>
           </div>
           <p className="text-xs text-muted-foreground">
             {[
