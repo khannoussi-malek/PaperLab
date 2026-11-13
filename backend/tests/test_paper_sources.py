@@ -27,7 +27,8 @@ async def test_without_a_row_every_source_is_on_but_openalex(no_row):
         "unpaywall": True, "pubmed": True, "pmc": True, "europe_pmc": True, "zenodo": True, "hal": True,
         "acm_dl": True, "ssrn": False, "doaj": True, "openaire": True, "iacr_eprint": True,
         "biorxiv": True,
-        "medrxiv": True, "dblp": False,
+        "medrxiv": True, "dblp": False, "openreview": False,
+        "acl_anthology": True,
     }  # fmt: skip
     assert sources.contact_email is None
     assert sources.api_keys == {

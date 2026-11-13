@@ -321,3 +321,18 @@ async def test_hitting_the_biorxiv_page_ceiling_with_a_pending_cursor_raises_and
 
     with pytest.raises(RuntimeError, match="BIORXIV_MAX_HARVEST_PAGES"):
         await harvest.harvest_biorxiv({})
+
+
+async def test_an_update_without_venue_or_doi_keeps_the_ones_already_there(session):
+    ids = {"iacr_eprint": "2026/9002"}
+    first = Candidate(title="Kept", authors=[], year=2026, external_ids=ids, venue="CRYPTO", doi="10.1/kept",
+                      sources=("iacr_eprint",))  # fmt: skip
+    await harvest_ingest_candidate(session, first)
+    await session.flush()
+    await harvest_ingest_candidate(session, Candidate(title="Kept", authors=[], year=2026, external_ids=ids,
+                                                      sources=("iacr_eprint",)))  # fmt: skip
+    await session.flush()
+    row = (
+        await session.execute(select(ExternalRef).where(ExternalRef.external_ids["iacr_eprint"].astext == "2026/9002"))
+    ).scalar_one()
+    assert (row.venue, row.doi) == ("CRYPTO", "10.1/kept")

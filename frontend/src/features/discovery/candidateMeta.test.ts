@@ -47,6 +47,14 @@ describe('pageLink', () => {
     expect(pageLink({ ...ids, external_ids: { doaj: '0'.repeat(32) } })).toBe(`https://doaj.org/article/${'0'.repeat(32)}`)
   })
 
+  it('links an ACL Anthology paper to its anthology page', () => {
+    expect(pageLink({ ...ids, external_ids: { acl_anthology: '2023.acl-long.1' } })).toBe('https://aclanthology.org/2023.acl-long.1')
+  })
+
+  it('falls back to OpenReview when nothing else is set', () => {
+    expect(pageLink({ ...ids, external_ids: { openreview: 'AbC123xyz' } })).toBe('https://openreview.net/forum?id=AbC123xyz')
+  })
+
   it('falls back to OpenAIRE when nothing else is set', () => {
     const id = 'openaire____::' + '0'.repeat(32)
     expect(pageLink({ ...ids, external_ids: { openaire: id } })).toBe(

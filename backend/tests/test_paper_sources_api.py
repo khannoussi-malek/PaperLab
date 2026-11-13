@@ -42,6 +42,8 @@ async def test_the_defaults_come_back_without_a_row(client, no_row):
         ("biorxiv", "bioRxiv", True, None),
         ("medrxiv", "medRxiv", True, None),
         ("dblp", "DBLP", False, None),
+        ("openreview", "OpenReview", False, None),
+        ("acl_anthology", "ACL Anthology", True, None),
     ]
 
 

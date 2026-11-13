@@ -472,6 +472,12 @@ class FakeAdapter:
     handle: Callable[[httpx.Request], httpx.Response]
 
 
+def _openreview_handle(request: httpx.Request) -> httpx.Response:
+    # OpenReview is on in the every-source fake stack but has no fake papers: an empty answer keeps the e2e results
+    # the same as before it joined the registry.
+    return httpx.Response(200, json={"notes": [], "count": 0})
+
+
 def _dblp_handle(request: httpx.Request) -> httpx.Response:
     offset = int(request.url.params.get("f", "0"))
     size = int(request.url.params.get("h", "20"))
@@ -592,6 +598,7 @@ ADAPTERS: tuple[FakeAdapter, ...] = (
     FakeAdapter("api.archives-ouvertes.fr", lambda path, params: path == "/search/", _hal_handle),
     FakeAdapter("doaj.org", lambda path, params: path.startswith("/api/search/articles/"), _doaj_handle),
     FakeAdapter("api.openaire.eu", lambda path, params: path == "/graph/v3/research-products", _openaire_handle),
+    FakeAdapter("api2.openreview.net", lambda path, params: path == "/notes/search", _openreview_handle),
     FakeAdapter("pdf.paperlab.test", lambda path, params: True, _pdf_handle),
 )  # fmt: skip
 

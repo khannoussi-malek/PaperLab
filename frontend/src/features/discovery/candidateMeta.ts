@@ -21,6 +21,8 @@ export const SOURCE_NAMES: Record<PaperSourceId, string> = {
   biorxiv: 'bioRxiv',
   medrxiv: 'medRxiv',
   dblp: 'DBLP',
+  openreview: 'OpenReview',
+  acl_anthology: 'ACL Anthology',
 }
 
 /** "1,234 citations", "1 citation", or '' when the count is unknown. */
@@ -44,16 +46,19 @@ const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
   biorxiv: (id) => `https://doi.org/${id}`,
   medrxiv: (id) => `https://doi.org/${id}`,
   dblp: (id) => `https://dblp.org/rec/${id}`,
+  openreview: (id) => `https://openreview.net/forum?id=${encodeURIComponent(id)}`,
+  acl_anthology: (id) => `https://aclanthology.org/${encodeURIComponent(id)}`,
 }
 /** Preference order for candidateKey/sameCandidate (pageLink has its own order, defined inline above) — doi is
  * handled separately in each since it isn't a key in external_ids. */
-const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint', 'biorxiv', 'medrxiv', 'dblp']
+const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint', 'biorxiv', 'medrxiv', 'dblp', 'openreview', 'acl_anthology']
 
 /** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, CORE, then PubMed, then PMC, then
- * Zenodo, then HAL, then DOAJ, then OpenAIRE, then IACR ePrint, then bioRxiv, then medRxiv, then DBLP; null with no identifier. */
+ * Zenodo, then HAL, then DOAJ, then OpenAIRE, then IACR ePrint, then bioRxiv, then medRxiv, then DBLP, then OpenReview, then ACL Anthology;
+ * null with no identifier. */
 export function pageLink(candidate: Pick<Candidate, 'doi' | 'external_ids'>): string | null {
   if (candidate.doi) return `https://doi.org/${candidate.doi}`
-  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint', 'biorxiv', 'medrxiv', 'dblp']) {
+  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint', 'biorxiv', 'medrxiv', 'dblp', 'openreview', 'acl_anthology']) {
     const id = candidate.external_ids[source]
     if (id) return ID_URL_BUILDERS[source](id)
   }
@@ -77,7 +82,7 @@ export function candidateKey(candidate: Candidate, index: number): string {
 export function sameCandidate(candidate: Candidate, added: Candidate): boolean {
   if (added.external_ids.openalex) return candidate.external_ids.openalex === added.external_ids.openalex
   if (added.doi) return candidate.doi?.toLowerCase() === added.doi.toLowerCase()
-  for (const source of ['semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint', 'biorxiv', 'medrxiv', 'dblp']) {
+  for (const source of ['semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint', 'biorxiv', 'medrxiv', 'dblp', 'openreview', 'acl_anthology']) {
     const addedId = added.external_ids[source]
     if (addedId) return candidate.external_ids[source] === addedId
   }

@@ -23,7 +23,9 @@ SOURCE_ID_PATTERNS: dict[str, re.Pattern[str]] = {
     "hal": re.compile(r"^\d{1,20}$"),
     "doaj": re.compile(r"^[0-9a-f]{32}$"),
     "openaire": re.compile(r"^[0-9a-z_]{1,20}::[0-9a-f]{32}$"),
+    "openreview": re.compile(r"^[A-Za-z0-9_-]{1,40}$"),
     "iacr_eprint": re.compile(r"^\d{4}/\d{1,6}$"),
+    "acl_anthology": re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"),
     "biorxiv": re.compile(r"^10\.\d{4,9}/\S+$"),
     "medrxiv": re.compile(r"^10\.\d{4,9}/\S+$"),
 }

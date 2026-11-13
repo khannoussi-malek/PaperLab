@@ -3971,7 +3971,7 @@ export interface components {
             /** Abstract */
             abstract?: string | null;
             /** Sources */
-            sources?: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp")[];
+            sources?: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp" | "openreview" | "acl_anthology")[];
             /** Pdf Urls */
             pdf_urls?: string[];
         };
@@ -4002,7 +4002,7 @@ export interface components {
             /** Pdf Urls */
             pdf_urls: string[];
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp" | "openreview" | "acl_anthology")[];
             /** Paper Id */
             paper_id: string | null;
         };
@@ -6458,7 +6458,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp";
+            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp" | "openreview" | "acl_anthology";
             /** Name */
             name: string;
             /** Enabled */
@@ -7311,7 +7311,7 @@ export interface components {
              * Sources
              * @default []
              */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp" | "openreview" | "acl_anthology")[];
             /** Year From */
             year_from?: number | null;
             /** Year To */
@@ -7383,7 +7383,7 @@ export interface components {
             /** Query */
             query?: string | null;
             /** Sources */
-            sources?: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp")[] | null;
+            sources?: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp" | "openreview" | "acl_anthology")[] | null;
             /** Year From */
             year_from?: number | null;
             /** Year To */
@@ -7491,7 +7491,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp" | "openreview" | "acl_anthology")[];
             /**
              * Query Overrides
              * @default {}
@@ -8243,6 +8243,10 @@ export interface components {
             medrxiv?: boolean;
             /** Dblp */
             dblp?: boolean;
+            /** Openreview */
+            openreview?: boolean;
+            /** Acl Anthology */
+            acl_anthology?: boolean;
         };
         /** SourceWarning */
         SourceWarning: {

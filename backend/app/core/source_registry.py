@@ -17,6 +17,7 @@ import httpx
 
 from app.core.candidates import (
     Candidate,
+    from_acl_anthology,
     from_acm_dl,
     from_arxiv,
     from_biorxiv,
@@ -29,6 +30,7 @@ from app.core.candidates import (
     from_iacr_eprint,
     from_medrxiv,
     from_openaire,
+    from_openreview,
     from_pmc,
     from_pubmed,
     from_s2,
@@ -37,6 +39,7 @@ from app.core.candidates import (
     from_zenodo,
 )
 from app.providers import (
+    acl_anthology,
     acm_dl,
     arxiv,
     biorxiv,
@@ -49,6 +52,7 @@ from app.providers import (
     iacr_eprint,
     openaire,
     openalex,
+    openreview,
     pmc,
     pubmed,
     semantic_scholar,
@@ -134,6 +138,11 @@ async def _doaj(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidat
 async def _openaire(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
     items = await openaire.search(http, value, PER_SOURCE)
     return [candidate for item in items if item and (candidate := from_openaire(item))]
+
+
+async def _openreview(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
+    items = await openreview.search(http, value, PER_SOURCE)
+    return [candidate for item in items if item and (candidate := from_openreview(item))]
 
 
 async def _dblp(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
@@ -257,6 +266,15 @@ REGISTRY: tuple[SourceSpec, ...] = (
         id="dblp", name="DBLP", keyed=False, enabled_by_default=False, is_discovery_source=True,
         new_client=dblp.new_client, ask=_dblp, ask_kinds=("title",),
         page=dblp.search_page, mapper=from_dblp, page_size=20,
+    ),
+    SourceSpec(
+        id="openreview", name="OpenReview", keyed=False, enabled_by_default=False, is_discovery_source=True,
+        new_client=openreview.new_client, ask=_openreview, ask_kinds=("title",),
+        page=openreview.search_page, mapper=from_openreview, page_size=25,
+    ),
+    SourceSpec(
+        id="acl_anthology", name="ACL Anthology", keyed=False, enabled_by_default=True, is_discovery_source=True,
+        new_client=acl_anthology.new_client, page=acl_anthology.search_page, mapper=from_acl_anthology, page_size=50,
     ),
 )
 
