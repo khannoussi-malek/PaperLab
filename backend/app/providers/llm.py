@@ -319,6 +319,18 @@ def fake_diagram_reply(prompt: str) -> str:
     return "\n".join(["<tikz>", head, *nodes, *arrows, "\\end{tikzpicture}", "</tikz>"])
 
 
+def fake_chart_reply(prompt: str) -> str:
+    """A bar of D1's second column by its first, read from the datasets block the chart prompt lists (M14)."""
+    first = next((line for line in prompt.splitlines() if line.startswith("D1 · ")), None)
+    if first is None:
+        return json.dumps({"chart": False, "reason": "The fake model saw no dataset."})
+    columns = [c.split(" (")[0].strip() for c in first.split("columns: ", 1)[1].split(" · first row:")[0].split(", ")]
+    if len(columns) < 2:
+        return json.dumps({"chart": False, "reason": "The fake model needs two columns."})
+    return json.dumps({"chart": True, "type": "bar", "dataset": "D1", "x": columns[0], "y": [columns[1]],
+                       "title": f"{columns[1]} by {columns[0]}", "caption": "The fake model drew the first table."})
+
+
 def fake_evidence_card_reply(prompt: str) -> str:
     """The evidence-card JSON on the fake stack: the first numbered passage's first words, copied exactly, as the
     research question, design and one finding. The value is the quote itself, so every number in it is in the quote."""
@@ -396,9 +408,10 @@ class FakeLLM:
         # Imported here: core.chat → retrieval → embedding → http_embedders → this module. Providers never import core
         # at module level.
         from app.core.chat import WORKSPACE_SYSTEM_PROMPT
-        from app.core.checks import SYSTEM_PROMPT as CHECK_SYSTEM_PROMPT
 
         # Same reason: note_suggestions → core.chat → retrieval → embedding → http_embedders → this module.
+        from app.core.chat_charts import SYSTEM_PROMPT as CHART_SYSTEM_PROMPT
+        from app.core.checks import SYSTEM_PROMPT as CHECK_SYSTEM_PROMPT
         from app.core.claim_detect import SYSTEM_PROMPT as CLAIM_DETECT_SYSTEM_PROMPT
         from app.core.claims import SYSTEM_PROMPT as CLAIM_CHECK_SYSTEM_PROMPT
         from app.core.diagram import SYSTEM_PROMPT as DIAGRAM_SYSTEM_PROMPT
@@ -431,6 +444,8 @@ class FakeLLM:
             tokens = [fake_claim_detect_reply(prompt)]
         elif system == SECTION_REVIEW_SYSTEM_PROMPT:
             tokens = [fake_section_review_reply(prompt)]
+        elif system == CHART_SYSTEM_PROMPT:
+            tokens = [fake_chart_reply(prompt)]
         elif system == DIAGRAM_SYSTEM_PROMPT:
             tokens = [fake_diagram_reply(prompt)]
         elif system == DRAFT_REVIEW_SYSTEM_PROMPT:

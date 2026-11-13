@@ -97,6 +97,7 @@ class ChatAnswer(BaseModel):
     saved_notes: list[SavedNoteOut]  # its suggested notes already saved, by block
     skill_label: str | None  # the skill that ran, copied when the answer was written; null with no skill
     lens: LensId = "full"  # the lens the answer's sources came from (M16): 'full' unless a skill's lens applied
+    chart_spec: dict | None = None  # a chart answer's spec (M14): dataset/column ids, drawn like a saved chart
 
 
 class PromoteRequest(BaseModel):
@@ -208,3 +209,7 @@ def to_notes(notes: "list[chat.NoteSource | None]") -> list[NoteSource | None]:
         else NoteSource(label=f"N{i}", note_id=n.id, paper_id=n.paper_id, page=n.page, provenance=n.provenance)
         for i, n in enumerate(notes, start=1)
     ]
+
+
+class ChartAnswerCreated(BaseModel):
+    output_id: uuid.UUID

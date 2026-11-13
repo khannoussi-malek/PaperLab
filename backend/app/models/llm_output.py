@@ -42,6 +42,8 @@ class LLMOutput(Base):
     prompt_version: Mapped[int]
     # A check's kept lines {lines: [{verdict, text, cited}], dropped}, judged once at save. NULL for every other kind.
     check_result: Mapped[dict | None] = mapped_column(JSONB)
+    # A chat answer drawn as a chart (M14): its chart spec, the same shape a saved chart stores. NULL otherwise.
+    chart_spec: Mapped[dict | None] = mapped_column(JSONB)
     # The answer this one follows up (paper chat). Deleting it (SET NULL) makes this the start of its own thread.
     parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("llm_outputs.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))

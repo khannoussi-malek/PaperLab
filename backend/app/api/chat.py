@@ -9,12 +9,13 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
-from app.core import answer_provenance, chat, hit_chat, notes, skills
+from app.core import answer_provenance, chat, chat_charts, hit_chat, notes, skills
 from app.core.errors import Conflict, InvalidInput
 from app.db import SessionLocal
 from app.providers.base import LLM, LLMError, LLMUnavailable
 from app.schemas.chat import (
     AnswerProvenanceOut,
+    ChartAnswerCreated,
     ChatAnswer,
     ChatRequest,
     DoneEvent,
@@ -186,7 +187,25 @@ def to_answer(answer: chat.Answer) -> ChatAnswer:
         saved_notes=[SavedNoteOut(index=s.index, note_id=s.note_id, paper_ids=s.paper_ids) for s in answer.saved_notes],
         skill_label=output.skill_label,
         lens=output.lens,
+        chart_spec=output.chart_spec,
     )
+
+
+@router.post("/api/papers/{paper_id}/chat/chart", status_code=201)
+async def paper_chart(
+    paper_id: uuid.UUID, payload: ChatRequest, session: SessionDep, llm: LLMDep
+) -> ChartAnswerCreated:
+    """A chart of the paper's captured data, saved as a chat answer (M14). 422 says in words why nothing was drawn."""
+    scope = chat.Scope(paper_id=paper_id)
+    return ChartAnswerCreated(output_id=await chat_charts.ask_chart(session, scope, payload.question, llm))
+
+
+@router.post("/api/workspaces/{workspace_id}/chat/chart", status_code=201)
+async def workspace_chart(
+    workspace_id: uuid.UUID, payload: ChatRequest, session: SessionDep, llm: LLMDep
+) -> ChartAnswerCreated:
+    scope = chat.Scope(workspace_id=workspace_id)
+    return ChartAnswerCreated(output_id=await chat_charts.ask_chart(session, scope, payload.question, llm))
 
 
 @router.get("/api/papers/{paper_id}/chat")
