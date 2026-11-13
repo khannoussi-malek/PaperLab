@@ -762,8 +762,15 @@ export const useSearchHits = (
   })
 
 /** Unscreened hits, most likely relevant first (M31a); refetched after every decision, since each one retrains it. */
-export const useRankedHits = (workspaceId: string, enabled: boolean) =>
-  useQuery({ queryKey: keys.rankedHits(workspaceId), queryFn: () => api.rankedSearchHits(workspaceId), enabled })
+export const useRankedHits = (workspaceId: string, enabled: boolean, inbox?: SavedSearchInbox) =>
+  useQuery({
+    queryKey: [...keys.rankedHits(workspaceId), ...(inbox ? ['inbox', inbox.savedSearchId, inbox.since] : [])],
+    queryFn: () =>
+      api.rankedSearchHits(
+        workspaceId, 200, inbox && { saved_search_id: inbox.savedSearchId, found_after: inbox.since },
+      ),
+    enabled,
+  })
 
 /** The workspace's screening criteria and suggestion-job state (M31b). Polls only while a suggestion job is
  * running or stopping; the hit pool itself refreshes separately once the job goes back to idle. */

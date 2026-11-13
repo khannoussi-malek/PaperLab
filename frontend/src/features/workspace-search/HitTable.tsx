@@ -92,9 +92,7 @@ export function HitTable({
   inbox?: SavedSearchInbox
   onLeaveInbox?: () => void
 }) {
-  const [chosenSort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
-  // ponytail: the ranked order is the whole pool's, so the inbox shows its few finds in found order instead.
-  const sort: HitSort = inbox && chosenSort === 'ranked' ? 'found' : chosenSort
+  const [sort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
   const [minRelevance, setMinRelevance] = useState<number | null>(null)
   const { data, isPending, isError, error, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, undefined, {
     sort: sort === 'ai' ? 'ai' : undefined,
@@ -118,8 +116,8 @@ export function HitTable({
   const [bulkReason, setBulkReason] = useState<ExcludeReason | ''>('')
   const [previewWidth, setPreviewWidth] = useState(() => loadPanelWidth(HIT_PREVIEW, browserStorage()))
   useEffect(() => savePanelWidth(HIT_PREVIEW, browserStorage(), previewWidth), [previewWidth])
-  useEffect(() => saveHitSort(browserStorage(), workspaceId, chosenSort), [workspaceId, chosenSort])
-  const ranked = useRankedHits(workspaceId, sort === 'ranked')
+  useEffect(() => saveHitSort(browserStorage(), workspaceId, sort), [workspaceId, sort])
+  const ranked = useRankedHits(workspaceId, sort === 'ranked', inbox)
 
   const rows = sort === 'ranked' ? (ranked.data?.items ?? []) : (data?.pages.flatMap((page) => page.items) ?? [])
   const rawFound = totalRawFound(run)

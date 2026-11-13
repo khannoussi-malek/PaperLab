@@ -805,8 +805,11 @@ export const api = {
     request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}`, sendJson('PATCH', body)),
   bulkPatchSearchHits: (workspaceId: string, body: BulkHitReviewUpdate) =>
     request<BulkUpdateOut>(`/api/workspaces/${workspaceId}/search/hits/bulk`, sendJson('PATCH', body)),
-  rankedSearchHits: (workspaceId: string, limit = 200) =>
-    request<RankedHits>(`/api/workspaces/${workspaceId}/search/hits/ranked?limit=${limit}`),
+  /** `inbox` ranks only what one saved search found after a time (M7.6); the model still trains on every decision. */
+  rankedSearchHits: (workspaceId: string, limit = 200, inbox?: { saved_search_id: string; found_after: string }) =>
+    request<RankedHits>(
+      `/api/workspaces/${workspaceId}/search/hits/ranked?${new URLSearchParams({ limit: String(limit), ...inbox })}`,
+    ),
   /** `hitIds` omitted imports every hit still pending acquisition. */
   importSearchHits: (workspaceId: string, hitIds?: string[]) =>
     request<ImportHitsOut>(

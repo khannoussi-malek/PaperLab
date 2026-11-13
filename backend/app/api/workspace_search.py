@@ -113,8 +113,9 @@ async def list_hits(
 @router.get("/hits/ranked")
 async def ranked_hits(
     workspace_id: uuid.UUID, session: SessionDep, limit: Annotated[int, Query(gt=0, le=RANKED_LIMIT_MAX)] = 200,
+    saved_search_id: uuid.UUID | None = None, found_after: AwareDatetime | None = None,
 ) -> RankedHitsOut:
-    return await screening.ranked_hits(session, workspace_id, limit)
+    return await screening.ranked_hits(session, workspace_id, limit, saved_search_id, found_after)
 
 
 @router.get("/screening")

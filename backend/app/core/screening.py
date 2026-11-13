@@ -106,7 +106,20 @@ async def _pool_features(session: AsyncSession, workspace_id: uuid.UUID, rows: l
     return feats, fresh
 
 
-async def ranked_hits(session: AsyncSession, workspace_id: uuid.UUID, limit: int) -> dict:
+async def _inbox_ids(session: AsyncSession, saved_search_id: uuid.UUID, found_after: datetime | None) -> set[uuid.UUID]:
+    """The hits a saved search's own runs found after `found_after` (M7.6 inbox)."""
+    hit = WorkspaceSearchHit
+    runs = select(WorkspaceSearchRun.id).where(WorkspaceSearchRun.saved_search_id == saved_search_id)
+    query = select(hit.id).where(hit.run_id.in_(runs))
+    if found_after is not None:
+        query = query.where(hit.first_seen_at > found_after)
+    return set(await session.scalars(query))
+
+
+async def ranked_hits(
+    session: AsyncSession, workspace_id: uuid.UUID, limit: int,
+    saved_search_id: uuid.UUID | None = None, found_after: datetime | None = None,
+) -> dict:
     """Reads only ids, decisions and (cached) features for the whole pool, and full rows for the `limit` shown:
     SE Creativity's 276k hits took 49 s as ORM rows, retrained on the event loop."""
     workspace = await session.get(Workspace, workspace_id)
@@ -130,6 +143,9 @@ async def ranked_hits(session: AsyncSession, workspace_id: uuid.UUID, limit: int
     if trained and not workspace.screening_ranked_used:
         workspace.screening_ranked_used = True  # PRISMA reports the automation (spec §3.5)
         await session.commit()
+    if saved_search_id is not None:  # the inbox in ranked order: trained on every decision, shown for its finds only
+        inbox = await _inbox_ids(session, saved_search_id, found_after)
+        order = [hit_id for hit_id in order if hit_id in inbox]
     shown = order[:limit]
     hit = WorkspaceSearchHit
     full = {

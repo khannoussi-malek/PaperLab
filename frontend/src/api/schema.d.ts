@@ -11592,6 +11592,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                saved_search_id?: string | null;
+                found_after?: string | null;
             };
             header?: never;
             path: {
