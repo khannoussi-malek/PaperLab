@@ -13,7 +13,16 @@ import uuid
 from typing import Annotated, Literal, TypedDict
 
 from mcp.server.mcpserver import MCPServer
-from mcp.types import CallToolResult, GetPromptResult, Prompt, PromptMessage, TextContent, ToolAnnotations
+from mcp.shared.exceptions import MCPError
+from mcp.types import (
+    INVALID_PARAMS,
+    CallToolResult,
+    GetPromptResult,
+    Prompt,
+    PromptMessage,
+    TextContent,
+    ToolAnnotations,
+)
 from pydantic import Field
 
 from app.core import (
@@ -42,16 +51,24 @@ from app.db import SessionLocal
 from mcp_server import skill_prompts
 
 
-def _refused(exc: DomainError) -> ValueError:
-    """The app's not-found wording (or a merged paper's detail) as the ValueError the MCP library passes on."""
-    return ValueError(exc.details.get("detail", str(exc)))
+class PromptRefused(MCPError, ValueError):
+    """A prompt request that can't be served, with the reason. An MCPError reaches the client as invalid params with
+    this text; a plain ValueError would arrive only as "Internal server error"."""
+
+    def __init__(self, message: str):
+        super().__init__(INVALID_PARAMS, message)
+
+
+def _refused(exc: DomainError) -> PromptRefused:
+    """The app's not-found wording (or a merged paper's detail)."""
+    return PromptRefused(exc.details.get("detail", str(exc)))
 
 
 async def _prompt_paper(session, raw: str) -> papers.Paper:
     try:
         paper_id = uuid.UUID(raw)
     except ValueError as exc:
-        raise ValueError("paper_id is not a valid id.") from exc
+        raise PromptRefused("paper_id is not a valid id.") from exc
     try:
         return await papers.get_paper(session, paper_id)
     except DomainError as exc:
@@ -73,13 +90,13 @@ async def _prompt_targets(
     scope = view.scope
     missing = {name for name in skill_prompts.REQUIRED[scope] if not arguments.get(name)}
     if missing:
-        raise ValueError(f"Missing required arguments: {missing}")
+        raise PromptRefused(f"Missing required arguments: {missing}")
     if scope == "both":
         given = [name for name in skill_prompts.ARGUMENTS["both"] if arguments.get(name)]
         if not given:
-            raise ValueError("Give a paper_id or a workspace.")
+            raise PromptRefused("Give a paper_id or a workspace.")
         if len(given) == 2:
-            raise ValueError("Give a paper_id or a workspace, not both.")
+            raise PromptRefused("Give a paper_id or a workspace, not both.")
     if scope == "paper" or (scope == "both" and arguments.get("paper_id")):
         return await _prompt_paper(session, arguments["paper_id"]), None
     return None, await _prompt_workspace(session, arguments["workspace"])
@@ -107,7 +124,7 @@ class PaperLabMCP(MCPServer):
             views = await skills.list_skills(session)  # hidden skills are not offered, so they are refused here
             view = next((view for view in views if skill_prompts.prompt_name(view) == name), None)
             if view is None:
-                raise ValueError(f"Unknown prompt: {name}")
+                raise PromptRefused(f"Unknown prompt: {name}")
             paper, workspace = await _prompt_targets(session, view, arguments or {})
         text = skill_prompts.prompt_text(
             view, paper=(paper.title, str(paper.id)) if paper is not None else None, workspace=workspace

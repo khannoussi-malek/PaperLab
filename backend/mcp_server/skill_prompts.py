@@ -17,6 +17,12 @@ WORKSPACE_TAIL = (
 )
 
 
+ARGUMENT_HELP = {
+    "paper_id": "The PaperLab id of the paper (from search_library or list_papers).",
+    "workspace": "The name of a PaperLab workspace (from list_workspaces).",
+}
+
+
 def prompt_name(view: SkillView) -> str:
     """A bundled skill's slug (check-evaluation); a custom one's custom-<uuid>."""
     kind, _, key = view.id.partition(":")
@@ -24,7 +30,10 @@ def prompt_name(view: SkillView) -> str:
 
 
 def prompt_args(scope: str) -> list[PromptArgument]:
-    return [PromptArgument(name=name, required=name in REQUIRED[scope]) for name in ARGUMENTS[scope]]
+    return [
+        PromptArgument(name=name, description=ARGUMENT_HELP[name], required=name in REQUIRED[scope])
+        for name in ARGUMENTS[scope]
+    ]
 
 
 def prompt_text(view: SkillView, *, paper: tuple[str, str] | None, workspace: str | None) -> str:

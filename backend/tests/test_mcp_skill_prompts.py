@@ -207,7 +207,7 @@ async def test_a_both_skill_takes_a_paper_or_a_workspace(session):
 
 
 async def refused(name: str, arguments: dict | None = None) -> str:
-    """The override's ValueError text. The client sees the library's generic internal error (see the wire test)."""
+    """The refusal text, as the server raises it (test_a_client_sees_why_a_prompt_was_refused checks the client sees it too)."""
     with pytest.raises(ValueError) as caught:
         await server.mcp.get_prompt(name, arguments)
     return str(caught.value)
@@ -255,3 +255,15 @@ async def test_the_existing_tools_still_list_after_the_prompts_were_added():
     async with Client(server.mcp) as client:
         names = {tool.name for tool in (await client.list_tools()).tools}
     assert {"search_library", "get_paper", "list_papers", "list_workspaces"} <= names
+
+
+async def test_a_client_sees_why_a_prompt_was_refused(session):
+    # The library turns a plain ValueError into "Internal server error" on the wire; the refusal must reach Claude.
+    def texts(error: BaseException) -> str:  # the client wraps the error in an exception group
+        if isinstance(error, BaseExceptionGroup):
+            return " ".join(texts(inner) for inner in error.exceptions)
+        return str(error)
+
+    with pytest.raises(BaseException) as caught:
+        await fetch("no-such-skill", {})
+    assert "Unknown prompt: no-such-skill" in texts(caught.value)
