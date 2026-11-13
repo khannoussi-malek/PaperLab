@@ -1,7 +1,7 @@
-import { ArrowUp, CornerDownRight, MessageSquareText, Settings2, X } from 'lucide-react'
+import { ArrowUp, ChartColumn, CornerDownRight, MessageSquareText, Settings2, X } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react'
-import type { ChatScope, ChatSource, Note, NoteSource, ChatAnswer as SavedAnswer } from '@/api/client'
-import { useChatHistory, useChatModels, usePromoteNote, useSkills } from '@/api/queries'
+import type { ChartSpec, ChatScope, ChatSource, Note, NoteSource, ChatAnswer as SavedAnswer } from '@/api/client'
+import { useAskChart, useChatHistory, useChatModels, usePromoteNote, useSkills } from '@/api/queries'
 import { pressable } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,8 @@ import { promoteErrorMessage, type PromoteDraft } from './promote'
 import { saveButtonPosition } from './saveButton'
 import { SaveAsNoteButton } from './SaveAsNoteButton'
 import { SkillPicker } from './SkillPicker'
+import { ChatChart } from './ChatChart'
+import { chartTitle } from './chartTitle'
 import { resolveSkill } from './skillChoice'
 import { ProblemAlert } from './ProblemAlert'
 import { threadOrder } from './threads'
@@ -106,6 +108,9 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
     return typed.ask(text, parentId)
   }
   const [question, setQuestion] = useState('')
+  // M14: the next question asks for a chart of the scope's captured data instead of a written answer.
+  const [chartMode, setChartMode] = useState(false)
+  const askChart = useAskChart(scope)
   const streamSource = stream.source
   useEffect(() => {
     if (streamSource) onSource?.(streamSource)
@@ -129,7 +134,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
   // says so instead of leaving an empty gap where the dropdown was.
   const unusable = unavailable !== undefined || noModels || chatModels.isPending
   // A spoken question or its answer under way holds the box too: two answers at once would share one live slot.
-  const closed = busy || voice.state === 'thinking' || voice.state === 'speaking' || unusable
+  const closed = busy || askChart.isPending || voice.state === 'thinking' || voice.state === 'speaking' || unusable
   // A saved answer comes back in the history, so the live copy hides instead of showing twice.
   const showLive = stream.status !== 'idle' && !answers.some((answer) => answer.id === stream.done?.output_id)
   const { placed, liveAt, liveReply } = threadOrder(answers, showLive ? stream.parentId : null)
@@ -220,6 +225,13 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
   function submit() {
     const text = question.trim()
     if (!text || closed) return
+    if (chartMode && scope.kind !== 'hit') {
+      // The question stays until the chart is saved, so a refusal can be reworded rather than retyped.
+      // A chart stands on its own: it doesn't follow up an earlier answer, so the Following chip goes.
+      setFollowingId(null)
+      askChart.mutate({ question: text, modelId }, { onSuccess: () => setQuestion('') })
+      return
+    }
     setQuestion('')
     void ask(text, followingId)
   }
@@ -310,7 +322,9 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
               onCite={onCite}
               followUp={scope.kind !== 'workspace' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
               suggestions={{ scope, saved: answer.saved_notes }}
-            />
+            >
+              {answer.chart_spec && <ChatChart spec={answer.chart_spec as ChartSpec} title={chartTitle(answer.content)} />}
+            </ChatAnswer>
           </Fragment>
         ))}
         {liveAt === placed.length && liveAnswer()}
@@ -383,7 +397,27 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
           <div className="flex flex-wrap gap-2">
             <ModelPicker models={chatModels.data} value={modelId} onChange={pickModel} />
             {scope.kind !== 'hit' && skills.data && <SkillPicker skills={skills.data} value={skillId} onChange={setSkillPick} />}
+            {scope.kind !== 'hit' && (
+              <Button
+                type="button"
+                size="sm"
+                variant={chartMode ? 'secondary' : 'ghost'}
+                aria-pressed={chartMode}
+                title="Draw a chart from this chat's captured tables instead of writing an answer"
+                onClick={() => setChartMode((on) => !on)}
+              >
+                <ChartColumn aria-hidden />
+                Chart
+              </Button>
+            )}
           </div>
+        )}
+        {askChart.error && (
+          <p role="alert" className="px-1 text-xs text-destructive">
+            {askChart.error.message === 'no_datasets'
+              ? `No captured tables in this ${scope.kind} yet. Capture one in a paper's Data tab first.`
+              : askChart.error.message}
+          </p>
         )}
         {voice.problem && (
           <p role="alert" className="px-1 text-xs text-destructive">

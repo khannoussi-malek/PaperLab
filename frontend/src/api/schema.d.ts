@@ -795,6 +795,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/chat/chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Paper Chart
+         * @description A chart of the paper's captured data, saved as a chat answer (M14). 422 says in words why nothing was drawn.
+         */
+        post: operations["paper_chart_api_papers__paper_id__chat_chart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/chat/chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Workspace Chart */
+        post: operations["workspace_chart_api_workspaces__workspace_id__chat_chart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llm-outputs/{output_id}/provenance": {
         parameters: {
             query?: never;
@@ -4116,6 +4153,14 @@ export interface components {
                 number
             ][] | null;
         };
+        /** ChartAnswerCreated */
+        ChartAnswerCreated: {
+            /**
+             * Output Id
+             * Format: uuid
+             */
+            output_id: string;
+        };
         /** ChartCreate */
         ChartCreate: {
             /** Title */
@@ -4249,6 +4294,10 @@ export interface components {
              * @enum {string}
              */
             lens: "full" | "key_ideas" | "critical" | "method" | "related";
+            /** Chart Spec */
+            chart_spec?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** ChatModelOut */
         ChatModelOut: {
@@ -10176,6 +10225,76 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    paper_chart_api_papers__paper_id__chat_chart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartAnswerCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_chart_api_workspaces__workspace_id__chat_chart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartAnswerCreated"];
                 };
             };
             /** @description Validation Error */

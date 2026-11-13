@@ -125,3 +125,37 @@ describe('skill picker', () => {
     expect(listSkills).not.toHaveBeenCalled() // a hit chat never asks for skills it can't offer
   })
 })
+
+describe('charts in chat (M14)', () => {
+  it('with Chart on, a question asks for a chart instead of a written answer', async () => {
+    const askChart = vi.spyOn(api, 'askChartAnswer').mockResolvedValue({ output_id: 'o1' })
+    const askChat = vi.spyOn(api, 'askChat')
+    renderPanel()
+    const question = await screen.findByLabelText('Question')
+    await waitFor(() => expect(question).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Chart' }))
+    expect(screen.getByRole('button', { name: 'Chart' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(question, { target: { value: 'plot F1 by system' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await waitFor(() => expect(askChart).toHaveBeenCalledWith({ kind: 'paper', id: 'p1' }, 'plot F1 by system', 'm1'))
+    expect(askChat).not.toHaveBeenCalled()
+  })
+
+  it('says in words why no chart was drawn, and keeps the question', async () => {
+    vi.spyOn(api, 'askChartAnswer').mockRejectedValue(new Error('Table 3 has no column “Precision”.'))
+    renderPanel({ kind: 'workspace', id: 'w1' })
+    const question = await screen.findByLabelText('Question')
+    await waitFor(() => expect(question).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Chart' }))
+    fireEvent.change(question, { target: { value: 'plot precision' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    expect(await screen.findByText('Table 3 has no column “Precision”.')).toBeInTheDocument()
+    expect(question).toHaveValue('plot precision')
+  })
+
+  it('a search hit chat has no Chart switch', async () => {
+    renderPanel({ kind: 'hit', workspaceId: 'w1', id: 'h1' })
+    await screen.findByLabelText('Question')
+    expect(screen.queryByRole('button', { name: 'Chart' })).toBeNull()
+  })
+})

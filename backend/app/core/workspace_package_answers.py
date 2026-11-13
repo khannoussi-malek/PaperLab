@@ -16,8 +16,11 @@ from app.models import LLMOutput
 
 async def export_rows(session: AsyncSession, workspace_id: uuid.UUID, keys: dict[uuid.UUID, str]) -> tuple[list, int]:
     """The workspace's chat answers as answers.json rows, and how many were left out. An answer saved before M33 has no
-    snapshot, so nothing its citations could open from: it is counted, not exported. A paper's own answers stay out."""
-    query = select(LLMOutput).where(LLMOutput.workspace_id == workspace_id, LLMOutput.kind == "chat")
+    snapshot, so nothing its citations could open from: it is counted, not exported. A paper's own answers stay out, and
+    so do chart answers (M14): a package carries no datasets, so their charts would have nothing to draw."""
+    query = select(LLMOutput).where(
+        LLMOutput.workspace_id == workspace_id, LLMOutput.kind == "chat", LLMOutput.chart_spec.is_(None)
+    )
     outputs = list(await session.scalars(query.order_by(LLMOutput.created_at)))
     kept = [output for output in outputs if output.source_snapshot is not None]
     return [_row(output, keys) for output in kept], len(outputs) - len(kept)
