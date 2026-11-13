@@ -10,12 +10,23 @@ import pytest
 from conftest import FakeArq
 from sqlalchemy import func, select
 
-from app.core import citations_bundle_read, discovery, papers, pipeline, queue, tags, workspace_package, workspaces
+from app.core import (
+    answer_provenance,
+    chat,
+    citations_bundle_read,
+    discovery,
+    papers,
+    pipeline,
+    queue,
+    tags,
+    workspace_package,
+    workspaces,
+)  # fmt: skip
 from app.core.errors import InvalidInput
-from app.models import Paper, PaperStatus, Workspace, note_papers
+from app.models import LLMOutput, Paper, PaperStatus, Workspace, note_papers
 from app.models.workspace import workspace_papers
+from tests.test_workspace_package_export import ALPHA_TEXT, BETA_TEXT, _draft, _seeded, cited_answer
 from tests.test_workspace_package_export import PDF as SEEDED_PDF
-from tests.test_workspace_package_export import _seeded
 
 pytestmark = pytest.mark.anyio
 
@@ -50,6 +61,7 @@ def _package(
     format_name="paperlab-workspace",
     version=1,
     description=None,
+    answers=None,
 ) -> bytes:
     manifest = {
         "format": format_name,
@@ -73,8 +85,24 @@ def _package(
         "screening.json": json.dumps({"runs": [], "hits": []}),
         "prisma.json": json.dumps({"identified": 0}),
     }
+    if answers is not None:  # a package from before M35b2 has no answers.json at all
+        members["answers.json"] = json.dumps({"answers": list(answers)})
     members |= {f"pdfs/{key}.pdf": data.decode("latin-1") for key, data in (pdfs or {}).items()}
     return _zip({k: v.encode() if isinstance(v, str) else v for k, v in members.items()})
+
+
+def _answer(**fields) -> dict:
+    """One answers.json row, as the export writes it: a chat answer citing C2 with one snapshot passage, of paper p1."""
+    base = {
+        "question": "Does sleep help?", "content": "Yes [C2].", "model": "qwen3:8b", "connection_name": "Ollama",
+        "prompt_version": 7, "skill_label": "Plain English", "skill_version": 2, "whole_paper": False,
+        "notes_used": None, "notes_total": None, "created_at": "2026-11-01T10:00:00+00:00", "slots": 2,
+        "cited": ["C2"],
+        "snapshot": [
+            {"label": "C2", "paper": "p1", "page": 4, "section": "Results", "text": "x", "from_abstract": False}
+        ],
+    }  # fmt: skip
+    return base | fields
 
 
 def _paper(key: str, title: str, **fields) -> dict:
@@ -144,6 +172,36 @@ async def test_the_screening_record_is_kept_for_download(session, pdf_dir, clien
     assert response.status_code == 200 and set(response.json()) == {"screening", "prisma"}
     plain = await client.get(f"/api/workspaces/{ws.id}/package-record")
     assert plain.status_code == 404
+
+
+# ---- Review Focus 1: chat answers come back with their cited passages (M35b2) ----
+
+
+async def test_a_round_trip_brings_the_answer_back_and_its_citations_open_from_the_snapshot(session, pdf_dir):
+    ws, alpha, beta, *_ = await _seeded(session, pdf_dir)
+    answer_id = await cited_answer(session, ws, alpha, beta)
+    saved_at = (await session.get(LLMOutput, answer_id)).created_at
+    package = (await workspace_package.export_package(session, ws.id, pdfs=False)).read()
+    await workspaces.delete(session, ws.id)
+    for paper in (alpha, beta):
+        await papers.delete_paper(session, paper.id)
+
+    report = await _import(session, package)
+
+    assert report.answers == 1
+    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
+    assert (answer.output.question, answer.output.model, answer.output.skill_label) == (
+        "Does sleep help?", "qwen3:8b", "Plain English",
+    )  # fmt: skip
+    assert answer.output.created_at == saved_at
+    assert answer.sources == [None, None]  # none of its passages exists here...
+    new = {p.title: p for p in await workspaces.papers(session, report.workspace_id)}
+    assert [(r.paper_id, r.page) for r in answer.replaced] == [(new["Alpha study"].id, 1), (new["Beta study"].id, 2)]
+    # Review Focus 1: once the imported papers' text is back, the citations show as still in the paper
+    await papers.replace_chunks(session, new["Alpha study"].id, [_draft(ALPHA_TEXT, 1)])
+    await papers.replace_chunks(session, new["Beta study"].id, [_draft(BETA_TEXT, 2)])
+    view = await answer_provenance.provenance(session, answer.output.id)
+    assert [(p.label, p.state, p.page) for p in view.passages] == [("C1", "current", 1), ("C2", "current", 2)]
 
 
 # ---- Review Focus 2: matching an existing library ----
@@ -565,3 +623,40 @@ async def test_deleting_a_workspace_removes_its_package_record(session, pdf_dir)
     await workspaces.delete(session, space.id)
 
     assert not record.exists()
+
+
+# ---- M35b2: chat answers ----
+
+
+async def test_a_snapshot_passage_from_a_paper_outside_the_package_is_dropped(session, pdf_dir):
+    snapshot = [{"label": "C1", "paper": "p9", "page": 2, "section": None, "text": "gone", "from_abstract": False}]
+    package = _package(papers=[_paper("p1", "Kept")], answers=[_answer(cited=["C1"], slots=1, snapshot=snapshot)])
+    report = await _import(session, package)
+    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
+    assert answer.output.source_snapshot == [] and answer.replaced == [None]
+
+
+async def test_a_package_without_answers_json_imports_with_no_answers(session, pdf_dir):
+    report = await _import(session, _package(papers=[_paper("p1", "Old package")]))
+    assert report.answers == 0
+    assert await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id)) == []
+
+
+async def test_malformed_answers_are_package_invalid_and_nothing_is_written(session, pdf_dir):
+    bad_rows = [
+        {"question": "only a question"},  # missing fields
+        _answer(cited=["C3"]),  # cites a slot the answer does not have
+        _answer(snapshot=[{"label": "C2", "paper": "p1", "page": "4", "text": "x", "from_abstract": False}]),
+        _answer(created_at="not a time"),
+        _answer(slots=-1),
+    ]
+    for row in bad_rows:
+        await _refused(session, pdf_dir, _package(papers=[_paper("p1", "Bad")], answers=[row]), "package_invalid")
+
+
+async def test_the_api_counts_the_answers_it_imported(client, session, pdf_dir):
+    package = _package(name="Api answers", answers=[_answer(), _answer(question="second")])
+    response = await client.post(
+        "/api/workspaces/import-package", files={"file": ("a.paperlab", package, "application/zip")}
+    )
+    assert response.status_code == 201 and response.json()["answers"] == 2

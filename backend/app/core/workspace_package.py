@@ -40,6 +40,7 @@ from app.core import (
     screening,
     search_run_results,
     tags,
+    workspace_package_answers,
     workspaces,
 )  # fmt: skip
 from app.core.candidates import Candidate
@@ -48,7 +49,7 @@ from app.core.citations_bundle import SPOOL_BYTES
 from app.core.citations_import import CitationsImportError
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
-from app.core.workspace_package_shapes import Manifest, NotesDoc, PapersDoc, TagsDoc
+from app.core.workspace_package_shapes import AnswersDoc, Manifest, NotesDoc, PapersDoc, TagsDoc
 from app.models import Chunk, Note, Paper, PaperStatus, Workspace, WorkspaceTag, note_anchors
 from app.models.references import ExternalRef
 from app.models.tag import paper_tags
@@ -201,8 +202,11 @@ def _dump(value) -> bytes:
     return json.dumps(value, ensure_ascii=False, indent=2).encode()
 
 
-async def _parts(session: AsyncSession, workspace_id: uuid.UUID, pdfs: bool) -> tuple[dict[str, bytes], list]:
-    """The package's members (name -> bytes) and the PDFs to put in it. Raises NotFound for an unknown workspace."""
+async def _parts(
+    session: AsyncSession, workspace_id: uuid.UUID, pdfs: bool, answers: bool
+) -> tuple[dict[str, bytes], list]:
+    """The package's members (name -> bytes) and the PDFs to put in it. Raises NotFound for an unknown workspace. With
+    `answers`, answers.json holds the chat answers that carry a snapshot."""
     workspace = await session.get(Workspace, workspace_id)
     if workspace is None:
         raise NotFound(f"workspace {workspace_id} not found")
@@ -220,14 +224,20 @@ async def _parts(session: AsyncSession, workspace_id: uuid.UUID, pdfs: bool) -> 
     screening = await _screening_json(session, workspace_id, runs, run_keys, labels, keys)
     prisma = await _prisma_json(session, workspace_id, run_keys)
     note_views = await workspaces.notes(session, workspace_id)
+    answer_rows, answers_skipped = (
+        await workspace_package_answers.export_rows(session, workspace_id, keys) if answers else ([], 0)
+    )
     manifest = {
         "format": FORMAT,
         "format_version": FORMAT_VERSION,
         "paperlab_version": _paperlab_version(),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "workspace": {name: getattr(workspace, name) for name in WORKSPACE_FIELDS},
-        "counts": {"papers": len(members), "notes": len(note_views), "pdfs": len(pdf_files)},
-    }
+        "counts": {
+            "papers": len(members), "notes": len(note_views), "pdfs": len(pdf_files),
+            "answers": len(answer_rows), "answers_skipped": answers_skipped,
+        },
+    }  # fmt: skip
     parts = {
         "manifest.json": _dump(manifest),
         "papers.json": _dump(papers_json),
@@ -236,6 +246,8 @@ async def _parts(session: AsyncSession, workspace_id: uuid.UUID, pdfs: bool) -> 
         "screening.json": _dump(screening),
         "prisma.json": _dump(prisma),
     }
+    if answers:
+        parts["answers.json"] = _dump({"answers": answer_rows})
     return parts, pdf_files
 
 
@@ -246,19 +258,22 @@ def _fits_import(parts: dict[str, bytes], pdf_files: list) -> None:
         raise Conflict(TOO_LARGE_WITH_PDFS)
 
 
-async def export_package(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: bool) -> IO[bytes]:
+async def export_package(
+    session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: bool, answers: bool = True
+) -> IO[bytes]:
     """The workspace as a zip file positioned at 0. Raises NotFound for an unknown workspace. With `pdfs`, each paper
     whose PDF is on disk is included; a paper whose PDF is missing is listed without one. Raises Conflict
-    (package_too_large_with_pdfs) when, with its PDFs, the package would be more than the import takes."""
-    parts, pdf_files = await _parts(session, workspace_id, pdfs)
+    (package_too_large_with_pdfs) when, with its PDFs, the package would be more than the import takes. `answers` adds
+    the chat answers (answers.json)."""
+    parts, pdf_files = await _parts(session, workspace_id, pdfs, answers)
     if pdfs:
         _fits_import(parts, pdf_files)
     return await asyncio.to_thread(_write, parts, pdf_files)
 
 
-async def check_export(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: bool) -> None:
+async def check_export(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: bool, answers: bool = True) -> None:
     """Raises what export_package would for this workspace, without writing the zip (the dialog asks first)."""
-    parts, pdf_files = await _parts(session, workspace_id, pdfs)
+    parts, pdf_files = await _parts(session, workspace_id, pdfs, answers)
     if pdfs:
         _fits_import(parts, pdf_files)
 
@@ -287,6 +302,7 @@ class ImportReport:
     notes: int
     pdfs_skipped: int  # a PDF that was too large, not a PDF, or missing from the zip
     has_record: bool  # the screening record was kept for download
+    answers: int  # chat answers written to the workspace
 
 
 @dataclass(frozen=True)
@@ -298,6 +314,7 @@ class _Package:
     tags: list[dict]
     screening: dict
     prisma: dict
+    answers: list[dict]
 
 
 def _invalid(detail: str = INVALID) -> InvalidInput:
@@ -381,6 +398,13 @@ def _check_tags(doc, keys: set[str]) -> list[dict]:
     return rows
 
 
+def _answer_rows(zf: zipfile.ZipFile) -> list[dict]:
+    """answers.json's rows when the package has the member; a package from before M35b2 has none and no answers."""
+    if "answers.json" not in zf.NameToInfo:
+        return []
+    return _shaped(AnswersDoc, _json(zf, "answers.json"))["answers"]
+
+
 def _read(zf: zipfile.ZipFile) -> _Package:
     """Every member, checked: the manifest first (a file without one, or of another format, is refused before anything
     else is read). Each JSON member must take the shape its model describes."""
@@ -402,7 +426,7 @@ def _read(zf: zipfile.ZipFile) -> _Package:
     if not isinstance(screening, dict) or not isinstance(prisma, dict):
         raise InvalidInput(INVALID)
     _made_on(manifest)
-    return _Package(zf, manifest, papers_rows, notes_rows, tag_rows, screening, prisma)
+    return _Package(zf, manifest, papers_rows, notes_rows, tag_rows, screening, prisma, _answer_rows(zf))
 
 
 def _identifiers(rec: dict) -> list[str]:
@@ -697,6 +721,7 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
         ids, added, matched, skipped = await _papers_into(session, pkg, workspace.id, held, alias, written, queued)
         await _tags_into(session, workspace.id, pkg.tags, ids)
         note_count = await _notes_into(session, pkg.notes, ids)
+        answer_count = await workspace_package_answers.write_rows(session, workspace.id, pkg.answers, ids)
         await _record_into(pkg, workspace.id, written)
         await session.commit()
     except BaseException:
@@ -709,7 +734,7 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
             await queue.enqueue(job, arg)
         except Exception:
             logger.exception("could not queue %s for paper %s; it stays uploaded until it is queued again", job, arg)
-    return ImportReport(workspace.id, name, added, matched, note_count, skipped, has_record=True)
+    return ImportReport(workspace.id, name, added, matched, note_count, skipped, True, answer_count)
 
 
 async def import_package(session: AsyncSession, data: bytes | IO[bytes]) -> ImportReport:

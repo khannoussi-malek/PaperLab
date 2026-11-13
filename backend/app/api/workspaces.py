@@ -103,9 +103,12 @@ async def export_citations_zip(
 
 
 @router.get("/{workspace_id}/package")
-async def export_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: bool = False) -> StreamingResponse:
-    """The workspace as one `.paperlab` file (M35a): PDFs included with `pdfs=true`. 404 unknown workspace."""
-    file = await workspace_package.export_package(session, workspace_id, pdfs=pdfs)
+async def export_package(
+    workspace_id: uuid.UUID, session: SessionDep, pdfs: bool = False, answers: bool = True
+) -> StreamingResponse:
+    """The workspace as one `.paperlab` file (M35a): PDFs included with `pdfs=true`, chat answers with `answers` (M35b2,
+    on by default). 404 unknown workspace."""
+    file = await workspace_package.export_package(session, workspace_id, pdfs=pdfs, answers=answers)
     file.seek(0, 2)
     size = file.tell()
     file.seek(0)
@@ -115,10 +118,12 @@ async def export_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: boo
 
 
 @router.get("/{workspace_id}/package/check", status_code=204)
-async def check_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: bool = False) -> Response:
-    """204 when the package (with its PDFs when `pdfs`) would export and import; 409 package_too_large_with_pdfs when
-    it would be over the import cap. 404 unknown workspace."""
-    await workspace_package.check_export(session, workspace_id, pdfs=pdfs)
+async def check_package(
+    workspace_id: uuid.UUID, session: SessionDep, pdfs: bool = False, answers: bool = True
+) -> Response:
+    """204 when the package (with its PDFs when `pdfs`, and its answers when `answers`) would export and import; 409
+    package_too_large_with_pdfs when it would be over the import cap. 404 unknown workspace."""
+    await workspace_package.check_export(session, workspace_id, pdfs=pdfs, answers=answers)
     return Response(status_code=204)
 
 
