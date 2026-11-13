@@ -13,6 +13,8 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
+from app.core import paper_sources
 from app.core.candidates import Candidate, from_acl_anthology, from_biorxiv_entry, from_iacr_eprint
 from app.db import SessionLocal
 from app.models import ExternalRef
@@ -212,6 +214,10 @@ async def _acl_cursor(session: AsyncSession) -> HarvestCursor:
 async def _sync_acl_anthology(session: AsyncSession) -> None:
     """One weekly run: a conditional download of the whole dump (its ETag and Last-Modified are stored on the cursor),
     then an upsert of every kept paper keyed by its Anthology ID. A 304 returns before anything is written."""
+    # Nothing leaves the machine when ACL is off in Settings, or on a test stack's fake providers.
+    if settings.discovery_provider == "fake" or not (await paper_sources.get(session)).enabled["acl_anthology"]:
+        logger.info("ACL Anthology harvest skipped: the source is off, or the paper sources are fake")
+        return
     cursor = await _acl_cursor(session)
     http = acl_anthology.new_client()
     with tempfile.TemporaryDirectory() as scratch:

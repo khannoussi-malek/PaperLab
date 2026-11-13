@@ -10,6 +10,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from app.core import paper_sources
 from app.core.candidates import from_acl_anthology
 from app.core.source_registry import BY_ID
 from app.models import ExternalRef
@@ -305,3 +306,22 @@ def test_harvest_acl_anthology_is_registered_as_a_weekly_cron_job():
 
     [job] = [job for job in WorkerSettings.cron_jobs if job.name == "harvest_acl_anthology"]
     assert job.weekday == "sun"
+
+
+async def test_the_harvest_downloads_nothing_when_acl_is_off_or_on_a_test_stack(session, dump, monkeypatch):
+    _use_test_session(monkeypatch, session, harvest)
+    calls = []
+
+    async def no_download(*args, **kwargs):
+        calls.append(1)
+        return None
+
+    monkeypatch.setattr(harvest.acl_anthology, "download", no_download)
+    await paper_sources.update(session, {"enabled": {"acl_anthology": False}})
+    await harvest.harvest_acl_anthology({})
+    assert calls == []  # turned off in Settings: no download at all
+
+    await paper_sources.update(session, {"enabled": {"acl_anthology": True}})
+    monkeypatch.setattr(harvest.settings, "discovery_provider", "fake")
+    await harvest.harvest_acl_anthology({})
+    assert calls == []  # the test stack's fake providers never reach the real site
