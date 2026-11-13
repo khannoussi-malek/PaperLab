@@ -3325,6 +3325,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voice/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status */
+        get: operations["status_api_voice_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/latency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latency */
+        get: operations["latency_api_voice_latency_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5231,6 +5265,28 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** Latency */
+        Latency: {
+            /** Groups */
+            groups: components["schemas"]["LatencyGroup"][];
+        };
+        /** LatencyGroup */
+        LatencyGroup: {
+            /** Model */
+            model: string;
+            /** Warm */
+            warm: {
+                [key: string]: components["schemas"]["Percentiles"];
+            };
+            /** Cold */
+            cold: {
+                [key: string]: components["schemas"]["Percentiles"];
+            };
+            /** Interrupts */
+            interrupts: number;
+            /** False Interrupts */
+            false_interrupts: number;
+        };
         /** Layout */
         Layout: {
             /**
@@ -6133,6 +6189,19 @@ export interface components {
             dimensions: string[];
             /** Color By */
             color_by?: string | null;
+        };
+        /** Percentiles */
+        Percentiles: {
+            /** N */
+            n: number;
+            /** Median */
+            median?: number | null;
+            /** P90 */
+            p90?: number | null;
+            /** P95 */
+            p95?: number | null;
+            /** P99 */
+            p99?: number | null;
         };
         /** PinKeyOut */
         PinKeyOut: {
@@ -8079,6 +8148,13 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VoiceStatus */
+        VoiceStatus: {
+            /** Ready */
+            ready: boolean;
+            /** Detail */
+            detail?: string | null;
         };
         /** WorkspaceCreate */
         WorkspaceCreate: {
@@ -15239,6 +15315,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_api_voice_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceStatus"];
+                };
+            };
+        };
+    };
+    latency_api_voice_latency_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Latency"];
                 };
             };
         };
