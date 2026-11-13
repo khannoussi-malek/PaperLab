@@ -16,6 +16,9 @@ class HarvestCursor(Base):
 
     source: Mapped[str] = mapped_column(Text, primary_key=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The last download's HTTP validators (ACL Anthology, M32 batch 7): a 304 to If-None-Match leaves the row alone.
+    etag: Mapped[str | None] = mapped_column(Text)
+    last_modified: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()")
     )

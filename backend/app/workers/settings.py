@@ -12,8 +12,10 @@ from app.workers.citations_import import IMPORT_JOB_TIMEOUT, import_citations
 from app.workers.evidence_cards import MAX_TRIES as EVIDENCE_CARDS_MAX_TRIES
 from app.workers.evidence_cards import generate_evidence_cards
 from app.workers.harvest import (
+    ACL_HARVEST_JOB_TIMEOUT,
     BIORXIV_HARVEST_JOB_TIMEOUT,
     HARVEST_JOB_TIMEOUT,
+    harvest_acl_anthology,
     harvest_biorxiv,
     harvest_iacr_eprint,
     harvest_medrxiv,
@@ -107,6 +109,15 @@ class WorkerSettings:
             minute={30},
             run_at_startup=True,
             timeout=BIORXIV_HARVEST_JOB_TIMEOUT,
+        ),
+        cron(
+            harvest_acl_anthology,
+            name="harvest_acl_anthology",
+            weekday="sun",
+            hour={5},
+            minute={0},
+            run_at_startup=True,
+            timeout=ACL_HARVEST_JOB_TIMEOUT,
         ),
         # never at startup: each worker start would check another RECHECK_CAP papers ("25 a day"). ponytail: a Mac
         # asleep at 05:00 skips that day's run; arq doesn't catch up on missed crons

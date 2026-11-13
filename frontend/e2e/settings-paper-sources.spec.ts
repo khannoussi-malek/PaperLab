@@ -106,6 +106,7 @@ const NAMES: Record<SourceId, string> = {
   medrxiv: 'medRxiv',
   dblp: 'DBLP',
   openreview: 'OpenReview',
+  acl_anthology: 'ACL Anthology',
 }
 const KEYED: SourceId[] = ['openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo']
 

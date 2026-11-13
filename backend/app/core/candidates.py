@@ -537,6 +537,24 @@ def from_iacr_eprint(entry: Mapping[str, Any]) -> Candidate:
     )
 
 
+def from_acl_anthology(entry: Mapping[str, Any]) -> Candidate:
+    """A paper from providers/acl_anthology.py: the Anthology ID (e.g. "2023.acl-long.1") is this source's own key,
+    and the PDF is the Anthology's own convention, https://aclanthology.org/<id>.pdf. The file has no abstract or DOI
+    for some entries, so those stay None. Whether a row is a paper at all is decided before this mapper runs."""
+    acl_id = entry["id"]
+    return Candidate(
+        title=entry.get("title") or "Untitled",
+        authors=list(entry.get("authors") or [])[:MAX_AUTHORS],
+        year=entry.get("year"),
+        venue=entry.get("venue") or None,
+        doi=entry.get("doi") or None,
+        external_ids={"acl_anthology": acl_id},
+        abstract=entry.get("abstract") or None,
+        pdf_urls=ordered_pdf_urls(None, f"https://aclanthology.org/{acl_id}.pdf"),
+        sources=("acl_anthology",),
+    )
+
+
 def from_biorxiv_entry(entry: Mapping[str, Any], *, server: str) -> Candidate:
     """An entry from providers/biorxiv.py's own fetch_page() 'collection' list, for either server
     ("biorxiv" or "medrxiv") -- the real API's own response shape is identical between the two, only
@@ -602,6 +620,7 @@ def _ids(candidate: Candidate) -> set[str]:
         "doaj": candidate.external_ids.get("doaj"),
         "openaire": candidate.external_ids.get("openaire"),
         "openreview": candidate.external_ids.get("openreview"),
+        "acl_anthology": candidate.external_ids.get("acl_anthology"),
         "iacr_eprint": candidate.external_ids.get("iacr_eprint"),
         "biorxiv": candidate.external_ids.get("biorxiv"),
         "medrxiv": candidate.external_ids.get("medrxiv"),
@@ -638,6 +657,7 @@ def _combined(records: list[Candidate]) -> Candidate:
             "core": first_id("core"), "pubmed": first_id("pubmed"), "pmc": first_id("pmc"),
             "zenodo": first_id("zenodo"), "hal": first_id("hal"), "doaj": first_id("doaj"),
             "openaire": first_id("openaire"), "openreview": first_id("openreview"),
+            "acl_anthology": first_id("acl_anthology"),
             "iacr_eprint": first_id("iacr_eprint"),
             "biorxiv": first_id("biorxiv"), "medrxiv": first_id("medrxiv"),
         }.items()

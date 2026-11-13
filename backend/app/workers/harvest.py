@@ -6,16 +6,18 @@ the same generic store every live source's own candidates already land in.
 """
 
 import logging
+import tempfile
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.candidates import Candidate, from_biorxiv_entry, from_iacr_eprint
+from app.core.candidates import Candidate, from_acl_anthology, from_biorxiv_entry, from_iacr_eprint
 from app.db import SessionLocal
 from app.models import ExternalRef
 from app.models.harvest import HarvestCursor
-from app.providers import biorxiv, iacr_eprint
+from app.providers import acl_anthology, biorxiv, iacr_eprint
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,12 @@ BIORXIV_MAX_HARVEST_PAGES = 3000
 # over budget with no other cause needed. 3 hours instead of 2 gives headroom beyond the current
 # window's own expected page count in case per-page latency drifts further.
 BIORXIV_HARVEST_JOB_TIMEOUT = 10800
+# The ACL dump is ~139k entries (~47 MB gzipped): one lookup and one upsert per kept paper, so a first
+# run takes minutes.
+ACL_HARVEST_JOB_TIMEOUT = 3600
+# The session holds every upserted row until it is expunged, so a first run would keep ~136k ORM objects (abstracts
+# included) alive. Flushing and expunging every this many entries keeps the job's memory flat.
+ACL_FLUSH_EVERY = 1000
 
 
 async def harvest_ingest_candidate(session: AsyncSession, candidate: Candidate) -> None:
@@ -62,18 +70,22 @@ async def harvest_ingest_candidate(session: AsyncSession, candidate: Candidate) 
     several different LIVE sources' own concurrent results for the SAME query, a different problem from
     recording one periodic source's own harvested finding."""
     source, eprint_id = next(iter(candidate.external_ids.items()))
+    # Containment, not `external_ids[source].astext ==`: the GIN index on external_ids (0076) serves this lookup.
     existing = (
-        await session.execute(select(ExternalRef).where(ExternalRef.external_ids[source].astext == eprint_id))
+        await session.execute(select(ExternalRef).where(ExternalRef.external_ids.contains({source: eprint_id})))
     ).scalar_one_or_none()
     if existing is not None:
         existing.title = candidate.title
         existing.authors = candidate.authors
         existing.abstract = candidate.abstract
         existing.year = candidate.year
+        existing.venue = candidate.venue
+        existing.doi = candidate.doi
         return
     session.add(
         ExternalRef(
             title=candidate.title, authors=candidate.authors, year=candidate.year, abstract=candidate.abstract,
+            venue=candidate.venue, doi=candidate.doi,
             external_ids=dict(candidate.external_ids), sources=list(candidate.sources),
         )
     )
@@ -185,5 +197,53 @@ async def harvest_medrxiv(ctx: dict) -> None:
             await session.commit()
         except Exception:
             logger.exception("medRxiv harvest failed")
+            await session.rollback()
+            raise
+
+
+async def _acl_cursor(session: AsyncSession) -> HarvestCursor:
+    cursor = await session.get(HarvestCursor, "acl_anthology")
+    if cursor is None:
+        cursor = HarvestCursor(source="acl_anthology", last_synced_at=None)
+        session.add(cursor)
+    return cursor
+
+
+async def _sync_acl_anthology(session: AsyncSession) -> None:
+    """One weekly run: a conditional download of the whole dump (its ETag and Last-Modified are stored on the cursor),
+    then an upsert of every kept paper keyed by its Anthology ID. A 304 returns before anything is written."""
+    cursor = await _acl_cursor(session)
+    http = acl_anthology.new_client()
+    with tempfile.TemporaryDirectory() as scratch:
+        dump = Path(scratch) / "anthology+abstracts.bib.gz"
+        try:
+            validators = await acl_anthology.download(
+                http, dump, etag=cursor.etag, last_modified=cursor.last_modified
+            )
+        finally:
+            await http.aclose()
+        if validators is None:
+            logger.info("ACL Anthology dump is unchanged (304); nothing to harvest")
+            return
+        for ingested, entry in enumerate(acl_anthology.iter_entries(dump), start=1):
+            await harvest_ingest_candidate(session, from_acl_anthology(entry))
+            if ingested % ACL_FLUSH_EVERY == 0:
+                await session.flush()
+                session.expunge_all()  # the cursor is re-fetched below, so detaching it is safe
+        await session.flush()
+
+    cursor = await _acl_cursor(session)
+    cursor.etag = validators.etag
+    cursor.last_modified = validators.last_modified
+    cursor.last_synced_at = datetime.now(UTC)
+
+
+async def harvest_acl_anthology(ctx: dict) -> None:
+    async with SessionLocal() as session:
+        try:
+            await _sync_acl_anthology(session)
+            await session.commit()
+        except Exception:
+            logger.exception("ACL Anthology harvest failed")
             await session.rollback()
             raise

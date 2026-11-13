@@ -295,6 +295,7 @@ async def test_each_source_that_is_on_gets_a_client_and_keys_travel_in_headers()
             "medrxiv": False,
             "dblp": False,
             "openreview": False,
+            "acl_anthology": True,
         },
         api_keys={"openalex": "oa-key-0123456789", "semantic_scholar": None, "core": "core-key-0123456789"},
     )
