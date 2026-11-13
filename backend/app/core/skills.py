@@ -387,6 +387,9 @@ async def reset(session: AsyncSession, skill_id: str) -> SkillView:
     row = await _row_for(session, skill_id)
     if row is None:
         return await get_view(session, skill_id)
+    if row.label is not None:  # the shipped label comes back: refuse it when another skill has taken it since
+        shipped = next(b.label for b in BUNDLED if b.slug == row.builtin_slug)
+        await _refuse_taken(session, shipped, exclude_id=skill_id)
     row.label = row.description = row.scope = row.instructions = None
     row.version += 1
     await session.flush()
@@ -408,6 +411,8 @@ async def set_default(session: AsyncSession, skill_id: str, kind: ChatKind, on: 
     if on:
         await session.execute(sql_update(Skill).where(getattr(Skill, flag), Skill.id != row.id).values({flag: False}))
     setattr(row, flag, on)
+    if on:
+        row.is_listed = True  # a default the picker hid would never be applied; hiding clears defaults, so both agree
     await session.flush()
     await session.commit()
     return await get_view(session, skill_id)

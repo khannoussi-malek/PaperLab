@@ -207,20 +207,25 @@ async def test_deleting_an_unknown_skill_is_not_found(session):
 # reset
 
 
-async def test_reset_returns_the_shipped_text_and_keeps_hidden_and_default_state(session):
+async def test_reset_returns_the_shipped_text_and_keeps_hidden_state(session):
     await skills.update(session, "builtin:check-evaluation", label="Mine", instructions="Mine.")
     await skills.update(session, "builtin:check-evaluation", is_listed=False)
-    await skills.set_default(session, "builtin:check-evaluation", "paper", True)
-    before = await row_for(session, "check-evaluation")
-    version_before = before.version
+    version_before = (await row_for(session, "check-evaluation")).version
 
     reset = await skills.reset(session, "builtin:check-evaluation")
 
     shipped = skills.BUNDLED[1]
     assert (reset.label, reset.instructions, reset.state) == (shipped.label, shipped.instructions, "builtin")
-    assert (reset.is_listed, reset.is_paper_default) == (False, True)
+    assert reset.is_listed is False
     assert reset.version == shipped.version
     assert (await row_for(session, "check-evaluation")).version == version_before + 1
+
+
+async def test_reset_keeps_the_default(session):
+    await skills.update(session, "builtin:check-evaluation", instructions="Mine.")
+    await skills.set_default(session, "builtin:check-evaluation", "paper", True)
+    reset = await skills.reset(session, "builtin:check-evaluation")
+    assert (reset.state, reset.is_paper_default) == ("builtin", True)
 
 
 async def test_reset_refuses_a_custom_skill(session):
@@ -341,3 +346,18 @@ async def test_a_row_for_a_removed_bundled_skill_is_ignored_and_its_id_is_not_fo
     assert "builtin:removed-in-a-release" not in ids and len(ids) == 6
     with pytest.raises(NotFound, match="skill_not_found"):
         await skills.resolve(session, "builtin:removed-in-a-release", "paper")
+
+
+async def test_reset_refuses_to_bring_back_a_shipped_label_another_skill_now_has(session):
+    await skills.update(session, "builtin:check-evaluation", label="Baselines")
+    await make_custom(session, label="Check the evaluation")
+    with pytest.raises(Conflict, match="skill_label_taken"):
+        await skills.reset(session, "builtin:check-evaluation")
+    assert (await view(session, "builtin:check-evaluation")).label == "Baselines"
+
+
+async def test_making_a_hidden_skill_the_default_shows_it_again(session):
+    await skills.update(session, "builtin:plain-explanation", is_listed=False)
+    shown = await skills.set_default(session, "builtin:plain-explanation", "paper", True)
+    assert (shown.is_listed, shown.is_paper_default) == (True, True)
+    assert "builtin:plain-explanation" in [v.id for v in await skills.list_skills(session, "paper")]
