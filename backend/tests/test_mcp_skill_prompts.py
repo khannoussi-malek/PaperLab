@@ -7,9 +7,9 @@ from contextlib import asynccontextmanager
 import pytest
 from mcp import Client
 
-from app.core import skills, workspaces
+from app.core import skill_prompts, skills, workspaces
 from app.models import Paper
-from mcp_server import server, skill_prompts
+from mcp_server import server
 
 pytestmark = pytest.mark.anyio
 
@@ -207,7 +207,7 @@ async def test_a_both_skill_takes_a_paper_or_a_workspace(session):
 
 
 async def refused(name: str, arguments: dict | None = None) -> str:
-    """The refusal text, as the server raises it (test_a_client_sees_why_a_prompt_was_refused checks the client sees it too)."""
+    """The refusal text as the server raises it; test_a_client_sees_why_a_prompt_was_refused covers the client."""
     with pytest.raises(ValueError) as caught:
         await server.mcp.get_prompt(name, arguments)
     return str(caught.value)
@@ -224,7 +224,7 @@ async def test_a_both_skill_with_both_arguments_is_refused(session):
 
 
 async def test_a_paper_skill_without_its_argument_is_refused(session):
-    assert await refused(PAPER_SKILL.slug, {}) == "Missing required arguments: {'paper_id'}"
+    assert await refused(PAPER_SKILL.slug, {}) == "Missing required argument: paper_id."
 
 
 async def test_a_paper_that_is_not_in_the_library_is_refused(session):
@@ -267,3 +267,11 @@ async def test_a_client_sees_why_a_prompt_was_refused(session):
     with pytest.raises(BaseException) as caught:
         await fetch("no-such-skill", {})
     assert "Unknown prompt: no-such-skill" in texts(caught.value)
+
+
+async def test_a_blank_argument_counts_as_not_given(session):
+    paper = await make_paper(session, f"Blank {RUN}")
+    arguments = {"paper_id": str(paper.id), "workspace": "   "}
+    [message] = (await fetch(BOTH_SKILL.slug, arguments)).messages
+    assert "Work on the paper" in message.content.text
+    assert await refused(PAPER_SKILL.slug, {"paper_id": "  "}) == "Missing required argument: paper_id."

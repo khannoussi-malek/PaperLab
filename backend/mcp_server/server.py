@@ -19,6 +19,7 @@ from mcp.types import (
     CallToolResult,
     GetPromptResult,
     Prompt,
+    PromptArgument,
     PromptMessage,
     TextContent,
     ToolAnnotations,
@@ -42,13 +43,13 @@ from app.core import (
     pipeline,
     reporting_guidelines,
     screening,
+    skill_prompts,
     skills,
     workspaces,
 )
 from app.core.errors import DomainError, error_code
 from app.core.manuscript_checks import doi_service
 from app.db import SessionLocal
-from mcp_server import skill_prompts
 
 
 class PromptRefused(MCPError, ValueError):
@@ -88,9 +89,10 @@ async def _prompt_targets(
 ) -> tuple[papers.Paper | None, str | None]:
     """The paper or the workspace a prompt is about. A `both` skill takes exactly one of them."""
     scope = view.scope
-    missing = {name for name in skill_prompts.REQUIRED[scope] if not arguments.get(name)}
+    arguments = {name: value.strip() for name, value in arguments.items() if isinstance(value, str) and value.strip()}
+    missing = [name for name in skill_prompts.REQUIRED[scope] if name not in arguments]
     if missing:
-        raise PromptRefused(f"Missing required arguments: {missing}")
+        raise PromptRefused(f"Missing required argument: {', '.join(missing)}.")
     if scope == "both":
         given = [name for name in skill_prompts.ARGUMENTS["both"] if arguments.get(name)]
         if not given:
@@ -114,7 +116,7 @@ class PaperLabMCP(MCPServer):
                 name=skill_prompts.prompt_name(view),
                 title=view.label,
                 description=view.description or view.label,
-                arguments=skill_prompts.prompt_args(view.scope),
+                arguments=[PromptArgument(**argument._asdict()) for argument in skill_prompts.prompt_args(view.scope)],
             )
             for view in views
         ]

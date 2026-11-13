@@ -1,7 +1,7 @@
-"""The reader's skills as MCP prompts (M17.5): the names, arguments and the one user message. Pure: the server looks the
-skills and the paper or workspace up, then calls these."""
+"""The reader's skills as MCP prompts (M17.5): the names, arguments and the one user message. Pure, and free of MCP
+types (mcp_server/server.py imports only app.core and turns these into the library's Prompt objects)."""
 
-from mcp.types import PromptArgument
+from typing import NamedTuple
 
 from app.core.skills import SkillView
 
@@ -29,11 +29,14 @@ def prompt_name(view: SkillView) -> str:
     return key if kind == "builtin" else f"custom-{key}"
 
 
-def prompt_args(scope: str) -> list[PromptArgument]:
-    return [
-        PromptArgument(name=name, description=ARGUMENT_HELP[name], required=name in REQUIRED[scope])
-        for name in ARGUMENTS[scope]
-    ]
+class Argument(NamedTuple):
+    name: str
+    description: str
+    required: bool
+
+
+def prompt_args(scope: str) -> list[Argument]:
+    return [Argument(name, ARGUMENT_HELP[name], name in REQUIRED[scope]) for name in ARGUMENTS[scope]]
 
 
 def prompt_text(view: SkillView, *, paper: tuple[str, str] | None, workspace: str | None) -> str:
