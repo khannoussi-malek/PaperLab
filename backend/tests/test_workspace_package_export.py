@@ -4,6 +4,7 @@ import io
 import json
 import uuid
 import zipfile
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -12,9 +13,17 @@ from app.config import settings
 from app.core import chat, citations_bundle_read, notes, papers, prisma_export, tags, workspace_package, workspaces
 from app.core.chunking import ChunkDraft
 from app.core.errors import Conflict, NotFound
+from app.core.hit_links import record_links
 from app.core.notes import Anchor
 from app.models import Chunk, LLMConnection, LLMOutput, Note, PaperSources, Workspace, note_papers
-from app.models.workspace_search import SearchRunEligibility
+from app.models.provenance import WorkspaceBranchState
+from app.models.references import ExternalRef
+from app.models.workspace_search import (
+    SearchRunEligibility,
+    WorkspaceSearchCursor,
+    WorkspaceSearchHit,
+    WorkspaceSearchRun,
+)
 from tests.screening_pool import make_pool
 
 pytestmark = pytest.mark.anyio
@@ -324,3 +333,307 @@ async def test_the_api_refuses_an_oversize_package_before_it_is_downloaded(clien
     monkeypatch.setattr(citations_bundle_read, "MAX_ZIP_BYTES", 200 * 1024 * 1024)
     fine = await client.get(f"/api/workspaces/{ws.id}/package/check", params={"pdfs": "true"})
     assert fine.status_code == 204
+
+
+# ---- M35c Task 1: screening v2 ----
+
+BASE = datetime(2026, 11, 1, tzinfo=timezone.utc)
+SECRET_CURSOR = "cursor-secret-m35c"
+
+
+async def screened(session, pdf_dir):
+    """A workspace with live screening: a database run (two sources, a cursor and a warning carrying secrets), a
+    snowball run from alpha, four hits with decisions and suggestions, eligibility, two links and two branch states.
+    Alpha (a member) has a PDF; gamma is outside the workspace."""
+    ws, alpha, beta, _, _ = await _seeded(session, pdf_dir)
+    gamma = await papers.create_metadata_paper(
+        session, {"title": "Gamma study", "doi": "10.1/gamma", "authors": ["Ana Lopez"], "year": 2019}, "crossref"
+    )
+    model = await session.get(Workspace, ws.id)
+    model.screening_ranked_used, model.screening_criteria = True, "RCTs of sleep"
+    run1 = WorkspaceSearchRun(
+        workspace_id=ws.id,
+        query_text="sleep trial",
+        query_overrides_json={"crossref": "sleep RCT"},
+        filters_json={},
+        sources_json=["openalex", "crossref"],
+        status="exhausted",
+        started_at=BASE,
+        stats_json={
+            "per_source_raw_count": {"openalex": 3, "crossref": 2},
+            "per_source_new_hits": {"openalex": 3},
+            "warnings": [{"source": "openalex", "message": f"slow, api_key={SECRET_KEY}"}],
+        },
+    )
+    run2 = WorkspaceSearchRun(
+        workspace_id=ws.id,
+        query_text='Snowball from "Alpha study"',
+        query_overrides_json={},
+        filters_json={},
+        sources_json=["semantic_scholar"],
+        status="exhausted",
+        started_at=BASE + timedelta(hours=1),
+        stats_json={},
+    )
+    session.add_all([run1, run2])
+    await session.flush()
+    session.add_all(
+        [
+            WorkspaceSearchCursor(
+                run_id=run1.id, source="openalex", cursor_json={"value": 2, "api_key": SECRET_CURSOR}, exhausted=True
+            ),
+            WorkspaceSearchCursor(
+                run_id=run1.id,
+                source="crossref",
+                cursor_json={"errors": 1},
+                exhausted=False,
+                last_error=f"timed out for mailto={SECRET_EMAIL}",
+            ),
+            WorkspaceSearchCursor(run_id=run2.id, source="semantic_scholar", cursor_json={"value": 0}, exhausted=True),
+        ]
+    )
+
+    async def ref(title, doi):
+        row = ExternalRef(title=title, doi=doi, authors=["Jane Smith"], year=2020, venue="Sleep J")
+        session.add(row)
+        await session.flush()
+        return row
+
+    alpha_ref = await ref("Alpha study", "10.1/alpha")
+    alpha_hit = WorkspaceSearchHit(
+        workspace_id=ws.id,
+        run_id=run1.id,
+        external_ref_id=alpha_ref.id,
+        source_method="database_search",
+        normalized_title="alpha study",
+        first_seen_at=BASE,
+        paper_id=alpha.id,
+        stage1_status="relevant",
+        stage1_decided_at=BASE,
+        acquisition_status="imported",
+        priority=4,
+        topic_fit="same_topic",
+        suggestion="include",
+        suggestion_reason=None,
+        suggestion_note="fits",
+        suggestion_model="Ollama · qwen3:8b",
+        suggestion_relevance=5,
+        suggestion_confidence="high",
+        suggestion_quotes=[{"quote": "sleep", "section": "Results"}],
+        suggestion_flags=[],
+        suggestion_prompt_version=3,
+        suggested_at=BASE,
+    )
+    beta_hit = WorkspaceSearchHit(
+        workspace_id=ws.id,
+        run_id=run1.id,
+        external_ref_id=(await ref("Beta study", "10.1/beta")).id,
+        source_method="database_search",
+        normalized_title="beta study",
+        first_seen_at=BASE + timedelta(seconds=1),
+        paper_id=beta.id,
+        stage1_status="not_relevant",
+        stage1_exclude_reason="wrong_topic",
+        stage1_note="off topic",
+        stage1_decided_at=BASE,
+        suggestion="exclude",
+        suggestion_reason="wrong_topic",
+        suggestion_flags=["no_abstract"],
+    )
+    delta_hit = WorkspaceSearchHit(
+        workspace_id=ws.id,
+        run_id=run1.id,
+        external_ref_id=(await ref("Delta study", None)).id,
+        source_method="database_search",
+        normalized_title="delta study",
+        first_seen_at=BASE + timedelta(seconds=2),
+        stage1_status="maybe",
+        stage1_decided_at=BASE,
+    )
+    gamma_hit = WorkspaceSearchHit(
+        workspace_id=ws.id,
+        run_id=run2.id,
+        external_ref_id=(await ref("Gamma study", "10.1/gamma")).id,
+        source_method="snowball_backward",
+        normalized_title="gamma study",
+        first_seen_at=BASE + timedelta(hours=1),
+        seed_paper_id=alpha.id,
+        snowball_round=1,
+        paper_id=gamma.id,
+        stage1_status="relevant",
+        stage1_decided_at=BASE,
+    )
+    session.add_all([alpha_hit, beta_hit, delta_hit, gamma_hit])
+    await session.flush()
+    run2.stats_json = {
+        "snowball": {
+            "seeds": [
+                {
+                    "id": str(alpha.id),
+                    "kind": "paper",
+                    "title": "Alpha study",
+                    "hit_id": str(alpha_hit.id),
+                    "found": {"cites": 1, "cited_by": 0},
+                    "new": {"cites": 1, "cited_by": 0},
+                    "errors": {},
+                    "done": ["cites"],
+                    "skipped": None,
+                    "error": None,
+                }
+            ],
+            "directions": ["cites"],
+        }
+    }
+    session.add_all(
+        [
+            SearchRunEligibility(paper_id=alpha.id, search_run_id=run1.id, stage2_status="include", assessed_at=BASE),
+            SearchRunEligibility(
+                paper_id=gamma.id,
+                search_run_id=run2.id,
+                stage2_status="exclude",
+                stage2_exclude_reason="wrong_study_type",
+                assessed_at=BASE,
+            ),
+        ]
+    )
+    await record_links(session, run1, [alpha_hit.id, beta_hit.id], "search", None, None)
+    await record_links(session, run2, [gamma_hit.id], "cites", alpha_hit.id, None)
+    session.add_all(
+        [
+            WorkspaceBranchState(
+                workspace_id=ws.id,
+                hit_id=alpha_hit.id,
+                state="go_further",
+                directions=["cites"],
+                reason="core trial",
+                set_by="screening",
+            ),
+            WorkspaceBranchState(workspace_id=ws.id, paper_id=beta.id, state="stopped", set_by="owner"),
+        ]
+    )
+    await session.flush()
+    return ws, {
+        "alpha": alpha,
+        "beta": beta,
+        "gamma": gamma,
+        "run1": run1,
+        "run2": run2,
+        "alpha_hit": alpha_hit,
+        "beta_hit": beta_hit,
+        "delta_hit": delta_hit,
+        "gamma_hit": gamma_hit,
+    }
+
+
+async def test_v2_declares_its_version_and_carries_every_hit_field(session, pdf_dir):  # Review Focus 1
+    ws, _ = await screened(session, pdf_dir)
+    screening = _json(await _export(session, ws.id, pdfs=True), "screening.json")
+    assert screening["version"] == 2
+    assert screening["workspace"] == {"screening_criteria": "RCTs of sleep", "screening_ranked_used": True}
+    assert len(screening["hits"]) == 4
+    assert all(h["key"].startswith("h") for h in screening["hits"])
+    alpha = next(h for h in screening["hits"] if h["title"] == "Alpha study")
+    assert alpha["external_ids"] == {} and alpha["authors"] == ["Jane Smith"] and alpha["year"] == 2020
+    assert (alpha["venue"], alpha["abstract"], alpha["source_type"]) == ("Sleep J", None, None)
+    assert (alpha["published_doi"], alpha["published_venue"]) == (None, None)
+    assert (alpha["snowball_round"], alpha["seed_paper"], alpha["acquisition_status"]) == (None, None, "imported")
+    assert (alpha["priority"], alpha["topic_fit"], alpha["stage1_decided_at"]) == (4, "same_topic", BASE.isoformat())
+    assert alpha["first_seen_at"] == BASE.isoformat() and alpha["stage1"]["status"] == "relevant"
+    assert alpha["ai_suggestion"] == {
+        "ai": True,
+        "suggestion": "include",
+        "reason": None,
+        "note": "fits",
+        "model": "Ollama · qwen3:8b",
+        "relevance": 5,
+        "confidence": "high",
+        "quotes": [{"quote": "sleep", "section": "Results"}],
+        "flags": [],
+        "prompt_version": 3,
+        "suggested_at": BASE.isoformat(),
+    }
+    gamma = next(h for h in screening["hits"] if h["title"] == "Gamma study")
+    paper_keys = {
+        p["title"]: p["key"] for p in _json(await _export(session, ws.id, pdfs=True), "papers.json")["papers"]
+    }
+    assert gamma["seed_paper"] == paper_keys["Alpha study"] and gamma["snowball_round"] == 1
+    assert gamma["source_method"] == "snowball_backward" and gamma["paper"] == paper_keys["Gamma study"]
+
+
+async def test_v2_runs_carry_stats_and_paging_state_only(session, pdf_dir):  # Review Focus 1, secrecy
+    ws, _ = await screened(session, pdf_dir)
+    screening = _json(await _export(session, ws.id, pdfs=True), "screening.json")
+    run1 = next(r for r in screening["runs"] if r["query"] == "sleep trial")
+    assert run1["query_overrides"] == {"crossref": "sleep RCT"} and run1["stopped_at"] is None
+    assert run1["stats"]["per_source_raw_count"] == {"openalex": 3, "crossref": 2}
+    assert "api_key=***" in run1["stats"]["warnings"][0]["message"] and SECRET_KEY not in str(run1["stats"])
+    cursors = {c["source"]: c for c in run1["cursors"]}
+    assert cursors["openalex"] == {"source": "openalex", "exhausted": True, "cursor": {"value": 2}, "last_error": None}
+    assert cursors["crossref"]["cursor"] == {"errors": 1} and cursors["crossref"]["exhausted"] is False
+    assert cursors["crossref"]["last_error"] == "timed out for mailto=***"
+    run2 = next(r for r in screening["runs"] if r["query"].startswith("Snowball"))
+    seed = run2["stats"]["snowball"]["seeds"][0]
+    paper_keys = {
+        p["title"]: p["key"] for p in _json(await _export(session, ws.id, pdfs=True), "papers.json")["papers"]
+    }
+    hit_keys = {h["title"]: h["key"] for h in screening["hits"]}
+    assert "id" not in seed and "hit_id" not in seed
+    assert (seed["paper"], seed["hit"]) == (paper_keys["Alpha study"], hit_keys["Alpha study"])
+
+
+async def test_v2_eligibility_links_and_branches_use_package_keys(session, pdf_dir):
+    ws, rows = await screened(session, pdf_dir)
+    screening = _json(await _export(session, ws.id, pdfs=True), "screening.json")
+    keys = {h["title"]: h["key"] for h in screening["hits"]}
+    papers_json = {
+        p["title"]: p["key"] for p in _json(await _export(session, ws.id, pdfs=True), "papers.json")["papers"]
+    }
+    run_keys = {r["query"]: r["key"] for r in screening["runs"]}
+    assert {
+        "paper": papers_json["Alpha study"],
+        "run": run_keys["sleep trial"],
+        "stage2_status": "include",
+        "exclude_reason": None,
+        "assessed_at": BASE.isoformat(),
+    } in screening["eligibility"]
+    gamma_elig = next(e for e in screening["eligibility"] if e["paper"] == papers_json["Gamma study"])
+    assert gamma_elig["stage2_status"] == "exclude" and gamma_elig["exclude_reason"] == "wrong_study_type"
+    kinds = sorted(((link["kind"], link["child_hit"], link["parent_hit"]) for link in screening["links"]), key=str)
+    assert kinds == sorted(
+        [
+            ("search", keys["Alpha study"], None),
+            ("search", keys["Beta study"], None),
+            ("cites", keys["Gamma study"], keys["Alpha study"]),
+        ],
+        key=str,
+    )
+    branches = {(b["hit"], b["paper"]): b for b in screening["branches"]}
+    assert branches[(keys["Alpha study"], None)] == {
+        "hit": keys["Alpha study"],
+        "paper": None,
+        "state": "go_further",
+        "directions": ["cites"],
+        "reason": "core trial",
+        "set_by": "screening",
+    }
+    assert branches[(None, papers_json["Beta study"])]["state"] == "stopped"
+
+
+async def test_v2_marks_papers_outside_the_workspace(session, pdf_dir):
+    ws, rows = await screened(session, pdf_dir)
+    zf = await _export(session, ws.id, pdfs=True)
+    rows_by_title = {p["title"]: p for p in _json(zf, "papers.json")["papers"]}
+    assert rows_by_title["Alpha study"]["member"] is True and rows_by_title["Beta study"]["member"] is True
+    gamma = rows_by_title["Gamma study"]
+    assert gamma["member"] is False and "pdf" not in gamma and gamma["doi"] == "10.1/gamma"
+    assert gamma["key"] not in {rows_by_title["Alpha study"]["key"], rows_by_title["Beta study"]["key"]}
+
+
+async def test_v2_leaks_no_secret_or_database_id(session, pdf_dir):  # Review Focus 4, extended to screening
+    ws, rows = await screened(session, pdf_dir)
+    ids = [str(v.id) for v in rows.values() if hasattr(v, "id")] + [str(ws.id)]
+    zf = await _export(session, ws.id, pdfs=True)
+    for name in zf.namelist():
+        data = zf.read(name).decode("utf-8", "ignore") if not name.startswith("pdfs/") else ""
+        for needle in (SECRET_KEY, SECRET_CURSOR, SECRET_EMAIL, *ids):
+            assert needle not in data, f"{needle!r} leaked into {name}"
