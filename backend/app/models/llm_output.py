@@ -33,6 +33,9 @@ class LLMOutput(Base):
     # The connection's label when the answer was written, copied (no FK): renaming or deleting the connection
     # never changes it. NULL for answers written before connections existed.
     connection_name: Mapped[str | None] = mapped_column(Text)
+    # The skill's label and version when the answer was written, copied (no FK), as connection_name is (M17 S7).
+    skill_label: Mapped[str | None] = mapped_column(Text)
+    skill_version: Mapped[int | None]
     prompt_version: Mapped[int]
     # A check's kept lines {lines: [{verdict, text, cited}], dropped}, judged once at save. NULL for every other kind.
     check_result: Mapped[dict | None] = mapped_column(JSONB)
