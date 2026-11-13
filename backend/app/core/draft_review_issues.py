@@ -15,10 +15,13 @@ from app.core.manuscript_sentences import _blank_comments
 SEVERITIES = ("blocker", "major", "minor", "nit")
 MIN_PAPER_CHARS = 200
 MAX_PAPER_CHARS = 40_000  # about 10k tokens: with the prompt and the answer it fits OLLAMA_NUM_CTX = 16 384
+MAX_TOTAL_CHARS = 160_000  # a longer draft is refused; a draft up to this is reviewed in parts of MAX_PAPER_CHARS
 MAX_DEPTH = 4
 MIN_QUOTE, MAX_QUOTE = 12, 400
 MAX_WORDS = 40
 NO_REF = re.compile(r"(?!)")  # a point here cites nothing
+HEADING = re.compile(r"^\\(?:section|chapter)\*?", re.MULTILINE)
+BLANK = re.compile(r"\n\s*\n")
 
 
 class RawIssue(BaseModel):  # extra keys are ignored: local models add them
@@ -71,6 +74,41 @@ def assemble(files: Mapping[str, str], main: str) -> tuple[str, dict[str, str]]:
         text = text[begin + len("\\begin{document}") :]
     end = text.find("\\end{document}")
     return (text if end < 0 else text[:end]).strip(), used
+
+
+def _blocks(paper: str) -> list[str]:
+    """The paper cut before each heading line; the text before the first heading is a block of its own."""
+    starts = sorted({0, *(m.start() for m in HEADING.finditer(paper))})
+    return [paper[a:b] for a, b in zip(starts, [*starts[1:], len(paper)])]
+
+
+def _units(block: str, limit: int) -> list[str]:
+    """A block that fits is one unit; a longer one is cut after its blank lines, and a paragraph still over the limit
+    is cut every `limit` characters. The units concatenate back to the block."""
+    if len(block) <= limit:
+        return [block]
+    pieces, start = [], 0
+    for m in BLANK.finditer(block):
+        pieces.append(block[start : m.end()])
+        start = m.end()
+    pieces.append(block[start:])
+    return [part for piece in pieces for part in (piece[i : i + limit] for i in range(0, len(piece), limit)) if part]
+
+
+def split_parts(paper: str, limit: int = MAX_PAPER_CHARS) -> list[str]:
+    """The paper in parts of at most `limit` characters, cut at section headings where it can be, greedily packed.
+    `"".join(parts) == paper` always, so a quote is found in the part that holds it."""
+    if len(paper) <= limit:
+        return [paper]
+    units = [unit for block in _blocks(paper) for unit in _units(block, limit)]
+    parts: list[str] = []
+    current = ""
+    for unit in units:
+        if current and len(current) + len(unit) > limit:
+            parts.append(current)
+            current = ""
+        current += unit
+    return [*parts, current]
 
 
 def locate(files: Mapping[str, str], quote: str) -> Place | None:

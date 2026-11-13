@@ -119,3 +119,61 @@ def test_merge_keeps_the_same_span_in_two_files_apart_and_sorts_by_severity():
         [mk("nit", "a", 0, 9, "ideas"), mk("blocker", "b", 0, 9, "ideas"), mk("major", "a", 50, 60, "ideas")], AB
     )
     assert [i.severity for i in out] == ["blocker", "major", "nit"]
+
+
+def section(n, size):  # exactly `size` characters, ending on a line break so the next heading starts a line
+    head = f"\\section{{S{n}}}\n"
+    return head + "x" * (size - len(head) - 1) + "\n"
+
+
+def test_a_short_paper_is_one_part_and_unchanged():
+    paper = "\\section{A}\nA short paper.\n\n\\section{B}\nStill short.\n"
+    assert di.split_parts(paper) == [paper]
+
+
+def test_sections_pack_greedily_and_cut_before_each_heading():
+    s1, s2, s3 = section(1, 20_000), section(2, 20_000), section(3, 20_000)
+    parts = di.split_parts(s1 + s2 + s3)
+    assert parts == [s1 + s2, s3]  # 40,000 fits exactly, so sections 1 and 2 share a part
+
+
+def test_a_section_over_the_limit_is_cut_at_blank_lines():
+    big = "\\section{Big}\n" + "\n\n".join(f"p{i:04d} " + "w" * 44 for i in range(1000))
+    parts = di.split_parts(big)
+    assert len(big) > di.MAX_PAPER_CHARS and len(parts) >= 2
+    assert all(len(p) <= di.MAX_PAPER_CHARS for p in parts)
+    assert all(p.endswith("\n\n") for p in parts[:-1])  # every cut falls on a blank line
+    assert "".join(parts) == big
+
+
+def test_a_paragraph_with_no_breaks_is_cut_at_the_limit():
+    paper = "\\section{X}\n" + "y" * 90_000
+    parts = di.split_parts(paper)
+    assert [len(p) for p in parts] == [di.MAX_PAPER_CHARS, di.MAX_PAPER_CHARS, len(paper) - 2 * di.MAX_PAPER_CHARS]
+
+
+def test_text_before_the_first_heading_is_its_own_block():
+    preamble = "Front matter.\n" * 1_000  # 14,000 characters, ending on a line break; it fits with section 1 only
+    paper = preamble + section(1, 20_000) + section(2, 20_000)
+    assert di.split_parts(paper) == [preamble + section(1, 20_000), section(2, 20_000)]
+
+
+@pytest.mark.parametrize(
+    "paper",
+    [
+        "",
+        "tiny",
+        section(1, 45_000),
+        section(1, 45_000) + "\n\n\\chapter*{Two}\n" + section(2, 30_000),
+        "lead " * 9_000 + "\n\\section{Mid}\n" + "text \\section{inline is not a heading}\n" * 2_000,
+        "\\section{Gap}\n" + "\n \n".join("z" * 1_000 for _ in range(60)),
+    ],
+)
+def test_joining_the_parts_gives_back_the_paper(paper):
+    parts = di.split_parts(paper)
+    assert "".join(parts) == paper
+    assert all(len(p) <= di.MAX_PAPER_CHARS for p in parts)
+
+
+def test_the_total_cap_is_four_parts_worth():
+    assert di.MAX_TOTAL_CHARS == 160_000
