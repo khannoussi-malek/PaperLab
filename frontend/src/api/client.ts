@@ -488,9 +488,18 @@ export const api = {
   /**
    * The raw response: on success its body is the SSE stream that `useChatStream` reads. `modelId` null: the default.
    * `parentId`: the saved answer this question follows up (paper chat only); null for a question on its own.
+   * `skillId`: the skill the question runs with (null: No skill). A search hit's chat has no skills, so it sends none.
    */
-  askChat: (scope: ChatScope, question: string, modelId: string | null, parentId: string | null, signal?: AbortSignal) =>
-    fetch(chatUrl(scope), { ...sendJson('POST', { question, model_id: modelId, parent_id: parentId }), signal }),
+  askChat: (scope: ChatScope, question: string, modelId: string | null, parentId: string | null, skillId: string | null, signal?: AbortSignal) =>
+    fetch(chatUrl(scope), {
+      ...sendJson('POST', {
+        question,
+        model_id: modelId,
+        parent_id: parentId,
+        ...(scope.kind === 'hit' ? {} : { skill_id: skillId }),
+      }),
+      signal,
+    }),
   listChatModels: () => request<ChatModel[]>('/api/llm/models'),
   /** `scope` narrows to the skills a chat of that kind can use; hidden ones come back only with `includeHidden`. */
   listSkills: (scope?: 'paper' | 'workspace', includeHidden?: boolean) => {

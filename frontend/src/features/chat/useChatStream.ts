@@ -54,7 +54,7 @@ export const IDLE: ChatStream = {
 const STOPPED: ChatProblem = { message: 'The answer stopped before it finished.', retryable: true, reindex: false }
 
 /**
- * Asks one question with the model `modelId` (null: the default) and follows its SSE stream:
+ * Asks one question with the model `modelId` (null: the default) and the skill `skillId` (null: none), and follows its SSE stream:
  * idle → sources → streaming → done | error. Unmounting stops updating the panel but lets the answer finish; the
  * server saves it. Asking again while one streams cancels the one before it.
  *
@@ -64,6 +64,7 @@ const STOPPED: ChatProblem = { message: 'The answer stopped before it finished.'
 export function useChatStream(
   scope: ChatScope,
   modelId: string | null,
+  skillId: string | null,
   onThreadMove?: (parentId: string, next: string | null) => void,
 ) {
   const [stream, setStream] = useState<ChatStream>(IDLE)
@@ -101,7 +102,7 @@ export function useChatStream(
     const fail = (problem: ChatProblem, tail: Segment[] = []) =>
       set((s) => ({ ...s, status: 'error', problem, segments: appendSegments(s.segments, tail) }))
 
-    const response = await api.askChat(scope, question, modelId, parentId, current.signal).catch(() => null)
+    const response = await api.askChat(scope, question, modelId, parentId, skillId, current.signal).catch(() => null)
     if (!response) return fail({ message: "Can't reach the PaperLab API.", retryable: true, reindex: false })
     if (!response.ok || !response.body) {
       // A removed model or a missing default: the dropdown refetches and falls back.
