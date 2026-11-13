@@ -3307,6 +3307,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Activity
+         * @description The tool calls MCP clients made on the library, newest first.
+         */
+        get: operations["list_activity_api_mcp_activity_get"];
+        put?: never;
+        post?: never;
+        /** Clear Activity */
+        delete: operations["clear_activity_api_mcp_activity_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings */
+        get: operations["get_settings_api_mcp_settings_get"];
+        /** Put Settings */
+        put: operations["put_settings_api_mcp_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup": {
         parameters: {
             query?: never;
@@ -3444,6 +3483,24 @@ export interface components {
             accepted: number;
             /** Skipped */
             skipped: string[];
+        };
+        /** ActivityOut */
+        ActivityOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Tool */
+            tool: string;
+            /** Arguments */
+            arguments: string;
+            /** Outcome */
+            outcome: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Is Write */
+            is_write: boolean;
         };
         /** AddPaperRequest */
         AddPaperRequest: {
@@ -8343,6 +8400,16 @@ export interface components {
         WorkspaceRename: {
             /** Name */
             name: string;
+        };
+        /** WritesSettingIn */
+        WritesSettingIn: {
+            /** Writes Enabled */
+            writes_enabled: boolean;
+        };
+        /** WritesSettingOut */
+        WritesSettingOut: {
+            /** Writes Enabled */
+            writes_enabled: boolean;
         };
     };
     responses: never;
@@ -15419,6 +15486,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["McpCheckOut"];
+                };
+            };
+        };
+    };
+    list_activity_api_mcp_activity_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_activity_api_mcp_activity_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_settings_api_mcp_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WritesSettingOut"];
+                };
+            };
+        };
+    };
+    put_settings_api_mcp_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WritesSettingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WritesSettingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
