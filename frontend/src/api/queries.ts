@@ -233,6 +233,16 @@ export const useChunksOnPage = (paperId: string, page: number | null) =>
 export const useChatHistory = (scope: ChatScope) =>
   useQuery({ queryKey: keys.chat(scope), queryFn: () => api.listChat(scope) })
 
+/** Asks for a chart answer (M14); the saved answer then comes back in the history. */
+export function useAskChart(scope: ChatScope) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ question, modelId }: { question: string; modelId: string | null }) =>
+      api.askChartAnswer(scope, question, modelId),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.chat(scope) }),
+  })
+}
+
 /** For the chat stream, which isn't a query: refetch the history once an answer is saved. */
 export function useInvalidateChatHistory(scope: ChatScope) {
   const client = useQueryClient()
