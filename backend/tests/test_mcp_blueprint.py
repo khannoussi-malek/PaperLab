@@ -8,6 +8,7 @@ from mcp_fixtures import call
 from sqlalchemy import select
 
 from app.core import manuscript_agent, manuscript_templates, manuscripts
+from app.core import manuscript_blueprint as bp
 from app.models import ManuscriptSnapshot
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
@@ -27,7 +28,9 @@ async def test_the_starter_has_the_templates_bands(session):
 
     assert not response.is_error, response.content
     text = await manuscripts.get_text(session, made.id, "blueprint.json")
-    assert text == starter("Draft", "ieee")
+    title = bp.latex_title(await manuscripts.get_text(session, made.id, "main.tex"))
+    assert title and title != "Draft"  # the template's own \title, not the stored name
+    assert text == starter(title, "ieee")
     assert text.endswith("}\n") and '\n  "contributions": [],' in text
     assert json.loads(text)["target_words"]["introduction"] == [400, 900]
 
@@ -65,3 +68,14 @@ async def test_the_history_snapshot_carries_the_tool_and_reason(session):
                                          ManuscriptSnapshot.ai_tool == "create_manuscript_blueprint"))
     assert (snap.ai_path, snap.ai_reason) == ("blueprint.json", "plan the paper")
     assert response.structured_content["snapshot_id"] == str(snap.id)
+
+
+async def test_the_title_comes_from_the_papers_latex_title(session):
+    made = await manuscripts.create_from_files(
+        session, title="Stored name", workspace_id=None,
+        files={"main.tex": "\\title[Short]{Readable \\\\ \\large Title\\thanks{Funded}}\n"}, main_file="main.tex")
+
+    response = await call("create_manuscript_blueprint", manuscript_id=str(made.id))
+
+    assert not response.is_error, response.content
+    assert json.loads(await manuscripts.get_text(session, made.id, "blueprint.json"))["title"] == "Readable Title"

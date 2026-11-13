@@ -15,7 +15,7 @@ function renderPanel({ files, title = 'My paper', template = 'article' }: { file
   const invalidate = vi.spyOn(client, 'invalidateQueries')
   render(
     <QueryClientProvider client={client}>
-      <BlueprintPanel manuscriptId="m1" files={files.map((f) => file(f.path))} title={title} template={template} />
+      <BlueprintPanel manuscriptId="m1" files={files.map((f) => file(f.path))} mainFile="main.tex" title={title} template={template} />
     </QueryClientProvider>,
   )
   return { invalidate }
@@ -75,6 +75,7 @@ test('the Create button shows only when there is no blueprint', async () => {
 test('it writes the starter with a null base and the template bands', async () => {
   mockTemplates()
   const save = mockSave()
+  mockFile('main.tex', '\\section{A}')
   renderPanel({ files: [{ path: 'main.tex' }] })
   const button = screen.getByRole('button', { name: 'Create blueprint' })
   await waitFor(() => expect(button).toBeEnabled()) // the template bands have loaded
@@ -85,9 +86,22 @@ test('it writes the starter with a null base and the template bands', async () =
   expect(JSON.parse(text)).toEqual({ title: 'My paper', contributions: [], notation: [], target_words: { introduction: [400, 900] } })
 })
 
+test('the starter takes the title from the main file\'s \\title, not the stored name', async () => {
+  mockTemplates()
+  const save = mockSave()
+  mockFile('main.tex', '% \\title{Old}\n\\title[Short]{Real \\\\ \\large Title\\thanks{Funded}}')
+  renderPanel({ files: [{ path: 'main.tex' }], title: 'Stored name' })
+  const button = screen.getByRole('button', { name: 'Create blueprint' })
+  await waitFor(() => expect(button).toBeEnabled())
+  fireEvent.click(button)
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+  expect(JSON.parse(save.mock.calls[0][2]).title).toBe('Real Title')
+})
+
 test('a custom template writes empty targets', async () => {
   mockTemplates()
   const save = mockSave()
+  mockFile('main.tex', '\\section{A}')
   renderPanel({ files: [{ path: 'main.tex' }], title: 'T', template: 'custom' })
   const button = screen.getByRole('button', { name: 'Create blueprint' })
   await waitFor(() => expect(button).toBeEnabled())
@@ -99,6 +113,7 @@ test('a custom template writes empty targets', async () => {
 test('after creating, the manuscript and its blueprint are refetched', async () => {
   mockTemplates()
   mockSave()
+  mockFile('main.tex', '\\section{A}')
   const { invalidate } = renderPanel({ files: [{ path: 'main.tex' }] })
   const button = screen.getByRole('button', { name: 'Create blueprint' })
   await waitFor(() => expect(button).toBeEnabled())
@@ -110,6 +125,7 @@ test('after creating, the manuscript and its blueprint are refetched', async () 
 test('it never overwrites: a 409 file_exists refreshes and shows no error', async () => {
   mockTemplates()
   const save = vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new ApiError('file_exists', 409, { detail: 'file_exists' }))
+  mockFile('main.tex', '\\section{A}')
   const toast = vi.spyOn(sileo, 'error').mockReturnValue('' as never)
   const { invalidate } = renderPanel({ files: [{ path: 'main.tex' }] })
   const button = screen.getByRole('button', { name: 'Create blueprint' })
@@ -123,10 +139,36 @@ test('it never overwrites: a 409 file_exists refreshes and shows no error', asyn
 test('another failure shows the Sileo error', async () => {
   mockTemplates()
   vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new ApiError('boom', 500, { detail: 'boom' }))
+  mockFile('main.tex', '\\section{A}')
   const toast = vi.spyOn(sileo, 'error').mockReturnValue('' as never)
   renderPanel({ files: [{ path: 'main.tex' }] })
   const button = screen.getByRole('button', { name: 'Create blueprint' })
   await waitFor(() => expect(button).toBeEnabled())
   fireEvent.click(button)
   await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Couldn't create the blueprint" }))
+})
+
+const NO_TARGETS_LINE = 'No word targets yet: this template has none. Add them under target_words.'
+
+test('a plan with no targets on a template with no bands says so', async () => {
+  mockTemplates()
+  mockFile('blueprint.json', '{"title":"T"}')
+  renderPanel({ files: [{ path: 'blueprint.json' }], template: 'custom' })
+  expect(await screen.findByText(NO_TARGETS_LINE)).toBeInTheDocument()
+})
+
+test('no such line when the template has bands', async () => {
+  mockTemplates()
+  mockFile('blueprint.json', '{"title":"T"}')
+  renderPanel({ files: [{ path: 'blueprint.json' }], template: 'article' })
+  expect(await screen.findByText('T')).toBeInTheDocument()
+  expect(screen.queryByText(NO_TARGETS_LINE)).toBeNull()
+})
+
+test('no such line when the plan has its own targets on a template with no bands', async () => {
+  mockTemplates()
+  mockFile('blueprint.json', '{"title":"T","target_words":{"Introduction":[600,900]}}')
+  renderPanel({ files: [{ path: 'blueprint.json' }], template: 'custom' })
+  expect(await screen.findByText('T')).toBeInTheDocument()
+  expect(screen.queryByText(NO_TARGETS_LINE)).toBeNull()
 })

@@ -51,7 +51,21 @@ def test_below_and_above_the_target_have_exact_text():
 def test_template_band_is_the_default_and_custom_has_none():
     files = {"blueprint.json": "{}", "main.tex": f"\\section{{Conclusion}}\n{words(5)}\n"}
     assert "100 to 300" in run("blueprint.words", files, template="article")[0].message
-    assert run("blueprint.words", files, template="custom") == []
+    assert no_targets(run("blueprint.words", files, template="custom")) == [NO_TARGETS]
+
+
+def test_a_target_naming_no_section_explains_itself_without_the_no_targets_note():
+    files = {"blueprint.json": plan(target_words={"Intro": [1, 9]}),
+             "main.tex": f"\\section{{Conclusion}}\n{words(5)}\n"}
+    f = run("blueprint.words", files, template="custom")
+    assert no_targets(f) == []
+    assert [x.message for x in f] == ['target_words names "Intro", but no section has that title.']
+
+
+def test_an_invalid_plan_gives_only_its_own_warning():
+    files = {"blueprint.json": "{not json", "main.tex": f"\\section{{Conclusion}}\n{words(5)}\n"}
+    f = run("blueprint.words", files, template="custom")
+    assert [x.severity for x in f] == ["warning"] and no_targets(f) == []
 
 
 def test_target_naming_no_section_is_info_and_a_second_file_is_read():
@@ -111,3 +125,33 @@ def test_symbol_spellings_and_non_greek_and_function_like():
              "main.tex": "$\\alpha_t$ and $x_i$ and $\\sigma(x)$.\n"}
     f = run("blueprint.notation", files)
     assert [x.message.split()[0] for x in f] == ["\\sigma"]  # listed, used only as a function: unused
+
+
+NO_TARGETS = ("info", "blueprint.json", 1, "No section has a word target, so section lengths aren't checked.")
+
+
+def no_targets(findings):
+    return [(x.severity, x.file, x.line, x.message) for x in findings if x.message.startswith("No section has")]
+
+
+def test_a_custom_plan_with_no_targets_says_lengths_are_not_checked():
+    files = {"blueprint.json": "{}", "main.tex": f"\\section{{Method}}\n{words(4)}\n"}
+    f = run("blueprint.words", files)
+    assert no_targets(f) == [NO_TARGETS]
+    assert f[0].fix_hint == 'Add targets to target_words in blueprint.json, for example "Introduction": [600, 900].'
+
+
+def test_one_target_anywhere_means_no_such_note():
+    files = {"blueprint.json": plan(target_words={"method": [1, 9]}),
+             "main.tex": f"\\section{{Method}}\n{words(4)}\n\\section{{Intro}}\n{words(4)}\n"}
+    assert no_targets(run("blueprint.words", files)) == []
+
+
+def test_a_template_with_bands_needs_no_note_even_with_empty_targets():
+    files = {"blueprint.json": "{}", "main.tex": f"\\section{{Introduction}}\n{words(4)}\n"}
+    assert no_targets(run("blueprint.words", files, template="acm")) == []
+
+
+def test_no_note_when_no_section_is_measurable():
+    files = {"blueprint.json": "{}", "main.tex": "\\section{Method}\n\\input{sections/m}\n"}
+    assert no_targets(run("blueprint.words", files)) == []

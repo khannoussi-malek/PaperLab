@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core import manuscript_templates
 from app.core.manuscript_checks.latex_hygiene import blank_math, line_of
-from app.core.manuscript_sentences import _blank_comments
+from app.core.manuscript_sentences import _blank_comments, _brace_end
 from app.core.manuscript_template_spec import Band, _check_band
 
 PATH = "blueprint.json"
@@ -89,3 +89,25 @@ def band(spec: BlueprintSpec, section_id: str, template: str) -> Band | None:
         return spec.target_words[section_id]
     t = manuscript_templates.get(template)
     return next((s.words for s in t.sections if s.id == section_id), None) if t else None
+
+
+_TITLE = re.compile(r"\\title\s*(?:\[[^\]]*\]\s*)?\{")
+_THANKS = re.compile(r"\\thanks\s*\{")
+_BREAK = re.compile(r"\\\\|\\newline\b|~")  # ~ is a non-breaking space
+_ESCAPED = re.compile(r"\\([%&$#_])")
+_LETTERS = re.compile(r"\\[A-Za-z]+\*?")
+
+
+def latex_title(tex: str) -> str | None:
+    """The paper's \\title as plain text for the blueprint, or None. Mirrors latexTitle in blueprint.ts."""
+    text = _blank_comments(tex)
+    m = _TITLE.search(text)
+    if m is None:
+        return None
+    end = _brace_end(text, m.end() - 1)
+    body = text[m.end():end - 1] if end <= len(text) and text[end - 1] == "}" else ""
+    while (t := _THANKS.search(body)) is not None:  # footnotes in the title are not part of it
+        body = body[:t.start()] + " " + body[_brace_end(body, t.end() - 1):]
+    body = _LETTERS.sub("", _ESCAPED.sub(r"\1", _BREAK.sub(" ", body)))
+    plain = " ".join(body.replace("{", "").replace("}", "").split())
+    return plain or None

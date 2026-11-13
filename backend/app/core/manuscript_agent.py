@@ -16,7 +16,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import manuscript_history, manuscript_templates, manuscripts, workspaces
+from app.core import manuscript_blueprint, manuscript_history, manuscript_templates, manuscripts, workspaces
 from app.core import manuscript_paths as paths
 from app.core.errors import Conflict, InvalidInput
 from app.models import ManuscriptSnapshot
@@ -274,9 +274,11 @@ async def create_blueprint(session: AsyncSession, mid: uuid.UUID, reason: str | 
     manuscript = await manuscripts.get(session, mid)
     if await manuscripts.get_text(session, mid, BLUEPRINT) is not None:
         raise InvalidInput("blueprint_exists")
+    main = await manuscripts.get_text(session, mid, manuscript.main_file) or ""
+    title = manuscript_blueprint.latex_title(main) or manuscript.title
     try:
         return await create_file(
-            session, mid, BLUEPRINT, starter_blueprint(manuscript.title, manuscript.template), reason,
+            session, mid, BLUEPRINT, starter_blueprint(title, manuscript.template), reason,
             tool="create_manuscript_blueprint",
         )
     except Conflict as exc:  # a racing create of blueprint.json committed first

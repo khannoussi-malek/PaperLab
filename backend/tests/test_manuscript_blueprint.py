@@ -50,3 +50,23 @@ def test_band_prefers_the_blueprint_then_the_template():
     assert bp.band(spec, "method", "article") == (1, 2)
     assert bp.band(spec, "introduction", "article") == (400, 900)
     assert bp.band(spec, "introduction", "custom") is None and bp.band(spec, "nope", "article") is None
+
+
+@pytest.mark.parametrize("tex, want", [
+    ("\\title{What Works}", "What Works"),
+    ("\\title[Short]{Long \\\\ Title}", "Long Title"),
+    ("\\title{A\\thanks{Funded by X.} B}", "A B"),
+    ("\\title{Retrieval~at Scale}", "Retrieval at Scale"),
+    ("% \\title{Old}\n\\title{New}", "New"),
+    ("\\title{\\textbf{Bold} words}", "Bold words"),
+    ("\\title{Foo\\\\ \\large Bar}", "Foo Bar"),
+    ("\\title{Line one\\newline line two}", "Line one line two"),
+    ("\\title{Half 50\\% done % a comment\n}", "Half 50% done"),
+    ("\\title{Nested {braces} stay}", "Nested braces stay"),
+    ("\\title{}", None),
+    ("\\title{\\thanks{only a note}}", None),
+    ("\\section{No title here}", None),
+    ("\\title{Unclosed", None),
+])
+def test_latex_title_is_readable_plain_text(tex, want):
+    assert bp.latex_title(tex) == want
