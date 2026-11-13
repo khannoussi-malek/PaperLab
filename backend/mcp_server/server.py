@@ -13,7 +13,17 @@ import uuid
 from typing import Annotated, Literal, TypedDict
 
 from mcp.server.mcpserver import MCPServer
-from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from mcp.shared.exceptions import MCPError
+from mcp.types import (
+    INVALID_PARAMS,
+    CallToolResult,
+    GetPromptResult,
+    Prompt,
+    PromptArgument,
+    PromptMessage,
+    TextContent,
+    ToolAnnotations,
+)
 from pydantic import Field
 
 from app.core import (
@@ -29,18 +39,107 @@ from app.core import (
     manuscripts,
     notes,
     novelty,
+    papers,
     pipeline,
     reporting_guidelines,
     screening,
+    skill_prompts,
+    skills,
     workspaces,
 )
 from app.core.errors import DomainError, error_code
 from app.core.manuscript_checks import doi_service
 from app.db import SessionLocal
 
+
+class PromptRefused(MCPError, ValueError):
+    """A prompt request that can't be served, with the reason. An MCPError reaches the client as invalid params with
+    this text; a plain ValueError would arrive only as "Internal server error"."""
+
+    def __init__(self, message: str):
+        super().__init__(INVALID_PARAMS, message)
+
+
+def _refused(exc: DomainError) -> PromptRefused:
+    """The app's not-found wording (or a merged paper's detail)."""
+    return PromptRefused(exc.details.get("detail", str(exc)))
+
+
+async def _prompt_paper(session, raw: str) -> papers.Paper:
+    try:
+        paper_id = uuid.UUID(raw)
+    except ValueError as exc:
+        raise PromptRefused("paper_id is not a valid id.") from exc
+    try:
+        return await papers.get_paper(session, paper_id)
+    except DomainError as exc:
+        raise _refused(exc) from exc
+
+
+async def _prompt_workspace(session, name: str) -> str:
+    try:
+        await workspaces.by_name(session, name)
+    except DomainError as exc:
+        raise _refused(exc) from exc
+    return name.strip()
+
+
+async def _prompt_targets(
+    session, view: skills.SkillView, arguments: dict[str, str]
+) -> tuple[papers.Paper | None, str | None]:
+    """The paper or the workspace a prompt is about. A `both` skill takes exactly one of them."""
+    scope = view.scope
+    arguments = {name: value.strip() for name, value in arguments.items() if isinstance(value, str) and value.strip()}
+    missing = [name for name in skill_prompts.REQUIRED[scope] if name not in arguments]
+    if missing:
+        raise PromptRefused(f"Missing required argument: {', '.join(missing)}.")
+    if scope == "both":
+        given = [name for name in skill_prompts.ARGUMENTS["both"] if arguments.get(name)]
+        if not given:
+            raise PromptRefused("Give a paper_id or a workspace.")
+        if len(given) == 2:
+            raise PromptRefused("Give a paper_id or a workspace, not both.")
+    if scope == "paper" or (scope == "both" and arguments.get("paper_id")):
+        return await _prompt_paper(session, arguments["paper_id"]), None
+    return None, await _prompt_workspace(session, arguments["workspace"])
+
+
+class PaperLabMCP(MCPServer):
+    """The library's MCPServer with the reader's skills offered as prompts (M17.5). Nothing is cached: every list and
+    get reads the skills again, so an edit, hide, reset or delete shows on the next call."""
+
+    async def list_prompts(self) -> list[Prompt]:
+        async with sessions() as session:
+            views = await skills.list_skills(session)
+        return [
+            Prompt(
+                name=skill_prompts.prompt_name(view),
+                title=view.label,
+                description=view.description or view.label,
+                arguments=[PromptArgument(**argument._asdict()) for argument in skill_prompts.prompt_args(view.scope)],
+            )
+            for view in views
+        ]
+
+    async def get_prompt(self, name: str, arguments: dict[str, str] | None = None, context=None) -> GetPromptResult:
+        async with sessions() as session:
+            views = await skills.list_skills(session)  # hidden skills are not offered, so they are refused here
+            view = next((view for view in views if skill_prompts.prompt_name(view) == name), None)
+            if view is None:
+                raise PromptRefused(f"Unknown prompt: {name}")
+            paper, workspace = await _prompt_targets(session, view, arguments or {})
+        text = skill_prompts.prompt_text(
+            view, paper=(paper.title, str(paper.id)) if paper is not None else None, workspace=workspace
+        )
+        return GetPromptResult(
+            description=view.description or view.label,
+            messages=[PromptMessage(role="user", content=TextContent(type="text", text=text))],
+        )
+
+
 # ponytail: the embedding model loads on the first search (seconds). Warm it up in a lifespan if a first search
 # times out in Claude Desktop.
-mcp = MCPServer(
+mcp = PaperLabMCP(
     "paperlab",
     instructions=(
         "PaperLab is the owner's research library. Learn workspace names with list_workspaces. "
@@ -87,7 +186,9 @@ mcp = MCPServer(
         "cancel_draft_review, "
         "get/set_manuscript_checklist, compile_manuscript "
         "then get_compile_result, start_manuscript_review, get_manuscript_review, cancel_manuscript_review_all, "
-        "read_manuscript_pdf_text."
+        "read_manuscript_pdf_text. "
+        "The owner's PaperLab skills are offered as prompts: each frames a task (for example checking an evaluation) "
+        "for one paper or one workspace."
     ),
 )
 sessions = SessionLocal  # tests point this at their rolled-back session

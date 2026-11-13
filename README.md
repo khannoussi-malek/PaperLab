@@ -285,6 +285,8 @@ citation), and save a note on a passage it quotes.
 - It can also run searches and snowballs, read screening suggestions and record the decisions you ask for, build
 evidence cards, check a claim against the papers it cites, and write and compile manuscripts. Each manuscript write
 keeps an earlier version you can restore.
+- Your skills appear there as prompts too: pick one, give it a paper or a workspace, and Claude works through that
+task with PaperLab's tools. Hidden skills aren't offered.
 
 **Install it as an app**
 
