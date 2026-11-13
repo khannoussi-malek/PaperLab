@@ -21,6 +21,7 @@ _UNSET = object()  # "leave this field as it is"; workspace_id=None moves the ma
 _NOW = func.clock_timestamp()  # not now(): that is the transaction's start, so two saves in one transaction tie
 # A `running` older than this has no live job behind it: the worker died, or ARQ's timeout cancelled the job.
 STALE_AFTER = timedelta(seconds=COMPILE_TIMEOUT + 60)
+NOT_IN_PDF: frozenset[str] = frozenset({"blueprint.json"})  # saving these doesn't make the PDF stale
 _META = load_only(ManuscriptFile.id, ManuscriptFile.manuscript_id, ManuscriptFile.path, ManuscriptFile.size,
                   ManuscriptFile.updated_at)
 
@@ -145,7 +146,8 @@ async def _store(session, manuscript_id, path, row: ManuscriptFile | None, **con
     else:
         await session.execute(update_rows(ManuscriptFile).where(ManuscriptFile.id == row.id)
                               .values(size=size, updated_at=_NOW, **content))
-    await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
+    if path not in NOT_IN_PDF:
+        await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
     await session.flush()
     await session.refresh(row)
     return row
@@ -240,7 +242,8 @@ async def remove(session: AsyncSession, manuscript_id: uuid.UUID, path: str, *,
     snap = await manuscript_history.take(session, manuscript_id, snapshot) if snapshot is not None else None
     await session.execute(delete_rows(ManuscriptFile).where(
         ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.path == path))
-    await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
+    if path not in NOT_IN_PDF:
+        await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
     if snap is not None:
         await manuscript_history.settle(session, snap)
 

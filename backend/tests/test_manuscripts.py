@@ -1,4 +1,5 @@
-from datetime import timedelta
+import asyncio
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -86,6 +87,26 @@ async def test_rename_validates_the_new_path(session):
     renamed_main = await manuscripts.rename(session, m.id, "main.tex", "paper.tex")
     assert renamed_main.path == "paper.tex"
     assert (await manuscripts.get(session, m.id)).main_file == "paper.tex"
+
+
+async def test_plan_edits_do_not_make_the_pdf_stale_but_tex_edits_and_removals_do(session):
+    m = await new(session)
+    await manuscripts.save_text(session, m.id, "a.tex", "x", base=None)
+    m.compiled_at = datetime.now(timezone.utc)  # a compile finished after the files above
+    await session.flush()
+    await asyncio.sleep(0.05)
+    stamp = (await manuscripts.get(session, m.id)).updated_at
+    await manuscripts.save_text(session, m.id, "blueprint.json", "{}", base=None)
+    await manuscripts.remove(session, m.id, "blueprint.json")
+    row = await manuscripts.get(session, m.id)
+    assert row.updated_at == stamp and row.updated_at <= row.compiled_at
+    base = (await manuscripts.read(session, m.id, "a.tex")).updated_at
+    await manuscripts.save_text(session, m.id, "a.tex", "y", base=base)
+    assert (await manuscripts.get(session, m.id)).updated_at > row.compiled_at
+    compiled = (await manuscripts.get(session, m.id)).compiled_at
+    await asyncio.sleep(0.05)
+    await manuscripts.remove(session, m.id, "a.tex")
+    assert (await manuscripts.get(session, m.id)).updated_at > compiled
 
 
 async def test_list_for_none_returns_orphans_only(session):
