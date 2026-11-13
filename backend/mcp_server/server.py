@@ -37,6 +37,7 @@ from app.core import (
     manuscript_draft_review,
     manuscript_templates,
     manuscripts,
+    mcp_reads,
     notes,
     novelty,
     papers,
@@ -892,6 +893,54 @@ async def export_citations(
     {"format", "count", "text"}; text is ready to paste or save to a file."""
     async with sessions() as session:
         return await pipeline.export_citations_as(session, workspace, format, tags, match)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def paper_references(
+    paper_id: uuid.UUID, direction: Literal["references", "citing"] = "references"
+) -> mcp_reads.ReferencesOut:
+    """Use to see a library paper's references ("references") or the works that cite it ("citing"), ranked for this
+    library, at most 100 rows (`truncated` and `total` say when there are more). `in_library` marks the ones the owner
+    already holds (`library_paper_id` is its id). `cocitation` counts library papers that share the reference. Nothing
+    is fetched here: when `state` is "none" the listing was never fetched and `note` says so; "failed" comes with the
+    `error`."""
+    async with sessions() as session:
+        return await mcp_reads.references_out(session, paper_id, direction)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def list_datasets(paper_id: uuid.UUID | None = None) -> list[mcp_reads.DatasetItem]:
+    """Use to see the tables and numbers the owner captured from papers, or the owner's own data. Give `paper_id` for
+    one paper's (in page order), or leave it out for all of them. `kind` is "table" (captured), "numbers" or "user"."""
+    async with sessions() as session:
+        return await mcp_reads.datasets_out(session, paper_id)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def get_dataset(dataset_id: uuid.UUID) -> mcp_reads.DatasetOut:
+    """Use to read one captured table or the owner's data: its columns (name, unit), rows of cells (`raw` is the text
+    as captured, `value` the number parsed from it, `origin` "extracted" or "human"), and the charts that use it. At
+    most 200 rows; `truncated` says when there are more."""
+    async with sessions() as session:
+        return await mcp_reads.dataset_out(session, dataset_id)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def saved_answers(
+    paper_id: uuid.UUID | None = None,
+    workspace: str | None = None,
+    offset: Annotated[int, Field(ge=0)] = 0,
+) -> mcp_reads.AnswersOut:
+    """Use to read the chat answers the owner saved on a paper, or in a workspace (give exactly one). They are AI
+    text: every answer has `ai` true with its `model` and `skill_label`, so say so when you quote one. Newest first,
+    20 at a time: pass `offset` to go on, `total` counts them all. Each source is a passage an answer cites, by the
+    label its text uses ([C1]); `sources_missing` counts the ones a re-ingest replaced."""
+    async with sessions() as session:
+        return await mcp_reads.answers_out(session, paper_id=paper_id, workspace=workspace, offset=offset)
 
 
 @mcp.tool(annotations=READ_ONLY)

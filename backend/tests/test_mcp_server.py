@@ -65,6 +65,7 @@ EXPECTED_TOOLS = {
     "check_dois": None,
     "list_manuscript_templates": True,
     "create_manuscript_blueprint": None,
+    "paper_references": True, "list_datasets": True, "get_dataset": True, "saved_answers": True,
 }
 
 
