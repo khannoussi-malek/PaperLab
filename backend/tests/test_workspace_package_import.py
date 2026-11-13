@@ -680,3 +680,31 @@ async def test_an_answer_claiming_too_many_slots_is_package_invalid(session, pdf
               "snapshot": []}  # fmt: skip
     with pytest.raises(InvalidInput, match="package_invalid"):
         await _import(session, _package(answers=[answer]))
+
+
+async def test_a_lens_answer_round_trips_with_its_lens(session, pdf_dir):
+    ws, alpha, beta, *_ = await _seeded(session, pdf_dir)
+    answer_id = await cited_answer(session, ws, alpha, beta)
+    (await session.get(LLMOutput, answer_id)).lens = "method"
+    await session.flush()
+    package = (await workspace_package.export_package(session, ws.id, pdfs=False)).read()
+    assert json.loads(zipfile.ZipFile(io.BytesIO(package)).read("answers.json"))["answers"][0]["lens"] == "method"
+    await workspaces.delete(session, ws.id)
+    for paper in (alpha, beta):
+        await papers.delete_paper(session, paper.id)
+
+    report = await _import(session, package)
+
+    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
+    assert answer.output.lens == "method"
+
+
+async def test_an_answer_without_a_lens_imports_as_the_whole_paper(session, pdf_dir):
+    report = await _import(session, _package(papers=[_paper("p1", "Old")], answers=[_answer()]))
+    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
+    assert answer.output.lens == "full"
+
+
+async def test_an_unknown_lens_is_package_invalid(session, pdf_dir):
+    package = _package(papers=[_paper("p1", "Bad")], answers=[_answer(lens="sideways")])
+    await _refused(session, pdf_dir, package, "package_invalid")

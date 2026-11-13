@@ -127,6 +127,7 @@ class AnswerProvenanceOut(BaseModel):
     connection_name: str | None
     prompt_version: int
     skill_label: str | None
+    lens: LensId  # the lens the answer read through; 'full' is the whole paper
     created_at: datetime
     out_of_date: bool  # a cited passage changed since the answer was written
     passages: list[AnswerPassageOut]
@@ -182,6 +183,7 @@ def to_provenance(view: "answer_provenance.AnswerProvenance") -> AnswerProvenanc
         connection_name=view.connection_name,
         prompt_version=view.prompt_version,
         skill_label=view.skill_label,
+        lens=view.lens,
         created_at=view.created_at,
         out_of_date=view.out_of_date,
         passages=[

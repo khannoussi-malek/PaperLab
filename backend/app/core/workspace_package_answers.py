@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.skills import FULL
 from app.models import LLMOutput
 
 
@@ -32,6 +33,7 @@ def _row(output: LLMOutput, keys: dict[uuid.UUID, str]) -> dict:
         "prompt_version": output.prompt_version,
         "skill_label": output.skill_label,
         "skill_version": output.skill_version,
+        "lens": output.lens,
         "whole_paper": output.whole_paper,
         "notes_used": output.notes_used,
         "notes_total": output.notes_total,
@@ -88,6 +90,7 @@ async def write_rows(
                 prompt_version=row["prompt_version"],
                 skill_label=row["skill_label"],
                 skill_version=row["skill_version"],
+                lens=row.get("lens", FULL),  # a package from before lens chat has none
                 whole_paper=row["whole_paper"],
                 notes_used=row["notes_used"],
                 notes_total=row["notes_total"],

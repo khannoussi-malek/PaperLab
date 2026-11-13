@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Collapsible } from 'radix-ui'
 import type { AnswerPassage, AnswerProvenance, McpNoteProvenance } from '@/api/client'
 import { useAnswerProvenance, useNoteProvenance } from '@/api/queries'
+import { LENS_LABELS } from '@/features/lenses/lenses'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -68,6 +69,12 @@ function Provenance({ view }: { view: AnswerProvenance }) {
           <>
             <dt className="text-muted-foreground">Skill</dt>
             <dd>{view.skill_label}</dd>
+          </>
+        )}
+        {view.lens !== 'full' && (
+          <>
+            <dt className="text-muted-foreground">Lens</dt>
+            <dd>{LENS_LABELS[view.lens]}</dd>
           </>
         )}
         <dt className="text-muted-foreground">Made</dt>

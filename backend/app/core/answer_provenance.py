@@ -64,6 +64,7 @@ class AnswerProvenance:
     connection_name: str | None
     prompt_version: int
     skill_label: str | None
+    lens: str  # the lens the answer read through: 'full' unless a skill's lens applied (M16)
     created_at: datetime
     passages: list[AnswerPassage]
     out_of_date: bool  # a cited passage has changed since the answer was written
@@ -133,6 +134,7 @@ async def provenance(session: AsyncSession, output_id: uuid.UUID) -> AnswerProve
         connection_name=output.connection_name,
         prompt_version=output.prompt_version,
         skill_label=output.skill_label,
+        lens=output.lens,
         created_at=output.created_at,
         passages=passages,
         out_of_date=any(p.state == CHANGED for p in passages),
