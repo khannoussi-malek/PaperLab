@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import type { Skill } from '@/api/client'
+import type { LensId, Skill } from '@/api/client'
 import { useCreateSkill, useUpdateSkill } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -7,12 +7,17 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { LENS_LABELS } from '@/features/lenses/lenses'
 import { changedFields, createBody, draftOf, skillErrorMessage, SCOPE_LABELS, validateDraft, type Scope, type SkillDraft } from './skillRules'
 
 const EDITOR_NOTE =
   "PaperLab already tells the model to cite its sources and answer in plain prose, so a skill needn't say how to format or cite."
 const SCOPES: readonly Scope[] = ['paper', 'workspace', 'both']
+const LENSES: readonly LensId[] = ['full', 'key_ideas', 'critical', 'method', 'related']
+/** A skill on the whole paper is the Settings name for `full`; the other lenses keep their own labels. */
+const lensName = (lens: LensId) => (lens === 'full' ? 'Whole paper' : LENS_LABELS[lens])
 
 type Props = {
   open: boolean
@@ -87,6 +92,22 @@ export function SkillEditorDialog({ open, onOpenChange, skill }: Props) {
               ))}
             </RadioGroup>
           </fieldset>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="skill-lens">Lens</Label>
+            <Select value={draft.lens} onValueChange={(value) => setDraft((d) => ({ ...d, lens: value as LensId }))}>
+              <SelectTrigger id="skill-lens" className="w-full">
+                <SelectValue>{lensName(draft.lens)}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {LENSES.map((lens) => (
+                  <SelectItem key={lens} value={lens}>
+                    {lensName(lens)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="grid gap-1.5">
             <Label htmlFor="skill-instructions">Instructions</Label>

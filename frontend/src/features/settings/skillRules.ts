@@ -1,8 +1,8 @@
-import { ApiError, type Skill, type SkillCreate, type SkillUpdate } from '@/api/client'
+import { ApiError, type LensId, type Skill, type SkillCreate, type SkillUpdate } from '@/api/client'
 
 export type Scope = Skill['scope']
 export type ChatKind = 'paper' | 'workspace'
-export type SkillDraft = { label: string; description: string; scope: Scope; instructions: string }
+export type SkillDraft = { label: string; description: string; scope: Scope; instructions: string; lens: LensId }
 
 export const LABEL_MAX = 80
 export const DESCRIPTION_MAX = 200
@@ -41,14 +41,15 @@ export function duplicateLabel(label: string, taken: readonly string[]): string 
 
 export const draftOf = (skill?: Skill): SkillDraft =>
   skill
-    ? { label: skill.label, description: skill.description, scope: skill.scope, instructions: skill.instructions }
-    : { label: '', description: '', scope: 'both', instructions: '' }
+    ? { label: skill.label, description: skill.description, scope: skill.scope, instructions: skill.instructions, lens: skill.lens }
+    : { label: '', description: '', scope: 'both', instructions: '', lens: 'full' }
 
 export const createBody = (draft: SkillDraft): SkillCreate => ({
   label: draft.label.trim(),
   description: draft.description.trim(),
   scope: draft.scope,
   instructions: draft.instructions,
+  lens: draft.lens,
 })
 
 /** Only the fields the draft changed, so editing a built-in does not pin the fields it did not touch. */
@@ -60,6 +61,7 @@ export function changedFields(skill: Skill, draft: SkillDraft): SkillUpdate {
     ...(description !== skill.description && { description }),
     ...(draft.scope !== skill.scope && { scope: draft.scope }),
     ...(draft.instructions !== skill.instructions && { instructions: draft.instructions }),
+    ...(draft.lens !== skill.lens && { lens: draft.lens }),
   }
 }
 

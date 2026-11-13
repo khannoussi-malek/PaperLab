@@ -116,10 +116,20 @@ it('a whole-paper answer over one passage says "1 chunk"', () => {
 })
 
 describe('ChatAnswer skill chip', () => {
-  const footer = { model: 'qwen3', connectionName: 'Ollama', promptVersion: 2 }
+  const footer = { model: 'qwen3', connectionName: 'Ollama', promptVersion: 2, lens: 'full' as const }
 
   it('shows the label of the skill the answer ran with, beside the AI mark', () => {
     render(<ChatAnswer {...base} footer={{ ...footer, skillLabel: 'Limits' }} />)
+    expect(screen.getByText('Limits')).toBeInTheDocument()
+  })
+
+  it('adds the lens after the skill when the skill reads through one', () => {
+    render(<ChatAnswer {...base} footer={{ ...footer, skillLabel: 'Check the evaluation', lens: 'critical' }} />)
+    expect(screen.getByText('Check the evaluation · Critical check')).toBeInTheDocument()
+  })
+
+  it('shows just the skill label for a Whole paper skill', () => {
+    render(<ChatAnswer {...base} footer={{ ...footer, skillLabel: 'Limits', lens: 'full' }} />)
     expect(screen.getByText('Limits')).toBeInTheDocument()
   })
 
@@ -132,7 +142,7 @@ describe('ChatAnswer skill chip', () => {
 
 describe('How this was made', () => {
   it('a saved answer offers the disclosure, closed', () => {
-    render(<ChatAnswer {...base} outputId="out-1" footer={{ model: 'm', connectionName: null, promptVersion: 1, skillLabel: null }} />)
+    render(<ChatAnswer {...base} outputId="out-1" footer={{ model: 'm', connectionName: null, promptVersion: 1, skillLabel: null, lens: 'full' }} />)
     const trigger = screen.getByRole('button', { name: 'How this was made' })
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
   })

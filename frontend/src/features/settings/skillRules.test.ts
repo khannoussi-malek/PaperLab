@@ -81,18 +81,19 @@ describe('changedFields', () => {
 
 describe('createBody and draftOf', () => {
   it('trims the label and description, and starts a new skill on both chats', () => {
-    expect(createBody({ label: ' Mine ', description: ' Short ', scope: 'paper', instructions: 'Do it.' })).toEqual({
+    expect(createBody({ label: ' Mine ', description: ' Short ', scope: 'paper', instructions: 'Do it.', lens: 'method' })).toEqual({
       label: 'Mine',
       description: 'Short',
       scope: 'paper',
       instructions: 'Do it.',
+      lens: 'method',
     })
-    expect(draftOf(undefined)).toEqual({ label: '', description: '', scope: 'both', instructions: '' })
+    expect(draftOf(undefined)).toEqual({ label: '', description: '', scope: 'both', instructions: '', lens: 'full' })
   })
 })
 
 describe('validateDraft', () => {
-  const ok = { label: 'Mine', description: '', scope: 'both' as const, instructions: 'Do it.' }
+  const ok = { label: 'Mine', description: '', scope: 'both' as const, instructions: 'Do it.', lens: 'full' as const }
 
   it('accepts a complete draft', () => {
     expect(validateDraft(ok)).toBeNull()

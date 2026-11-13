@@ -37,6 +37,7 @@ export function SkillRow({ skill, labels }: Props) {
         description: skill.description,
         scope: skill.scope,
         instructions: skill.instructions,
+        lens: skill.lens,
       }),
     )
   }
