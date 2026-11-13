@@ -282,6 +282,8 @@ A DOI check is opt-in.
 and notes, find the papers in your library connected to one (a shared workspace, note, author or topic, or a
 citation), and save a note on a passage it quotes.
 - A note it saves is marked AI, like a note saved from chat, and is highlighted on the lines it quoted.
+- It can read what you've gathered around a paper: its references and citing works (with the ones in your library
+marked), the tables and numbers you captured, and past chat answers, marked as AI.
 - It can also run searches and snowballs, read screening suggestions and record the decisions you ask for, build
 evidence cards, check a claim against the papers it cites, and write and compile manuscripts. Each manuscript write
 keeps an earlier version you can restore.
