@@ -118,8 +118,10 @@ describe('skill picker', () => {
   })
 
   it('shows no picker in a search hit chat, and sends no skill_id', async () => {
+    const listSkills = vi.spyOn(api, 'listSkills')
     renderPanel({ kind: 'hit', id: 'h1', workspaceId: 'w1' })
     await screen.findByRole('button', { name: 'Ask' })
     expect(screen.queryByRole('combobox', { name: 'Skill' })).toBeNull()
+    expect(listSkills).not.toHaveBeenCalled() // a hit chat never asks for skills it can't offer
   })
 })

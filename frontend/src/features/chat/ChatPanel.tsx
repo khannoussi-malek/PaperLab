@@ -81,7 +81,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
     : null
   // The skill the reader picked this session; undefined until they pick (the kind's default), null for No skill.
   // A search hit's chat has no skills, so its question sends none.
-  const skills = useSkills(scope.kind === 'hit' ? 'paper' : scope.kind)
+  const skills = useSkills(scope.kind === 'hit' ? 'paper' : scope.kind, false, scope.kind !== 'hit')
   const [skillPick, setSkillPick] = useState<string | null | undefined>(undefined)
   const skillId = scope.kind === 'hit' ? null : resolveSkill(skills.data ?? [], scope.kind, skillPick)
   // The saved answer the next question follows up (paper chat only); null asks it on its own.

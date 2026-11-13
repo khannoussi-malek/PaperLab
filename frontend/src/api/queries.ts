@@ -1177,8 +1177,13 @@ export function useChartMutations() {
 export const useChatModels = () => useQuery({ queryKey: keys.chatModels, queryFn: api.listChatModels })
 
 /** The skills a chat of this kind can use; hidden ones come back only for Settings (`includeHidden`). */
-export const useSkills = (kind: 'paper' | 'workspace', includeHidden = false) =>
-  useQuery({ queryKey: [...keys.skills, kind, includeHidden] as const, queryFn: () => api.listSkills(kind, includeHidden) })
+/** `enabled: false` for a chat that offers no skills (a search hit's), so it never asks. */
+export const useSkills = (kind: 'paper' | 'workspace', includeHidden = false, enabled = true) =>
+  useQuery({
+    queryKey: [...keys.skills, kind, includeHidden] as const,
+    queryFn: () => api.listSkills(kind, includeHidden),
+    enabled,
+  })
 
 /** Every skill mutation refetches all skills lists: a change moves rows between kinds, hidden lists and defaults. */
 function useSkillMutation<Variables, Result>(mutationFn: (variables: Variables) => Promise<Result>) {
