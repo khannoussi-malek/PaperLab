@@ -133,13 +133,16 @@ def reading_position(note: NoteView, paper_id: uuid.UUID) -> tuple[int, float, f
     return min((a.page, r[1], r[0]) for a in note.anchors if a.paper_id == paper_id for r in a.bbox)
 
 
-async def queue_embed(note_id: uuid.UUID) -> None:
-    """Queues the note's embedding (workers/references.embed_note). Call after the commit that saved its body. A queue
-    that is down only logs: the next references fetch embeds the note."""
+async def queue_embed(*note_ids: uuid.UUID) -> None:
+    """Queues the embedding of these notes as ONE job (workers/references.embed_note): an import of many notes is one
+    job, not one per note. Call after the commit that saved their bodies. A queue that is down only logs: the next
+    references fetch embeds them."""
+    if not note_ids:
+        return
     try:
-        await queue.enqueue("embed_note", str(note_id))
+        await queue.enqueue("embed_note", [str(note_id) for note_id in note_ids])
     except Exception:
-        logging.getLogger(__name__).exception("could not queue the embedding of note %s", note_id)
+        logging.getLogger(__name__).exception("could not queue the embedding of notes %s", note_ids)
 
 
 async def _get_note(session: AsyncSession, note_id: uuid.UUID) -> Note:

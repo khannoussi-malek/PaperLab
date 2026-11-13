@@ -225,6 +225,5 @@ async def import_files(session: AsyncSession, files: list[tuple[str, bytes]]) ->
         created += 1
         linked += bool(found)
     await session.commit()
-    for note_id in saved:
-        await notes.queue_embed(note_id)
+    await notes.queue_embed(*saved)
     return ImportResult(created, linked, created - linked, skipped)

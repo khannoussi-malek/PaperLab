@@ -52,7 +52,7 @@ async def test_creating_a_note_enqueues_one_embed_note(session, jobs):
     paper = await make_paper(session)
     note = await notes.create_paper_note(session, paper.id, "a new thought")
 
-    assert enqueued(jobs) == [("embed_note", str(note.id))]
+    assert enqueued(jobs) == [("embed_note", [str(note.id)])]
 
 
 async def test_editing_the_body_enqueues_the_note(session, jobs):
@@ -62,7 +62,7 @@ async def test_editing_the_body_enqueues_the_note(session, jobs):
 
     await notes.update_note(session, note.id, body="second")
 
-    assert enqueued(jobs) == [("embed_note", str(note.id))]
+    assert enqueued(jobs) == [("embed_note", [str(note.id)])]
 
 
 async def test_recolouring_does_not_enqueue(session, jobs):
@@ -141,3 +141,18 @@ async def test_embed_new_still_embeds_stale_notes(session, jobs):
     await references.embed_new(session, FakeEmbedder())
 
     assert await embedded(session, note.id) == {note.id}
+
+
+async def test_an_import_of_many_notes_queues_one_job(session, jobs):
+    from app.core import notes
+
+    ids = [uuid.uuid4() for _ in range(3)]
+    await notes.queue_embed(*ids)
+    assert enqueued(jobs) == [("embed_note", [str(i) for i in ids])]
+
+
+async def test_queueing_nothing_queues_no_job(session, jobs):
+    from app.core import notes
+
+    await notes.queue_embed()
+    assert enqueued(jobs) == []

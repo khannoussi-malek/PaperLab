@@ -172,8 +172,7 @@ async def _file(session: AsyncSession, paper_id: uuid.UUID, entry: ImportEntry, 
             have.add(body)
             added += 1
     await session.commit()
-    for note_id in saved:
-        await notes.queue_embed(note_id)
+    await notes.queue_embed(*saved)
     return added
 
 

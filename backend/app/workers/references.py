@@ -15,19 +15,20 @@ logger = logging.getLogger(__name__)
 EMBED_NOTE_JOB_TIMEOUT = 5 * 60
 
 
-async def embed_note(ctx: dict, note_id: str) -> None:
-    """Embeds one note as it is saved, so a fetch ranks references by it without waiting for the next fetch. Quiet
-    when no search model can embed it (none set up, or the source refuses): the fetch-time catch-up embeds it later."""
-    nid = uuid.UUID(note_id)
+async def embed_note(ctx: dict, note_ids: list[str] | str) -> None:
+    """Embeds notes as they are saved, so a fetch ranks references by them without waiting for the next fetch. One
+    job carries every note of one save or import. Quiet when no search model can embed them (none set up, or the
+    source refuses): the fetch-time catch-up embeds them later."""
+    ids = [uuid.UUID(note_id) for note_id in ([note_ids] if isinstance(note_ids, str) else note_ids)]
     async with SessionLocal() as session:
         try:
             embedder = await search_embedder(ctx, session)
             if embedder is None:
-                logger.info("note %s wasn't embedded on save: no search model", nid)
+                logger.info("%d note(s) weren't embedded on save: no search model", len(ids))
                 return
-            await references.embed_notes(session, embedder, [nid])
+            await references.embed_notes(session, embedder, ids)
         except (LLMUnavailable, LLMError) as exc:
-            logger.info("note %s wasn't embedded on save, the next references fetch will: %s", nid, exc)
+            logger.info("%d note(s) weren't embedded on save, the next references fetch will: %s", len(ids), exc)
 
 
 async def fetch_references(ctx: dict, paper_id: str) -> None:

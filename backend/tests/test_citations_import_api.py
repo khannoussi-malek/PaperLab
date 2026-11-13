@@ -218,7 +218,8 @@ async def test_a_zip_with_its_pdf_imports_inline(client, session, redis):
     assert response.status_code == 200, response.text
     result = response.json()["result"]
     assert (result["imported"], result["pdfs_attached"], result["needs_pdf"]) == (1, 1, [])
-    assert redis.jobs == [("ingest_paper", redis.jobs[0][1])]
+    paper_jobs = [job for job in redis.jobs if job[0] != "embed_note"]  # a note it saves queues its embedding too
+    assert paper_jobs == [("ingest_paper", paper_jobs[0][1])]
 
 
 async def test_a_new_workspace_is_made_and_filled(client, session):
