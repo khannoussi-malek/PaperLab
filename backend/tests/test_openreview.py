@@ -224,3 +224,10 @@ async def test_the_bucket_makes_a_twenty_first_request_wait_for_the_window(fresh
 
     [wait] = fresh_budget_and_no_sleeps
     assert openreview.RATE_WINDOW_SECONDS - 1 < wait <= openreview.RATE_WINDOW_SECONDS
+
+
+async def test_a_reply_without_notes_is_a_failed_source_not_an_empty_result():
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, json={"count": 3}))
+    http = openreview.new_client(email=None, api_key=None, transport=transport)
+    with pytest.raises(httpx.HTTPError):
+        await openreview.search_page(http, "retrieval", 20, 0)

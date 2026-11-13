@@ -40,6 +40,8 @@ def upgrade() -> None:
     # CREATE INDEX CONCURRENTLY cannot run inside a transaction block; autocommit_block() commits the migration's
     # transaction for this one statement, the same mechanism 0022 uses.
     with op.get_context().autocommit_block():
+        # a CONCURRENTLY build that failed leaves an invalid index behind: drop it first so the upgrade can rerun
+        op.execute("DROP INDEX CONCURRENTLY IF EXISTS external_refs_external_ids_gin")
         op.execute("CREATE INDEX CONCURRENTLY external_refs_external_ids_gin ON external_refs USING gin (external_ids)")
 
 

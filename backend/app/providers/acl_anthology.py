@@ -104,7 +104,7 @@ def _author(name: str) -> str:
 
 
 def _authors(raw: str | None) -> list[str]:
-    names = (_decode(part) for part in (raw or "").split(" and "))
+    names = (_decode(part) for part in re.split(r"\s+and\s+", raw or ""))
     return [_author(name) for name in names if name]
 
 

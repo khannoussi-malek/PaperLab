@@ -85,15 +85,22 @@ def _params(term: str, limit: int, offset: int) -> dict:
     return {"term": term, "type": "terms", "content": "title", "source": "forum", "limit": limit, "offset": offset}
 
 
+def _notes(body) -> list[dict]:
+    """The reply's notes; a reply without them is a failed source, not an empty result."""
+    notes = body.get("notes") if isinstance(body, dict) else None
+    if not isinstance(notes, list):
+        raise httpx.DecodingError("OpenReview replied without a notes list")
+    return notes
+
+
 async def search(http: httpx.AsyncClient, term: str, limit: int) -> list[dict]:
-    body = json_body(_checked(await _get(http, _params(term, limit, 0))))
-    return body["notes"]
+    return _notes(json_body(_checked(await _get(http, _params(term, limit, 0)))))
 
 
 async def search_page(http: httpx.AsyncClient, term: str, page_size: int, cursor: int) -> tuple[list[dict], int | None]:
     """`cursor` is a 0-based offset into the results (the registry's default starting_cursor of 0). Returns
     (notes, next_offset_or_None): more remain while the offset is still short of the reported `count`."""
     body = json_body(_checked(await _get(http, _params(term, page_size, cursor))))
-    notes = body["notes"]
+    notes = _notes(body)
     more = bool(notes) and cursor + page_size < (body.get("count") or 0)
     return notes, cursor + page_size if more else None

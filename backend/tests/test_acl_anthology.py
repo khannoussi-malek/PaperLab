@@ -325,3 +325,10 @@ async def test_the_harvest_downloads_nothing_when_acl_is_off_or_on_a_test_stack(
     monkeypatch.setattr(harvest.settings, "discovery_provider", "fake")
     await harvest.harvest_acl_anthology({})
     assert calls == []  # the test stack's fake providers never reach the real site
+
+
+def test_authors_split_on_and_across_a_line_break():
+    assert acl_anthology._authors("Smith, Ann and\n  Jones, Bo") == [
+        acl_anthology._author("Smith, Ann"),
+        acl_anthology._author("Jones, Bo"),
+    ]

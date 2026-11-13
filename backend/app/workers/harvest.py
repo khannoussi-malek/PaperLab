@@ -81,8 +81,9 @@ async def harvest_ingest_candidate(session: AsyncSession, candidate: Candidate) 
         existing.authors = candidate.authors
         existing.abstract = candidate.abstract
         existing.year = candidate.year
-        existing.venue = candidate.venue
-        existing.doi = candidate.doi
+        # never blank what another path (a live search's fold) filled in when this record lacks it
+        existing.venue = candidate.venue or existing.venue
+        existing.doi = candidate.doi or existing.doi
         return
     session.add(
         ExternalRef(
@@ -219,12 +220,14 @@ async def _sync_acl_anthology(session: AsyncSession) -> None:
         logger.info("ACL Anthology harvest skipped: the source is off, or the paper sources are fake")
         return
     cursor = await _acl_cursor(session)
+    etag, last_modified = cursor.etag, cursor.last_modified
+    await session.commit()  # no transaction stays open across a download that can take minutes
     http = acl_anthology.new_client()
     with tempfile.TemporaryDirectory() as scratch:
         dump = Path(scratch) / "anthology+abstracts.bib.gz"
         try:
             validators = await acl_anthology.download(
-                http, dump, etag=cursor.etag, last_modified=cursor.last_modified
+                http, dump, etag=etag, last_modified=last_modified
             )
         finally:
             await http.aclose()
