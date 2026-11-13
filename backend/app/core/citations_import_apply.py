@@ -350,7 +350,7 @@ async def apply(
     workspace before anything is created; anything else an entry raises is listed in `failed`. Past `deadline` (a
     time.monotonic() value) the entries left are listed in `not_reached` and `stopped` says so."""
     if workspace_id is not None:
-        await workspaces.get(session, workspace_id)
+        await workspaces.require_writable(session, workspace_id)
     result = ImportResult()
     async with contextlib.AsyncExitStack() as stack:
         opened: list[discovery.Providers] = []
@@ -478,7 +478,7 @@ async def start(
     read from it, never whole). Raises CitationsImportError for an unreadable file, NotFound for an unknown
     workspace."""
     if workspace_id is not None:
-        await workspaces.get(session, workspace_id)
+        await workspaces.require_writable(session, workspace_id)
     entries, bundle = read(name, source)
     with bundle or contextlib.nullcontext():
         return await route(

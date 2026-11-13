@@ -189,6 +189,7 @@ async def upload_paper(
     in the library reuses that paper (no second copy); otherwise it is kept on the new paper as a locked field.
     Everything is checked before the first write."""
     ws = await workspace_id(session, workspace)
+    await workspaces.require_writable(session, ws)
     names = [tags.normalize(name) for name in tag_names or []]
     clean_doi = None
     if doi is not None and (clean_doi := enrichment.normalize_doi(doi)) is None:
@@ -431,6 +432,8 @@ async def add_paper(
     saved_without_pdf; its abstract is indexed)."""
     kind, value = _identifier(identifier)
     workspace_uuid = await workspace_id(session, workspace) if workspace is not None else None  # before any download
+    if workspace_uuid is not None:
+        await workspaces.require_writable(session, workspace_uuid)
     async with discovery.open_providers(session) as providers:
         return await _add(session, providers, kind, value, workspace_uuid, save_without_pdf)
 
@@ -473,6 +476,8 @@ async def add_papers(
     if len(identifiers) > MAX_ADD_PAPERS:
         raise InvalidInput("too_many_identifiers", max=MAX_ADD_PAPERS)
     workspace_uuid = await workspace_id(session, workspace) if workspace is not None else None  # before any download
+    if workspace_uuid is not None:
+        await workspaces.require_writable(session, workspace_uuid)
     items = []
     async with discovery.open_providers(session) as providers:
         for text, parsed, error in _distinct(identifiers):
@@ -698,6 +703,7 @@ async def enrich_hits(session: AsyncSession, workspace: str, run_id: uuid.UUID |
     again. With Semantic Scholar turned off in Settings nothing is queued (`s2_off`). Hits whose 'no abstract'
     suggestion is now out of date are cleared (`suggestions_cleared`), so run_prescreen picks them up again."""
     ws = await workspace_id(session, workspace)
+    await workspaces.require_writable(session, ws)
     if run_id is not None:
         await workspace_search.get_run(session, run_id, workspace_id=ws)  # NotFound for a foreign run
     cleared = await hit_enrichment.clear_stale_no_abstract(session, ws)  # needs no Semantic Scholar

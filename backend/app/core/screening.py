@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import llm_connections
+from app.core import llm_connections, workspaces
 from app.core.branches import default_branch_on_decision
 from app.core.errors import Conflict, NotFound
 from app.core.screening_rank import Doc, Features, features, rank, stop_hint
@@ -225,6 +225,7 @@ async def set_criteria(
 ) -> dict:
     """Saves the question and criteria; a change to any clears every stored suggestion, judged against the old
     ones (§4.1). The old `criteria` is the inclusion criteria."""
+    await workspaces.require_writable(session, workspace_id)
     workspace = await session.get(Workspace, workspace_id)
     if workspace is None:
         raise NotFound(f"workspace {workspace_id} not found")
@@ -256,6 +257,7 @@ async def set_prescreen_settings(
     auto_import_min_relevance: int | None,
 ) -> dict:
     """Auto-run after scheduled runs (None = leave) and the auto-import bar (None = off; else 4 or 5)."""
+    await workspaces.require_writable(session, workspace_id)
     workspace = await session.get(Workspace, workspace_id)
     if workspace is None:
         raise NotFound(f"workspace {workspace_id} not found")
@@ -288,6 +290,7 @@ async def start_suggestions(
     limit: int | None = None, run_ids: Collection[uuid.UUID] | None = None,
 ) -> dict:
     """Marks the job running; the route enqueues it. Suggest only (D189): the job never writes stage1_status."""
+    await workspaces.require_writable(session, workspace_id)
     pool = await load_pool(session, workspace_id)
     workspace = pool.workspace
     if not (workspace.research_question or workspace.inclusion_criteria):
@@ -314,6 +317,7 @@ async def start_suggestions(
 
 
 async def stop_suggestions(session: AsyncSession, workspace_id: uuid.UUID) -> dict:
+    await workspaces.require_writable(session, workspace_id)
     workspace = await session.get(Workspace, workspace_id)
     if workspace is None:
         raise NotFound(f"workspace {workspace_id} not found")
@@ -339,6 +343,7 @@ class AcceptResult:
 async def accept_suggestions(session: AsyncSession, workspace_id: uuid.UUID, hit_ids: list[uuid.UUID]) -> AcceptResult:
     """The owner's Accept: an include becomes relevant, an exclude not_relevant with its reason, stamped like a manual
     decision. Unsure, unsuggested, already decided, foreign and unknown hits are skipped, never written."""
+    await workspaces.require_writable(session, workspace_id)
     hits = (await session.scalars(
         select(WorkspaceSearchHit).where(
             WorkspaceSearchHit.id.in_(hit_ids), WorkspaceSearchHit.workspace_id == workspace_id

@@ -43,7 +43,7 @@ async def upload_paper(
 ) -> PaperOut:
     """workspace_id: also add the new paper to this workspace (404 before anything is stored if it's unknown)."""
     if workspace_id is not None:
-        await workspaces.get(session, workspace_id)
+        await workspaces.require_writable(session, workspace_id)
     paper = await papers.create_paper_from_stream(session, file.filename or "untitled.pdf", file.file, settings.pdf_dir)
     if workspace_id is not None:
         await workspaces.add_paper(session, workspace_id, paper.id)

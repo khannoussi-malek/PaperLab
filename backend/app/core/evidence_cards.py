@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import claims, llm_json, numbers, prompts, queue, quotes, retrieval
+from app.core import claims, llm_json, numbers, prompts, queue, quotes, retrieval, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, EvidenceCard, LLMOutput, Paper, PaperStatus, Workspace, workspace_papers
 
@@ -249,6 +249,8 @@ async def request_cards(
     `card_edited_needs_confirm`, checked for every paper before anything changes). A card already `generating` is
     returned as is and not queued again, so two requests make one job. Returns one view per paper, in order.
     """
+    if workspace_id is not None:
+        await workspaces.require_writable(session, workspace_id)
     paper_ids = original_ids = list(dict.fromkeys(paper_ids))
     if not paper_ids:
         return []

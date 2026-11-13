@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import workspaces
 from app.core.enrichment import normalize_doi
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, Workspace, WorkspaceTag, hit_tags, paper_tags, workspace_papers
@@ -118,6 +119,7 @@ async def tag_papers(
     dois: Sequence[str] = (),
 ) -> TagResult:
     """Tags the workspace's papers, creating the tag when missing. Non-members are skipped, never added."""
+    await workspaces.require_writable(session, ws)
     name = normalize(name)
     members, skipped = await _members(session, ws, paper_ids, dois)
     tag = await get_or_create(session, ws, name)
@@ -140,6 +142,7 @@ async def untag_papers(
     dois: Sequence[str] = (),
 ) -> TagResult:
     """Raises InvalidInput("unknown_tag") rather than creating the tag."""
+    await workspaces.require_writable(session, ws)
     (tag,) = await resolve(session, ws, [name])
     members, skipped = await _members(session, ws, paper_ids, dois)
     done = await session.execute(
@@ -153,6 +156,7 @@ async def untag_papers(
 
 
 async def rename(session: AsyncSession, ws: uuid.UUID, name: str, new_name: str) -> str:
+    await workspaces.require_writable(session, ws)
     (tag,) = await resolve(session, ws, [name])
     new_name = normalize(new_name)
     other = await _find(session, ws, new_name)
@@ -165,6 +169,7 @@ async def rename(session: AsyncSession, ws: uuid.UUID, name: str, new_name: str)
 
 async def delete(session: AsyncSession, ws: uuid.UUID, name: str) -> int:
     """Removes the tag; returns how many papers carried it. The papers are untouched."""
+    await workspaces.require_writable(session, ws)
     (tag,) = await resolve(session, ws, [name])
     carried = await session.scalar(select(func.count()).select_from(paper_tags).where(paper_tags.c.tag_id == tag.id))
     await session.execute(delete_rows(WorkspaceTag).where(WorkspaceTag.id == tag.id))
@@ -252,6 +257,7 @@ async def apply_hit_tags(session: AsyncSession, ws: uuid.UUID, hits: Sequence[Wo
 
 async def tag_hits(session: AsyncSession, ws: uuid.UUID, names: list[str], hit_ids: Sequence[uuid.UUID]) -> None:
     """Stores the tags on the workspace's hits (creating missing tags); a hit already imported tags its paper too."""
+    await workspaces.require_writable(session, ws)
     if not names or not hit_ids:
         return
     tag_ids = {(await get_or_create(session, ws, name)).id for name in names}
@@ -273,11 +279,13 @@ async def _name_of(session: AsyncSession, ws: uuid.UUID, tag_id: uuid.UUID) -> s
 
 
 async def rename_by_id(session: AsyncSession, ws: uuid.UUID, tag_id: uuid.UUID, new_name: str) -> tuple[str, str]:
+    await workspaces.require_writable(session, ws)
     old = await _name_of(session, ws, tag_id)
     return old, await rename(session, ws, old, new_name)
 
 
 async def delete_by_id(session: AsyncSession, ws: uuid.UUID, tag_id: uuid.UUID) -> tuple[str, int]:
+    await workspaces.require_writable(session, ws)
     name = await _name_of(session, ws, tag_id)
     return name, await delete(session, ws, name)
 

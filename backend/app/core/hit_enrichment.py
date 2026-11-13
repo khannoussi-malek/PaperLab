@@ -13,6 +13,7 @@ import httpx
 from sqlalchemy import func, null, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import workspaces
 from app.core.abstracts import is_citation_only, usable_abstract
 from app.core.candidates import ARXIV_ID, ARXIV_VERSION, s2_triage
 from app.core.source_types import ARXIV_DOI_PREFIX
@@ -140,6 +141,7 @@ async def enrich(
 ) -> EnrichResult:
     """Looks the refs up in chunks of CHUNK, one batch call each, committing per chunk. A chunk that fails is logged
     and counted as not found; four 429s in a row stop the job, with the count of refs left."""
+    await workspaces.require_writable(session, ws)
     pending = await refs_to_enrich(session, ws, run_id)
     refs = [(ref, key) for ref in pending if (key := s2_id(ref))]
     for ref in pending:

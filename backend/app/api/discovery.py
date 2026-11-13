@@ -34,7 +34,7 @@ async def add_paper(
     download); 409 when the paper is already in the library or no free PDF is found, unless `save_without_pdf`
     saves it without one (then only its abstract, if any, is indexed)."""
     if payload.workspace_id is not None:
-        await workspaces.get(session, payload.workspace_id)
+        await workspaces.require_writable(session, payload.workspace_id)
     paper = await discovery.add(
         session,
         providers,
