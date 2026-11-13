@@ -8243,6 +8243,7 @@ export interface components {
             medrxiv?: boolean;
             /** Dblp */
             dblp?: boolean;
+            /** Openreview */
             openreview?: boolean;
         };
         /** SourceWarning */
