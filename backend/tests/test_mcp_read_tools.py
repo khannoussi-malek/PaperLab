@@ -362,3 +362,14 @@ async def test_the_four_read_tools_are_read_only(session):
         assert tools[name].annotations.read_only_hint is True, name
         assert tools[name].output_schema, name
         assert tools[name].description.startswith("Use "), name
+
+
+async def test_saved_answers_say_which_lens_an_answer_read_through(session):
+    paper = await reader(session)
+    output = await answer_on(session, paper.id, "Lensed?")
+    output.lens = "critical"
+    await session.flush()
+
+    answer = result(await call("saved_answers", paper_id=str(paper.id)))
+
+    assert answer["answers"][0]["lens"] == "critical"

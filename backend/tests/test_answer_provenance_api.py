@@ -99,3 +99,14 @@ async def test_a_note_added_through_mcp_says_only_where_it_came_from(client, ses
     response = await client.get(f"/api/notes/{note.id}/provenance")
 
     assert response.json() == {"source": "claude_desktop"}
+
+
+async def test_provenance_says_which_lens_the_answer_read_through(client, session):
+    paper = await make_paper(session, ["one", "two"])
+    output_id = await answered(session, paper.id)
+    assert (await client.get(f"/api/llm-outputs/{output_id}/provenance")).json()["lens"] == "full"
+
+    (await session.get(LLMOutput, output_id)).lens = "key_ideas"
+    await session.flush()
+
+    assert (await client.get(f"/api/llm-outputs/{output_id}/provenance")).json()["lens"] == "key_ideas"

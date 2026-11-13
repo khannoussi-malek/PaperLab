@@ -15,6 +15,7 @@ const view = (over: Partial<AnswerProvenance> = {}): AnswerProvenance => ({
   connection_name: 'Home server',
   prompt_version: 3,
   skill_label: null,
+  lens: 'full',
   created_at: CREATED,
   out_of_date: false,
   passages: [],
@@ -132,5 +133,21 @@ describe('HowThisWasMade', () => {
     setup({ outputId: 'out-1' })
     fireEvent.click(screen.getByRole('button', { name: 'How this was made' }))
     await waitFor(() => expect(screen.getByText('Could not load how this was made.')).toBeInTheDocument())
+  })
+
+  it('shows the Lens row with the lens label when the answer read through a lens', async () => {
+    vi.spyOn(api, 'answerProvenance').mockResolvedValue(view({ lens: 'key_ideas' }))
+    setup({ outputId: 'out-1' })
+    fireEvent.click(screen.getByRole('button', { name: 'How this was made' }))
+    expect(await screen.findByText('Lens')).toBeInTheDocument()
+    expect(screen.getByText('Key ideas')).toBeInTheDocument()
+  })
+
+  it('leaves the Lens row out when the answer read the whole paper', async () => {
+    vi.spyOn(api, 'answerProvenance').mockResolvedValue(view({ lens: 'full' }))
+    setup({ outputId: 'out-1' })
+    fireEvent.click(screen.getByRole('button', { name: 'How this was made' }))
+    await screen.findByText('qwen3:14b')
+    expect(screen.queryByText('Lens')).toBeNull()
   })
 })

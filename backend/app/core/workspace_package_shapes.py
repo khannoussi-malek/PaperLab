@@ -17,6 +17,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.core.lenses import LensId
 from app.models import NoteKind, Provenance
 
 Text = StrictStr | None
@@ -137,6 +138,7 @@ class AnswerRow(_Shape):
     prompt_version: StrictInt
     skill_label: Text = None
     skill_version: StrictInt | None = None
+    lens: LensId = "full"  # a package from before lens chat has none: the whole paper
     whole_paper: StrictBool
     notes_used: StrictInt | None = None
     notes_total: StrictInt | None = None

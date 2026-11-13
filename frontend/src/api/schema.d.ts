@@ -3747,6 +3747,11 @@ export interface components {
             /** Skill Label */
             skill_label: string | null;
             /**
+             * Lens
+             * @enum {string}
+             */
+            lens: "full" | "key_ideas" | "critical" | "method" | "related";
+            /**
              * Created At
              * Format: date-time
              */

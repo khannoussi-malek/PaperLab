@@ -105,6 +105,7 @@ class AnswerOut:
     ai: bool  # always true: never pass a saved answer off as the owner's
     model: str
     skill_label: str | None
+    lens: str  # the lens the answer read through: 'full' is the whole paper
     created_at: datetime
     sources: list[SourceOut]
     sources_missing: int  # sources a re-ingest replaced
@@ -214,6 +215,7 @@ def _answer(answer: chat.Answer) -> AnswerOut:
         ai=True,
         model=output.model,
         skill_label=output.skill_label,
+        lens=output.lens,
         created_at=output.created_at,
         # the label is the chunk's position in the answer, so a skipped source keeps its number
         sources=[_source(i, chunk) for i, chunk in enumerate(answer.sources, start=1) if chunk is not None],
