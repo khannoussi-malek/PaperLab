@@ -323,6 +323,24 @@ export const zoteroZipUrl = (workspaceId: string) =>
 
 export const notesZipUrl = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}/notes.zip`
 
+/** The workspace as one `.paperlab` file; PDFs are in it only with `pdfs`. */
+export const packageUrl = (workspaceId: string, pdfs: boolean) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/package?pdfs=${pdfs}`
+
+/** The screening record an imported package carried, as JSON. */
+export const packageRecordUrl = (workspaceId: string) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/package-record`
+
+export type PackageImportResult = {
+  workspace_id: string
+  name: string
+  added: number
+  matched: number
+  notes: number
+  pdfs_skipped: number
+  has_record: boolean
+}
+
 export type NotesImportResult = {
   created: number
   linked_papers: number
@@ -424,6 +442,21 @@ export const api = {
   setNotePapers: (noteId: string, paperIds: string[]) =>
     request<Note>(`/api/notes/${noteId}/papers`, sendJson('PUT', { paper_ids: paperIds })),
   listWorkspaces: () => request<Workspace[]>('/api/workspaces'),
+  /** A `.paperlab` file as a new workspace. A refusal is an ApiError whose code is a `package_*` one. */
+  importPackage: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<PackageImportResult>('/api/workspaces/import-package', { method: 'POST', body: form })
+  },
+  /** Whether a workspace carries a screening record: a 404 means it doesn't. */
+  hasPackageRecord: (workspaceId: string) =>
+    request<unknown>(packageRecordUrl(workspaceId)).then(
+      () => true,
+      (error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) return false
+        throw error
+      },
+    ),
   createWorkspace: (name: string) => request<Workspace>('/api/workspaces', sendJson('POST', { name })),
   renameWorkspace: (id: string, name: string) =>
     request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),

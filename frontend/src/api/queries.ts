@@ -105,6 +105,7 @@ export const keys = {
   paperTags: (ws: string) => ['workspaces', ws, 'paper-tags'] as const,
   paperTagsOfPaper: (id: string) => ['papers', id, 'tags'] as const,
   workspaceNotes: (id: string) => ['workspaces', id, 'notes'] as const,
+  packageRecord: (id: string) => ['workspaces', id, 'package-record'] as const,
   searchRuns: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'runs'] as const,
   evidenceCards: (workspaceId: string) => ['workspaces', workspaceId, 'evidence-cards'] as const,
   evidenceCard: (paperId: string) => ['papers', paperId, 'evidence-card'] as const,
@@ -423,6 +424,19 @@ export const useWorkspace = (id: string) =>
     queryFn: api.listWorkspaces,
     select: (workspaces) => workspaces.find((workspace) => workspace.id === id) ?? null,
   })
+
+/** Whether a workspace carries a screening record from an imported package. */
+export const usePackageRecord = (workspaceId: string) =>
+  useQuery({ queryKey: keys.packageRecord(workspaceId), queryFn: () => api.hasPackageRecord(workspaceId) })
+
+/** Imports a `.paperlab` file as a new workspace; the workspace list refreshes with it. */
+export function useImportPackage() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => api.importPackage(file),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.workspaces }),
+  })
+}
 
 /** A workspace's papers. Polls while one is ingesting, like the library, so an upload from the Papers tab shows progress. */
 export const useWorkspacePapers = (id: string) =>
