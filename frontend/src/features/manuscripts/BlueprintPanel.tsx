@@ -3,15 +3,15 @@ import { sileo } from 'sileo'
 import { api, isConflict, type ManuscriptFile } from '@/api/client'
 import { useManuscriptTemplates } from '@/api/queries'
 import { Button } from '@/components/ui/button'
-import { BLUEPRINT_PATH, parseBlueprint, starterBlueprint } from './blueprint'
+import { BLUEPRINT_PATH, latexTitle, parseBlueprint, starterBlueprint } from './blueprint'
 
-type Props = { manuscriptId: string; files: ManuscriptFile[]; title: string; template: string }
+type Props = { manuscriptId: string; files: ManuscriptFile[]; mainFile: string; title: string; template: string }
 
 /**
  * The paper plan from blueprint.json. Read-only, except the Create button when there is no file yet:
  * it writes the starter once and never overwrites one.
  */
-export function BlueprintPanel({ manuscriptId, files, title, template }: Props) {
+export function BlueprintPanel({ manuscriptId, files, mainFile, title, template }: Props) {
   const queryClient = useQueryClient()
   const present = files.some((f) => f.path === BLUEPRINT_PATH)
   const query = useQuery({
@@ -21,9 +21,11 @@ export function BlueprintPanel({ manuscriptId, files, title, template }: Props) 
   })
   const templates = useManuscriptTemplates()
   const create = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const bands = templates.data?.find((t) => t.name === template)?.section_words
-      return api.saveManuscriptFile(manuscriptId, BLUEPRINT_PATH, starterBlueprint(title, bands), null)
+      const main = files.some((f) => f.path === mainFile) ? await api.getManuscriptFile(manuscriptId, mainFile) : null
+      const plainTitle = (main && latexTitle(main.text)) || title // the paper's \title, else the stored name
+      return api.saveManuscriptFile(manuscriptId, BLUEPRINT_PATH, starterBlueprint(plainTitle, bands), null)
     },
     onError: (e) => {
       if (!isConflict(e, 'file_exists')) sileo.error({ title: "Couldn't create the blueprint" }) // already there: the refresh shows it

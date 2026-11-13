@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { parseBlueprint, starterBlueprint } from './blueprint'
+import { latexTitle, parseBlueprint, starterBlueprint } from './blueprint'
 
 test('reads the fields it knows and ignores the rest', () => {
   const b = parseBlueprint('{"title":"T","contributions":["a"],"notation":[{"symbol":"\\\\alpha","meaning":"w"}],"target_words":{"method":[100,200]},"extra":1}')
@@ -27,4 +27,22 @@ test('the starter has the title, empty lists and the template bands', () => {
 
 test('no bands gives an empty target_words', () => {
   expect(JSON.parse(starterBlueprint('T', undefined)).target_words).toEqual({})
+})
+
+test.each([
+  ['\\title{What Works}', 'What Works'],
+  ['\\title[Short]{Long \\\\ Title}', 'Long Title'],
+  ['\\title{A\\thanks{Funded by X.} B}', 'A B'],
+  ['% \\title{Old}\n\\title{New}', 'New'],
+  ['\\title{\\textbf{Bold} words}', 'Bold words'],
+  ['\\title{Foo\\\\ \\large Bar}', 'Foo Bar'],
+  ['\\title{Line one\\newline line two}', 'Line one line two'],
+  ['\\title{Half 50\\% done % a comment\n}', 'Half 50% done'],
+  ['\\title{Nested {braces} stay}', 'Nested braces stay'],
+  ['\\title{}', null],
+  ['\\title{\\thanks{only a note}}', null],
+  ['\\section{No title here}', null],
+  ['\\title{Unclosed', null],
+])('latexTitle(%j) is %j', (tex, want) => {
+  expect(latexTitle(tex)).toBe(want)
 })

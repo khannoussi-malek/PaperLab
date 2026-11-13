@@ -306,7 +306,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                       <summary className="cursor-pointer px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">All files</summary>
                       <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file} flushCurrent={flushCurrent} />
                     </details>
-                    <BlueprintPanel manuscriptId={manuscriptId} files={data.files} title={data.title} template={data.template} />
+                    <BlueprintPanel manuscriptId={manuscriptId} files={data.files} mainFile={data.main_file} title={data.title} template={data.template} />
                     <FinalStepsChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
                     <GuidelineChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
                   </div>
