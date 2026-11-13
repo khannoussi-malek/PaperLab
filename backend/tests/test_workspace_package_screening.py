@@ -19,7 +19,7 @@ from app.models.workspace_search import (
     WorkspaceSearchRun,
 )
 from app.workers import workspace_search as search_worker
-from tests.test_workspace_package_export import SECRET_KEY, _json, screened
+from tests.test_workspace_package_export import SECRET_EMAIL, SECRET_KEY, _json, screened
 from tests.test_workspace_package_import import _package
 
 pytestmark = pytest.mark.anyio
@@ -248,3 +248,183 @@ async def test_the_import_report_counts_the_search_results_rebuilt(session, pdf_
 async def test_a_v1_package_reports_no_search_results(session, pdf_dir):
     report = await workspace_package.import_package(session, _package(name="Old review"))
     assert report.hits == 0
+
+
+def _screening_of(package: bytes) -> dict:
+    return _json(zipfile.ZipFile(io.BytesIO(package)), "screening.json")
+
+
+def _is_alpha(hit: dict) -> bool:
+    return hit["title"] == "Alpha study"
+
+
+async def test_an_import_never_edits_a_library_reference(session, pdf_dir):  # M1
+    ws, rows = await screened(session, pdf_dir)
+    alpha_ref = await session.scalar(select(ExternalRef).where(ExternalRef.title == "Alpha study"))
+    alpha_ref.external_ids = {"openalex": "W123"}
+    alpha_ref.abstract = "The library's own abstract"
+    await session.commit()
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    alpha_ref.abstract = None  # blank in the library now; the package's hit carries an abstract
+    await session.commit()
+    await workspaces.delete(session, ws.id)
+    await workspace_package.import_package(session, package)
+    await session.refresh(alpha_ref)
+    assert alpha_ref.abstract is None
+    assert alpha_ref.external_ids == {"openalex": "W123"}
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda s: next(h for h in s["hits"] if h["ai_suggestion"])["ai_suggestion"].update(suggested_at="yesterday"),
+        lambda s: s["eligibility"][0].update(assessed_at="yesterday"),
+        lambda s: s["runs"][0].update(started_at="2026-11-01T10:00:00"),
+        lambda s: next(h for h in s["hits"] if h["ai_suggestion"])["ai_suggestion"].update(prompt_version=40000),
+        lambda s: s["hits"][0].update(year=2**40),
+        lambda s: s["hits"][0].update(snowball_round=2**40),
+        lambda s: s["runs"][0]["stats"].update(per_source_raw_count=[1, 2]),
+        lambda s: s["runs"][0]["stats"].update(failed_sources="openalex"),
+        lambda s: s["runs"][0]["cursors"][0]["cursor"].update(errors="many"),
+        lambda s: s["links"][0].update(parent_hit=s["links"][0]["child_hit"], parent_paper=None),
+    ],
+    ids=[
+        "an AI suggestion's time that is no timestamp",
+        "an eligibility time that is no timestamp",
+        "a run start with no time zone",
+        "a prompt version past smallint",
+        "a year past int4",
+        "a snowball round past int4",
+        "per-source counts that are a list",
+        "failed sources that are text",
+        "a cursor's error count that is text",
+        "a hit linked to itself",
+    ],
+)
+async def test_a_screening_value_the_database_cannot_hold_is_package_invalid(session, pdf_dir, edit):  # M2, L2
+    ws, _ = await screened(session, pdf_dir)
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    screening = _screening_of(package)
+    edit(screening)
+    tampered = _rewrite(package, {"screening.json": json.dumps(screening).encode()})
+    before = await _counts(session)
+    with pytest.raises(InvalidInput) as refused:
+        await workspace_package.import_package(session, tampered)
+    assert str(refused.value) == "package_invalid"
+    assert await _counts(session) == before
+
+
+async def test_a_count_check_that_cannot_run_is_package_invalid(session, pdf_dir, monkeypatch):  # M2
+    ws, _ = await screened(session, pdf_dir)
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    await workspaces.delete(session, ws.id)
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("the rebuilt screening cannot be read back")
+
+    monkeypatch.setattr(prisma_export, "prisma_export", broken)
+    before = await _counts(session)
+    with pytest.raises(InvalidInput) as refused:
+        await workspace_package.import_package(session, package)
+    assert str(refused.value) == "package_invalid"
+    assert refused.value.details == {"detail": "screening counts don't match"}
+    assert await _counts(session) == before
+
+
+async def test_the_full_text_totals_are_checked_when_the_package_carries_the_pdfs(session, pdf_dir):  # M3
+    ws, _ = await screened(session, pdf_dir)
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    prisma = _json(zipfile.ZipFile(io.BytesIO(package)), "prisma.json")
+    tampered = _rewrite(package, {"prisma.json": json.dumps(prisma | {"included": prisma["included"] + 1}).encode()})
+    with pytest.raises(InvalidInput) as refused:
+        await workspace_package.import_package(session, tampered)
+    assert refused.value.details == {"detail": "screening counts don't match"}
+
+
+async def test_the_full_text_totals_follow_the_package_not_the_library(session, pdf_dir):  # M3
+    ws, rows = await screened(session, pdf_dir)
+    alpha, pdf_path = rows["alpha"], rows["alpha"].file_path
+    alpha.file_path = None  # the owner's copy has no full text, so alpha counts as not retrieved
+    await session.commit()
+    package = (await workspace_package.export_package(session, ws.id, pdfs=False)).read()
+    await workspaces.delete(session, ws.id)
+    for paper in rows["beta"], rows["gamma"]:
+        await papers.delete_paper(session, paper.id)
+    alpha.file_path = pdf_path  # the importing library holds alpha with its own PDF
+    await session.commit()
+    report = await workspace_package.import_package(session, package)
+    assert report.hits == 4
+
+
+async def test_a_hit_on_a_reference_an_earlier_hit_uses_gets_its_own_copy(session, pdf_dir):  # M4
+    ws, rows = await screened(session, pdf_dir)
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    screening = _screening_of(package)
+    alpha = next(h for h in screening["hits"] if _is_alpha(h))
+    # A second database hit on the same paper (same DOI): the owner's dedupe kept both, and the importer's library
+    # holds one reference for them. Its prisma duplicates_removed is one more than the first hit's alone.
+    twin = alpha | {
+        "key": "h99", "source_method": "database_search",
+        "stage1": {"status": None, "exclude_reason": None, "note": None},
+        "stage1_decided_at": None, "paper": None, "stage2": None, "ai_suggestion": None,
+        "acquisition_status": "not_attempted", "seed_paper": None, "snowball_round": None,
+        "priority": None, "topic_fit": None,
+    }  # fmt: skip
+    prisma = _json(zipfile.ZipFile(io.BytesIO(package)), "prisma.json")
+    changes = {
+        "screening.json": json.dumps(screening | {"hits": screening["hits"] + [twin]}).encode(),
+        "prisma.json": json.dumps(prisma | {"duplicates_removed": prisma["duplicates_removed"] - 1}).encode(),
+    }
+    tampered = _rewrite(package, changes)
+    alpha_ref = await session.scalar(select(ExternalRef).where(ExternalRef.title == "Alpha study"))
+    await workspaces.delete(session, ws.id)
+    report = await workspace_package.import_package(session, tampered)
+    assert report.hits == 5
+    hits = (
+        await session.scalars(
+            select(WorkspaceSearchHit).where(
+                WorkspaceSearchHit.workspace_id == report.workspace_id,
+                WorkspaceSearchHit.normalized_title == "alpha study",
+            )
+        )
+    ).all()
+    assert len(hits) == 2
+    refs = {hit.external_ref_id for hit in hits}
+    assert alpha_ref.id in refs and len(refs) == 2
+    copy = await session.get(ExternalRef, next(r for r in refs if r != alpha_ref.id))
+    assert (copy.title, copy.doi, copy.external_ids) == ("Alpha study", "10.1/alpha", {})
+
+
+async def test_a_snowball_seed_error_is_redacted_in_the_package(session, pdf_dir):  # L1
+    ws, _ = await screened(session, pdf_dir)
+    run = await session.scalar(
+        select(WorkspaceSearchRun).where(
+            WorkspaceSearchRun.workspace_id == ws.id, WorkspaceSearchRun.query_text.like("Snowball%")
+        )
+    )
+    snowball = run.stats_json["snowball"]
+    seed = {
+        **snowball["seeds"][0],
+        "error": f"timed out for mailto={SECRET_EMAIL}",
+        "errors": {"cites": f"HTTP 503 mailto={SECRET_EMAIL}"},
+    }
+    run.stats_json = {**run.stats_json, "snowball": {**snowball, "seeds": [seed]}}
+    await session.commit()
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    assert SECRET_EMAIL not in json.dumps(_screening_of(package))
+    out = next(r for r in _screening_of(package)["runs"] if r["query"].startswith("Snowball"))["stats"]["snowball"][
+        "seeds"
+    ][0]
+    assert out["error"] == "timed out for mailto=***"
+    assert out["errors"] == {"cites": "HTTP 503 mailto=***"}
+
+
+async def test_nul_characters_are_stripped_from_imported_strings(session, pdf_dir):  # L3
+    ws, _ = await screened(session, pdf_dir)
+    package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
+    await workspaces.delete(session, ws.id)
+    manifest = _json(zipfile.ZipFile(io.BytesIO(package)), "manifest.json")
+    manifest["workspace"]["name"] = "Sleep\u0000 review"
+    tampered = _rewrite(package, {"manifest.json": json.dumps(manifest).encode()})
+    report = await workspace_package.import_package(session, tampered)
+    assert (await session.get(Workspace, report.workspace_id)).name == "Sleep review"

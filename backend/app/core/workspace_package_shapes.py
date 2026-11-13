@@ -178,11 +178,53 @@ BranchState = Literal["go_further", "stopped"]
 SetBy = Literal["screening", "owner"]
 
 
+SmallInt = Annotated[StrictInt, Field(ge=-(2**15), le=2**15 - 1)]  # a smallint column
+Int4 = Annotated[StrictInt, Field(ge=-(2**31), le=2**31 - 1)]  # an integer column
+
+
+def _aware(value: str | None) -> str | None:
+    """A timestamp with its time zone, or None. A ValueError (through pydantic, a ValidationError) otherwise."""
+    if value is not None and datetime.fromisoformat(value).tzinfo is None:
+        raise ValueError("a timestamp needs its time zone")
+    return value
+
+
+class CursorState(_Shape):
+    """A source's paging state (the keys search_run_results and the pass logic read); anything else is dropped."""
+
+    value: StrictInt | StrictStr | None = None  # Europe PMC pages by a string token, the rest by a number
+    errors: StrictInt | None = None
+    paused: StrictBool | None = None
+    retry_after: Text = None
+    disabled: StrictBool | None = None
+
+    _timestamps = field_validator("retry_after")(_aware)
+
+
 class CursorRow(_Shape):
     source: StrictStr
     exhausted: StrictBool
-    cursor: dict[StrictStr, StrictInt | StrictBool | StrictStr]
+    cursor: CursorState = CursorState()
     last_error: Text = None
+
+
+class StatsRow(_Shape):
+    """A run's stats (the keys the search, the pass logic and PRISMA read); anything else is dropped on import."""
+
+    warnings: list[dict] | None = None
+    snowball: dict | None = None
+    cut_short: StrictBool | None = None
+    unfinished_sources: Texts = None
+    paused_sources: Texts = None
+    failed_sources: Texts = None
+    per_source_raw_count: dict[StrictStr, StrictInt] | None = None
+    per_source_out_of_range: dict[StrictStr, StrictInt] | None = None
+    per_source_new_hits: dict[StrictStr, StrictInt] | None = None
+    per_source_error: dict[StrictStr, StrictStr] | None = None
+    pass_raw_count: dict[StrictStr, StrictInt] | None = None
+    last_batch_new_hits: StrictInt | None = None
+    passes: StrictInt | None = None
+    prescreen_capped: dict | None = None
 
 
 class RunRow(_Shape):
@@ -194,15 +236,10 @@ class RunRow(_Shape):
     status: RunStatus
     started_at: StrictStr
     stopped_at: Text = None
-    stats: dict
+    stats: StatsRow
     cursors: list[CursorRow] = []
 
-    @field_validator("started_at", "stopped_at")
-    @classmethod
-    def _is_a_timestamp(cls, value: str | None) -> str | None:
-        if value:
-            datetime.fromisoformat(value)  # ValueError becomes a ValidationError
-        return value
+    _timestamps = field_validator("started_at", "stopped_at")(_aware)
 
 
 class StageOne(_Shape):
@@ -226,8 +263,10 @@ class AiSuggestion(_Shape):
     confidence: Text = None
     quotes: list | None = None
     flags: list | None = None
-    prompt_version: StrictInt | None = None
+    prompt_version: SmallInt | None = None
     suggested_at: Text = None
+
+    _timestamps = field_validator("suggested_at")(_aware)
 
 
 class HitRow(_Shape):
@@ -237,7 +276,7 @@ class HitRow(_Shape):
     doi: Text = None
     external_ids: dict[StrictStr, StrictStr] | None = None
     authors: Texts = None
-    year: StrictInt | None = None
+    year: Int4 | None = None
     venue: Text = None
     abstract: Text = None
     source_type: Text = None
@@ -246,7 +285,7 @@ class HitRow(_Shape):
     paper: Text = None
     source_method: SourceMethod
     seed_paper: Text = None
-    snowball_round: StrictInt | None = None
+    snowball_round: Int4 | None = None
     first_seen_at: StrictStr
     acquisition_status: Acquisition
     priority: Annotated[StrictInt, Field(ge=1, le=5)] | None = None
@@ -256,12 +295,7 @@ class HitRow(_Shape):
     stage2: StageTwo | None = None
     ai_suggestion: AiSuggestion | None = None
 
-    @field_validator("first_seen_at", "stage1_decided_at")
-    @classmethod
-    def _is_a_timestamp(cls, value: str | None) -> str | None:
-        if value:
-            datetime.fromisoformat(value)  # ValueError becomes a ValidationError
-        return value
+    _timestamps = field_validator("first_seen_at", "stage1_decided_at")(_aware)
 
 
 class EligibilityRow(_Shape):
@@ -270,6 +304,8 @@ class EligibilityRow(_Shape):
     stage2_status: Stage2 | None = None
     exclude_reason: Text = None
     assessed_at: Text = None
+
+    _timestamps = field_validator("assessed_at")(_aware)
 
 
 class LinkRow(_Shape):

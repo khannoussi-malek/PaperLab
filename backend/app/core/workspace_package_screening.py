@@ -6,11 +6,12 @@ stats and last errors pass redact().
 
 The import side (`rebuild`) is added below this export half."""
 
+import logging
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
-from sqlalchemy import any_, bindparam, func, select
+from sqlalchemy import any_, bindparam, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import prisma_export, search_run_results
 from app.core.candidates import Candidate, normal_title
 from app.core.redact import redact
+from app.core.workspace_package_shapes import CursorState, StatsRow
 from app.core.workspace_search import _find_or_create_external_ref
 from app.models import Paper
 from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
@@ -32,7 +34,10 @@ from app.models.workspace_search import (
 )
 
 VERSION = 2
-CURSOR_STATE = ("value", "errors", "paused", "retry_after", "disabled")  # paging state only; nothing else leaves
+CURSOR_STATE = tuple(CursorState.model_fields)  # paging state only; nothing else leaves
+STATS_KEYS = tuple(StatsRow.model_fields)  # the stats keys the screening reads; nothing else is imported
+UNIQUE_IDS = ("openalex", "semantic_scholar", "biorxiv", "medrxiv", "iacr_eprint")  # unique-indexed external ids
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -130,8 +135,13 @@ def _cursor_state(cursor_json: dict | None) -> dict:
 
 
 def _seed(seed: dict, hit_keys: dict, paper_keys: dict) -> dict:
-    """A seed's line without its database ids: its hit and its paper by key (either may be None)."""
-    rest = {k: v for k, v in seed.items() if k not in ("id", "hit_id")}
+    """A seed's line without its database ids: its hit and its paper by key (either may be None). Its error strings
+    get the same redaction as a cursor's last error."""
+    rest = {k: v for k, v in seed.items() if k not in ("id", "hit_id", "error", "errors")}
+    if "error" in seed:
+        rest["error"] = search_run_results.short_error(seed["error"])
+    if isinstance(seed.get("errors"), dict):
+        rest["errors"] = {kind: search_run_results.short_error(text) for kind, text in seed["errors"].items()}
     return rest | {
         "hit": hit_keys.get(_uuid(seed.get("hit_id"))),
         "paper": paper_keys.get(_uuid(seed.get("id"))),
@@ -311,6 +321,9 @@ def check_references(doc: dict, paper_keys: set[str]) -> None:
         for seed in _seeds(run):
             if not all(v is None or isinstance(v, str) for v in (seed.get("hit"), seed.get("paper"))):
                 raise ValueError("a snowball seed names a non-string key")
+    for link in doc["links"]:
+        if link["parent_hit"] is not None and link["parent_hit"] == link["child_hit"]:
+            raise ValueError("a hit links to itself")
     for hit in doc["hits"]:
         _named(hit["run"], runs)
         _named(hit["paper"], paper_keys, optional=True)
@@ -354,22 +367,46 @@ def _seeds(run: dict) -> list[dict]:
 
 
 def _stats_in(stats: dict, hit_ids: dict[str, uuid.UUID]) -> dict:
-    """A run's stats with fresh seed ids; a seed's hit is its rebuilt hit's id (or None when it has none)."""
-    snowball = stats.get("snowball")
+    """A run's known stats with fresh seed ids; a seed's hit is its rebuilt hit's id (or None when it has none)."""
+    kept = {k: v for k, v in stats.items() if k in STATS_KEYS}
+    snowball = kept.get("snowball")
     if snowball is None:
-        return dict(stats)
+        return kept
     seeds = []
     for seed in snowball.get("seeds", []):
         hit = hit_ids.get(seed.get("hit"))
         rest = {k: v for k, v in seed.items() if k not in ("id", "hit", "paper", "hit_id")}
         seeds.append(rest | {"id": str(uuid.uuid4()), "hit_id": str(hit) if hit else None})
-    return dict(stats) | {"snowball": {**snowball, "seeds": seeds}}
+    return kept | {"snowball": {**snowball, "seeds": seeds}}
 
 
-async def _place_hit(session, workspace_id, hit, run_ids, paper_ids, hit_ids) -> uuid.UUID | None:
-    """One hit with its reference found or created. None when the workspace already holds that reference (a package
-    that names one paper twice): the count check then refuses the package."""
-    ref = await _find_or_create_external_ref(session, _candidate(hit))
+def _fresh_copy(session, candidate: Candidate) -> ExternalRef:
+    """A reference for a hit whose library reference an earlier hit of this import already uses. It keeps the title,
+    DOI and bibliographic fields but not the unique-indexed external ids, which the first reference owns."""
+    ref = ExternalRef(
+        title=candidate.title, doi=candidate.doi, authors=candidate.authors, year=candidate.year, venue=candidate.venue,
+        external_ids={k: v for k, v in candidate.external_ids.items() if k not in UNIQUE_IDS},
+    )  # fmt: skip
+    session.add(ref)
+    return ref
+
+
+async def _reference(session, hit: dict, used: set[uuid.UUID]) -> ExternalRef:
+    """The hit's library reference. The import only reads an existing one (M1); when an earlier hit of this import
+    already uses it, the hit gets its own copy, so both hits are kept and the counts still match (M4)."""
+    candidate = _candidate(hit)
+    ref = await _find_or_create_external_ref(session, candidate, backfill=False)
+    if ref.id in used:
+        ref = _fresh_copy(session, candidate)
+        await session.flush()
+    used.add(ref.id)
+    return ref
+
+
+async def _place_hit(session, workspace_id, hit, run_ids, paper_ids, hit_ids, used) -> uuid.UUID | None:
+    """One hit with its reference found or created. None only if the insert conflicts, which the copies above rule out;
+    the count check would then refuse the package."""
+    ref = await _reference(session, hit, used)
     ai, stage1 = hit["ai_suggestion"] or {}, hit["stage1"]
     row = {
         "id": hit_ids[hit["key"]], "workspace_id": workspace_id, "run_id": run_ids[hit["run"]],
@@ -398,7 +435,7 @@ def _cursor_rows(runs: list[dict], run_ids: dict[str, uuid.UUID]) -> list[dict]:
         {
             "run_id": run_ids[run["key"]],
             "source": c["source"],
-            "cursor_json": c["cursor"],
+            "cursor_json": {k: v for k, v in c["cursor"].items() if k in CURSOR_STATE},
             "exhausted": True,
             "last_error": c["last_error"],
         }
@@ -425,8 +462,9 @@ async def rebuild(session, doc: dict, workspace, paper_ids: dict[str, uuid.UUID]
     if cursors := _cursor_rows(doc["runs"], run_ids):
         await session.execute(pg_insert(WorkspaceSearchCursor).values(cursors).on_conflict_do_nothing())
     placed: dict[str, uuid.UUID] = {}
+    used: set[uuid.UUID] = set()
     for hit in doc["hits"]:
-        if (new_id := await _place_hit(session, workspace.id, hit, run_ids, paper_ids, hit_ids)) is not None:
+        if (new_id := await _place_hit(session, workspace.id, hit, run_ids, paper_ids, hit_ids, used)) is not None:
             placed[hit["key"]] = new_id
     await session.flush()
     await _insert_rows(
@@ -484,24 +522,27 @@ async def _insert_rows(session, model, rows: list[dict]) -> None:
         await session.execute(pg_insert(model).values(rows).on_conflict_do_nothing())
 
 
-async def _full_text_rebuilt(session, workspace_id: uuid.UUID) -> bool:
-    """False when a hit that counts as retrieved has a paper with no full text here (the package left its PDF out, or
-    the library's own copy has none): the retrieval totals can't be reproduced, so they are not checked."""
-    retrieved = select(WorkspaceSearchHit.paper_id).where(
-        WorkspaceSearchHit.workspace_id == workspace_id,
-        WorkspaceSearchHit.stage1_status == "relevant",
-        WorkspaceSearchHit.acquisition_status.in_(prisma_export.RETRIEVED),
-        WorkspaceSearchHit.paper_id.is_not(None),
+def full_text_in_package(screening: dict, papers_rows: list[dict]) -> bool:
+    """True when the package carries the PDF of every retrieved hit's paper, so the full-text totals can be reproduced
+    here. Decided from the package alone (papers.json and screening.json), never from what this library holds (M3)."""
+    has_pdf = {row["key"]: bool(row.get("pdf")) for row in papers_rows}
+    return all(
+        has_pdf[hit["paper"]]
+        for hit in screening["hits"]
+        if hit["stage1"]["status"] == "relevant"
+        and hit["acquisition_status"] in prisma_export.RETRIEVED
+        and hit["paper"] is not None
     )
-    missing = await session.scalar(
-        select(func.count()).select_from(Paper).where(Paper.id.in_(retrieved), Paper.file_path.is_(None))
-    )
-    return not missing
 
 
-async def counts_match(session, workspace_id: uuid.UUID, expected: dict) -> bool:
+async def counts_match(session, workspace_id: uuid.UUID, expected: dict, full_text: bool) -> bool:
     """True when prisma_export on the rebuilt workspace gives the package's numeric totals (see SHARED_TOTALS and
-    RETRIEVAL_TOTALS). Flush first: prisma_export reads what this session has written."""
-    actual = asdict(await prisma_export.prisma_export(session, workspace_id, None))
-    fields = SHARED_TOTALS + (RETRIEVAL_TOTALS if await _full_text_rebuilt(session, workspace_id) else ())
+    RETRIEVAL_TOTALS; the latter only when `full_text`). Flush first: prisma_export reads what this session has
+    written. Any failure to read the rebuilt screening back is a mismatch, never a server error."""
+    try:
+        actual = asdict(await prisma_export.prisma_export(session, workspace_id, None))
+    except Exception:
+        logger.warning("the rebuilt screening of %s could not be counted", workspace_id, exc_info=True)
+        return False
+    fields = SHARED_TOTALS + (RETRIEVAL_TOTALS if full_text else ())
     return all(actual[name] == expected[name] for name in fields)

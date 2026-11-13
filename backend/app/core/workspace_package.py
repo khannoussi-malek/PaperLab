@@ -304,6 +304,17 @@ def _vet(zf: zipfile.ZipFile) -> None:
         raise InvalidInput(UNSAFE) from None
 
 
+def _no_nul(value):
+    """The value with NUL characters removed from every string (Postgres text and JSONB refuse them). A new value."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_no_nul(item) for item in value]
+    if isinstance(value, dict):
+        return {_no_nul(key): _no_nul(item) for key, item in value.items()}
+    return value
+
+
 def _json(zf: zipfile.ZipFile, name: str):
     if name not in zf.NameToInfo:
         raise InvalidInput(INVALID)
@@ -311,7 +322,7 @@ def _json(zf: zipfile.ZipFile, name: str):
     if info.file_size > MAX_JSON_BYTES:
         raise InvalidInput(TOO_LARGE)
     try:
-        return json.loads(zf.read(info))
+        return _no_nul(json.loads(zf.read(info)))
     except (ValueError, OSError, RuntimeError, EOFError, NotImplementedError, zipfile.BadZipFile, zlib.error):
         raise InvalidInput(INVALID) from None
 
@@ -706,7 +717,8 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
         if workspace_package_screening.is_v2(pkg.screening):
             hit_count = await workspace_package_screening.rebuild(session, pkg.screening, workspace, ids)
             await session.flush()
-            if not await workspace_package_screening.counts_match(session, workspace.id, pkg.prisma):
+            full_text = workspace_package_screening.full_text_in_package(pkg.screening, pkg.papers)
+            if not await workspace_package_screening.counts_match(session, workspace.id, pkg.prisma, full_text):
                 raise InvalidInput(INVALID, detail="screening counts don't match")
         else:
             await _record_into(pkg, workspace.id, written)
