@@ -1,13 +1,14 @@
 import uuid
 from dataclasses import asdict
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 
-from app.api.citations import download
+from app.api.citations import CappedBody, download
 from app.api.deps import SessionDep
 from app.core import citations_bundle, notes_markdown, pipeline, tags, workspace_package, workspace_search, workspaces
 from app.core.citations_export import filename_slug
+from app.core.errors import NotFound
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
 from app.schemas.tags import TagApply, TagDeleted, TagOut, TagRename, TagRenamed, TagResultOut
@@ -15,6 +16,8 @@ from app.schemas.workspace_search import EligibilityOut, EligibilityUpdate
 from app.schemas.workspaces import WorkspaceCreate, WorkspaceOut, WorkspaceRename
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
+# The package upload is capped as the Zotero import is (api/citations.py).
+imports = APIRouter(tags=["workspaces"], route_class=CappedBody)
 
 
 @router.get("")
@@ -105,6 +108,27 @@ async def export_package(workspace_id: uuid.UUID, session: SessionDep, pdfs: boo
     return StreamingResponse(citations_bundle.chunks(file), media_type="application/zip", headers=headers)
 
 
+@imports.post("/import-package", status_code=201)
+async def import_package(file: UploadFile, session: SessionDep) -> dict:
+    """A `.paperlab` file as a new workspace (M35a). 422 with a package_* code when it is refused."""
+    return asdict(await workspace_package.import_package(session, file.file))
+
+
+@router.get("/{workspace_id}/package-record")
+async def package_record(workspace_id: uuid.UUID, session: SessionDep) -> Response:
+    """The screening record an imported package carried, as JSON. 404 when the workspace has none."""
+    await workspaces.get(session, workspace_id)
+    data = workspace_package.read_record(workspace_id)
+    if data is None:
+        raise NotFound("no_package_record")
+    slug = filename_slug((await workspaces.get(session, workspace_id)).name)
+    return Response(
+        data,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{slug}-screening-record.json"'},
+    )
+
+
 @router.get("/{workspace_id}/notes.zip")
 async def export_notes(workspace_id: uuid.UUID, request: Request, session: SessionDep) -> Response:
     """The workspace's notes as markdown files, one per paper, zipped for Obsidian. 404 unknown workspace."""
@@ -150,3 +174,6 @@ async def rename_tag(workspace_id: uuid.UUID, tag_id: uuid.UUID, payload: TagRen
 async def delete_tag(workspace_id: uuid.UUID, tag_id: uuid.UUID, session: SessionDep) -> TagDeleted:
     name, count = await tags.delete_by_id(session, workspace_id, tag_id)
     return TagDeleted(tag=name, papers=count)
+
+
+router.include_router(imports)

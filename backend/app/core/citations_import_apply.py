@@ -25,7 +25,7 @@ from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 from typing import IO
 
-from sqlalchemy import case, delete, func, literal, select, update
+from sqlalchemy import case, delete, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -109,6 +109,17 @@ async def _held(session: AsyncSession, entry: ImportEntry) -> uuid.UUID | None:
     if (other := await discovery.held_version(session, candidate)) is not None:
         return other[0]
     return await _same_title(session, entry)
+
+
+async def held_by_pubmed_ids(session: AsyncSession, pmid: str | None, pmcid: str | None) -> uuid.UUID | None:
+    """A library paper with this PMID or PMCID (PMCID compared without case), or None. A step of its own, asked by the
+    workspace package import after the DOI and OpenAlex checks; the Zotero import never asks it."""
+    clauses = [Paper.pmid == pmid] if pmid else []
+    if pmcid:
+        clauses.append(func.upper(Paper.pmcid) == pmcid.upper())
+    if not clauses:
+        return None
+    return await session.scalar(select(Paper.id).where(or_(*clauses)).limit(1))
 
 
 def _prefill(entry: ImportEntry) -> dict:
