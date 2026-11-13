@@ -15,7 +15,23 @@ from app.models import McpActivity, McpSettings
 ACTIVITY_CAP = 1000
 TEXT_CAP = 200  # a string argument longer than this is cut to this many characters and "…"
 SUMMARY_CAP = 500  # the whole summary, "…" included
-UPLOAD_KEYS = frozenset({"pdf_base64"})  # upload_paper's file content: stored as its size, never as text
+UPLOAD_KEYS = frozenset({"pdf_base64", "data_base64"})  # uploaded files (a paper, a figure): stored as their size
+TOOL_NAME_MAX = 100
+# Tools that write only with some arguments: verify_claim(s) save a note only with save=true; import_citations
+# with job_id only reads the progress of an import already running.
+WRITES_WHEN = {
+    "verify_claim": lambda arguments: bool(arguments.get("save")),
+    "verify_claims": lambda arguments: bool(arguments.get("save")),
+    "import_citations": lambda arguments: not arguments.get("job_id"),
+}
+
+
+def writes(tool: str, arguments: dict, *, read_only: bool) -> bool:
+    """Whether this call changes the library: never for a READ_ONLY tool, by its arguments for WRITES_WHEN's."""
+    if read_only:
+        return False
+    decide = WRITES_WHEN.get(tool)
+    return True if decide is None else decide(arguments or {})
 ELLIPSIS = "…"
 WRITES_DISABLED = {
     "error": "writes_disabled",
@@ -68,7 +84,7 @@ async def record(
     session.add(
         McpActivity(
             at=datetime.now(timezone.utc),
-            tool=tool,
+            tool=tool[:TOOL_NAME_MAX],
             arguments=summarise(arguments),
             outcome=outcome,
             duration_ms=duration_ms,

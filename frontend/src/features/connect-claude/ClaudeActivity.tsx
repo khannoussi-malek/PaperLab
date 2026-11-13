@@ -34,6 +34,17 @@ function Section({ id, title, children }: { id: string; title: string; children:
 }
 
 /** Connect Claude's activity: the tool calls MCP clients made, and the owner's switch for changes from Claude. */
+const OUTCOMES: Record<string, string> = {
+  ok: 'Done',
+  failed: 'Failed',
+  writes_disabled: 'Refused: changes are off',
+}
+
+/** The result in words; any other code is a tool's own recoverable error, shown as it is. */
+export function outcomeText(outcome: string): string {
+  return OUTCOMES[outcome] ?? outcome
+}
+
 export function ClaudeActivity() {
   const activity = useMcpActivity()
   const settings = useMcpSettings()
@@ -48,14 +59,15 @@ export function ClaudeActivity() {
           <Label htmlFor="mcp-writes">Let Claude change your library</Label>
           <Switch
             id="mcp-writes"
-            checked={settings.data?.writes_enabled ?? true}
+            checked={settings.data?.writes_enabled ?? false}
             disabled={!settings.data || setWrites.isPending}
             aria-describedby={HELP_ID}
             onCheckedChange={(on) => setWrites.mutate(on)}
           />
         </div>
         <p id={HELP_ID} className="text-sm text-muted-foreground">
-          Off: Claude can still search and read, but can't add, tag, write or delete anything.
+          Off: Claude can still search and read, but can't start any change: adding, tagging, writing or deleting.
+          Work it already started still finishes.
         </p>
         {settings.isError && <ErrorAlert message={settings.error.message} />}
         {setWrites.error && <ErrorAlert message={setWrites.error.message} />}
@@ -88,7 +100,7 @@ export function ClaudeActivity() {
                 <TableCell>
                   <code className="font-mono text-xs break-all">{row.arguments}</code>
                 </TableCell>
-                <TableCell>{row.outcome}</TableCell>
+                <TableCell>{outcomeText(row.outcome)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { ClaudeActivity } from './ClaudeActivity'
+import { ClaudeActivity, outcomeText } from './ClaudeActivity'
 
 type Row = { at: string; tool: string; arguments: string; outcome: string; duration_ms: number; is_write: boolean }
 
@@ -53,7 +53,7 @@ test('lists each call with its time, tool, arguments and result under the four c
   const row = screen.getByText('search_library').closest('tr') as HTMLElement
   expect(within(row).getByText(WHEN.format(new Date(search.at)))).toBeInTheDocument()
   expect(within(row).getByText('{"query":"tidal volume"}')).toBeInTheDocument()
-  expect(within(row).getByText('ok')).toBeInTheDocument()
+  expect(within(row).getByText('Done')).toBeInTheDocument()
 })
 
 test('a write call carries a Change badge and a read call does not', () => {
@@ -88,7 +88,9 @@ test('the switch shows the saved setting, saves the new one and explains what of
   const toggle = screen.getByRole('switch', { name: 'Let Claude change your library' })
   expect(toggle).toBeChecked()
   expect(
-    screen.getByText("Off: Claude can still search and read, but can't add, tag, write or delete anything."),
+    screen.getByText(
+      "Off: Claude can still search and read, but can't start any change: adding, tagging, writing or deleting. Work it already started still finishes.",
+    ),
   ).toBeInTheDocument()
 
   fireEvent.click(toggle)
@@ -99,4 +101,11 @@ test('the switch reads off when the owner has turned changes off', () => {
   mocks.settings.data = { writes_enabled: false }
   render(<ClaudeActivity />)
   expect(screen.getByRole('switch', { name: 'Let Claude change your library' })).not.toBeChecked()
+})
+
+test('results read in words, and a tool\'s own error code is shown as it is', () => {
+  expect(outcomeText('ok')).toBe('Done')
+  expect(outcomeText('failed')).toBe('Failed')
+  expect(outcomeText('writes_disabled')).toBe('Refused: changes are off')
+  expect(outcomeText('unknown_workspace')).toBe('unknown_workspace')
 })

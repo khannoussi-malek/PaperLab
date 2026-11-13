@@ -175,7 +175,7 @@ class PaperLabMCP(MCPServer):
         """Lists every tool call in the activity log (M36). While the owner has turned changes off, a tool that
         changes the library (any tool not annotated READ_ONLY) is refused before it runs; reads always run."""
         tool = self._tool_manager.get_tool(name)
-        is_write = tool is not None and not _is_read_only(tool)
+        is_write = tool is not None and mcp_activity.writes(name, arguments, read_only=_is_read_only(tool))
         if is_write and not await _changes_allowed():
             await _log(name, arguments, "writes_disabled", 0, True)
             return CallToolResult(
@@ -1159,7 +1159,7 @@ async def check_manuscript(
         return await manuscript_agent_checks.check_manuscript(session, manuscript_id, checks)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @recoverable
 async def check_dois(manuscript_id: uuid.UUID) -> doi_service.DoiCheckResult:
     """Use to check each DOI in the manuscript's .bib files against Crossref, the same check as the app's Check DOIs

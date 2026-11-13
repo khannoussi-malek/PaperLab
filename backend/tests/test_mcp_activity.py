@@ -203,3 +203,33 @@ async def test_a_logging_failure_never_breaks_the_call(monkeypatch):
     response = await call("list_workspaces")
 
     assert not response.is_error
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "read_only", "expected"),
+    [
+        ("search_library", {}, True, False),
+        ("create_note", {}, False, True),
+        ("verify_claim", {"save": False}, False, False),
+        ("verify_claim", {"save": True}, False, True),
+        ("verify_claims", {}, False, False),
+        ("import_citations", {"job_id": "abc"}, False, False),
+        ("import_citations", {"workspace": "W"}, False, True),
+    ],
+)
+async def test_a_call_writes_only_when_its_tool_and_arguments_change_the_library(tool, arguments, read_only, expected):
+    assert mcp_activity.writes(tool, arguments, read_only=read_only) is expected
+
+
+async def test_a_figure_upload_is_kept_as_its_size_and_a_long_tool_name_is_cut(session):
+    summary = mcp_activity.summarise({"path": "fig.png", "data_base64": base64.b64encode(PDF).decode()})
+    assert "data_base64" in summary and f"<{len(PDF)} bytes>" in summary
+    await mcp_activity.record(session, tool="x" * 300, arguments={}, outcome="ok", duration_ms=1, is_write=False)
+    assert (await log_rows(session))[0].tool == "x" * mcp_activity.TOOL_NAME_MAX
+
+
+async def test_checking_dois_still_runs_with_changes_off(session):
+    await switch(session, False)
+    response = await call("check_dois", manuscript_id=str(uuid.uuid4()))
+    # it ran: an unknown manuscript is its own answer, not the switch's refusal
+    assert "unknown_manuscript" in response.content[0].text and "writes_disabled" not in response.content[0].text
