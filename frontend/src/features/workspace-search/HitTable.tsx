@@ -240,13 +240,13 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
       tone: 'error' as const,
       text: errorText(acceptSuggestions.error.message) ?? acceptSuggestions.error.message,
     }) ||
-    (bulkPatch.isError && { tone: 'error' as const, text: bulkPatch.error.message }) ||
-    (importHits.isError && { tone: 'error' as const, text: importHits.error.message }) ||
-    (importAllHits.isError && { tone: 'error' as const, text: importAllHits.error.message }) ||
-    (clearHits.isError && { tone: 'error' as const, text: clearHits.error.message }) ||
-    (reviewHit.isError && { tone: 'error' as const, text: reviewHit.error.message }) ||
+    (bulkPatch.isError && { tone: 'error' as const, text: codeInWords(bulkPatch.error.message) }) ||
+    (importHits.isError && { tone: 'error' as const, text: codeInWords(importHits.error.message) }) ||
+    (importAllHits.isError && { tone: 'error' as const, text: codeInWords(importAllHits.error.message) }) ||
+    (clearHits.isError && { tone: 'error' as const, text: codeInWords(clearHits.error.message) }) ||
+    (reviewHit.isError && { tone: 'error' as const, text: codeInWords(reviewHit.error.message) }) ||
     (uploadHitPdf.isError && { tone: 'error' as const, text: codeInWords(uploadHitPdf.error.message) }) ||
-    (snowball.isError && { tone: 'error' as const, text: snowball.error.message }) ||
+    (snowball.isError && { tone: 'error' as const, text: codeInWords(snowball.error.message) }) ||
     // A "failed" import is a resolved response (see useImportSearchHits), not a rejected mutation — no free
     // copy was found automatically, which isn't an error so much as a cue to use the manual options already
     // in the preview panel.

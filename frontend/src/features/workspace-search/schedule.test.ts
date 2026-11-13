@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { browserTimeZone, describeSchedule, describeYears } from './schedule'
+import { browserTimeZone, describeSchedule, describeYears, errorText } from './schedule'
 
 test('describes daily, weekly and custom schedules', () => {
   expect(describeSchedule({ schedule_kind: 'daily', time: '02:00', weekday: null, timezone: 'Europe/Berlin' })).toBe(
@@ -18,4 +18,9 @@ test('browserTimeZone is the Intl zone; years read naturally', () => {
   expect(describeYears(2020, 2024)).toBe('2020–2024')
   expect(describeYears(null, 2024)).toBe('to 2024')
   expect(describeYears(null, null)).toBeNull()
+})
+
+test('a read-only workspace refusal reads in words, not as its code', () => {
+  expect(errorText('workspace_read_only')).toBe('This workspace is read-only. Make it editable first.')
+  expect(errorText('some_unknown_code')).toBe('some_unknown_code')
 })
