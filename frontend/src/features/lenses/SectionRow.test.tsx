@@ -50,3 +50,17 @@ describe('SectionRow reader checklist', () => {
     expect(onJump).not.toHaveBeenCalled()
   })
 })
+
+describe('SectionRow number suggestions (D33)', () => {
+  it('the section menu offers Suggest numbers when the panel can', async () => {
+    const onSuggestNumbers = vi.fn()
+    render(
+      <ul>
+        <SectionRow section={section()} busy={false} onJump={() => {}} onRoleChange={() => {}} onSuggestNumbers={onSuggestNumbers} />
+      </ul>,
+    )
+    fireEvent.pointerDown(screen.getByRole('button', { name: /Section actions/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Suggest numbers…' }))
+    expect(onSuggestNumbers).toHaveBeenCalled()
+  })
+})

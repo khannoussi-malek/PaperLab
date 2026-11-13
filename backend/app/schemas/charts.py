@@ -61,7 +61,7 @@ class ResolvedCellOut(BaseModel):
     raw: str
     value: float | None
     error: float | None
-    origin: Literal["extracted", "human"]
+    origin: Literal["extracted", "human", "llm"]
     original_raw: str | None
     page: int | None
     bbox: list[Rect] | None

@@ -85,10 +85,12 @@ async def _number_columns(session: AsyncSession, dataset: Dataset) -> dict[str, 
 
 
 async def add_number(
-    session: AsyncSession, paper_id: uuid.UUID, label: str, raw: str, unit: str, page: int, bbox: list[Rect]
+    session: AsyncSession, paper_id: uuid.UUID, label: str, raw: str, unit: str, page: int, bbox: list[Rect],
+    *, suggested: bool = False,
 ) -> NumberAdded:
     """Appends a row (label, value, unit) to the paper's numbers dataset, creating it on first use. The value cell is
-    anchored on the selected text."""
+    anchored on the selected text. `suggested`: an AI suggestion (D33), whose label the model wrote and is marked so;
+    its value is still the paper's own text at the quote."""
     paper = await get_paper(session, paper_id)
     _check_page(paper, page)
     if not bbox:
@@ -114,11 +116,12 @@ async def add_number(
     session.add(row)
     await session.flush()
     typed = {"value": None, "error": None, "origin": "human", "page": None, "bbox": None}
+    label_origin = {"origin": "llm"} if suggested else {}  # the model wrote the label; the value is the paper's text
     # Every row has every key: an executemany insert takes its columns from the first row.
     await session.execute(
         insert(cell_table),
         [
-            {"row_id": row.id, "column_id": columns["Label"], "raw": label, **typed},
+            {"row_id": row.id, "column_id": columns["Label"], "raw": label, **typed, **label_origin},
             {"row_id": row.id, "column_id": columns["Value"], "raw": raw.strip(), "value": parsed.value,
              "error": parsed.error, "origin": "extracted", "page": page, "bbox": [list(rect) for rect in bbox]},
             {"row_id": row.id, "column_id": columns["Unit"], "raw": unit, **typed},

@@ -25,6 +25,7 @@ import {
   editCell,
   fillDown,
   type Grid,
+  type GridCell,
   type GridColumn,
   insertColumn,
   insertRow,
@@ -199,7 +200,8 @@ export function GridEditor({ grid, onChange, focus = null }: Props) {
                         data-row-id={row.id ?? undefined}
                         data-column-id={grid.columns[c].id ?? undefined}
                         data-edited={edited}
-                        title={edited ? `Edited: extraction read “${cell.extracted}”` : undefined}
+                        data-suggested={cell.suggested !== undefined}
+                        title={cellTitle(cell, edited)}
                         onChange={(e) => onChange(editCell(grid, r, c, e.target.value))}
                         className={cn(inputClass, edited && 'outline-1 outline-dashed outline-offset-1 outline-muted-foreground/60')}
                       />
@@ -224,4 +226,10 @@ export function GridEditor({ grid, onChange, focus = null }: Props) {
       </div>
     </div>
   )
+}
+
+/** An edited cell names what was read or suggested first; a model's cell says it is the model's (D33). */
+function cellTitle(cell: GridCell, edited: boolean): string | undefined {
+  if (cell.suggested !== undefined) return edited ? `Edited: the AI suggested “${cell.suggested}”` : 'Suggested by AI'
+  return edited ? `Edited: extraction read “${cell.extracted}”` : undefined
 }

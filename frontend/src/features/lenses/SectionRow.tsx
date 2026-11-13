@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -27,10 +28,12 @@ type Props = {
   onJump: () => void
   /** null: back to the automatic role. Only offered on a section with a heading. */
   onRoleChange: (role: Role | null) => void
+  /** Opens the AI number suggestions for this section (D33); left out when the paper has no PDF to anchor them on. */
+  onSuggestNumbers?: () => void
 }
 
 /** One section in the Lens tab: its heading, role and page, a click to jump there, and ⋯ to change its role. */
-export function SectionRow({ section, busy, onJump, onRoleChange }: Props) {
+export function SectionRow({ section, busy, onJump, onRoleChange, onSuggestNumbers }: Props) {
   const title = section.title ?? 'Before the first heading'
   const fixed = section.source === 'user'
   const checklist = READER_CHECKLISTS[section.role]
@@ -81,6 +84,12 @@ export function SectionRow({ section, busy, onJump, onRoleChange }: Props) {
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
+              {onSuggestNumbers && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={onSuggestNumbers}>Suggest numbers…</DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

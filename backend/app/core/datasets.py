@@ -35,6 +35,8 @@ class CellIn:
     extracted: str | None = None
     page: int | None = None
     bbox: list[Rect] | None = None
+    # What a model wrote, for a cell it suggested (D33): marked as the model's, and as edited once raw differs.
+    suggested: str | None = None
 
 
 @dataclass(frozen=True)
@@ -211,16 +213,18 @@ def _check_shape(grid: GridIn) -> None:
 
 
 def _cell_values(cell: CellIn, has_paper: bool) -> dict:
-    if not has_paper and (cell.extracted is not None or cell.page is not None or cell.bbox is not None):
+    from_paper = (cell.extracted, cell.page, cell.bbox, cell.suggested)
+    if not has_paper and any(value is not None for value in from_paper):
         raise InvalidInput("only a dataset from a paper can have cells read from a page")
     parsed = parse_number(cell.raw)
-    extracted = cell.extracted is not None
+    original = cell.suggested if cell.suggested is not None else cell.extracted
+    origin = "llm" if cell.suggested is not None else "extracted" if cell.extracted is not None else "human"
     return {
         "raw": cell.raw,
         "value": parsed.value,
         "error": parsed.error,
-        "origin": "extracted" if extracted else "human",
-        "original_raw": cell.extracted if extracted and cell.raw != cell.extracted else None,
+        "origin": origin,
+        "original_raw": original if original is not None and cell.raw != original else None,
         "page": cell.page,
         "bbox": None if cell.bbox is None else [list(rect) for rect in cell.bbox],
     }

@@ -20,6 +20,8 @@ class CellIn(BaseModel):
     extracted: str | None = Field(default=None, max_length=CELL_CHARS)
     page: int | None = Field(default=None, ge=1)
     bbox: list[Rect] | None = Field(default=None, min_length=1, max_length=MAX_CELL_RECTS)
+    # What a model wrote, for a cell it suggested (D33); send it back unchanged when saving a grid.
+    suggested: str | None = Field(default=None, max_length=CELL_CHARS)
 
 
 class ColumnIn(BaseModel):
@@ -52,7 +54,10 @@ class GridIn(BaseModel):
                 datasets.RowIn(
                     id=r.id,
                     cells=[
-                        datasets.CellIn(raw=c.raw, extracted=c.extracted, page=c.page, bbox=c.bbox) for c in r.cells
+                        datasets.CellIn(
+                            raw=c.raw, extracted=c.extracted, page=c.page, bbox=c.bbox, suggested=c.suggested
+                        )
+                        for c in r.cells
                     ],
                 )
                 for r in self.rows
@@ -80,7 +85,7 @@ class CellOut(BaseModel):
     raw: str
     value: float | None
     error: float | None
-    origin: Literal["extracted", "human"]
+    origin: Literal["extracted", "human", "llm"]
     original_raw: str | None
     page: int | None
     bbox: list[Rect] | None
@@ -151,6 +156,29 @@ class NumberCreate(BaseModel):
     unit: str = ""
     page: int = Field(ge=1)
     bbox: list[Rect] = Field(min_length=1, max_length=MAX_CELL_RECTS)
+    suggested: bool = False  # an AI suggestion (D33): the label is the model's, marked so
+
+
+class NumberSuggestRequest(BaseModel):
+    section_title: str | None  # null: the text before the paper's first heading
+
+
+class NumberSuggestionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    label: str
+    raw: str
+    unit: str
+    quote: str
+    page: int
+    bbox: list[Rect]
+
+
+class NumberSuggestionsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    suggestions: list[NumberSuggestionOut]
+    dropped: int  # the model's suggestions the checks threw out
 
 
 class NumberAddedOut(BaseModel):

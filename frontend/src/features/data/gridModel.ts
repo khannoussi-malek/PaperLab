@@ -7,7 +7,8 @@ import type { PdfRect } from '../reader/coords'
  * `raw` differs from it. Rows and columns keep their server `id` (null until saved) so charts keep pointing at them;
  * `key` is only for React.
  */
-export type GridCell = { raw: string; extracted: string | null; page: number | null; bbox: PdfRect[] | null }
+// `suggested`: what a model wrote, on a cell it suggested (D33); only such cells carry it.
+export type GridCell = { raw: string; extracted: string | null; page: number | null; bbox: PdfRect[] | null; suggested?: string }
 export type GridColumn = { key: string; id: string | null; name: string; unit: string | null }
 export type GridRow = { key: string; id: string | null; cells: GridCell[] }
 export type Grid = { columns: GridColumn[]; rows: GridRow[] }
@@ -44,6 +45,7 @@ export function fromDataset(dataset: Dataset): Grid {
         extracted: c.origin === 'extracted' ? (c.original_raw ?? c.raw) : null,
         page: c.page,
         bbox: c.bbox,
+        ...(c.origin === 'llm' ? { suggested: c.original_raw ?? c.raw } : {}),
       })),
     })),
   }
@@ -52,11 +54,15 @@ export function fromDataset(dataset: Dataset): Grid {
 export function toGridIn(grid: Grid): GridIn {
   return {
     columns: grid.columns.map(({ id, name, unit }) => ({ id, name, unit })),
-    rows: grid.rows.map(({ id, cells }) => ({ id, cells: cells.map(({ raw, extracted, page, bbox }) => ({ raw, extracted, page, bbox })) })),
+    rows: grid.rows.map(({ id, cells }) => ({
+      id,
+      cells: cells.map(({ raw, extracted, page, bbox, suggested }) => ({ raw, extracted, page, bbox, ...(suggested !== undefined ? { suggested } : {}) })),
+    })),
   }
 }
 
-export const isEdited = (cell: GridCell): boolean => cell.extracted !== null && cell.raw !== cell.extracted
+export const isEdited = (cell: GridCell): boolean =>
+  (cell.extracted !== null && cell.raw !== cell.extracted) || (cell.suggested !== undefined && cell.raw !== cell.suggested)
 
 export function emptyGrid(names: string[], rowCount: number): Grid {
   return {

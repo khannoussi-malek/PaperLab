@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { usePaperBriefs, useSetSectionRole } from './queries'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { NO_PDF_LENS_TEXT, lensNotice, lensSections } from './lenses'
 import { BriefCard } from './BriefCard'
 import { SectionRow } from './SectionRow'
+import { NumberSuggestionsDialog } from '../data/NumberSuggestionsDialog'
 import { useBriefStream } from './useBriefStream'
 import type { LensReader } from './useLensReader'
 
@@ -13,6 +14,8 @@ type Props = { paperId: string; reader: LensReader; hasPdf: boolean }
 /** The Lens tab (spec §5): the lens's label, what it can't show, then its sections, each with Change role. */
 export function LensPanel({ paperId, reader, hasPdf }: Props) {
   const setRole = useSetSectionRole(paperId)
+  // The section whose numbers the AI is suggesting (D33); undefined: none open. null is the untitled first section.
+  const [numbersFor, setNumbersFor] = useState<string | null | undefined>(undefined)
   const briefs = usePaperBriefs(paperId)
   const { stream, generate } = useBriefStream(paperId)
   const { lens, sectionsQuery } = reader
@@ -55,9 +58,13 @@ export function LensPanel({ paperId, reader, hasPdf }: Props) {
             busy={setRole.isPending}
             onJump={() => reader.jumpToChunk(section.first_chunk_id)}
             onRoleChange={(role) => section.title !== null && setRole.mutate({ section_title: section.title, role })}
+            onSuggestNumbers={hasPdf ? () => setNumbersFor(section.title) : undefined}
           />
         ))}
       </ul>
+      {numbersFor !== undefined && (
+        <NumberSuggestionsDialog paperId={paperId} sectionTitle={numbersFor} onClose={() => setNumbersFor(undefined)} />
+      )}
     </Shell>
   )
 }
