@@ -1,11 +1,31 @@
 /// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
+
+// PDF.js's image decoders (CCITT fax, JBIG2, JPEG 2000, colour profiles), at the /pdfjs-wasm/ that src/features/reader/pdfjs.ts
+// gives it as wasmUrl. PDF.js asks for them by fixed name, so they are served as they are, not hashed by an import.
+const PDFJS_WASM = fileURLToPath(new URL('./node_modules/pdfjs-dist/wasm/', import.meta.url))
+const pdfjsWasm = (): Plugin => ({
+  name: 'pdfjs-wasm',
+  configureServer(server) {
+    server.middlewares.use('/pdfjs-wasm', (req, res, next) => {
+      const name = (req.url ?? '').replace(/^\/|\?.*$/g, '')
+      if (!readdirSync(PDFJS_WASM).includes(name)) return next()
+      res.setHeader('Content-Type', name.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
+      res.end(readFileSync(PDFJS_WASM + name))
+    })
+  },
+  generateBundle() {
+    for (const name of readdirSync(PDFJS_WASM).filter((n) => !n.startsWith('LICENSE')))
+      this.emitFile({ type: 'asset', fileName: `pdfjs-wasm/${name}`, source: readFileSync(PDFJS_WASM + name) })
+  },
+})
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), pdfjsWasm()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // The hand tracker's bundle has no imports of its own, so it is served as is: pre-bundling would only make the dev
   // server discover it on first use and reload the page in the middle of hands mode.
