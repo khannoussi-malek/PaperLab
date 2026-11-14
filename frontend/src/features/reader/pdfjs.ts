@@ -1,6 +1,6 @@
 // The single entry point to PDF.js. Import order matters: pdf_viewer.mjs reads
 // globalThis.pdfjsLib, which only exists once pdfjs-dist has been evaluated.
-import { GlobalWorkerOptions, PDFWorker, getDocument } from 'pdfjs-dist'
+import { GlobalWorkerOptions, PDFWorker, getDocument as pdfjsGetDocument } from 'pdfjs-dist'
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { TextLayerBuilder } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
@@ -15,5 +15,13 @@ GlobalWorkerOptions.workerSrc = workerSrc
 // task hasn't settled within a second or two if that ever shows up.
 export const pdfWorker = new PDFWorker()
 
-export { getDocument, TextLayerBuilder }
+// PDF.js decodes CCITT fax, JBIG2 and JPEG 2000 images with WebAssembly it fetches from `wasmUrl` (vite.config.ts
+// serves its wasm/ folder there). Without it every page of a scanned paper renders blank, with only the text layer.
+// Absolute, because the worker fetches `${wasmUrl}jbig2.wasm` relative to its own location.
+const wasmUrl = new URL(`${import.meta.env.BASE_URL}pdfjs-wasm/`, location.origin).href
+
+export const getDocument = (src: Exclude<Parameters<typeof pdfjsGetDocument>[0], string | URL | ArrayBuffer | Uint8Array>) =>
+  pdfjsGetDocument({ wasmUrl, ...src })
+
+export { TextLayerBuilder }
 export type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
