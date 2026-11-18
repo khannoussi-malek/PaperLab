@@ -32,16 +32,16 @@ always marked as AI in the interface.
 
 ## Try it
 
-PaperLab is free and open source, and on a Mac it takes three commands with [Homebrew](https://brew.sh/):
+PaperLab is free and open source. On a Mac, paste this one line into Terminal:
 
 ```sh
-brew install --cask docker-desktop   # PaperLab runs on Docker: open Docker Desktop once after this
-brew tap khannoussi-malek/paperlab https://github.com/khannoussi-malek/PaperLab
-brew install --cask khannoussi-malek/paperlab/paperlab
+curl -fsSL https://raw.githubusercontent.com/khannoussi-malek/PaperLab/main/install.sh | sh
 ```
 
-Then open **PaperLab** from Applications. Homebrew picks the right build for Apple silicon or Intel, and macOS opens it
-without the Open Anyway step. On Windows or Linux, or without Homebrew, see the [Quick start](#quick-start).
+It installs what PaperLab needs and is missing (Docker Desktop, Ollama and a chat model sized to your Mac's memory),
+then PaperLab itself, and opens it ready to use. It asks for your password once and shows Docker's terms before
+accepting them. Anything already installed is left as it is, and running the line again updates PaperLab. On Windows
+or Linux, or with Homebrew, see the [Quick start](#quick-start).
 
 Give it a try with a few of your own papers, and tell me how it went, good or bad, in an
 [issue](https://github.com/khannoussi-malek/PaperLab/issues) or on [LinkedIn](https://www.linkedin.com/company/os-paperlab).
@@ -367,7 +367,18 @@ produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", 
 
 ## Quick start
 
-### The desktop app
+### On a Mac: one command
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/khannoussi-malek/PaperLab/main/install.sh | sh
+```
+
+It installs Docker Desktop, Ollama, a chat model (qwen3:4b under 16 GB of memory, qwen3:8b above; none under 8 GB)
+and PaperLab, downloads the search model, and opens PaperLab with nothing left to set up. It asks for your password
+once, only to install Docker, and waits for Enter on Docker's terms. A Docker or Ollama you already have is used as it
+is. Running it again updates PaperLab and keeps your library. What it did is in `~/paperlab-install.log`.
+
+### Download the app yourself
 
 PaperLab runs on [Docker](https://www.docker.com/products/docker-desktop/): install Docker Desktop and open it once.
 Then download PaperLab for your system from the
