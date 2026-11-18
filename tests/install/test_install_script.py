@@ -135,3 +135,85 @@ def test_wrong_or_no_password_stops_with_a_sentence(tmp_path):
     result = sh_fn(tmp_path, "ask_password", {"sudo": "exit 1"})
     assert result.returncode == 1
     assert result.stdout.splitlines()[1] == "PaperLab can't install Docker without your password. Run the command again."
+
+
+# Docker counts as running once `open -a Docker` has run (it touches $tmp/docker-up).
+DOCKER_UP = '[ "$1" = info ] && [ ! -f "$FAKE_STATE/docker-up" ] && exit 1'
+OPEN = 'case "$*" in "-a Docker") touch "$FAKE_STATE/docker-up" ;; esac'
+# Docker's installer: puts a docker command on PATH, as Docker Desktop's install does.
+SUDO_INSTALLS_DOCKER = (
+    'case "$*" in *Docker.app/Contents/MacOS/install*) '
+    "printf '#!/bin/sh\\nprintf \"%%s\\\\n\" \"docker $*\" >> \"$FAKE_LOG\"\\n" + DOCKER_UP.replace('"', '\\"')
+    + "\\nexit 0\\n' > \"$(dirname \"$0\")/docker\"; chmod +x \"$(dirname \"$0\")/docker\" ;; esac"
+)
+
+
+def docker_env(tmp_path: Path, tty: str | None = "\n") -> dict[str, str]:
+    state = tmp_path / "state"
+    state.mkdir(exist_ok=True)
+    if tty is not None:
+        (tmp_path / "tty").write_text(tty)
+    return {"FAKE_STATE": str(state)}
+
+
+def test_working_docker_is_left_alone(tmp_path):
+    result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": ""}, **docker_env(tmp_path))
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ["[1/5] Docker is ready"]
+    assert [c.split()[0] for c in calls(tmp_path)] == ["docker"]  # docker info, nothing else
+
+
+def test_installed_but_stopped_docker_is_started_not_reinstalled(tmp_path):
+    result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": DOCKER_UP, "open": OPEN}, **docker_env(tmp_path))
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ["[1/5] Starting Docker…"]
+    assert "open -a Docker" in calls(tmp_path)
+    assert not any(c.startswith(("hdiutil", "sudo", "curl")) for c in calls(tmp_path))
+
+
+def test_missing_docker_shows_licence_then_installs_in_order(tmp_path):
+    bodies = {"docker": None, "open": OPEN, "sudo": SUDO_INSTALLS_DOCKER}
+    result = sh_fn(tmp_path, "ensure_docker mac-arm64", bodies, **docker_env(tmp_path))
+    assert result.returncode == 0, result.stdout
+    assert result.stdout.splitlines() == [
+        "[1/5] Installing Docker…",
+        "Docker Desktop is free for personal use, education and companies under 250 employees and $10M revenue; "
+        "larger companies need a paid Docker subscription.",
+        "Press Enter to accept Docker's terms and continue, or Ctrl+C to stop.",
+        "PaperLab needs your password once, to install Docker.",
+    ]
+    order = [c.split()[0] if not c.startswith("sudo /") else "install" for c in calls(tmp_path)]
+    assert order[:5] == ["curl", "hdiutil", "sudo", "install", "hdiutil"]  # download, attach, sudo -v, install, detach
+    log = calls(tmp_path)
+    assert any("desktop.docker.com/mac/main/arm64/Docker.dmg" in c for c in log)
+    assert any(c.startswith("sudo ") and "--accept-license --user=tester" in c for c in log)
+    assert "open -a Docker" in log
+
+
+def test_intel_mac_gets_the_amd64_docker(tmp_path):
+    bodies = {"docker": None, "open": OPEN, "sudo": SUDO_INSTALLS_DOCKER}
+    sh_fn(tmp_path, "ensure_docker mac-x64", bodies, **docker_env(tmp_path))
+    assert any("desktop.docker.com/mac/main/amd64/Docker.dmg" in c for c in calls(tmp_path))
+
+
+def test_without_a_terminal_it_stops_before_installing_docker(tmp_path):
+    result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": None}, **docker_env(tmp_path, tty=None))
+    assert result.returncode == 1
+    assert "PaperLab needs a terminal to ask about Docker's terms. Run the command in Terminal." in result.stdout
+    assert not any(c.startswith(("hdiutil", "sudo", "curl")) for c in calls(tmp_path))
+
+
+def test_refusing_the_terms_installs_nothing(tmp_path):
+    result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": None}, **docker_env(tmp_path, tty=""))  # EOF
+    assert result.returncode == 1
+    assert not any(c.startswith(("hdiutil", "sudo", "curl")) for c in calls(tmp_path))
+
+
+def test_docker_that_never_starts_fails_with_a_sentence(tmp_path):
+    result = sh_fn(
+        tmp_path, "ensure_docker mac-arm64", {"docker": "exit 1"}, PAPERLAB_DOCKER_WAIT="1", **docker_env(tmp_path)
+    )
+    assert result.returncode == 1
+    assert (
+        "Docker didn't start. Open Docker Desktop, finish its window, then run the command again." in result.stdout
+    )
