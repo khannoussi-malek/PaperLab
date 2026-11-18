@@ -60,6 +60,13 @@ app_asset_url() {
   echo "https://github.com/$REPO/releases/download/v$1/PaperLab-$1-$arch.dmg"
 }
 
+# Only Docker's own installer needs admin rights (Ollama and PaperLab go into /Applications without them), so this
+# runs just before it and needs no keep-alive. sudo reads the password from the terminal even under `curl | sh`.
+ask_password() {
+  echo "PaperLab needs your password once, to install Docker."
+  sudo -v || fail "PaperLab can't install Docker without your password. Run the command again."
+}
+
 main() {
   platform >/dev/null
 }

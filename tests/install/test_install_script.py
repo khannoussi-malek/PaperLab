@@ -122,3 +122,16 @@ def test_truncated_script_runs_nothing(tmp_path):
     for cut in (len(text) // 3, len(text) // 2, len(text) - 20):
         subprocess.run(["sh"], input=text[:cut], env=env, capture_output=True, text=True, timeout=30)
     assert calls(tmp_path) == []
+
+
+def test_password_asked_once_with_the_reason(tmp_path):
+    result = sh_fn(tmp_path, "ask_password")
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ["PaperLab needs your password once, to install Docker."]
+    assert [c for c in calls(tmp_path) if c.startswith("sudo")] == ["sudo -v"]
+
+
+def test_wrong_or_no_password_stops_with_a_sentence(tmp_path):
+    result = sh_fn(tmp_path, "ask_password", {"sudo": "exit 1"})
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[1] == "PaperLab can't install Docker without your password. Run the command again."
