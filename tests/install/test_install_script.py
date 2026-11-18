@@ -302,3 +302,63 @@ def test_low_memory_skips_chat_with_the_sentence(tmp_path):
         "add chat later in Settings.",
     ]
     assert calls(tmp_path) == []
+
+
+def test_env_written_when_absent(tmp_path):
+    sh_fn(tmp_path, "write_model_env qwen3:4b")
+    assert (tmp_path / "data" / ".env").read_text() == "LLM_MODEL=qwen3:4b\n"
+
+
+def test_existing_env_is_never_changed(tmp_path):
+    env = tmp_path / "data" / ".env"
+    env.parent.mkdir(parents=True)
+    env.write_bytes(b"LLM_MODEL=llama3\nOTHER=1")
+    sh_fn(tmp_path, "write_model_env qwen3:8b")
+    assert env.read_bytes() == b"LLM_MODEL=llama3\nOTHER=1"
+
+
+def test_no_env_without_a_model(tmp_path):
+    sh_fn(tmp_path, 'write_model_env ""')
+    assert not (tmp_path / "data" / ".env").exists()
+
+
+# PaperLab is running until `osascript … quit` has run.
+PGREP_RUNNING = '[ -f "$FAKE_STATE/quit" ] && exit 1'
+OSASCRIPT_QUITS = 'touch "$FAKE_STATE/quit"'
+
+
+def test_running_app_is_quit_before_it_is_replaced(tmp_path):
+    bodies = {"pgrep": PGREP_RUNNING, "osascript": OSASCRIPT_QUITS}
+    result = sh_fn(tmp_path, "install_app_mac 0.3.1 mac-arm64", bodies, **docker_env(tmp_path))
+    assert result.returncode == 0, result.stdout
+    names = [c.split()[0] for c in calls(tmp_path)]
+    assert "osascript -e quit app \"PaperLab\"" in calls(tmp_path)
+    assert names.index("osascript") < names.index("ditto")
+
+
+def test_app_that_is_not_running_is_not_quit(tmp_path):
+    sh_fn(tmp_path, "install_app_mac 0.3.1 mac-arm64", {"pgrep": "exit 1"}, **docker_env(tmp_path))
+    assert not any(c.startswith("osascript") for c in calls(tmp_path))
+
+
+def test_app_downloaded_copied_and_quarantine_cleared(tmp_path):
+    old = tmp_path / "Applications" / "PaperLab.app" / "old-file"
+    old.parent.mkdir(parents=True)
+    old.touch()
+    result = sh_fn(tmp_path, "install_app_mac 0.3.1 mac-x64", {"pgrep": "exit 1"}, **docker_env(tmp_path))
+    assert result.returncode == 0, result.stdout
+    log = calls(tmp_path)
+    assert any(c.startswith("curl") and c.endswith("/v0.3.1/PaperLab-0.3.1-x64.dmg") for c in log)
+    app = f"{tmp_path}/Applications/PaperLab.app"
+    assert any(c.startswith("ditto ") and c.endswith(f"PaperLab.app {app}") for c in log)
+    assert f"xattr -dr com.apple.quarantine {app}" in log
+    assert not old.exists()  # the old bundle is replaced, not merged into
+
+
+def test_app_that_will_not_quit_stops_with_a_sentence(tmp_path):
+    result = sh_fn(
+        tmp_path, "install_app_mac 0.3.1 mac-arm64", {"pgrep": ""}, PAPERLAB_QUIT_WAIT="1", **docker_env(tmp_path)
+    )
+    assert result.returncode == 1
+    assert "PaperLab is still open. Quit it, then run the command again." in result.stdout
+    assert not any(c.startswith("ditto") for c in calls(tmp_path))

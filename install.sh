@@ -201,6 +201,43 @@ ensure_model() {
     fail "Couldn't download the chat model. Check the internet connection, then run the command again."
 }
 
+DATA=${PAPERLAB_DATA_DIR:-$HOME/Library/Application Support/PaperLab}
+
+# Quitting PaperLab stops its containers the normal way; the library (Docker volumes) is never touched.
+quit_app_mac() {
+  pgrep -x PaperLab >/dev/null 2>&1 || return 0
+  run osascript -e 'quit app "PaperLab"' || true
+  waited=0
+  while pgrep -x PaperLab >/dev/null 2>&1; do
+    [ "$waited" -lt "${PAPERLAB_QUIT_WAIT:-60}" ] || fail "PaperLab is still open. Quit it, then run the command again."
+    sleep 2
+    waited=$((waited + 2))
+  done
+}
+
+# The release's .dmg, copied over any older PaperLab. Fetched by curl, it carries no quarantine flag; clearing it
+# anyway keeps macOS from asking "are you sure you want to open it?".
+install_app_mac() {
+  quit_app_mac
+  tmp=$(mktemp -d)
+  run curl -fsSL -o "$tmp/PaperLab.dmg" "$(app_asset_url "$1" "$2")" ||
+    fail "Couldn't download PaperLab. Check the internet connection, then run the command again."
+  run hdiutil attach -nobrowse -quiet -mountpoint "$tmp/mnt" "$tmp/PaperLab.dmg" || fail "Couldn't open the PaperLab download."
+  rm -rf "$APPS/PaperLab.app"
+  run ditto "$tmp/mnt/PaperLab.app" "$APPS/PaperLab.app" ||
+    { run hdiutil detach -quiet "$tmp/mnt"; fail "Couldn't copy PaperLab to $APPS."; }
+  run xattr -dr com.apple.quarantine "$APPS/PaperLab.app" || true
+  run hdiutil detach -quiet "$tmp/mnt" || true
+}
+
+# The chat model the backend seeds its first connection with (LLM_MODEL). Only on a first install: an existing .env
+# is the user's.
+write_model_env() {
+  [ -n "$1" ] && [ ! -e "$DATA/.env" ] || return 0
+  mkdir -p "$DATA"
+  printf 'LLM_MODEL=%s\n' "$1" >"$DATA/.env"
+}
+
 main() {
   platform >/dev/null
 }
