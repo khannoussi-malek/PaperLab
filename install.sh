@@ -135,6 +135,72 @@ ensure_docker() {
   fi
 }
 
+OLLAMA=${OLLAMA_API:-http://127.0.0.1:11434}
+
+ollama_ready() { run curl -fsS --max-time 5 "$OLLAMA/api/version"; }
+
+# Wait until Ollama answers (up to a minute; PAPERLAB_OLLAMA_WAIT in tests).
+wait_for_ollama() {
+  waited=0
+  until ollama_ready; do
+    [ "$waited" -lt "${PAPERLAB_OLLAMA_WAIT:-60}" ] ||
+      fail "Ollama didn't start. Open Ollama from Applications, then run the command again."
+    sleep 2
+    waited=$((waited + 2))
+  done
+}
+
+install_ollama_mac() {
+  tmp=$(mktemp -d)
+  run curl -fsSL -o "$tmp/Ollama.dmg" "https://ollama.com/download/Ollama.dmg" ||
+    fail "Couldn't download Ollama. Check the internet connection, then run the command again."
+  run hdiutil attach -nobrowse -quiet -mountpoint "$tmp/mnt" "$tmp/Ollama.dmg" || fail "Couldn't open the Ollama download."
+  run ditto "$tmp/mnt/Ollama.app" "$APPS/Ollama.app" ||
+    { run hdiutil detach -quiet "$tmp/mnt"; fail "Couldn't copy Ollama to $APPS."; }
+  run hdiutil detach -quiet "$tmp/mnt" || true
+}
+
+# An Ollama that answers is left alone (whatever installed it); an installed one is opened; otherwise it is installed.
+ensure_ollama() {
+  if ollama_ready; then
+    step 2 "Ollama is ready"
+    return 0
+  elif [ -d "$APPS/Ollama.app" ]; then
+    step 2 "Starting Ollama…"
+  else
+    step 2 "Installing Ollama…"
+    install_ollama_mac
+  fi
+  run open -a Ollama || true
+  wait_for_ollama
+}
+
+# The chat model through Ollama's API (no ollama command needed on PATH). Progress shows only on a terminal.
+ensure_model() {
+  if [ -z "$1" ]; then
+    step 3 "Chat is left off"
+    echo "This Mac has less than 8 GB of memory, so chat is left off. Reading, notes and search work; add chat later in Settings."
+    return 0
+  fi
+  if curl -fsS --max-time 10 "$OLLAMA/api/tags" 2>>"$LOG" | grep -q "\"name\":\"$1\""; then
+    step 3 "Chat model $1 is ready"
+    return 0
+  fi
+  step 3 "Downloading the chat model $1…"
+  stream=$(mktemp)
+  curl -fsSN -X POST "$OLLAMA/api/pull" -d "{\"model\":\"$1\"}" 2>>"$LOG" | tee "$stream" | while IFS= read -r line; do
+    total=$(printf '%s' "$line" | sed -n 's/.*"total":\([0-9]*\).*/\1/p')
+    done_bytes=$(printf '%s' "$line" | sed -n 's/.*"completed":\([0-9]*\).*/\1/p')
+    if [ -t 1 ] && [ -n "$total" ] && [ -n "$done_bytes" ] && [ "$total" -gt 0 ]; then
+      printf '\r      %s%%' $((done_bytes * 100 / total))
+    fi
+  done
+  if [ -t 1 ]; then printf '\n'; fi
+  cat "$stream" >>"$LOG"
+  grep -q '"status":"success"' "$stream" ||
+    fail "Couldn't download the chat model. Check the internet connection, then run the command again."
+}
+
 main() {
   platform >/dev/null
 }

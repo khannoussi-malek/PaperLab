@@ -217,3 +217,88 @@ def test_docker_that_never_starts_fails_with_a_sentence(tmp_path):
     assert (
         "Docker didn't start. Open Docker Desktop, finish its window, then run the command again." in result.stdout
     )
+
+
+# Ollama's API through curl: /api/version answers once Ollama is "up", /api/tags lists $OLLAMA_TAGS, /api/pull streams
+# $PULL_STREAM. `open -a Ollama` brings it up.
+CURL_OLLAMA = r"""case "$*" in
+  *api/version*) [ -f "$FAKE_STATE/ollama-up" ] || exit 7 ;;
+  *api/tags*) printf '%s' "${OLLAMA_TAGS:-}" ;;
+  *api/pull*) printf '%b' "$PULL_STREAM" ;;
+esac"""
+OPEN_OLLAMA = 'case "$*" in "-a Ollama") touch "$FAKE_STATE/ollama-up" ;; esac'
+PULLED = r'{"status":"pulling manifest"}\n{"status":"pulling abc","total":100,"completed":50}\n{"status":"success"}\n'
+
+
+def ollama_env(tmp_path: Path, up: bool = False, **extra: str) -> dict[str, str]:
+    env = docker_env(tmp_path)
+    if up:
+        (tmp_path / "state" / "ollama-up").touch()
+    return {**env, **extra}
+
+
+def test_running_ollama_is_left_alone(tmp_path):
+    result = sh_fn(tmp_path, "ensure_ollama", {"curl": CURL_OLLAMA}, **ollama_env(tmp_path, up=True))
+    assert result.stdout.splitlines() == ["[2/5] Ollama is ready"]
+    assert all("api/version" in c for c in calls(tmp_path))
+
+
+def test_missing_ollama_is_installed_and_opened(tmp_path):
+    bodies = {"curl": CURL_OLLAMA, "open": OPEN_OLLAMA}
+    result = sh_fn(tmp_path, "ensure_ollama", bodies, **ollama_env(tmp_path))
+    assert result.returncode == 0, result.stdout
+    assert result.stdout.splitlines() == ["[2/5] Installing Ollama…"]
+    steps = [c for c in calls(tmp_path) if "api/version" not in c]
+    assert "https://ollama.com/download/Ollama.dmg" in steps[0]
+    assert steps[1].startswith("hdiutil attach")
+    assert steps[2].startswith("ditto ") and steps[2].endswith(f"Ollama.app {tmp_path}/Applications/Ollama.app")
+    assert steps[3].startswith("hdiutil detach")
+    assert steps[4] == "open -a Ollama"
+
+
+def test_installed_but_stopped_ollama_is_opened_not_reinstalled(tmp_path):
+    (tmp_path / "Applications" / "Ollama.app").mkdir(parents=True)
+    result = sh_fn(tmp_path, "ensure_ollama", {"curl": CURL_OLLAMA, "open": OPEN_OLLAMA}, **ollama_env(tmp_path))
+    assert result.stdout.splitlines() == ["[2/5] Starting Ollama…"]
+    assert not any(c.startswith(("hdiutil", "ditto")) for c in calls(tmp_path))
+
+
+def test_ollama_that_never_starts_fails_with_a_sentence(tmp_path):
+    result = sh_fn(tmp_path, "ensure_ollama", {"curl": CURL_OLLAMA}, PAPERLAB_OLLAMA_WAIT="1", **ollama_env(tmp_path))
+    assert result.returncode == 1
+    assert "Ollama didn't start. Open Ollama from Applications, then run the command again." in result.stdout
+
+
+def test_model_already_pulled_is_skipped(tmp_path):
+    tags = '{"models":[{"name":"qwen3:4b","model":"qwen3:4b"}]}'
+    result = sh_fn(tmp_path, "ensure_model qwen3:4b", {"curl": CURL_OLLAMA}, **ollama_env(tmp_path, True, OLLAMA_TAGS=tags))
+    assert result.stdout.splitlines() == ["[3/5] Chat model qwen3:4b is ready"]
+    assert not any("api/pull" in c for c in calls(tmp_path))
+
+
+def test_model_is_pulled_through_the_api(tmp_path):
+    result = sh_fn(
+        tmp_path, "ensure_model qwen3:8b", {"curl": CURL_OLLAMA}, **ollama_env(tmp_path, True, PULL_STREAM=PULLED)
+    )
+    assert result.returncode == 0, result.stdout
+    assert result.stdout.splitlines() == ["[3/5] Downloading the chat model qwen3:8b…"]
+    pull = [c for c in calls(tmp_path) if "api/pull" in c]
+    assert len(pull) == 1 and '{"model":"qwen3:8b"}' in pull[0]
+
+
+def test_pull_error_fails_with_a_sentence(tmp_path):
+    stream = r'{"status":"pulling manifest"}\n{"error":"connection reset"}\n'
+    result = sh_fn(tmp_path, "ensure_model qwen3:8b", {"curl": CURL_OLLAMA}, **ollama_env(tmp_path, True, PULL_STREAM=stream))
+    assert result.returncode == 1
+    assert "Couldn't download the chat model. Check the internet connection, then run the command again." in result.stdout
+
+
+def test_low_memory_skips_chat_with_the_sentence(tmp_path):
+    result = sh_fn(tmp_path, 'ensure_model ""', {"curl": CURL_OLLAMA}, **ollama_env(tmp_path, True))
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == [
+        "[3/5] Chat is left off",
+        "This Mac has less than 8 GB of memory, so chat is left off. Reading, notes and search work; "
+        "add chat later in Settings.",
+    ]
+    assert calls(tmp_path) == []
