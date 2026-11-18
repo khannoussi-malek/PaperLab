@@ -238,8 +238,75 @@ write_model_env() {
   printf 'LLM_MODEL=%s\n' "$1" >"$DATA/.env"
 }
 
+# PaperLab's API: the port the app's own settings name (Settings → Desktop app can change it), else 5190.
+api_base() {
+  if [ -n "${PAPERLAB_API:-}" ]; then
+    echo "$PAPERLAB_API"
+    return 0
+  fi
+  port=$(sed -n 's/.*"port": *\([0-9][0-9]*\).*/\1/p' "$DATA/settings.json" 2>/dev/null | head -n 1)
+  echo "http://127.0.0.1:${port:-5190}"
+}
+
+# Open PaperLab and wait for its API (up to 15 minutes: the first start downloads its images; PAPERLAB_APP_WAIT in
+# tests).
+wait_for_app() {
+  run open -a PaperLab || true
+  waited=0
+  until run curl -fsS --max-time 5 "$(api_base)/api/setup"; do
+    [ "$waited" -lt "${PAPERLAB_APP_WAIT:-900}" ] ||
+      fail "PaperLab didn't start. Open it from Applications; if it shows a problem, it says what to do."
+    sleep 3
+    waited=$((waited + 3))
+  done
+}
+
+# The built-in search model, through the same API as the setup page's Search step (a server-sent event stream).
+ensure_search_model() {
+  if curl -fsS --max-time 10 "$(api_base)/api/embedding" 2>>"$LOG" | grep -q '"model_present": *true'; then
+    return 0
+  fi
+  stream=$(mktemp)
+  curl -fsSN -X POST "$(api_base)/api/embedding/model" 2>>"$LOG" | tee "$stream" | while IFS= read -r line; do
+    case $line in
+      data:*'"total"'*)
+        total=$(printf '%s' "$line" | sed -n 's/.*"total": *\([0-9]*\).*/\1/p')
+        done_bytes=$(printf '%s' "$line" | sed -n 's/.*"completed": *\([0-9]*\).*/\1/p')
+        if [ -t 1 ] && [ -n "$total" ] && [ -n "$done_bytes" ] && [ "$total" -gt 0 ]; then
+          printf '\r      search model %s%%' $((done_bytes * 100 / total))
+        fi
+        ;;
+    esac
+  done
+  if [ -t 1 ]; then printf '\n'; fi
+  cat "$stream" >>"$LOG"
+  grep -q '^event: done' "$stream" ||
+    fail "Couldn't download the search model. Open PaperLab and use Settings → Search to try again."
+}
+
+# The setup page has nothing left to ask, so it doesn't open.
+finish_setup() {
+  run curl -fsS -X PUT -H 'Content-Type: application/json' -d '{"done": true}' "$(api_base)/api/setup" ||
+    fail "PaperLab is installed, but couldn't finish its setup. Open it from Applications to finish there."
+}
+
 main() {
-  platform >/dev/null
+  # $(…) runs in a subshell, so a refusal's message is printed here.
+  plat=$(platform) || { printf '%s\n' "$plat"; exit 1; }
+  model=$(pick_model "$(memory_bytes)")
+  ensure_docker "$plat"
+  ensure_ollama
+  ensure_model "$model"
+  version=$(latest_version)
+  [ -n "$version" ] || fail "Couldn't find PaperLab's latest release. Check the internet connection, then run the command again."
+  step 4 "Installing PaperLab $version…"
+  install_app_mac "$version" "$plat"
+  write_model_env "$model"
+  step 5 "Opening PaperLab (the first start downloads about 335 MB)…"
+  wait_for_app
+  ensure_search_model
+  finish_setup
+  echo "PaperLab is ready. Next time, open it from Applications."
 }
 
 [ -n "${PAPERLAB_INSTALL_LIB:-}" ] || main "$@"

@@ -362,3 +362,111 @@ def test_app_that_will_not_quit_stops_with_a_sentence(tmp_path):
     assert result.returncode == 1
     assert "PaperLab is still open. Quit it, then run the command again." in result.stdout
     assert not any(c.startswith("ditto") for c in calls(tmp_path))
+
+
+# The whole outside world through curl: GitHub's latest-release redirect, the three downloads, Ollama's API and
+# PaperLab's API. The app answers once `open -a PaperLab` has run.
+CURL_WORLD = r"""case "$*" in
+  *releases/latest*) printf 'HTTP/2 302\r\nlocation: https://github.com/khannoussi-malek/PaperLab/releases/tag/v0.3.1\r\n\r\n' ;;
+  *api/version*) [ -f "$FAKE_STATE/ollama-up" ] || exit 7 ;;
+  *api/tags*) printf '%s' "${OLLAMA_TAGS:-}" ;;
+  *api/pull*) printf '%b' '{"status":"success"}\n' ;;
+  *api/setup*) [ -f "$FAKE_STATE/app-up" ] || exit 7 ;;
+  *api/embedding/model*) printf '%b' "$SEARCH_STREAM" ;;
+  *api/embedding*) printf '{"model_present":%s}' "${MODEL_PRESENT:-false}" ;;
+esac"""
+OPEN_ANY = 'case "$*" in "-a Docker") touch "$FAKE_STATE/docker-up" ;; "-a Ollama") touch "$FAKE_STATE/ollama-up" ;; "-a PaperLab") touch "$FAKE_STATE/app-up" ;; esac'
+
+
+def world(**overrides: str | None) -> dict[str, str | None]:
+    return {
+        **mac("arm64", "15.1"), "sysctl": f"echo {16 * GiB}", "curl": CURL_WORLD, "open": OPEN_ANY,
+        "docker": None, "sudo": SUDO_INSTALLS_DOCKER, "pgrep": "exit 1", **overrides,
+    }
+
+
+SEARCH_DONE = r'event: progress\ndata: {"completed":1,"total":2}\n\nevent: done\ndata: {"papers_queued":0}\n\n'
+
+
+def run_main(tmp_path: Path, bodies: dict, **extra: str):
+    env = env_for(tmp_path, bodies, **docker_env(tmp_path), **{"SEARCH_STREAM": SEARCH_DONE, **extra})
+    return subprocess.run(["sh", str(SCRIPT)], env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+
+
+def test_full_install_on_an_empty_mac(tmp_path):
+    result = run_main(tmp_path, world())
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.splitlines() == [
+        "[1/5] Installing Docker…",
+        "Docker Desktop is free for personal use, education and companies under 250 employees and $10M revenue; "
+        "larger companies need a paid Docker subscription.",
+        "Press Enter to accept Docker's terms and continue, or Ctrl+C to stop.",
+        "PaperLab needs your password once, to install Docker.",
+        "[2/5] Installing Ollama…",
+        "[3/5] Downloading the chat model qwen3:8b…",
+        "[4/5] Installing PaperLab 0.3.1…",
+        "[5/5] Opening PaperLab (the first start downloads about 335 MB)…",
+        "PaperLab is ready. Next time, open it from Applications.",
+    ]
+    assert (tmp_path / "data" / ".env").read_text() == "LLM_MODEL=qwen3:8b\n"
+    last = calls(tmp_path)[-1]
+    assert last.startswith("curl") and "-X PUT" in last and '{"done": true}' in last and last.endswith("/api/setup")
+
+
+def test_rerun_with_everything_installed_only_updates_the_app(tmp_path):
+    env_file = tmp_path / "data" / ".env"
+    env_file.parent.mkdir(parents=True)
+    env_file.write_text("LLM_MODEL=llama3\n")
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "ollama-up").touch()
+    tags = '{"models":[{"name":"qwen3:8b"}]}'
+    result = run_main(tmp_path, world(docker=""), OLLAMA_TAGS=tags, MODEL_PRESENT="true")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.splitlines() == [
+        "[1/5] Docker is ready",
+        "[2/5] Ollama is ready",
+        "[3/5] Chat model qwen3:8b is ready",
+        "[4/5] Installing PaperLab 0.3.1…",
+        "[5/5] Opening PaperLab (the first start downloads about 335 MB)…",
+        "PaperLab is ready. Next time, open it from Applications.",
+    ]
+    log = calls(tmp_path)
+    assert not any(c.startswith("sudo") for c in log)
+    assert not any("Docker.dmg" in c or "Ollama.dmg" in c or "api/pull" in c or "embedding/model" in c for c in log)
+    assert any(c.endswith("PaperLab-0.3.1-arm64.dmg") for c in log)
+    assert env_file.read_text() == "LLM_MODEL=llama3\n"
+
+
+def test_search_download_error_fails_and_leaves_setup_open(tmp_path):
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "ollama-up").touch()
+    stream = r'event: error\ndata: {"detail":"disk full"}\n\n'
+    result = run_main(tmp_path, world(docker=""), OLLAMA_TAGS='{"models":[{"name":"qwen3:8b"}]}', SEARCH_STREAM=stream)
+    assert result.returncode == 1
+    assert "Couldn't download the search model. Open PaperLab and use Settings → Search to try again." in result.stdout
+    assert not any("-X PUT" in c for c in calls(tmp_path))
+
+
+def test_app_that_never_answers_fails_with_a_sentence(tmp_path):
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "ollama-up").touch()
+    bodies = world(docker="", open="")  # opening PaperLab never brings its API up
+    result = run_main(tmp_path, bodies, OLLAMA_TAGS='{"models":[{"name":"qwen3:8b"}]}', PAPERLAB_APP_WAIT="1")
+    assert result.returncode == 1
+    assert "PaperLab didn't start. Open it from Applications; if it shows a problem, it says what to do." in result.stdout
+
+
+def test_unsupported_system_says_so_from_main(tmp_path):
+    result = run_main(tmp_path, world(**mac("arm64", "12.6")))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[0] == "PaperLab needs macOS 13 or later."
+    assert not any(c.startswith(("curl", "hdiutil", "sudo")) for c in calls(tmp_path))
+
+
+def test_app_port_comes_from_the_apps_settings(tmp_path):
+    settings = tmp_path / "data" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{\n  "keepRunning": true,\n  "port": 5299,\n  "updatesEnabled": true\n}\n')
+    assert sh_fn(tmp_path, "api_base").stdout.strip() == "http://127.0.0.1:5299"
+    settings.unlink()
+    assert sh_fn(tmp_path, "api_base").stdout.strip() == "http://127.0.0.1:5190"
