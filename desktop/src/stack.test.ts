@@ -87,7 +87,8 @@ describe('launch', () => {
   })
 
   it('with no docker at all, says Docker is needed', async () => {
-    expect((await run(deps(null).deps)).last).toEqual({ kind: 'docker-needed' })
+    expect((await run(deps(null).deps)).last).toEqual({ kind: 'docker-needed', mac: true })
+    expect((await run(deps(null, { platform: 'linux' }).deps)).last).toEqual({ kind: 'docker-needed', mac: false })
   })
 
   it('opens Docker Desktop when it is not running, asks every 2 s for 120 s, then says to start Docker', async () => {
@@ -315,7 +316,7 @@ describe('viewFor', () => {
   it('titles every screen as the spec names it', () => {
     const titles = (
       [
-        [{ kind: 'docker-needed' }, 'Docker needed'],
+        [{ kind: 'docker-needed', mac: true }, 'Docker needed'],
         [{ kind: 'starting-docker' }, 'Starting Docker'],
         [{ kind: 'start-docker' }, 'Start Docker'],
         [{ kind: 'update-docker', linux: false }, 'Update Docker'],
@@ -334,8 +335,12 @@ describe('viewFor', () => {
   })
 
   it("carries the spec's sentences, the last line, and each screen's way out", () => {
-    const needed = viewFor({ kind: 'docker-needed' })
+    const needed = viewFor({ kind: 'docker-needed', mac: true })
     expect(needed.body[0]).toContain('PaperLab runs on Docker Desktop')
+    expect(needed.body).toContain(
+      'Or let PaperLab install everything: in Terminal, run curl -fsSL https://raw.githubusercontent.com/khannoussi-malek/PaperLab/main/install.sh | sh',
+    )
+    expect(viewFor({ kind: 'docker-needed', mac: false }).body.join(' ')).not.toContain('install.sh')
     expect(needed.link).toEqual({ href: 'https://www.docker.com/products/docker-desktop/', label: 'Get Docker Desktop' })
     expect(needed.actions).toEqual(['retry'])
     expect(viewFor({ kind: 'starting-docker' }).body).toEqual(['If Docker Desktop opens its own window, finish it there.'])

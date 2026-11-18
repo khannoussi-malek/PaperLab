@@ -20,7 +20,7 @@ const PORT_TAKEN = /port is already allocated|address already in use/i
 
 export type Screen =
   | { kind: 'checking' }
-  | { kind: 'docker-needed' }
+  | { kind: 'docker-needed'; mac: boolean }
   | { kind: 'starting-docker' }
   | { kind: 'start-docker' }
   | { kind: 'docker-permission' }
@@ -74,7 +74,7 @@ export async function launch(deps: Deps, show: Show): Promise<Screen> {
   const { docker } = deps
   const screen: Screen =
     docker === null
-      ? { kind: 'docker-needed' }
+      ? { kind: 'docker-needed', mac: deps.platform === 'darwin' }
       : ((await checkDocker(docker, deps, show)) ??
         writeFilesOrFail(deps) ??
         (await ensureImage(docker, deps, show)) ??
@@ -209,6 +209,7 @@ const view = (title: string, body: string[], more: Partial<View> = {}): View => 
   busy: false,
   ...more,
 })
+const INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/khannoussi-malek/PaperLab/main/install.sh | sh'
 const RETRY: StartupAction[] = ['retry']
 const FAILED: StartupAction[] = ['retry', 'show-log']
 
@@ -216,12 +217,14 @@ type Views = { [K in Screen['kind']]: (screen: Extract<Screen, { kind: K }>) => 
 
 const VIEWS: Views = {
   checking: () => view('Opening PaperLab', ['Checking Docker…'], { busy: true }),
-  'docker-needed': () =>
+  'docker-needed': ({ mac }) =>
     view(
       'Docker needed',
       [
         'PaperLab runs on Docker Desktop. Install it, open it once, then press Retry.',
         'Any Docker that provides the docker command works too, such as OrbStack, Colima or Rancher Desktop.',
+        // The one-command install (install.sh at the repo root) is macOS-only for now.
+        ...(mac ? [`Or let PaperLab install everything: in Terminal, run ${INSTALL_COMMAND}`] : []),
       ],
       { link: { href: 'https://www.docker.com/products/docker-desktop/', label: 'Get Docker Desktop' }, actions: RETRY },
     ),
