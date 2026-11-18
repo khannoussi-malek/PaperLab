@@ -95,17 +95,40 @@ accept_docker_licence() {
     fail "PaperLab needs a terminal to ask about Docker's terms. Run the command in Terminal."
 }
 
+# A temporary file or folder under $TMPDIR (macOS's mktemp ignores TMPDIR without a template).
+scratch() { mktemp "$@" "${TMPDIR:-/tmp}/paperlab.XXXXXX" 2>>"$LOG"; }
+
+# Download <url> as <name>.dmg and mount it at $tmp/mnt. A connection that stalls for a minute is retried, then
+# given up on, instead of hanging forever.
+open_dmg() {
+  tmp=$(scratch -d) || fail "Couldn't make a temporary folder for the downloads."
+  run curl -fsSL --retry 3 --speed-time 60 --speed-limit 1 -o "$tmp/$2.dmg" "$1" ||
+    { rm -rf "$tmp"; fail "Couldn't download $2. Check the internet connection, then run the command again."; }
+  run hdiutil attach -nobrowse -quiet -mountpoint "$tmp/mnt" "$tmp/$2.dmg" ||
+    { rm -rf "$tmp"; fail "Couldn't open the $2 download. Run the command again."; }
+}
+
+# Unmount it and delete the download (Docker's is about 600 MB).
+close_dmg() {
+  run hdiutil detach -quiet "$tmp/mnt" || true
+  rm -rf "$tmp"
+}
+
+# Docker's installer runs as root, so it must be Docker's: a valid signature from Docker Inc's team.
+signed_by_docker() {
+  run codesign --verify --deep --strict "$1" && codesign -dv "$1" 2>&1 | grep -q '^TeamIdentifier=9BNSXJN65R$'
+}
+
 # Download first, then the password, then Docker's own silent installer.
 install_docker_mac() {
   case $1 in mac-arm64) arch=arm64 ;; *) arch=amd64 ;; esac
-  tmp=$(mktemp -d)
-  run curl -fsSL -o "$tmp/Docker.dmg" "https://desktop.docker.com/mac/main/$arch/Docker.dmg" ||
-    fail "Couldn't download Docker. Check the internet connection, then run the command again."
-  run hdiutil attach -nobrowse -quiet -mountpoint "$tmp/mnt" "$tmp/Docker.dmg" || fail "Couldn't open the Docker download."
+  open_dmg "https://desktop.docker.com/mac/main/$arch/Docker.dmg" Docker
+  signed_by_docker "$tmp/mnt/Docker.app" ||
+    { close_dmg; fail "The Docker download isn't signed by Docker, so it wasn't installed. Run the command again."; }
   ask_password
   run sudo "$tmp/mnt/Docker.app/Contents/MacOS/install" --accept-license --user="$USER" ||
-    { run hdiutil detach -quiet "$tmp/mnt"; fail "Docker's installer stopped."; }
-  run hdiutil detach -quiet "$tmp/mnt" || true
+    { close_dmg; fail "Docker's installer stopped. Run the command again."; }
+  close_dmg
 }
 
 # Open Docker and wait until it answers (up to 5 minutes; PAPERLAB_DOCKER_WAIT in tests).
@@ -124,9 +147,12 @@ start_docker_mac() {
 ensure_docker() {
   if docker_ready; then
     step 1 "Docker is ready"
-  elif [ -n "$(find_docker)" ] || [ -d "$APPS/Docker.app" ]; then
+  elif [ -d "$APPS/Docker.app" ]; then
     step 1 "Starting Docker…"
     start_docker_mac
+  elif [ -n "$(find_docker)" ]; then
+    # Another Docker (Colima, OrbStack, Rancher…): the user knows how to start it; installing a second one would not help.
+    fail "Your Docker isn't running. Start it, then run the command again."
   else
     step 1 "Installing Docker…"
     accept_docker_licence
@@ -151,13 +177,10 @@ wait_for_ollama() {
 }
 
 install_ollama_mac() {
-  tmp=$(mktemp -d)
-  run curl -fsSL -o "$tmp/Ollama.dmg" "https://ollama.com/download/Ollama.dmg" ||
-    fail "Couldn't download Ollama. Check the internet connection, then run the command again."
-  run hdiutil attach -nobrowse -quiet -mountpoint "$tmp/mnt" "$tmp/Ollama.dmg" || fail "Couldn't open the Ollama download."
+  open_dmg "https://ollama.com/download/Ollama.dmg" Ollama
   run ditto "$tmp/mnt/Ollama.app" "$APPS/Ollama.app" ||
-    { run hdiutil detach -quiet "$tmp/mnt"; fail "Couldn't copy Ollama to $APPS."; }
-  run hdiutil detach -quiet "$tmp/mnt" || true
+    { close_dmg; fail "Couldn't copy Ollama to $APPS. Run the command again."; }
+  close_dmg
 }
 
 # An Ollama that answers is left alone (whatever installed it); an installed one is opened; otherwise it is installed.
@@ -187,7 +210,7 @@ ensure_model() {
     return 0
   fi
   step 3 "Downloading the chat model $1…"
-  stream=$(mktemp)
+  stream=$(scratch) || fail "Couldn't make a temporary folder for the downloads."
   curl -fsSN -X POST "$OLLAMA/api/pull" -d "{\"model\":\"$1\"}" 2>>"$LOG" | tee "$stream" | while IFS= read -r line; do
     total=$(printf '%s' "$line" | sed -n 's/.*"total":\([0-9]*\).*/\1/p')
     done_bytes=$(printf '%s' "$line" | sed -n 's/.*"completed":\([0-9]*\).*/\1/p')
@@ -197,7 +220,10 @@ ensure_model() {
   done
   if [ -t 1 ]; then printf '\n'; fi
   cat "$stream" >>"$LOG"
-  grep -q '"status":"success"' "$stream" ||
+  pulled=yes
+  grep -q '"status":"success"' "$stream" || pulled=no
+  rm -f "$stream"
+  [ "$pulled" = yes ] ||
     fail "Couldn't download the chat model. Check the internet connection, then run the command again."
 }
 
@@ -209,33 +235,34 @@ quit_app_mac() {
   run osascript -e 'quit app "PaperLab"' || true
   waited=0
   while pgrep -x PaperLab >/dev/null 2>&1; do
-    [ "$waited" -lt "${PAPERLAB_QUIT_WAIT:-60}" ] || fail "PaperLab is still open. Quit it, then run the command again."
+    [ "$waited" -lt "${PAPERLAB_QUIT_WAIT:-60}" ] || return 1
     sleep 2
     waited=$((waited + 2))
   done
 }
 
-# The release's .dmg, copied over any older PaperLab. Fetched by curl, it carries no quarantine flag; clearing it
+# The release's .dmg, swapped in for any older PaperLab only once the new one is fully copied: a failed download or
+# copy leaves the old app in place (and still running). Fetched by curl, it carries no quarantine flag; clearing it
 # anyway keeps macOS from asking "are you sure you want to open it?".
 install_app_mac() {
-  quit_app_mac
-  tmp=$(mktemp -d)
-  run curl -fsSL -o "$tmp/PaperLab.dmg" "$(app_asset_url "$1" "$2")" ||
-    fail "Couldn't download PaperLab. Check the internet connection, then run the command again."
-  run hdiutil attach -nobrowse -quiet -mountpoint "$tmp/mnt" "$tmp/PaperLab.dmg" || fail "Couldn't open the PaperLab download."
+  open_dmg "$(app_asset_url "$1" "$2")" PaperLab
+  new="$APPS/PaperLab.app.new"
+  rm -rf "$new"
+  run ditto "$tmp/mnt/PaperLab.app" "$new" ||
+    { rm -rf "$new"; close_dmg; fail "Couldn't copy PaperLab to $APPS. Run the command again."; }
+  close_dmg
+  quit_app_mac || { rm -rf "$new"; fail "PaperLab is still open. Quit it, then run the command again."; }
   rm -rf "$APPS/PaperLab.app"
-  run ditto "$tmp/mnt/PaperLab.app" "$APPS/PaperLab.app" ||
-    { run hdiutil detach -quiet "$tmp/mnt"; fail "Couldn't copy PaperLab to $APPS."; }
+  mv "$new" "$APPS/PaperLab.app" || fail "Couldn't put PaperLab in $APPS. Run the command again."
   run xattr -dr com.apple.quarantine "$APPS/PaperLab.app" || true
-  run hdiutil detach -quiet "$tmp/mnt" || true
 }
 
 # The chat model the backend seeds its first connection with (LLM_MODEL). Only on a first install: an existing .env
 # is the user's.
 write_model_env() {
   [ -n "$1" ] && [ ! -e "$DATA/.env" ] || return 0
-  mkdir -p "$DATA"
-  printf 'LLM_MODEL=%s\n' "$1" >"$DATA/.env"
+  { mkdir -p "$DATA" && printf 'LLM_MODEL=%s\n' "$1" >"$DATA/.env"; } 2>>"$LOG" ||
+    fail "Couldn't save PaperLab's settings in $DATA."
 }
 
 # PaperLab's API: the port the app's own settings name (Settings → Desktop app can change it), else 5190.
@@ -266,7 +293,7 @@ ensure_search_model() {
   if curl -fsS --max-time 10 "$(api_base)/api/embedding" 2>>"$LOG" | grep -q '"model_present": *true'; then
     return 0
   fi
-  stream=$(mktemp)
+  stream=$(scratch) || fail "Couldn't make a temporary folder for the downloads."
   curl -fsSN -X POST "$(api_base)/api/embedding/model" 2>>"$LOG" | tee "$stream" | while IFS= read -r line; do
     case $line in
       data:*'"total"'*)
@@ -280,7 +307,10 @@ ensure_search_model() {
   done
   if [ -t 1 ]; then printf '\n'; fi
   cat "$stream" >>"$LOG"
-  grep -q '^event: done' "$stream" ||
+  fetched=yes
+  grep -q '^event: done' "$stream" || fetched=no
+  rm -f "$stream"
+  [ "$fetched" = yes ] ||
     fail "Couldn't download the search model. Open PaperLab and use Settings → Search to try again."
 }
 

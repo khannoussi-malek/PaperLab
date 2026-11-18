@@ -14,8 +14,14 @@ GiB = 1024**3
 # Every outside command the script may call. Each fake logs "name args" and then runs its body (default: succeed).
 FAKED = [
     "uname", "sw_vers", "sysctl", "curl", "docker", "hdiutil", "sudo", "open", "osascript", "pgrep", "ditto",
-    "xattr", "sleep",
+    "xattr", "sleep", "codesign",
 ]
+# Bodies every test gets unless it says otherwise: Docker's download is signed by Docker's team.
+# ditto creates its target, as the real one does.
+DEFAULT_BODIES = {
+    "codesign": 'case "$1" in -dv) echo "TeamIdentifier=9BNSXJN65R" >&2 ;; esac',
+    "ditto": 'mkdir -p "$2"',
+}
 
 
 def make_bin(tmp_path: Path, bodies: dict[str, str]) -> Path:
@@ -26,7 +32,7 @@ def make_bin(tmp_path: Path, bodies: dict[str, str]) -> Path:
             (bin_dir / name).unlink(missing_ok=True)
             continue
         fake = bin_dir / name
-        fake.write_text(f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$FAKE_LOG"\n{bodies.get(name, "")}\nexit 0\n')
+        fake.write_text(f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$FAKE_LOG"\n{bodies.get(name, DEFAULT_BODIES.get(name, ""))}\nexit 0\n')
         fake.chmod(0o755)
     return bin_dir
 
@@ -164,6 +170,7 @@ def test_working_docker_is_left_alone(tmp_path):
 
 
 def test_installed_but_stopped_docker_is_started_not_reinstalled(tmp_path):
+    (tmp_path / "Applications" / "Docker.app").mkdir(parents=True)
     result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": DOCKER_UP, "open": OPEN}, **docker_env(tmp_path))
     assert result.returncode == 0
     assert result.stdout.splitlines() == ["[1/5] Starting Docker…"]
@@ -183,7 +190,8 @@ def test_missing_docker_shows_licence_then_installs_in_order(tmp_path):
         "PaperLab needs your password once, to install Docker.",
     ]
     order = [c.split()[0] if not c.startswith("sudo /") else "install" for c in calls(tmp_path)]
-    assert order[:5] == ["curl", "hdiutil", "sudo", "install", "hdiutil"]  # download, attach, sudo -v, install, detach
+    # download, attach, signature, password, install, detach
+    assert order[:7] == ["curl", "hdiutil", "codesign", "codesign", "sudo", "install", "hdiutil"]
     log = calls(tmp_path)
     assert any("desktop.docker.com/mac/main/arm64/Docker.dmg" in c for c in log)
     assert any(c.startswith("sudo ") and "--accept-license --user=tester" in c for c in log)
@@ -210,6 +218,7 @@ def test_refusing_the_terms_installs_nothing(tmp_path):
 
 
 def test_docker_that_never_starts_fails_with_a_sentence(tmp_path):
+    (tmp_path / "Applications" / "Docker.app").mkdir(parents=True)
     result = sh_fn(
         tmp_path, "ensure_docker mac-arm64", {"docker": "exit 1"}, PAPERLAB_DOCKER_WAIT="1", **docker_env(tmp_path)
     )
@@ -331,9 +340,12 @@ def test_running_app_is_quit_before_it_is_replaced(tmp_path):
     bodies = {"pgrep": PGREP_RUNNING, "osascript": OSASCRIPT_QUITS}
     result = sh_fn(tmp_path, "install_app_mac 0.3.1 mac-arm64", bodies, **docker_env(tmp_path))
     assert result.returncode == 0, result.stdout
-    names = [c.split()[0] for c in calls(tmp_path)]
     assert "osascript -e quit app \"PaperLab\"" in calls(tmp_path)
-    assert names.index("osascript") < names.index("ditto")
+    # Downloaded and copied first, so PaperLab is closed only for the swap.
+    names = [c.split()[0] for c in calls(tmp_path)]
+    assert names.index("ditto") < names.index("osascript")
+    assert (tmp_path / "Applications" / "PaperLab.app").is_dir()
+    assert not (tmp_path / "Applications" / "PaperLab.app.new").exists()
 
 
 def test_app_that_is_not_running_is_not_quit(tmp_path):
@@ -350,7 +362,7 @@ def test_app_downloaded_copied_and_quarantine_cleared(tmp_path):
     log = calls(tmp_path)
     assert any(c.startswith("curl") and c.endswith("/v0.3.1/PaperLab-0.3.1-x64.dmg") for c in log)
     app = f"{tmp_path}/Applications/PaperLab.app"
-    assert any(c.startswith("ditto ") and c.endswith(f"PaperLab.app {app}") for c in log)
+    assert any(c.startswith("ditto ") and c.endswith(f"PaperLab.app {app}.new") for c in log)
     assert f"xattr -dr com.apple.quarantine {app}" in log
     assert not old.exists()  # the old bundle is replaced, not merged into
 
@@ -361,7 +373,7 @@ def test_app_that_will_not_quit_stops_with_a_sentence(tmp_path):
     )
     assert result.returncode == 1
     assert "PaperLab is still open. Quit it, then run the command again." in result.stdout
-    assert not any(c.startswith("ditto") for c in calls(tmp_path))
+    assert not (tmp_path / "Applications" / "PaperLab.app.new").exists()
 
 
 # The whole outside world through curl: GitHub's latest-release redirect, the three downloads, Ollama's API and
@@ -470,3 +482,78 @@ def test_app_port_comes_from_the_apps_settings(tmp_path):
     assert sh_fn(tmp_path, "api_base").stdout.strip() == "http://127.0.0.1:5299"
     settings.unlink()
     assert sh_fn(tmp_path, "api_base").stdout.strip() == "http://127.0.0.1:5190"
+
+
+def test_docker_installer_signed_by_someone_else_is_not_run(tmp_path):
+    bodies = {
+        "docker": None, "open": OPEN, "sudo": SUDO_INSTALLS_DOCKER,
+        "codesign": 'case "$1" in -dv) echo "TeamIdentifier=EVIL123" >&2 ;; esac',
+    }
+    result = sh_fn(tmp_path, "ensure_docker mac-arm64", bodies, **docker_env(tmp_path))
+    assert result.returncode == 1
+    assert "The Docker download isn't signed by Docker, so it wasn't installed. Run the command again." in result.stdout
+    log = calls(tmp_path)
+    assert not any(c.startswith("sudo") for c in log)  # neither the password nor the installer
+    assert log[-1].startswith("hdiutil detach")
+
+
+def test_downloads_give_up_on_a_stalled_connection(tmp_path):
+    bodies = {"docker": None, "open": OPEN, "sudo": SUDO_INSTALLS_DOCKER, "pgrep": "exit 1"}
+    sh_fn(tmp_path, "ensure_docker mac-arm64; install_ollama_mac; install_app_mac 0.3.1 mac-arm64", bodies, **docker_env(tmp_path))
+    downloads = [c for c in calls(tmp_path) if c.startswith("curl") and " -o " in c]
+    assert len(downloads) == 3
+    assert all("--retry 3" in c and "--speed-time 60 --speed-limit 1" in c for c in downloads)
+
+
+def test_stopped_docker_without_docker_desktop_says_start_it(tmp_path):
+    result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": DOCKER_UP, "open": OPEN}, **docker_env(tmp_path))
+    assert result.returncode == 1
+    assert "Your Docker isn't running. Start it, then run the command again." in result.stdout
+    assert "open -a Docker" not in calls(tmp_path)
+
+
+def old_app(tmp_path: Path) -> Path:
+    marker = tmp_path / "Applications" / "PaperLab.app" / "old-file"
+    marker.parent.mkdir(parents=True)
+    marker.touch()
+    return marker
+
+
+def test_failed_download_leaves_the_running_app_alone(tmp_path):
+    marker = old_app(tmp_path)
+    bodies = {"pgrep": PGREP_RUNNING, "osascript": OSASCRIPT_QUITS, "curl": 'case "$*" in *PaperLab-*) exit 22 ;; esac'}
+    result = sh_fn(tmp_path, "install_app_mac 0.3.1 mac-arm64", bodies, **docker_env(tmp_path))
+    assert result.returncode == 1
+    assert not any(c.startswith("osascript") for c in calls(tmp_path))
+    assert marker.exists()
+
+
+def test_failed_copy_keeps_the_old_app(tmp_path):
+    marker = old_app(tmp_path)
+    result = sh_fn(tmp_path, "install_app_mac 0.3.1 mac-arm64", {"pgrep": "exit 1", "ditto": "exit 1"}, **docker_env(tmp_path))
+    assert result.returncode == 1
+    assert marker.exists()
+
+
+def test_unwritable_data_folder_fails_with_a_sentence(tmp_path):
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+    result = sh_fn(tmp_path, "write_model_env qwen3:4b", PAPERLAB_DATA_DIR=str(blocker / "data"))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[0] == f"Couldn't save PaperLab's settings in {blocker / 'data'}."
+
+
+def test_no_temporary_folder_fails_with_a_sentence(tmp_path):
+    result = sh_fn(tmp_path, "install_app_mac 0.3.1 mac-arm64", {"pgrep": "exit 1"}, TMPDIR=str(tmp_path / "missing"))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[0] == "Couldn't make a temporary folder for the downloads."
+
+
+def test_downloads_are_removed_after_install(tmp_path):
+    scratch = tmp_path / "t"
+    scratch.mkdir()
+    bodies = {"docker": None, "open": OPEN, "sudo": SUDO_INSTALLS_DOCKER, "pgrep": "exit 1"}
+    expr = "ensure_docker mac-arm64; install_ollama_mac; install_app_mac 0.3.1 mac-arm64"
+    result = sh_fn(tmp_path, expr, bodies, TMPDIR=str(scratch), **docker_env(tmp_path))
+    assert result.returncode == 0, result.stdout
+    assert list(scratch.iterdir()) == []
