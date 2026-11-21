@@ -874,6 +874,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/answers/{output_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Answer Check
+         * @description The answer's newest check. 404 check_not_found.
+         */
+        get: operations["get_answer_check_api_chat_answers__output_id__check_get"];
+        put?: never;
+        /**
+         * Start Answer Check
+         * @description Checks each cited sentence of a saved answer against the passages it cites (M34), in a background job; poll
+         *     GET. A check still running is returned as it is. 404 answer_not_found; 409 answer_not_checkable (saved before
+         *     PaperLab kept its passages) or remote_model_needs_confirm (send confirm_remote).
+         */
+        post: operations["start_answer_check_api_chat_answers__output_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/search/hits/{hit_id}/chat": {
         parameters: {
             query?: never;
@@ -3787,6 +3813,70 @@ export interface components {
             ][];
             /** Quoted Text */
             quoted_text: string;
+        };
+        /** AnswerCheckOut */
+        AnswerCheckOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "done" | "failed";
+            /** Model */
+            model: string;
+            /** Connection Name */
+            connection_name: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Summary */
+            summary: string;
+            /** Limit Hit */
+            limit_hit: boolean;
+            /** Sentences */
+            sentences: components["schemas"]["AnswerCheckSentenceOut"][];
+        };
+        /** AnswerCheckRequest */
+        AnswerCheckRequest: {
+            /** Model Id */
+            model_id?: string | null;
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
+        };
+        /** AnswerCheckSentenceOut */
+        AnswerCheckSentenceOut: {
+            /** Index */
+            index: number;
+            /** Text */
+            text: string;
+            /** Labels */
+            labels: string[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "done" | "not_cited" | "not_kept" | "not_checked";
+            /** Verdict */
+            verdict: ("supported" | "partially_supported" | "not_supported" | "not_addressed" | "couldnt_check") | null;
+            /** Reason */
+            reason: string | null;
+            /** Quote */
+            quote: string | null;
+            /** Quote Label */
+            quote_label: string | null;
+            /** Confidence */
+            confidence: ("high" | "low") | null;
+            /** Shortened */
+            shortened: boolean;
         };
         /** AnswerPassageOut */
         AnswerPassageOut: {
@@ -10421,6 +10511,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_answer_check_api_chat_answers__output_id__check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                output_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerCheckOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_answer_check_api_chat_answers__output_id__check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                output_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AnswerCheckRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerCheckOut"];
                 };
             };
             /** @description Validation Error */

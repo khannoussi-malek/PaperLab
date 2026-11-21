@@ -9,10 +9,11 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
-from app.core import answer_provenance, chat, chat_charts, hit_chat, notes, skills
-from app.core.errors import Conflict, InvalidInput
+from app.core import answer_check_run, answer_provenance, chat, chat_charts, hit_chat, notes, queue, skills
+from app.core.errors import Conflict, InvalidInput, NotFound
 from app.db import SessionLocal
 from app.providers.base import LLM, LLMError, LLMUnavailable
+from app.schemas.answer_check import AnswerCheckOut, AnswerCheckRequest
 from app.schemas.chat import (
     AnswerProvenanceOut,
     ChartAnswerCreated,
@@ -230,6 +231,40 @@ async def save_suggestion(output_id: uuid.UUID, payload: SaveSuggestion, session
     409 already_saved (the history's saved_notes names the note); 422 no_such_block, empty_body, or a cited passage a
     re-ingest replaced."""
     return await notes.save_suggestion(session, output_id, payload.index)
+
+
+def to_check(check) -> AnswerCheckOut:
+    result = check.check_result
+    return AnswerCheckOut(
+        id=check.id, state=result["state"], model=check.model, connection_name=check.connection_name,
+        created_at=check.created_at, summary=check.content, limit_hit=result["limit_hit"],
+        sentences=result["sentences"],
+    )
+
+
+@router.post("/api/chat/answers/{output_id}/check", status_code=202)
+async def start_answer_check(
+    output_id: uuid.UUID, session: SessionDep, payload: AnswerCheckRequest | None = None
+) -> AnswerCheckOut:
+    """Checks each cited sentence of a saved answer against the passages it cites (M34), in a background job; poll
+    GET. A check still running is returned as it is. 404 answer_not_found; 409 answer_not_checkable (saved before
+    PaperLab kept its passages) or remote_model_needs_confirm (send confirm_remote)."""
+    payload = payload or AnswerCheckRequest()
+    check, new = await answer_check_run.start_check(
+        session, output_id, model_id=payload.model_id, confirmed=payload.confirm_remote
+    )
+    if new:
+        await queue.enqueue(answer_check_run.JOB, str(check.id))
+    return to_check(check)
+
+
+@router.get("/api/chat/answers/{output_id}/check")
+async def get_answer_check(output_id: uuid.UUID, session: SessionDep) -> AnswerCheckOut:
+    """The answer's newest check. 404 check_not_found."""
+    check = await answer_check_run.latest_check(session, output_id)
+    if check is None:
+        raise NotFound("check_not_found")
+    return to_check(check)
 
 
 HIT_STREAM_RESPONSES = {200: {"model": HitMetaEvent | SourcesEvent | TokenEvent | DoneEvent | ErrorEvent}}
