@@ -27,9 +27,9 @@ SUPPORTED = case("true-bleu", "The big model reached 28.4 BLEU [C1]. Ask a colle
     {"role": "supported", "accept": ["supported", "partially_supported"]},
     {"role": "uncited", "accept": ["not_cited"]},
 ])
-PLANTED = case("wrong-bleu", "The big model reached 32.4 BLEU [C1].", [
+PLANTED = case("wrong-architecture", "The big model relies on recurrent layers [C1].", [
     {"role": "unsupported", "accept": ["partially_supported", "not_supported", "not_addressed"]},
-], kind="missing_number")
+], kind="contradicted")
 
 
 def test_a_bad_file_is_refused(tmp_path):
@@ -61,7 +61,7 @@ async def test_fake_model_passes_a_supported_case():
 async def test_fake_model_misses_a_planted_unsupported_sentence():
     result = await ev.execute(config(PLANTED), FakeLLM(), runs=3)
     assert result.passed is False
-    assert any("wrong-bleu" in failure for failure in result.failures)
+    assert any("wrong-architecture" in failure for failure in result.failures)
 
 
 async def test_main_exit_codes(tmp_path, monkeypatch):

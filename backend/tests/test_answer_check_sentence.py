@@ -57,7 +57,7 @@ async def test_supported_with_kept_quote():
 
 async def test_quote_not_in_passage_is_low_confidence():
     llm = Scripted(reply("supported", 1, "the model reaches 41.0 BLEU on French"))
-    result = await check_sentence(llm, "It reaches 41.0 BLEU.", PASSAGES)
+    result = await check_sentence(llm, "It reaches 28.4 BLEU.", PASSAGES)
     assert result.verdict == "supported"
     assert result.quote is None
     assert result.confidence == "low"
@@ -103,3 +103,23 @@ async def test_fake_llm_answers_the_new_prompt():
     llm = FakeLLM()
     tokens = [t async for t in llm.stream(answer_check.SYSTEM_PROMPT, answer_check._prompt("A claim.", PASSAGES))]
     assert claims._Reply.model_validate_json("".join(tokens)).verdict in claims.VERDICT_WORDS
+
+
+async def test_a_number_missing_from_the_passages_caps_supported():
+    llm = Scripted(reply("supported", 1, "the big model reaches 28.4 BLEU"))
+    result = await check_sentence(llm, "The big model reaches 32.4 BLEU.", PASSAGES)
+    assert result.verdict == "partially_supported"
+    assert "32.4" in result.reason
+
+
+async def test_numbers_match_with_or_without_thousands_separators():
+    passages = [CheckPassage("C1", "Attention Is All You Need", 7, "5.2", "The big models were trained for 300,000 "
+                             "steps (3.5 days).", False)]
+    for sentence in ("It trained for 300,000 steps in 3.5 days.", "It trained for 300000 steps in 3.5 days."):
+        llm = Scripted(reply("supported", 1, "trained for 300,000 steps"))
+        assert (await check_sentence(llm, sentence, passages)).verdict == "supported"
+
+
+async def test_the_number_guard_leaves_other_verdicts_alone():
+    llm = Scripted(reply("not_supported", 1, "", "Different figure."))
+    assert (await check_sentence(llm, "It reaches 99.9 BLEU.", PASSAGES)).verdict == "not_supported"

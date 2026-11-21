@@ -3,16 +3,19 @@ sentence, reusing the claim check's reply, quote check and retries (M39 F4) with
 answer (D118)."""
 
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, replace
 
 from app.core import claims, prompts
 from app.providers.base import LLMError, LLMUnavailable
 
-ANSWER_CHECK_PROMPT_VERSION = 1
+ANSWER_CHECK_PROMPT_VERSION = 2  # v2: a number must refer to the same thing (v1 missed base vs big model)
 OUTPUT_KIND = "answer_check"
 MAX_CHECK_SENTENCES = 20
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("answer_check", ANSWER_CHECK_PROMPT_VERSION).split("\n<!-- prompt -->\n")
 NO_ANSWER = "The model didn't answer."
+# A figure: 84.1, 300,000, 2.5 (a thousands comma is dropped before comparing). Years and counts count too.
+_NUMBER = re.compile(r"(?<![\w.])\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.,])\d+(?:\.\d+)?")
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,22 @@ def _prompt(sentence: str, passages: list[CheckPassage]) -> str:
     return PROMPT_TEMPLATE.format(sentence=sentence, passages=numbered)  # braces in the texts are safe in .format
 
 
+def _numbers(text: str) -> set[str]:
+    return {n.replace(",", "") for n in _NUMBER.findall(text)}
+
+
+def _capped(verdict: "SentenceVerdict", sentence: str, passages: list[CheckPassage]) -> "SentenceVerdict":
+    """A Supported sentence with a number none of its passages contains is at most Partly supported: checked in code,
+    since a small model reads 84.1 as 80.5 (eval 2026-11-21)."""
+    if verdict.verdict != "supported":
+        return verdict
+    missing = sorted(_numbers(sentence) - set().union(*(_numbers(p.text) for p in passages)))
+    if not missing:
+        return verdict
+    note = f"The passages don't contain {', '.join(missing)}."
+    return replace(verdict, verdict="partially_supported", reason=f"{verdict.reason} {note}".strip())
+
+
 async def check_sentence(llm, sentence: str, passages: list[CheckPassage]) -> SentenceVerdict:
     try:
         reply = await claims._ask_with_retry(llm, SYSTEM_PROMPT, _prompt(sentence, passages), claims._Reply)
@@ -59,4 +78,5 @@ async def check_sentence(llm, sentence: str, passages: list[CheckPassage]) -> Se
     quote, index, dropped, _ = claims._pick_quote(reply, texts, [""] * len(texts))
     low = dropped or (reply.verdict in claims.CHECKED and quote is None)
     label = passages[index].label if index is not None else None
-    return SentenceVerdict(reply.verdict, reply.reason.strip(), quote, label, "low" if low else "high")
+    verdict = SentenceVerdict(reply.verdict, reply.reason.strip(), quote, label, "low" if low else "high")
+    return _capped(verdict, sentence, passages)
