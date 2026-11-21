@@ -38,3 +38,17 @@ def test_two_sentences_in_one_list_item_split():
 def test_empty_answer():
     assert answer_sentences("") == []
     assert answer_sentences("   \n\n") == []
+
+
+def test_a_sentence_ending_in_a_number_still_ends():
+    s = answer_sentences("The trial enrolled 1,200 in 2019. [C2] It cut risk 20%.")
+    assert [(x.text, x.labels) for x in s] == [("The trial enrolled 1,200 in 2019.", ("C2",)), ("It cut risk 20%.", ())]
+
+
+def test_a_wrapped_list_item_stays_one_unit():
+    content = "- The dose is halved when two criteria\n  apply, such as age 80 or more [C1].\n- Next item [C2]."
+    s = answer_sentences(content)
+    assert [(x.text, x.labels) for x in s] == [
+        ("The dose is halved when two criteria apply, such as age 80 or more.", ("C1",)),
+        ("Next item.", ("C2",)),
+    ]

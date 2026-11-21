@@ -17,8 +17,9 @@ _TABLE_ROW = re.compile(r"^\s*\|")
 _MARKERS = r"(?:\s*\[[CN]\d+\])*"
 # A sentence ends at . ! or ? (plus any markers right after it) followed by space and a capital or a digit.
 _END = re.compile(rf"[.!?]{_MARKERS}(?=\s+[A-Z0-9])")
-# Words whose dot is not a sentence end.
-_NOT_AN_END = re.compile(r"(?:\b(?:e\.g|i\.e|vs|et al|cf|approx|Fig|No)|\d)\.$", re.IGNORECASE)
+# Words whose dot is not a sentence end. A digit before the dot is a real end ("in 2019."): a decimal never
+# matches _END, which needs a space after the dot.
+_NOT_AN_END = re.compile(r"\b(?:e\.g|i\.e|vs|et al|cf|approx|Fig|No)\.$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,8 @@ class AnswerSentence:
 
 
 def _units(content: str) -> list[str]:
-    """Paragraphs, with list items and table rows as units of their own; headings and note blocks dropped."""
+    """Paragraphs, with list items and table rows as units of their own; headings and note blocks dropped. A line
+    right after a list item, before a blank line, continues that item (a wrapped item)."""
     units, paragraph, in_note = [], [], False
 
     def flush():
@@ -48,9 +50,13 @@ def _units(content: str) -> list[str]:
         if not stripped or _HEADING.match(line) or _TABLE_SEPARATOR.match(line):
             flush()
             continue
-        if _LIST_ITEM.match(line) or _TABLE_ROW.match(line):
+        if _TABLE_ROW.match(line):
             flush()
-            units.append(_LIST_ITEM.sub("", line, count=1).strip().strip("|").replace("|", " "))
+            units.append(line.strip().strip("|").replace("|", " "))
+            continue
+        if _LIST_ITEM.match(line):
+            flush()
+            paragraph.append(_LIST_ITEM.sub("", line, count=1).strip())  # its wrapped lines join it below
             continue
         paragraph.append(stripped)
     flush()
