@@ -80,7 +80,7 @@ async def test_second_start_returns_running_check(session, local_default_model):
 async def test_stale_running_check_is_replaced(session, local_default_model):
     answer, _ = await make_answer(session, "It reaches 28.4 BLEU [C1].", ["28.4 BLEU here."])
     first, _ = await start_check(session, answer.id, model_id=None, confirmed=False)
-    old = datetime.now(UTC) - timedelta(seconds=ANSWER_CHECK_JOB_TIMEOUT + 60)
+    old = datetime.now(UTC) - timedelta(seconds=answer_check_run.STALE_AFTER + 60)
     await session.execute(update(LLMOutput).where(LLMOutput.id == first.id).values(created_at=old))
     await session.commit()
 
@@ -213,3 +213,18 @@ def test_summary_line_order_and_zeros():
         "2 supported · 1 partly supported · 1 not supported · 1 couldn't check · 1 not cited · 1 not checked"
     )
     assert summary_line([]) == ""
+
+
+async def test_a_running_check_past_its_time_reads_as_failed(session, local_default_model):
+    answer, _ = await make_answer(session, "It reaches 28.4 BLEU [C1].", ["28.4 BLEU here."])
+    check, _ = await start_check(session, answer.id, model_id=None, confirmed=False)
+    old = datetime.now(UTC) - timedelta(seconds=answer_check_run.STALE_AFTER + 60)
+    await session.execute(update(LLMOutput).where(LLMOutput.id == check.id).values(created_at=old))
+    await session.commit()
+    check_id, answer_id = check.id, answer.id
+    session.expire_all()  # the UPDATE above bypassed the identity map
+
+    seen = await latest_check(session, answer_id)
+
+    assert seen.id == check_id and seen.check_result["state"] == "failed"
+    assert answer_check_run.STALE_AFTER > ANSWER_CHECK_JOB_TIMEOUT  # a job queued behind others still has its time

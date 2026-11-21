@@ -28,6 +28,9 @@ from app.providers.llm import build_llm
 
 JOB = "check_answer"
 ANSWER_CHECK_JOB_TIMEOUT = 1800  # seconds: 20 sentences at up to ~90 s each on a slow local model
+# A check still "running" this long after it was started has lost its job (killed, timed out, never queued): it is
+# read as failed. The margin covers a job that waited in the queue before its own timeout started.
+STALE_AFTER = ANSWER_CHECK_JOB_TIMEOUT + 600
 
 # The summary's words, in its order. Verdicts come from done sentences, the rest from the sentence state.
 _SUMMARY = [
@@ -65,19 +68,27 @@ def _initial(content: str) -> tuple[list[dict], bool]:
 
 
 async def latest_check(session: AsyncSession, output_id: uuid.UUID) -> LLMOutput | None:
+    """The answer's newest check; one left "running" past STALE_AFTER is saved as failed first, so the reader can
+    check again instead of watching a spinner forever."""
     query = (
         select(LLMOutput)
         .where(LLMOutput.parent_id == output_id, LLMOutput.kind == OUTPUT_KIND)
         .order_by(LLMOutput.created_at.desc(), LLMOutput.id)
         .limit(1)
     )
-    return await session.scalar(query)
+    check = await session.scalar(query)
+    if check is not None and _stale(check):
+        await _save(session, check, {**check.check_result, "state": "failed"})
+    return check
+
+
+def _stale(check: LLMOutput) -> bool:
+    running = (check.check_result or {}).get("state") == "running"
+    return running and check.created_at <= datetime.now(UTC) - timedelta(seconds=STALE_AFTER)
 
 
 def _running(check: LLMOutput | None) -> bool:
-    if check is None or (check.check_result or {}).get("state") != "running":
-        return False
-    return check.created_at > datetime.now(UTC) - timedelta(seconds=ANSWER_CHECK_JOB_TIMEOUT)  # older: its job died
+    return check is not None and (check.check_result or {}).get("state") == "running"  # latest_check failed stale ones
 
 
 async def start_check(

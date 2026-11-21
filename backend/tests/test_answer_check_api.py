@@ -122,3 +122,16 @@ async def test_check_rows_stay_out_of_answer_lists(client, session, local_defaul
     assert [a.id for a in mcp.answers] == [answer.id] and mcp.total == 1
     with pytest.raises(NotFound):
         await chat.load_thread(session, answer.paper_id, uuid.UUID(check["id"]))
+
+
+async def test_a_check_that_cannot_be_queued_is_marked_failed(client, session, local_default_model, monkeypatch):
+    answer, _ = await make_answer(session, "It reaches 28.4 BLEU [C1].", ["It reaches 28.4 BLEU."])
+
+    async def down(*_args, **_kwargs):
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(queue, "enqueue", down)
+    response = await client.post(url(answer.id), json={})
+
+    assert (response.status_code, response.json()["detail"]) == (409, "check_not_queued")
+    assert (await client.get(url(answer.id))).json()["state"] == "failed"

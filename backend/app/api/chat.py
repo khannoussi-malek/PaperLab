@@ -254,7 +254,12 @@ async def start_answer_check(
         session, output_id, model_id=payload.model_id, confirmed=payload.confirm_remote
     )
     if new:
-        await queue.enqueue(answer_check_run.JOB, str(check.id))
+        try:
+            await queue.enqueue(answer_check_run.JOB, str(check.id))
+        except Exception as exc:  # Redis down: never leave a "running" check that no job will finish
+            logger.exception("answer check %s could not be queued", check.id)
+            await answer_check_run.mark_failed(session, check.id)
+            raise Conflict("check_not_queued") from exc
     return to_check(check)
 
 
