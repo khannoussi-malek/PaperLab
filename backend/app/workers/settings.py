@@ -6,8 +6,10 @@ from arq.constants import in_progress_key_prefix
 from arq.cron import cron
 
 from app.config import settings
+from app.core.answer_check_run import ANSWER_CHECK_JOB_TIMEOUT
 from app.core.evidence_cards import JOB_TIMEOUT as EVIDENCE_CARDS_JOB_TIMEOUT
 from app.core.queue import INGEST_QUEUE
+from app.workers.answer_check import check_answer
 from app.workers.citations_import import IMPORT_JOB_TIMEOUT, import_citations
 from app.workers.evidence_cards import MAX_TRIES as EVIDENCE_CARDS_MAX_TRIES
 from app.workers.evidence_cards import generate_evidence_cards
@@ -85,6 +87,7 @@ class WorkerSettings:
         func(compile_manuscript, timeout=COMPILE_JOB_TIMEOUT, max_tries=1),
         # one try: the job deletes its uploaded file when it ends, so a retry would have nothing to read
         func(import_citations, timeout=IMPORT_JOB_TIMEOUT, max_tries=1, keep_result=24 * 3600),
+        func(check_answer, timeout=ANSWER_CHECK_JOB_TIMEOUT, max_tries=1, keep_result=0),
     ]
     cron_jobs = [
         cron(
