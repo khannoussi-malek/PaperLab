@@ -333,11 +333,12 @@ export const useTriageSummary = (sessionId: string, enabled: boolean) =>
 const answerCheckKey = (outputId: string) => ['llm-outputs', outputId, 'check'] as const
 const CHECK_POLL_MS = 2000
 
-/** An answer's newest check (M34), polled while it runs. */
-export const useAnswerCheck = (outputId: string) =>
+/** An answer's newest check (M34), polled while it runs; read only for an answer the history says has one. */
+export const useAnswerCheck = (outputId: string, enabled: boolean) =>
   useQuery({
     queryKey: answerCheckKey(outputId),
     queryFn: () => api.answerCheck(outputId),
+    enabled,
     refetchInterval: (query) => (query.state.data?.state === 'running' ? CHECK_POLL_MS : false),
   })
 

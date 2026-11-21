@@ -38,24 +38,25 @@ const check = (over: Partial<Check> = {}): Check => ({
 
 const conflict = (code: string, body: Record<string, unknown> = {}) => new ApiError(code, 409, { detail: code, ...body })
 
-function setup() {
+function setup(known = false) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <AnswerCheck outputId="out-1" />
+      <AnswerCheck outputId="out-1" known={known} />
     </QueryClientProvider>,
   )
 }
 
 describe('AnswerCheck', () => {
-  it('shows the button when nothing was checked yet', async () => {
-    vi.spyOn(api, 'answerCheck').mockResolvedValue(null)
+  it('shows the button and fetches nothing when the answer was never checked', async () => {
+    const get = vi.spyOn(api, 'answerCheck').mockResolvedValue(null)
     setup()
     expect(await screen.findByRole('button', { name: 'Check this answer' })).toBeInTheDocument()
+    expect(get).not.toHaveBeenCalled()
   })
 
   it('shows an earlier finished check without a click', async () => {
     vi.spyOn(api, 'answerCheck').mockResolvedValue(check())
-    setup()
+    setup(true)
     expect(await screen.findByText(/Checked by qwen3:8b/)).toBeInTheDocument()
     expect(screen.getByText(/1 supported · 1 not supported/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument()
@@ -68,7 +69,7 @@ describe('AnswerCheck', () => {
   it('starts a check and polls until it is done', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const running = check({ state: 'running', summary: '', sentences: [s(0), s(1, { state: 'pending', verdict: null })] })
-    const get = vi.spyOn(api, 'answerCheck').mockResolvedValueOnce(null).mockResolvedValue(check())
+    const get = vi.spyOn(api, 'answerCheck').mockResolvedValueOnce(running).mockResolvedValue(check())
     const start = vi.spyOn(api, 'startAnswerCheck').mockResolvedValue(running)
     setup()
     fireEvent.click(await screen.findByRole('button', { name: 'Check this answer' }))
@@ -76,7 +77,7 @@ describe('AnswerCheck', () => {
     expect(await screen.findByText('Checking 1 of 2 sentences…')).toBeInTheDocument()
     await act(async () => { await vi.advanceTimersByTimeAsync(2100) })
     await waitFor(() => expect(screen.getByText(/Checked by qwen3:8b/)).toBeInTheDocument())
-    expect(get.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(get).toHaveBeenCalled()
   })
 
   it('asks before sending to a cloud model, then sends with the yes', async () => {
@@ -86,7 +87,7 @@ describe('AnswerCheck', () => {
       .mockResolvedValue(check({ state: 'running', sentences: [s(0, { state: 'pending', verdict: null })] }))
     setup()
     fireEvent.click(await screen.findByRole('button', { name: 'Check this answer' }))
-    expect((await screen.findAllByText(/will be sent to api.example.com/)).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(/answer and the passages it cites will be sent to api.example.com/)).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(start).toHaveBeenLastCalledWith('out-1', true))
   })
@@ -105,7 +106,7 @@ describe('AnswerCheck', () => {
     vi.spyOn(api, 'answerCheck').mockResolvedValue(
       check({ sentences: [s(0, { shortened: true, confidence: 'low', quote: null })] }),
     )
-    setup()
+    setup(true)
     expect(await screen.findByText(/judged on a shortened passage/)).toBeInTheDocument()
     expect(screen.getByText(/low confidence/)).toBeInTheDocument()
   })

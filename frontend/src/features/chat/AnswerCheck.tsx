@@ -20,8 +20,9 @@ const startError = (e: unknown) =>
   isConflict(e, 'answer_not_checkable') ? NOT_CHECKABLE : e instanceof ApiError ? e.message : START_FAILED
 
 /** "Check this answer" under a saved chat answer (M34): each cited sentence judged against its own passages. */
-export function AnswerCheck({ outputId }: { outputId: string }) {
-  const query = useAnswerCheck(outputId)
+export function AnswerCheck({ outputId, known = false }: { outputId: string; known?: boolean }) {
+  const [started, setStarted] = useState(false)
+  const query = useAnswerCheck(outputId, known || started)
   const start = useStartAnswerCheck(outputId)
   const [host, setHost] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +31,7 @@ export function AnswerCheck({ outputId }: { outputId: string }) {
     setError(null)
     try {
       await start.mutateAsync(confirmRemote)
+      setStarted(true)
     } catch (e) {
       if (isConflict(e, 'remote_model_needs_confirm')) setHost(String((e as ApiError).body.host ?? 'a remote model'))
       else setError(startError(e))

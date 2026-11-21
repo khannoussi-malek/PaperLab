@@ -135,3 +135,16 @@ async def test_a_check_that_cannot_be_queued_is_marked_failed(client, session, l
 
     assert (response.status_code, response.json()["detail"]) == (409, "check_not_queued")
     assert (await client.get(url(answer.id))).json()["state"] == "failed"
+
+
+async def test_history_says_which_answers_have_a_check(client, session, local_default_model):
+    answer, _ = await make_answer(session, "It reaches 28.4 BLEU [C1].", ["It reaches 28.4 BLEU."])
+    other = LLMOutput(paper_id=answer.paper_id, kind="chat", question="q2", content="Other [C1].", model="m",
+                      prompt_version=7, source_snapshot=[])
+    session.add(other)
+    await session.commit()
+    await client.post(url(answer.id), json={})
+
+    history = (await client.get(f"/api/papers/{answer.paper_id}/chat")).json()
+
+    assert {a["id"]: a["has_check"] for a in history} == {str(answer.id): True, str(other.id): False}

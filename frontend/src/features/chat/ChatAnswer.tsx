@@ -37,6 +37,8 @@ type Props = {
   outputId?: string
   /** Offer "Check this answer" (M34): a saved paper or workspace answer, not a search hit's or a chart. */
   checkable?: boolean
+  /** The history says this answer has a check (only then is it read on open). */
+  hasCheck?: boolean
   /** The answer this one follows up. `reply` indents it under the first question of its thread. */
   parentId?: string | null
   reply?: boolean
@@ -67,7 +69,7 @@ const skillChip = (skillLabel: string, lens: LensId | null) => (lens && lens !==
 const hintFor = (source: Cited) => ('note_id' in source ? NOTE_HINT : source.from_abstract ? ABSTRACT_HINT : CITE_HINT)
 
 export function ChatAnswer(props: Props) {
-  const { question, wholePaper, sources, notes, notesUsed, notesTotal, segments, footer, outputId, pending, checkable } = props
+  const { question, wholePaper, sources, notes, notesUsed, notesTotal, segments, footer, outputId, pending, checkable, hasCheck } = props
   const { animate, paperLabel, onCite, children, parentId, reply, followUp, suggestions } = props
   const sourceFor = (label: string) => [...(sources ?? []), ...notes].find((source) => source?.label === label)
   const describe = (source: Cited) => describeSource(source, paperLabel?.(source.paper_id))
@@ -181,7 +183,7 @@ export function ChatAnswer(props: Props) {
               />
             )}
             {outputId && footer && <HowThisWasMade outputId={outputId} />}
-            {outputId && footer && checkable && <AnswerCheck outputId={outputId} />}
+            {outputId && footer && checkable && <AnswerCheck outputId={outputId} known={hasCheck} />}
             {notesUsed !== null && notesTotal !== null && notesUsed < notesTotal && (
               <p className="text-xs text-muted-foreground">
                 Using {notesUsed} of {notesTotal} <Term term="notesUsed">notes</Term> (newest first)

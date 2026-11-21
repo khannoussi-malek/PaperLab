@@ -80,6 +80,7 @@ class SavedNoteOut(BaseModel):
 
 class ChatAnswer(BaseModel):
     id: uuid.UUID
+    has_check: bool = False  # M34: an answer check exists, so the UI reads it (no GET per answer otherwise)
     question: str
     content: str
     model: str

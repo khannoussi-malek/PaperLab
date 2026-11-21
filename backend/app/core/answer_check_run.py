@@ -82,6 +82,14 @@ async def latest_check(session: AsyncSession, output_id: uuid.UUID) -> LLMOutput
     return check
 
 
+async def checked_answers(session: AsyncSession, output_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    """Which of these answers have at least one check: one query for a whole chat history."""
+    if not output_ids:
+        return set()
+    query = select(LLMOutput.parent_id).where(LLMOutput.kind == OUTPUT_KIND, LLMOutput.parent_id.in_(output_ids))
+    return set(await session.scalars(query.distinct()))
+
+
 def _stale(check: LLMOutput) -> bool:
     running = (check.check_result or {}).get("state") == "running"
     return running and check.created_at <= datetime.now(UTC) - timedelta(seconds=STALE_AFTER)

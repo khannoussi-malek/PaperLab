@@ -3,7 +3,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 type Props = { what: 'section' | 'text' | 'note' | 'answer'; host: string; onSend: () => void; onCancel: () => void }
 
-const remoteQuestion = (what: Props['what'], host: string) => `Your ${what} will be sent to ${host} and may cost money. Send it?`
+// An answer check sends the answer's cited paper passages too, so the question names them (D190).
+const WHAT: Record<Props['what'], string> = {
+  section: 'section', text: 'text', note: 'note', answer: 'answer and the passages it cites',
+}
+const remoteQuestion = (what: Props['what'], host: string) => `Your ${WHAT[what]} will be sent to ${host} and may cost money. Send it?`
 
 /** The question and its two answers, for a dialog that already has a title. */
 export function RemoteConfirm({ what, host, onSend, onCancel }: Props) {

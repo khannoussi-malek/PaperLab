@@ -4370,6 +4370,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Has Check
+             * @default false
+             */
+            has_check: boolean;
             /** Question */
             question: string;
             /** Content */

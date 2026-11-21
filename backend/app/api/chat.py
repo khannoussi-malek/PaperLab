@@ -169,10 +169,11 @@ async def ask_workspace(
         yield event
 
 
-def to_answer(answer: chat.Answer) -> ChatAnswer:
+def to_answer(answer: chat.Answer, checked: set[uuid.UUID] = frozenset()) -> ChatAnswer:
     output = answer.output
     return ChatAnswer(
         id=output.id,
+        has_check=output.id in checked,
         question=output.question,
         content=output.content,
         model=output.model,
@@ -211,12 +212,17 @@ async def workspace_chart(
 
 @router.get("/api/papers/{paper_id}/chat")
 async def history(paper_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
-    return [to_answer(answer) for answer in await chat.list_answers(session, paper_id)]
+    return await _with_checks(session, await chat.list_answers(session, paper_id))
 
 
 @router.get("/api/workspaces/{workspace_id}/chat")
 async def workspace_history(workspace_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
-    return [to_answer(answer) for answer in await chat.list_answers(session, chat.Scope(workspace_id=workspace_id))]
+    return await _with_checks(session, await chat.list_answers(session, chat.Scope(workspace_id=workspace_id)))
+
+
+async def _with_checks(session: AsyncSession, answers: list[chat.Answer]) -> list[ChatAnswer]:
+    checked = await answer_check_run.checked_answers(session, [answer.output.id for answer in answers])
+    return [to_answer(answer, checked) for answer in answers]
 
 
 @router.get("/api/llm-outputs/{output_id}/provenance")
