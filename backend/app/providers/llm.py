@@ -424,6 +424,7 @@ class FakeLLM:
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
         # Imported here: core.chat → retrieval → embedding → http_embedders → this module. Providers never import core
         # at module level.
+        from app.core.answer_check import SYSTEM_PROMPT as ANSWER_CHECK_SYSTEM_PROMPT
         from app.core.chat import WORKSPACE_SYSTEM_PROMPT
 
         # Same reason: note_suggestions → core.chat → retrieval → embedding → http_embedders → this module.
@@ -456,6 +457,8 @@ class FakeLLM:
             tokens = [fake_screening_reply(prompt)]
         elif system == EVIDENCE_CARD_SYSTEM_PROMPT:
             tokens = [fake_evidence_card_reply(prompt)]
+        elif system == ANSWER_CHECK_SYSTEM_PROMPT:  # the claim check's reply shape (M34)
+            tokens = [fake_claim_check_reply(prompt)]
         elif system == CLAIM_CHECK_SYSTEM_PROMPT:
             tokens = [fake_claim_check_reply(prompt)]
         elif system == CLAIM_DETECT_SYSTEM_PROMPT:
