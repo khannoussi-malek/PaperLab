@@ -1,0 +1,137 @@
+# Answer-check gate (M34; run: python -m evals.sentence_check_eval). Each case is a planted chat answer with
+# [C#] markers; its passages are verbatim chunk text from papers in the owner's library, so no retrieval runs.
+# sentences: one entry per sentence of the answer, in order: role supported | unsupported | uncited, and the
+# verdicts that count as right. Unsupported means contradicted, a number the passage lacks, or overstated.
+gates:
+  unsupported_flagged_runs: 3
+  supported_ok_runs: 2
+cases:
+- id: true-big-model-days
+  kind: 'true'
+  answer: The big models were trained for 300,000 steps, which took 3.5 days [C1].
+  passages:
+    C1: &id002
+      paper: Attention Is All You Need
+      page: 7
+      section: 5.2 Hardware and Schedule
+      text: We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described
+        throughout the paper, each training step took about 0.4 seconds. We trained the base models for a total of 100,000
+        steps or 12 hours. For our big models,(described on the bottom line of table 3), step time was 1.0 seconds. The big
+        models were trained for 300,000 steps (3.5 days).
+  sentences:
+  - role: supported
+    accept: &id001
+    - supported
+    - partially_supported
+- id: true-glue-score
+  kind: 'true'
+  answer: On the official GLUE leaderboard, BERT-large scored 80.5, against 72.8 for OpenAI GPT [C1].
+  passages:
+    C1: &id004
+      paper: 'BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding'
+      page: 6
+      section: 4.1 GLUE
+      text: Results are presented in Table 1. Both BERTBASE and BERTLARGE outperform all systems on all tasks by a substantial
+        margin, obtaining 4.5% and 7.0% respective average accuracy improvement over the prior state of the art. Note that
+        BERTBASE and OpenAI GPT are nearly identical in terms of model architecture apart from the attention masking. For
+        the largest and most widely reported GLUE task, MNLI, BERT obtains a 4.6% absolute accuracy improvement. On the official
+        GLUE leaderboard10, BERTLARGE obtains a score of 80.5, compared to OpenAI GPT, which obtains 72.8 as of the date of
+        writing. We find that BERTLARGE significantly outperforms BERTBASE across all tasks, especially those with very little
+        training data. The effect of model size is explored more thoroughly in Section 5.2.
+  sentences:
+  - role: supported
+    accept: *id001
+- id: contradicted-one-gpu
+  kind: contradicted
+  answer: The models were trained on a single NVIDIA P100 GPU [C1].
+  passages:
+    C1: *id002
+  sentences:
+  - role: unsupported
+    accept: &id003
+    - partially_supported
+    - not_supported
+    - not_addressed
+- id: contradicted-base-steps
+  kind: contradicted
+  answer: The base models were trained for 300,000 steps [C1].
+  passages:
+    C1: *id002
+  sentences:
+  - role: unsupported
+    accept: *id003
+- id: missing-number-glue
+  kind: missing_number
+  answer: BERT-large obtained a score of 84.1 on the official GLUE leaderboard [C1].
+  passages:
+    C1: *id004
+  sentences:
+  - role: unsupported
+    accept: *id003
+- id: overstated-apixaban-age
+  kind: overstated
+  answer: Apixaban 2.5 mg twice daily is recommended for every patient with atrial fibrillation aged 80 or over [C1].
+  passages:
+    C1: &id005
+      paper: Eliquis, INN-apixaban
+      page: 3
+      section: null
+      text: 'In patients undergoing knee replacement surgery The recommended duration of treatment is 10 to 14 days. Prevention
+        of stroke and systemic embolism in adult patients with non-valvular atrial fibrillation (NVAF) The recommended dose
+        of apixaban is 5 mg taken orally twice daily. Dose reduction The recommended dose of apixaban is 2.5 mg taken orally
+        twice daily in patients with NVAF and at least two of the following characteristics: age ≥ 80 years, body weight ≤
+        60 kg, or serum creatinine ≥ 1.5 mg/dL (133 micromole/L). Therapy should be continued long-term. Treatment of DVT,
+        treatment of PE and prevention of recurrent DVT and PE (VTEt) in adults The recommended dose of apixaban for the treatment
+        of acute DVT and treatment of PE is 10 mg taken orally twice daily for the first 7 days followed by 5 mg taken orally
+        twice daily. As per available medical guidelines, short duration of treatment (at least 3 months) should be based
+        on transient risk factors (e.g., recent surgery, trauma, immobilisation). The recommended dose of apixaban for the
+        prevention of recurrent DVT and PE is 2.5 mg taken orally twice daily. When prevention of recurrent DVT and PE is
+        indicated, the 2.5 mg twice daily dose should be initiated following completion of 6 months of treatment with apixaban
+        5 mg twice daily or with another anticoagulant, as indicated in Table 1 below (see also section 5.1). Table 1: Dose
+        recommendation (VTEt)'
+  sentences:
+  - role: unsupported
+    accept: *id003
+- id: second-passage-nsp
+  kind: second_passage
+  answer: BERT is pre-trained with a masked language model and a next sentence prediction task [C1][C2].
+  passages:
+    C1: *id004
+    C2:
+      paper: 'BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding'
+      page: 2
+      section: 1 Introduction
+      text: 'word based only on its context. Unlike left-toright language model pre-training, the MLM objective enables the
+        representation to fuse the left and the right context, which allows us to pretrain a deep bidirectional Transformer.
+        In addition to the masked language model, we also use a “next sentence prediction” task that jointly pretrains text-pair
+        representations. The contributions of our paper are as follows:
+
+
+        • We demonstrate the importance of bidirectional pre-training for language representations. Unlike Radford et al.
+        (2018), which uses unidirectional language models for pre-training, BERT uses masked language models to enable pretrained
+        deep bidirectional representations. This is also in contrast to Peters et al. (2018a), which uses a shallow concatenation
+        of independently trained left-to-right and right-to-left LMs.
+
+
+        • We show that pre-trained representations reduce the need for many heavily-engineered taskspecific architectures.
+        BERT is the first finetuning based representation model that achieves state-of-the-art performance on a large suite
+        of sentence-level and token-level tasks, outperforming many task-specific architectures.
+
+
+        • BERT advances the state of the art for eleven NLP tasks. The code and pre-trained models are available at https://github.com/
+        google-research/bert.'
+  sentences:
+  - role: supported
+    accept: *id001
+- id: uncited-pharmacist
+  kind: uncited
+  answer: For stroke prevention in non-valvular atrial fibrillation the recommended dose of apixaban is 5 mg twice daily [C1].
+    Always check with a pharmacist before changing a dose.
+  passages:
+    C1: *id005
+  sentences:
+  - role: supported
+    accept: *id001
+  - role: uncited
+    accept:
+    - not_cited
