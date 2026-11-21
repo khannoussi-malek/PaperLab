@@ -330,6 +330,25 @@ export const useTriageSummary = (sessionId: string, enabled: boolean) =>
   useQuery({ queryKey: ['triage-summary', sessionId] as const, queryFn: () => api.triageSummary(sessionId), enabled })
 
 /** How a saved answer was made; read only when its disclosure opens, so chat history stays as fast. */
+const answerCheckKey = (outputId: string) => ['llm-outputs', outputId, 'check'] as const
+const CHECK_POLL_MS = 2000
+
+/** An answer's newest check (M34), polled while it runs. */
+export const useAnswerCheck = (outputId: string) =>
+  useQuery({
+    queryKey: answerCheckKey(outputId),
+    queryFn: () => api.answerCheck(outputId),
+    refetchInterval: (query) => (query.state.data?.state === 'running' ? CHECK_POLL_MS : false),
+  })
+
+export function useStartAnswerCheck(outputId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (confirmRemote: boolean) => api.startAnswerCheck(outputId, confirmRemote),
+    onSuccess: (check) => client.setQueryData(answerCheckKey(outputId), check),
+  })
+}
+
 export const useAnswerProvenance = (outputId: string, enabled: boolean) =>
   useQuery({ queryKey: ['llm-outputs', outputId, 'provenance'] as const, queryFn: () => api.answerProvenance(outputId), enabled })
 
