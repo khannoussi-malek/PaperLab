@@ -49,6 +49,7 @@ def env_for(tmp_path: Path, bodies: dict[str, str], **extra: str) -> dict[str, s
         "PAPERLAB_APPS_DIR": str(tmp_path / "Applications"),
         "PAPERLAB_DATA_DIR": str(tmp_path / "data"),
         "PAPERLAB_DOCKER_PATHS": "",
+        "PAPERLAB_OLLAMA_LINK": str(tmp_path / "usr-local-bin" / "ollama"),
         **extra,
     }
 
@@ -262,7 +263,7 @@ def test_missing_ollama_is_installed_and_opened(tmp_path):
     assert steps[1].startswith("hdiutil attach")
     assert steps[2].startswith("ditto ") and steps[2].endswith(f"Ollama.app {tmp_path}/Applications/Ollama.app")
     assert steps[3].startswith("hdiutil detach")
-    assert steps[4] == f"open {tmp_path}/Applications/Ollama.app"
+    assert steps[-1] == f"open {tmp_path}/Applications/Ollama.app"
 
 
 def test_installed_but_stopped_ollama_is_opened_not_reinstalled(tmp_path):
@@ -276,6 +277,40 @@ def test_ollama_that_never_starts_fails_with_a_sentence(tmp_path):
     result = sh_fn(tmp_path, "ensure_ollama", {"curl": CURL_OLLAMA}, PAPERLAB_OLLAMA_WAIT="1", **ollama_env(tmp_path))
     assert result.returncode == 1
     assert "Ollama didn't start. Open Ollama from Applications, then run the command again." in result.stdout
+
+
+# Ollama's first start asks for the password in a window of its own to link its `ollama` command, and its server
+# doesn't answer until someone does (a clean-Mac run waited out the minute on that window).
+def test_ollama_command_is_linked_in_the_terminal_before_ollama_first_opens(tmp_path):
+    result = sh_fn(tmp_path, "ensure_ollama", {"curl": CURL_OLLAMA, "open": OPEN_OLLAMA}, **ollama_env(tmp_path))
+    assert result.returncode == 0, result.stdout
+    steps = calls(tmp_path)
+    link = f"sudo ln -sf {tmp_path}/Applications/Ollama.app/Contents/Resources/ollama {tmp_path}/usr-local-bin/ollama"
+    assert f"sudo mkdir -p {tmp_path}/usr-local-bin" in steps
+    assert steps.index(link) < steps.index(f"open {tmp_path}/Applications/Ollama.app")
+
+
+def test_existing_ollama_command_is_left_alone(tmp_path):
+    link = tmp_path / "usr-local-bin" / "ollama"
+    link.parent.mkdir()
+    link.touch()
+    (tmp_path / "Applications" / "Ollama.app").mkdir(parents=True)
+    result = sh_fn(tmp_path, "ensure_ollama", {"curl": CURL_OLLAMA, "open": OPEN_OLLAMA}, **ollama_env(tmp_path))
+    assert result.returncode == 0, result.stdout
+    assert not any(c.startswith("sudo") for c in calls(tmp_path))
+
+
+def test_refused_password_still_opens_ollama_and_says_where_it_will_ask(tmp_path):
+    (tmp_path / "Applications" / "Ollama.app").mkdir(parents=True)
+    bodies = {"curl": CURL_OLLAMA, "open": OPEN_OLLAMA, "sudo": "exit 1"}
+    result = sh_fn(tmp_path, "ensure_ollama", bodies, **ollama_env(tmp_path))
+    assert result.returncode == 0, result.stdout
+    assert result.stdout.splitlines() == [
+        "[2/5] Starting Ollama…",
+        "PaperLab needs your password to set up Ollama.",
+        "Ollama will ask for it in a window of its own instead; answer it there.",
+    ]
+    assert f"open {tmp_path}/Applications/Ollama.app" in calls(tmp_path)
 
 
 def test_model_already_pulled_is_skipped(tmp_path):
@@ -423,6 +458,14 @@ def test_full_install_on_an_empty_mac(tmp_path):
     assert (tmp_path / "data" / ".env").read_text() == "LLM_MODEL=qwen3:8b\n"
     last = calls(tmp_path)[-1]
     assert last.startswith("curl") and "-X PUT" in last and '{"done": true}' in last and last.endswith("/api/setup")
+
+
+# macOS's /bin/sh in a UTF-8 Terminal (the default) reads "$version…" as a variable named version plus the first byte
+# of "…", which `set -u` stops on (a clean-Mac run died at step 4).
+def test_full_install_in_a_utf8_terminal(tmp_path):
+    result = run_main(tmp_path, world(), LC_ALL="en_US.UTF-8")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "[4/5] Installing PaperLab 0.3.1…" in result.stdout.splitlines()
 
 
 def test_rerun_with_everything_installed_only_updates_the_app(tmp_path):

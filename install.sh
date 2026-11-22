@@ -184,6 +184,20 @@ install_ollama_mac() {
   close_dmg
 }
 
+OLLAMA_LINK=${PAPERLAB_OLLAMA_LINK:-/usr/local/bin/ollama}
+
+# Ollama's first start asks for the password in a window of its own to link its `ollama` command, and its server
+# doesn't answer until someone does. Linking it first asks in the terminal instead; a refusal leaves it to that window.
+link_ollama_command() {
+  [ -e "$OLLAMA_LINK" ] && return 0
+  if ! sudo -n true 2>/dev/null; then
+    echo "PaperLab needs your password to set up Ollama."
+    sudo -v || { echo "Ollama will ask for it in a window of its own instead; answer it there."; return 0; }
+  fi
+  run sudo mkdir -p "$(dirname "$OLLAMA_LINK")" &&
+    run sudo ln -sf "$APPS/Ollama.app/Contents/Resources/ollama" "$OLLAMA_LINK" || true
+}
+
 # An Ollama that answers is left alone (whatever installed it); an installed one is opened; otherwise it is installed.
 ensure_ollama() {
   if ollama_ready; then
@@ -195,6 +209,7 @@ ensure_ollama() {
     step 2 "Installing Ollama…"
     install_ollama_mac
   fi
+  link_ollama_command
   run open "$APPS/Ollama.app" || true
   wait_for_ollama
 }
@@ -330,7 +345,7 @@ main() {
   ensure_model "$model"
   version=$(latest_version)
   [ -n "$version" ] || fail "Couldn't find PaperLab's latest release. Check the internet connection, then run the command again."
-  step 4 "Installing PaperLab $version…"
+  step 4 "Installing PaperLab ${version}…"
   install_app_mac "$version" "$plat"
   write_model_env "$model"
   step 5 "Opening PaperLab (the first start downloads about 335 MB)…"
