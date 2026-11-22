@@ -67,6 +67,7 @@ ask_password() {
   sudo -v || fail "PaperLab can't install Docker without your password. Run the command again."
 }
 
+# Apps are opened by path: `open -a Name` fails for an app macOS hasn't registered yet, as right after copying it.
 APPS=${PAPERLAB_APPS_DIR:-/Applications}
 
 # Where a Mac's docker command may be. Apps started outside a shell don't get its PATH. The list and its order match
@@ -133,7 +134,7 @@ install_docker_mac() {
 
 # Open Docker and wait until it answers (up to 5 minutes; PAPERLAB_DOCKER_WAIT in tests).
 start_docker_mac() {
-  run open -a Docker || true
+  run open "$APPS/Docker.app" || true
   waited=0
   until docker_ready; do
     [ "$waited" -lt "${PAPERLAB_DOCKER_WAIT:-300}" ] ||
@@ -194,7 +195,7 @@ ensure_ollama() {
     step 2 "Installing Ollama…"
     install_ollama_mac
   fi
-  run open -a Ollama || true
+  run open "$APPS/Ollama.app" || true
   wait_for_ollama
 }
 
@@ -278,7 +279,7 @@ api_base() {
 # Open PaperLab and wait for its API (up to 15 minutes: the first start downloads its images; PAPERLAB_APP_WAIT in
 # tests).
 wait_for_app() {
-  run open -a PaperLab || true
+  run open "$APPS/PaperLab.app" || true
   waited=0
   until run curl -fsS --max-time 5 "$(api_base)/api/setup"; do
     [ "$waited" -lt "${PAPERLAB_APP_WAIT:-900}" ] ||

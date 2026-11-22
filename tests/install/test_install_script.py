@@ -143,9 +143,9 @@ def test_wrong_or_no_password_stops_with_a_sentence(tmp_path):
     assert result.stdout.splitlines()[1] == "PaperLab can't install Docker without your password. Run the command again."
 
 
-# Docker counts as running once `open -a Docker` has run (it touches $tmp/docker-up).
+# Docker counts as running once `open <Applications>/Docker.app` has run (it touches $tmp/docker-up).
 DOCKER_UP = '[ "$1" = info ] && [ ! -f "$FAKE_STATE/docker-up" ] && exit 1'
-OPEN = 'case "$*" in "-a Docker") touch "$FAKE_STATE/docker-up" ;; esac'
+OPEN = 'case "$*" in */Docker.app) touch "$FAKE_STATE/docker-up" ;; esac'
 # Docker's installer: puts a docker command on PATH, as Docker Desktop's install does.
 SUDO_INSTALLS_DOCKER = (
     'case "$*" in *Docker.app/Contents/MacOS/install*) '
@@ -174,7 +174,7 @@ def test_installed_but_stopped_docker_is_started_not_reinstalled(tmp_path):
     result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": DOCKER_UP, "open": OPEN}, **docker_env(tmp_path))
     assert result.returncode == 0
     assert result.stdout.splitlines() == ["[1/5] Starting Docker…"]
-    assert "open -a Docker" in calls(tmp_path)
+    assert f"open {tmp_path}/Applications/Docker.app" in calls(tmp_path)
     assert not any(c.startswith(("hdiutil", "sudo", "curl")) for c in calls(tmp_path))
 
 
@@ -195,7 +195,7 @@ def test_missing_docker_shows_licence_then_installs_in_order(tmp_path):
     log = calls(tmp_path)
     assert any("desktop.docker.com/mac/main/arm64/Docker.dmg" in c for c in log)
     assert any(c.startswith("sudo ") and "--accept-license --user=tester" in c for c in log)
-    assert "open -a Docker" in log
+    assert f"open {tmp_path}/Applications/Docker.app" in log
 
 
 def test_intel_mac_gets_the_amd64_docker(tmp_path):
@@ -229,13 +229,13 @@ def test_docker_that_never_starts_fails_with_a_sentence(tmp_path):
 
 
 # Ollama's API through curl: /api/version answers once Ollama is "up", /api/tags lists $OLLAMA_TAGS, /api/pull streams
-# $PULL_STREAM. `open -a Ollama` brings it up.
+# $PULL_STREAM. `open <Applications>/Ollama.app` brings it up.
 CURL_OLLAMA = r"""case "$*" in
   *api/version*) [ -f "$FAKE_STATE/ollama-up" ] || exit 7 ;;
   *api/tags*) printf '%s' "${OLLAMA_TAGS:-}" ;;
   *api/pull*) printf '%b' "$PULL_STREAM" ;;
 esac"""
-OPEN_OLLAMA = 'case "$*" in "-a Ollama") touch "$FAKE_STATE/ollama-up" ;; esac'
+OPEN_OLLAMA = 'case "$*" in */Ollama.app) touch "$FAKE_STATE/ollama-up" ;; esac'
 PULLED = r'{"status":"pulling manifest"}\n{"status":"pulling abc","total":100,"completed":50}\n{"status":"success"}\n'
 
 
@@ -262,7 +262,7 @@ def test_missing_ollama_is_installed_and_opened(tmp_path):
     assert steps[1].startswith("hdiutil attach")
     assert steps[2].startswith("ditto ") and steps[2].endswith(f"Ollama.app {tmp_path}/Applications/Ollama.app")
     assert steps[3].startswith("hdiutil detach")
-    assert steps[4] == "open -a Ollama"
+    assert steps[4] == f"open {tmp_path}/Applications/Ollama.app"
 
 
 def test_installed_but_stopped_ollama_is_opened_not_reinstalled(tmp_path):
@@ -377,7 +377,7 @@ def test_app_that_will_not_quit_stops_with_a_sentence(tmp_path):
 
 
 # The whole outside world through curl: GitHub's latest-release redirect, the three downloads, Ollama's API and
-# PaperLab's API. The app answers once `open -a PaperLab` has run.
+# PaperLab's API. The app answers once `open <Applications>/PaperLab.app` has run.
 CURL_WORLD = r"""case "$*" in
   *releases/latest*) printf 'HTTP/2 302\r\nlocation: https://github.com/khannoussi-malek/PaperLab/releases/tag/v0.3.1\r\n\r\n' ;;
   *api/version*) [ -f "$FAKE_STATE/ollama-up" ] || exit 7 ;;
@@ -387,7 +387,7 @@ CURL_WORLD = r"""case "$*" in
   *api/embedding/model*) printf '%b' "$SEARCH_STREAM" ;;
   *api/embedding*) printf '{"model_present":%s}' "${MODEL_PRESENT:-false}" ;;
 esac"""
-OPEN_ANY = 'case "$*" in "-a Docker") touch "$FAKE_STATE/docker-up" ;; "-a Ollama") touch "$FAKE_STATE/ollama-up" ;; "-a PaperLab") touch "$FAKE_STATE/app-up" ;; esac'
+OPEN_ANY = 'case "$*" in */Docker.app) touch "$FAKE_STATE/docker-up" ;; */Ollama.app) touch "$FAKE_STATE/ollama-up" ;; */PaperLab.app) touch "$FAKE_STATE/app-up" ;; esac'
 
 
 def world(**overrides: str | None) -> dict[str, str | None]:
@@ -509,7 +509,7 @@ def test_stopped_docker_without_docker_desktop_says_start_it(tmp_path):
     result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": DOCKER_UP, "open": OPEN}, **docker_env(tmp_path))
     assert result.returncode == 1
     assert "Your Docker isn't running. Start it, then run the command again." in result.stdout
-    assert "open -a Docker" not in calls(tmp_path)
+    assert not any("Docker.app" in c and c.startswith("open") for c in calls(tmp_path))
 
 
 def old_app(tmp_path: Path) -> Path:
