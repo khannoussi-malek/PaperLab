@@ -463,6 +463,17 @@ def test_full_install_on_an_empty_mac(tmp_path):
     assert last.startswith("curl") and "-X PUT" in last and '{"done": true}' in last and last.endswith("/api/setup")
 
 
+# sudo forgets the password after 5 minutes, and Docker's start plus Ollama's download can take longer: Ollama's
+# command is linked while Docker's password is still fresh, so the plan's "asked once" holds.
+def test_ollama_command_is_linked_right_after_dockers_installer(tmp_path):
+    result = run_main(tmp_path, world())
+    assert result.returncode == 0, result.stdout + result.stderr
+    log = calls(tmp_path)
+    docker_installer = next(i for i, c in enumerate(log) if "--accept-license" in c)
+    link = next(i for i, c in enumerate(log) if c.startswith("sudo ln -sf"))
+    assert docker_installer < link < log.index(f"open {tmp_path}/Applications/Docker.app")
+
+
 def test_cloud_choice_skips_ollama_and_leaves_the_chat_step_open(tmp_path):
     result = run_main(tmp_path, world(), tty="2\n\n")
     assert result.returncode == 0, result.stdout + result.stderr

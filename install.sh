@@ -120,6 +120,9 @@ install_docker_mac() {
   ask_password
   run sudo "$tmp/mnt/Docker.app/Contents/MacOS/install" --accept-license --user="$USER" ||
     { close_dmg; fail "Docker's installer stopped. Run the command again."; }
+  # sudo forgets the password after 5 minutes, and Docker's start plus Ollama's download can take longer: link
+  # Ollama's command now, while the password is fresh, so it's asked once (the link is dangling until Ollama lands).
+  if needs_ollama_link; then link_ollama_command; fi
   close_dmg
 }
 
@@ -178,6 +181,9 @@ OLLAMA_LINK=${PAPERLAB_OLLAMA_LINK:-/usr/local/bin/ollama}
 
 # Ollama's first start asks for the password in a window of its own to link its `ollama` command, and its server
 # doesn't answer until someone does. Linking it first asks in the terminal instead; a refusal leaves it to that window.
+# Chat runs on this Mac, Ollama isn't up yet and its command isn't linked.
+needs_ollama_link() { [ -n "${model:-}" ] && ! ollama_ready && [ ! -e "$OLLAMA_LINK" ]; }
+
 link_ollama_command() {
   [ -e "$OLLAMA_LINK" ] && return 0
   if ! sudo -n true 2>/dev/null; then
@@ -392,7 +398,7 @@ choose_chat() {
 # Says up front what the password will be for (Docker's installer; Ollama's command, see link_ollama_command).
 password_note() {
   link=no
-  [ -z "$model" ] || ollama_ready || [ -e "$OLLAMA_LINK" ] || link=yes
+  if needs_ollama_link; then link=yes; fi
   case $new_docker$link in
     yesyes) echo "Your Mac's password is asked once, to install Docker and set up Ollama." ;;
     yesno) echo "Your Mac's password is asked once, to install Docker." ;;
