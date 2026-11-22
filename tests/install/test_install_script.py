@@ -155,7 +155,7 @@ SUDO_INSTALLS_DOCKER = (
 )
 
 
-def docker_env(tmp_path: Path, tty: str | None = "\n") -> dict[str, str]:
+def docker_env(tmp_path: Path, tty: str | None = "\n\n") -> dict[str, str]:
     state = tmp_path / "state"
     state.mkdir(exist_ok=True)
     if tty is not None:
@@ -179,17 +179,11 @@ def test_installed_but_stopped_docker_is_started_not_reinstalled(tmp_path):
     assert not any(c.startswith(("hdiutil", "sudo", "curl")) for c in calls(tmp_path))
 
 
-def test_missing_docker_shows_licence_then_installs_in_order(tmp_path):
+def test_missing_docker_installs_in_order(tmp_path):
     bodies = {"docker": None, "open": OPEN, "sudo": SUDO_INSTALLS_DOCKER}
     result = sh_fn(tmp_path, "ensure_docker mac-arm64", bodies, **docker_env(tmp_path))
     assert result.returncode == 0, result.stdout
-    assert result.stdout.splitlines() == [
-        "[1/5] Installing Docker…",
-        "Docker Desktop is free for personal use, education and companies under 250 employees and $10M revenue; "
-        "larger companies need a paid Docker subscription.",
-        "Press Enter to accept Docker's terms and continue, or Ctrl+C to stop.",
-        "PaperLab needs your password once, to install Docker.",
-    ]
+    assert result.stdout.splitlines() == ["[1/5] Installing Docker…", "PaperLab needs your password once, to install Docker."]
     order = [c.split()[0] if not c.startswith("sudo /") else "install" for c in calls(tmp_path)]
     # download, attach, signature, password, install, detach
     assert order[:7] == ["curl", "hdiutil", "codesign", "codesign", "sudo", "install", "hdiutil"]
@@ -205,17 +199,17 @@ def test_intel_mac_gets_the_amd64_docker(tmp_path):
     assert any("desktop.docker.com/mac/main/amd64/Docker.dmg" in c for c in calls(tmp_path))
 
 
-def test_without_a_terminal_it_stops_before_installing_docker(tmp_path):
-    result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": None}, **docker_env(tmp_path, tty=None))
+def test_without_a_terminal_it_stops_before_installing_anything(tmp_path):
+    result = run_main(tmp_path, world(), tty=None)
     assert result.returncode == 1
-    assert "PaperLab needs a terminal to ask about Docker's terms. Run the command in Terminal." in result.stdout
-    assert not any(c.startswith(("hdiutil", "sudo", "curl")) for c in calls(tmp_path))
+    assert "PaperLab needs a terminal to ask before installing. Run the command in Terminal." in result.stdout
+    assert not any(c.startswith(("hdiutil", "sudo", "ditto")) or "api/pull" in c for c in calls(tmp_path))
 
 
-def test_refusing_the_terms_installs_nothing(tmp_path):
-    result = sh_fn(tmp_path, "ensure_docker mac-arm64", {"docker": None}, **docker_env(tmp_path, tty=""))  # EOF
+def test_stopping_at_the_plan_installs_nothing(tmp_path):
+    result = run_main(tmp_path, world(), tty="")  # Ctrl+D / EOF instead of an answer
     assert result.returncode == 1
-    assert not any(c.startswith(("hdiutil", "sudo", "curl")) for c in calls(tmp_path))
+    assert not any(c.startswith(("hdiutil", "sudo", "ditto")) or "api/pull" in c for c in calls(tmp_path))
 
 
 def test_docker_that_never_starts_fails_with_a_sentence(tmp_path):
@@ -337,17 +331,6 @@ def test_pull_error_fails_with_a_sentence(tmp_path):
     assert "Couldn't download the chat model. Check the internet connection, then run the command again." in result.stdout
 
 
-def test_low_memory_skips_chat_with_the_sentence(tmp_path):
-    result = sh_fn(tmp_path, 'ensure_model ""', {"curl": CURL_OLLAMA}, **ollama_env(tmp_path, True))
-    assert result.returncode == 0
-    assert result.stdout.splitlines() == [
-        "[3/5] Chat is left off",
-        "This Mac has less than 8 GB of memory, so chat is left off. Reading, notes and search work; "
-        "add chat later in Settings.",
-    ]
-    assert calls(tmp_path) == []
-
-
 def test_env_written_when_absent(tmp_path):
     sh_fn(tmp_path, "write_model_env qwen3:4b")
     assert (tmp_path / "data" / ".env").read_text() == "LLM_MODEL=qwen3:4b\n"
@@ -435,19 +418,39 @@ def world(**overrides: str | None) -> dict[str, str | None]:
 SEARCH_DONE = r'event: progress\ndata: {"completed":1,"total":2}\n\nevent: done\ndata: {"papers_queued":0}\n\n'
 
 
-def run_main(tmp_path: Path, bodies: dict, **extra: str):
-    env = env_for(tmp_path, bodies, **docker_env(tmp_path), **{"SEARCH_STREAM": SEARCH_DONE, **extra})
+def run_main(tmp_path: Path, bodies: dict, tty: str | None = "\n\n", **extra: str):
+    env = env_for(tmp_path, bodies, **docker_env(tmp_path, tty), **{"SEARCH_STREAM": SEARCH_DONE, **extra})
     return subprocess.run(["sh", str(SCRIPT)], env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+
+
+DOCKER_TERMS = (
+    "Docker Desktop is free for personal use, education and companies under 250 employees and $10M revenue; "
+    "larger companies need a paid Docker subscription. Starting accepts its terms."
+)
+PLAN_EMPTY_MAC = [
+    "PaperLab runs on this Mac. Here is what it needs:",
+    "  Docker Desktop  runs PaperLab's database and search in the background. Will install (about 550 MB).",
+    "  PaperLab        the app itself. Will install (about 120 MB; its first start downloads about 335 MB more).",
+    "",
+    "PaperLab's chat needs a language model to answer questions about your papers. Where should it run?",
+    "  1) On this Mac: free, and your papers and questions never leave it.",
+    "     Ollama runs the model. Will install (about 220 MB).",
+    "     The model, qwen3:8b. Will download (about 5.2 GB).",
+    "  2) A cloud service you have an API key for (OpenAI, Anthropic, …): nothing more to download.",
+    "     You paste the key in PaperLab when it opens, never in this window.",
+]
 
 
 def test_full_install_on_an_empty_mac(tmp_path):
     result = run_main(tmp_path, world())
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.splitlines() == [
+        *PLAN_EMPTY_MAC,
+        "Choose 1 or 2 [1]: ",
+        DOCKER_TERMS,
+        "Your Mac's password is asked once, to install Docker and set up Ollama.",
+        "Press Enter to start, or Ctrl+C to stop.",
         "[1/5] Installing Docker…",
-        "Docker Desktop is free for personal use, education and companies under 250 employees and $10M revenue; "
-        "larger companies need a paid Docker subscription.",
-        "Press Enter to accept Docker's terms and continue, or Ctrl+C to stop.",
         "PaperLab needs your password once, to install Docker.",
         "[2/5] Installing Ollama…",
         "[3/5] Downloading the chat model qwen3:8b…",
@@ -458,6 +461,52 @@ def test_full_install_on_an_empty_mac(tmp_path):
     assert (tmp_path / "data" / ".env").read_text() == "LLM_MODEL=qwen3:8b\n"
     last = calls(tmp_path)[-1]
     assert last.startswith("curl") and "-X PUT" in last and '{"done": true}' in last and last.endswith("/api/setup")
+
+
+def test_cloud_choice_skips_ollama_and_leaves_the_chat_step_open(tmp_path):
+    result = run_main(tmp_path, world(), tty="2\n\n")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.splitlines() == [
+        *PLAN_EMPTY_MAC,
+        "Choose 1 or 2 [1]: ",
+        DOCKER_TERMS,
+        "Your Mac's password is asked once, to install Docker.",
+        "Press Enter to start, or Ctrl+C to stop.",
+        "[1/5] Installing Docker…",
+        "PaperLab needs your password once, to install Docker.",
+        "[2/5] Ollama isn't needed: chat will use your cloud service",
+        "[3/5] No chat model to download",
+        "[4/5] Installing PaperLab 0.3.1…",
+        "[5/5] Opening PaperLab (the first start downloads about 335 MB)…",
+        "PaperLab is open on its chat step: add your cloud service and its API key there.",
+    ]
+    log = calls(tmp_path)
+    assert not any("Ollama" in c or "api/pull" in c for c in log)
+    assert not any("-X PUT" in c and "api/setup" in c for c in log)  # setup stays open on the chat step
+    assert any("api/embedding/model" in c for c in log)  # search is still set up
+    assert not (tmp_path / "data" / ".env").exists()
+
+
+def test_an_answer_other_than_1_or_2_is_asked_again(tmp_path):
+    result = run_main(tmp_path, world(), tty="3\n2\n\n")
+    assert result.returncode == 0, result.stdout + result.stderr
+    lines = result.stdout.splitlines()
+    assert "Choose 1 or 2 [1]: Type 1 or 2." in lines
+    assert "[2/5] Ollama isn't needed: chat will use your cloud service" in lines
+
+
+def test_low_memory_offers_only_a_cloud_service(tmp_path):
+    result = run_main(tmp_path, world(sysctl=f"echo {4 * GiB}"), tty="\n")  # only the Enter to start
+    assert result.returncode == 0, result.stdout + result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[4:7] == [
+        "PaperLab's chat needs a language model to answer questions about your papers. This Mac has less than 8 GB of",
+        "memory, too little to run one well, so chat can use a cloud service you have an API key for (OpenAI, Anthropic,",
+        "…). You paste the key in PaperLab when it opens, or skip chat there.",
+    ]
+    assert not any(line.startswith("Choose") for line in lines)
+    assert "[2/5] Ollama isn't needed: chat will use your cloud service" in lines
+    assert not any("Ollama" in c or "api/pull" in c for c in calls(tmp_path))
 
 
 # macOS's /bin/sh in a UTF-8 Terminal (the default) reads "$version…" as a variable named version plus the first byte
@@ -478,6 +527,18 @@ def test_rerun_with_everything_installed_only_updates_the_app(tmp_path):
     result = run_main(tmp_path, world(docker=""), OLLAMA_TAGS=tags, MODEL_PRESENT="true")
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.splitlines() == [
+        "PaperLab runs on this Mac. Here is what it needs:",
+        "  Docker Desktop  runs PaperLab's database and search in the background. Already here.",
+        "  PaperLab        the app itself. Will install (about 120 MB; its first start downloads about 335 MB more).",
+        "",
+        "PaperLab's chat needs a language model to answer questions about your papers. Where should it run?",
+        "  1) On this Mac: free, and your papers and questions never leave it.",
+        "     Ollama runs the model. Already here.",
+        "     The model, qwen3:8b. Already here.",
+        "  2) A cloud service you have an API key for (OpenAI, Anthropic, …): nothing more to download.",
+        "     You paste the key in PaperLab when it opens, never in this window.",
+        "Choose 1 or 2 [1]: ",
+        "Press Enter to start, or Ctrl+C to stop.",
         "[1/5] Docker is ready",
         "[2/5] Ollama is ready",
         "[3/5] Chat model qwen3:8b is ready",
@@ -490,6 +551,12 @@ def test_rerun_with_everything_installed_only_updates_the_app(tmp_path):
     assert not any("Docker.dmg" in c or "Ollama.dmg" in c or "api/pull" in c or "embedding/model" in c for c in log)
     assert any(c.endswith("PaperLab-0.3.1-arm64.dmg") for c in log)
     assert env_file.read_text() == "LLM_MODEL=llama3\n"
+
+
+def test_plan_says_an_installed_paperlab_will_be_updated(tmp_path):
+    (tmp_path / "Applications" / "PaperLab.app").mkdir(parents=True)
+    result = run_main(tmp_path, world())
+    assert "  PaperLab        the app itself. Will update to the latest version." in result.stdout.splitlines()
 
 
 def test_search_download_error_fails_and_leaves_setup_open(tmp_path):

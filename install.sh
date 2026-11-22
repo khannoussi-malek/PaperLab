@@ -87,15 +87,6 @@ docker_ready() {
   [ -n "$bin" ] && run "$bin" info
 }
 
-# Docker Desktop's terms, shown before anything is accepted for the user. Enter comes from the terminal: under
-# `curl | sh` the script itself is standard input.
-accept_docker_licence() {
-  echo "Docker Desktop is free for personal use, education and companies under 250 employees and \$10M revenue; larger companies need a paid Docker subscription."
-  echo "Press Enter to accept Docker's terms and continue, or Ctrl+C to stop."
-  { read -r _ <"${PAPERLAB_TTY:-/dev/tty}"; } 2>/dev/null ||
-    fail "PaperLab needs a terminal to ask about Docker's terms. Run the command in Terminal."
-}
-
 # A temporary file or folder under $TMPDIR (macOS's mktemp ignores TMPDIR without a template).
 scratch() { mktemp "$@" "${TMPDIR:-/tmp}/paperlab.XXXXXX" 2>>"$LOG"; }
 
@@ -156,7 +147,6 @@ ensure_docker() {
     fail "Your Docker isn't running. Start it, then run the command again."
   else
     step 1 "Installing Docker…"
-    accept_docker_licence
     install_docker_mac "$1"
     start_docker_mac
   fi
@@ -214,14 +204,11 @@ ensure_ollama() {
   wait_for_ollama
 }
 
+model_pulled() { curl -fsS --max-time 10 "$OLLAMA/api/tags" 2>>"$LOG" | grep -q "\"name\":\"$1\""; }
+
 # The chat model through Ollama's API (no ollama command needed on PATH). Progress shows only on a terminal.
 ensure_model() {
-  if [ -z "$1" ]; then
-    step 3 "Chat is left off"
-    echo "This Mac has less than 8 GB of memory, so chat is left off. Reading, notes and search work; add chat later in Settings."
-    return 0
-  fi
-  if curl -fsS --max-time 10 "$OLLAMA/api/tags" 2>>"$LOG" | grep -q "\"name\":\"$1\""; then
+  if model_pulled "$1"; then
     step 3 "Chat model $1 is ready"
     return 0
   fi
@@ -336,13 +323,96 @@ finish_setup() {
     fail "PaperLab is installed, but couldn't finish its setup. Open it from Applications to finish there."
 }
 
+# What the plan says each download weighs (rounded; checked 2026-11-22).
+model_size() { case $1 in qwen3:4b) echo 2.5 GB ;; *) echo 5.2 GB ;; esac; }
+
+# Before anything is installed: what this Mac needs and why, what's already here, and where chat runs. Answers come
+# from the terminal (under `curl | sh` the script itself is standard input), on fd 3 so each read takes the next line.
+# Empties $model when chat goes through a cloud service, which the user adds on PaperLab's own chat step.
+plan() {
+  tty=${PAPERLAB_TTY:-/dev/tty}
+  (: <"$tty") 2>/dev/null || fail "PaperLab needs a terminal to ask before installing. Run the command in Terminal."
+  exec 3<"$tty"
+  new_docker=no
+  echo "PaperLab runs on this Mac. Here is what it needs:"
+  docker_line="  Docker Desktop  runs PaperLab's database and search in the background."
+  if docker_ready || [ -d "$APPS/Docker.app" ] || [ -n "$(find_docker)" ]; then
+    echo "$docker_line Already here."
+  else
+    new_docker=yes
+    echo "$docker_line Will install (about 550 MB)."
+  fi
+  if [ -d "$APPS/PaperLab.app" ]; then
+    echo "  PaperLab        the app itself. Will update to the latest version."
+  else
+    echo "  PaperLab        the app itself. Will install (about 120 MB; its first start downloads about 335 MB more)."
+  fi
+  echo
+  choose_chat
+  echo
+  [ "$new_docker" = no ] || echo "Docker Desktop is free for personal use, education and companies under 250 employees and \$10M revenue; larger companies need a paid Docker subscription. Starting accepts its terms."
+  password_note
+  echo "Press Enter to start, or Ctrl+C to stop."
+  read -r _ <&3 || fail "PaperLab needs a terminal to ask before installing. Run the command in Terminal."
+}
+
+choose_chat() {
+  intro="PaperLab's chat needs a language model to answer questions about your papers."
+  if [ -z "$model" ]; then
+    echo "$intro This Mac has less than 8 GB of"
+    echo "memory, too little to run one well, so chat can use a cloud service you have an API key for (OpenAI, Anthropic,"
+    echo "…). You paste the key in PaperLab when it opens, or skip chat there."
+    return 0
+  fi
+  echo "$intro Where should it run?"
+  echo "  1) On this Mac: free, and your papers and questions never leave it."
+  if ollama_ready || [ -d "$APPS/Ollama.app" ]; then
+    echo "     Ollama runs the model. Already here."
+  else
+    echo "     Ollama runs the model. Will install (about 220 MB)."
+  fi
+  if ollama_ready && model_pulled "$model"; then
+    echo "     The model, $model. Already here."
+  else
+    echo "     The model, $model. Will download (about $(model_size "$model"))."
+  fi
+  echo "  2) A cloud service you have an API key for (OpenAI, Anthropic, …): nothing more to download."
+  echo "     You paste the key in PaperLab when it opens, never in this window."
+  while :; do
+    printf 'Choose 1 or 2 [1]: '
+    read -r answer <&3 || fail "PaperLab needs a terminal to ask before installing. Run the command in Terminal."
+    case $answer in
+      "" | 1) return 0 ;;
+      2) model= && return 0 ;;
+      *) echo "Type 1 or 2." ;;
+    esac
+  done
+}
+
+# Says up front what the password will be for (Docker's installer; Ollama's command, see link_ollama_command).
+password_note() {
+  link=no
+  [ -z "$model" ] || ollama_ready || [ -e "$OLLAMA_LINK" ] || link=yes
+  case $new_docker$link in
+    yesyes) echo "Your Mac's password is asked once, to install Docker and set up Ollama." ;;
+    yesno) echo "Your Mac's password is asked once, to install Docker." ;;
+    noyes) echo "Your Mac's password is asked once, to set up Ollama." ;;
+  esac
+}
+
 main() {
   # $(…) runs in a subshell, so a refusal's message is printed here.
   plat=$(platform) || { printf '%s\n' "$plat"; exit 1; }
   model=$(pick_model "$(memory_bytes)")
+  plan
   ensure_docker "$plat"
-  ensure_ollama
-  ensure_model "$model"
+  if [ -n "$model" ]; then
+    ensure_ollama
+    ensure_model "$model"
+  else
+    step 2 "Ollama isn't needed: chat will use your cloud service"
+    step 3 "No chat model to download"
+  fi
   version=$(latest_version)
   [ -n "$version" ] || fail "Couldn't find PaperLab's latest release. Check the internet connection, then run the command again."
   step 4 "Installing PaperLab ${version}…"
@@ -351,6 +421,10 @@ main() {
   step 5 "Opening PaperLab (the first start downloads about 335 MB)…"
   wait_for_app
   ensure_search_model
+  if [ -z "$model" ]; then
+    echo "PaperLab is open on its chat step: add your cloud service and its API key there."
+    return 0
+  fi
   finish_setup
   echo "PaperLab is ready. Next time, open it from Applications."
 }
