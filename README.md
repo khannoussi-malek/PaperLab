@@ -32,16 +32,17 @@ always marked as AI in the interface.
 
 ## Try it
 
-PaperLab is free and open source, and on a Mac it takes three commands with [Homebrew](https://brew.sh/):
+PaperLab is free and open source. On a Mac, paste this one line into Terminal:
 
 ```sh
-brew install --cask docker-desktop   # PaperLab runs on Docker: open Docker Desktop once after this
-brew tap khannoussi-malek/paperlab https://github.com/khannoussi-malek/PaperLab
-brew install --cask khannoussi-malek/paperlab/paperlab
+curl -fsSL https://raw.githubusercontent.com/khannoussi-malek/PaperLab/main/install.sh | sh
 ```
 
-Then open **PaperLab** from Applications. Homebrew picks the right build for Apple silicon or Intel, and macOS opens it
-without the Open Anyway step. On Windows or Linux, or without Homebrew, see the [Quick start](#quick-start).
+Before installing anything, it shows what PaperLab needs and why, what's already on your Mac and how much it will
+download. It also asks where chat should run: on your Mac (free and private, with Ollama and a chat model sized to its
+memory) or through a cloud service you have an API key for, which you add in PaperLab itself. Then it installs what's
+missing and opens PaperLab. It asks for your password once. Anything already installed is left as it is, and running
+the line again updates PaperLab. On Windows or Linux, or with Homebrew, see the [Quick start](#quick-start).
 
 Give it a try with a few of your own papers, and tell me how it went, good or bad, in an
 [issue](https://github.com/khannoussi-malek/PaperLab/issues) or on [LinkedIn](https://www.linkedin.com/company/os-paperlab).
@@ -367,7 +368,22 @@ produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", 
 
 ## Quick start
 
-### The desktop app
+### On a Mac: one command
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/khannoussi-malek/PaperLab/main/install.sh | sh
+```
+
+Before installing anything, it lists what PaperLab needs (Docker Desktop and the app), what's already there and the
+download sizes, and asks where chat runs. On this Mac, it installs Ollama and a chat model (qwen3:4b under 16 GB of
+memory, qwen3:8b above) and opens PaperLab with nothing left to set up. With a cloud service, it skips both and
+PaperLab opens on its chat step, where you paste your API key. The key never goes through the terminal. Macs with less
+than 8 GB of memory get the cloud option only. Either way it downloads the search model. It asks for your password
+once, for Docker's installer and Ollama's command, and shows Docker's terms before you press Enter to start. A Docker
+or Ollama you already have is used as it is. Running it again updates PaperLab and keeps your library. What it did is
+in `~/paperlab-install.log`.
+
+### Download the app yourself
 
 PaperLab runs on [Docker](https://www.docker.com/products/docker-desktop/): install Docker Desktop and open it once.
 Then download PaperLab for your system from the
