@@ -133,7 +133,8 @@ async def test_check_key_validates_without_searching(session, embedder, tmp_path
 
 
 async def test_words_off_passes_through_to_retrieve(session, embedder, tmp_path, monkeypatch):
-    """--words off must reach retrieve: HYBRID_SEARCH=false can't turn off the Settings switch (RAG report 2026-11-22)."""
+    """--words off must reach retrieve: HYBRID_SEARCH=false can't turn off the Settings switch (RAG report
+    2026-11-22)."""
     name = await seed(session, embedder)
     key_file = workspace_run.load_questions(write(tmp_path, key(name)))
     seen = []
@@ -159,3 +160,15 @@ async def test_chat_mode_scores_the_passages_chat_would_send(session, embedder, 
     by_id = {r.question.id: r for r in results}
     assert by_id["both"].answered == {workspace_run.CHAT: True}
     assert by_id["half"].met == {workspace_run.CHAT: 1}  # the far passage is its paper's last: the cap drops it
+
+
+async def test_each_paper_mode_scores_the_passages_each_paper_would_be_read_from(session, embedder, tmp_path):
+    """M8.5: every paper's own six passages; the far passage is the second paper's eighth, so it stays out."""
+    name = await seed(session, embedder)
+    key_file = workspace_run.load_questions(write(tmp_path, key(name)))
+
+    results = await workspace_run.evaluate(session, key_file, embedder, each_paper_path=True)
+
+    by_id = {r.question.id: r for r in results}
+    assert by_id["both"].answered == {workspace_run.EACH: True}
+    assert by_id["half"].met == {workspace_run.EACH: 1}

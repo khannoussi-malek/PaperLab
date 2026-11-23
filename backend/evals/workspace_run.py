@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core import chat, retrieval
+from app.core import chat, each_paper, retrieval
 from app.core.retrieval import RetrievedChunk, retrieve
 from app.models import Chunk, Paper, Workspace, workspace_papers
 from app.providers import embedding
@@ -31,6 +31,7 @@ from evals.run import KS, EvalError, normalize
 
 QUESTIONS = Path(__file__).with_name("workspace_questions.yaml")
 CHAT = 0  # the "k" of chat mode: every passage chat would send, after its likely papers, pool and budget
+EACH = -1  # the "k" of each-paper mode (M8.5): every passage each paper read would be read from
 
 
 class Passage(BaseModel):
@@ -102,24 +103,36 @@ def _met(chunks: list[RetrievedChunk], need: list[Passage], ids: dict[str, uuid.
 
 
 async def evaluate(
-    session: AsyncSession, key: QuestionFile, embedder, ks=KS, words: bool | None = None, chat_path: bool = False
+    session: AsyncSession,
+    key: QuestionFile,
+    embedder,
+    ks=KS,
+    words: bool | None = None,
+    chat_path: bool = False,
+    each_paper_path: bool = False,
 ) -> list[Result]:
     """One result per scored question (those with needs), in file order. `words` goes to retrieve as is; `chat_path`
-    scores the passages workspace chat would send instead of the top k (its one "k" is CHAT)."""
+    scores the passages workspace chat would send instead of the top k (its one "k" is CHAT); `each_paper_path` the
+    passages Ask each paper would read, every paper's own six (EACH)."""
     workspace_id, ids = await _key(session, key)
-    if chat_path:
+    if each_paper_path:
+        ks = (EACH,)
+    elif chat_path:
         ks = (CHAT,)
         members = select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == workspace_id)
         ready = list(await session.scalars(members))
     results = []
     for q in (q for q in key.questions if q.needs):
-        if chat_path:
+        if each_paper_path:
+            plan = await each_paper.plan(session, workspace_id, q.question, model="eval", embedder=embedder)
+            chunks = [p for task in plan.tasks for p in task.passages]
+        elif chat_path:
             chunks = (await chat._workspace_sources(session, ready, q.question, embedder, chat.FULL_LENS))[0]
         else:
             chunks = await retrieve(
                 session, q.question, workspace_id=workspace_id, k=max(ks), embedder=embedder, words=words
             )
-        met = {k: sum(_met(chunks[: k or None], need, ids) for need in q.needs) for k in ks}
+        met = {k: sum(_met(chunks if k <= 0 else chunks[:k], need, ids) for need in q.needs) for k in ks}
         results.append(Result(q, answered={k: met[k] == len(q.needs) for k in ks}, met=met))
     return results
 
@@ -150,7 +163,8 @@ def _share(results: list[Result], k: int) -> str:
 def summary(results: list[Result], k: int) -> str:
     unseen = [r for r in results if not r.question.seen]
     seen = [r for r in results if r.question.seen]
-    return f"recall@{k or 'chat'}: {_share(results, k)} · unseen {_share(unseen, k)} · seen {_share(seen, k)}"
+    name = {CHAT: "chat", EACH: "each paper"}.get(k, k)
+    return f"recall@{name}: {_share(results, k)} · unseen {_share(unseen, k)} · seen {_share(seen, k)}"
 
 
 async def main(argv: list[str] | None = None) -> int:
@@ -160,6 +174,7 @@ async def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check-key", action="store_true", help="only check the key against the papers; no search")
     parser.add_argument("--words", choices=("on", "off"), help="force the keyword half on or off (default: the switch)")
     parser.add_argument("--chat", action="store_true", help="score what workspace chat would send, not the top k")
+    parser.add_argument("--each-paper", action="store_true", help="score what Ask each paper would read (M8.5)")
     args = parser.parse_args(argv)
     try:
         key = load_questions(args.questions)
@@ -172,7 +187,9 @@ async def main(argv: list[str] | None = None) -> int:
         try:
             async with AsyncSession(engine) as session:
                 words = None if args.words is None else args.words == "on"
-                results = await evaluate(session, key, embedder, words=words, chat_path=args.chat)
+                results = await evaluate(
+                    session, key, embedder, words=words, chat_path=args.chat, each_paper_path=args.each_paper
+                )
                 hybrid = await retrieval.hybrid_on(session) if words is None else words
         finally:
             await engine.dispose()
@@ -180,11 +197,14 @@ async def main(argv: list[str] | None = None) -> int:
         print(f"eval error: {exc}", file=sys.stderr)
         return 2
 
-    ks = (CHAT,) if args.chat else KS
-    print("search: chat's path (likely papers, hybrid, budget)" if args.chat else
-          f"search: {'hybrid' if hybrid else 'vector only'}")
+    ks = (EACH,) if args.each_paper else (CHAT,) if args.chat else KS
+    if args.each_paper:
+        print("search: Ask each paper (likely papers, six passages each)")
+    else:
+        print("search: chat's path (likely papers, hybrid, budget)" if args.chat else
+              f"search: {'hybrid' if hybrid else 'vector only'}")
     for r in results:
-        cells = "  ".join(f"@{k or 'chat'} {r.met[k]}/{len(r.question.needs)}" for k in ks)
+        cells = "  ".join(f"@{ {CHAT: 'chat', EACH: 'each'}.get(k, k)} {r.met[k]}/{len(r.question.needs)}" for k in ks)
         print(f"  {r.question.id}{' (seen)' if r.question.seen else '       '}  {cells}  {r.question.question[:70]}")
     for k in ks:
         print(summary(results, k))
