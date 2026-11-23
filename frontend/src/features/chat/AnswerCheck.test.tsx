@@ -64,6 +64,7 @@ describe('AnswerCheck', () => {
     expect(screen.getByText('Not supported')).toBeInTheDocument()
     expect(screen.getByText('✗')).toBeInTheDocument()
     expect(screen.getByText('It says 28.4, not 32.4.')).toBeInTheDocument()
+    expect(screen.getByText(/can miss a figure moved to the wrong group/)).toBeInTheDocument()
   })
 
   it('starts a check and polls until it is done', async () => {

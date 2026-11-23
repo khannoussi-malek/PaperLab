@@ -9,6 +9,10 @@ import { chip, type Tone } from './answerCheckMarks'
 const NOT_CHECKABLE = "This answer was saved before PaperLab kept copies of its passages, so it can't be checked."
 const FAILED = 'The check stopped before it finished. Check again.'
 const START_FAILED = "Couldn't start the check."
+// The held-out gate's two misses (PR #224): say them where the verdicts are read.
+const CAVEAT =
+  'A first read, not proof: it can miss a figure moved to the wrong group or a claim stated more strongly than its ' +
+  'passage. Read the quotes.'
 const TONES: Record<Tone, string> = {
   quiet: 'text-muted-foreground',
   warn: 'text-amber-700 dark:text-amber-300',
@@ -67,10 +71,13 @@ function Summary({ check }: { check: Check }) {
   const when = new Date(check.created_at).toLocaleString()
   const by = check.connection_name ? `${check.model} (${check.connection_name})` : check.model
   return (
-    <p className="text-muted-foreground">
-      {`Checked by ${by} · ${when} · ${check.summary}`}
-      {check.limit_hit && ' · only the first 20 cited sentences were checked'}
-    </p>
+    <>
+      <p className="text-muted-foreground">
+        {`Checked by ${by} · ${when} · ${check.summary}`}
+        {check.limit_hit && ' · only the first 20 cited sentences were checked'}
+      </p>
+      <p className="text-muted-foreground italic">{CAVEAT}</p>
+    </>
   )
 }
 
