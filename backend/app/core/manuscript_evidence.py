@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections, manuscript_papers, manuscripts, queue
 from app.core.errors import Conflict, InvalidInput, error_code
-from app.core.retrieval import retrieve
+from app.core.retrieval import MAX_PER_PAPER, retrieve
 from app.models import ManuscriptEvidence
 
 MAX_SENTENCE = 2000
@@ -51,7 +51,10 @@ async def find(
         raise InvalidInput("no_workspace", detail="Pick a workspace for this manuscript to find evidence.")
     has_model = await _has_model(session, confirm_remote)  # before anything is read: a remote one needs a yes
     keys = {p["paper_id"]: p["key"] for p in await manuscript_papers.list_papers(session, mid)}
-    chunks = await retrieve(session, sentence, workspace_id=manuscript.workspace_id, k=PASSAGES, embedder=embedder)
+    # The strict cap: the default one lets a paper take the best 5, and evidence shows papers side by side.
+    chunks = await retrieve(
+        session, sentence, workspace_id=manuscript.workspace_id, k=PASSAGES, per_paper=MAX_PER_PAPER, embedder=embedder
+    )
     grouped: dict[uuid.UUID, list[dict]] = {}
     for c in chunks:
         if c.paper_id in keys:

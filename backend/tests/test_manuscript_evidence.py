@@ -91,6 +91,23 @@ async def test_papers_are_grouped_in_rank_order_with_their_keys(session, embedde
     assert [(r.status, r.rank) for r in await all_rows(session, m.id)] == [("queued", 0), ("queued", 1)]
 
 
+async def test_evidence_keeps_the_strict_cap_of_3_per_paper(session, embedder, local_default_model, arq, monkeypatch):
+    """The default cap keeps chat's best 5 from one paper; evidence wants papers side by side, so it stays strict."""
+    _, m = await library(session, embedder, "Alpha", "Beta")
+    caps = []
+    real = ev.retrieve
+
+    async def spy(*args, **kwargs):
+        caps.append(kwargs.get("per_paper"))
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(ev, "retrieve", spy)
+
+    await ev.find(session, m.id, SENTENCE, embedder=embedder)
+
+    assert caps == [retrieval.MAX_PER_PAPER]
+
+
 async def test_no_workspace_and_empty_sentence_are_refused(session, embedder):
     _, m = await library(session, embedder, "Alpha", with_ws=False)
     with pytest.raises(InvalidInput, match="no_workspace"):

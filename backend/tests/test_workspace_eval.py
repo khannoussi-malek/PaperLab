@@ -130,3 +130,32 @@ async def test_check_key_validates_without_searching(session, embedder, tmp_path
 
     assert message == "key ok: 2 scored questions, 4 passages, all in their papers"
     assert embedder.calls == []  # nothing was searched
+
+
+async def test_words_off_passes_through_to_retrieve(session, embedder, tmp_path, monkeypatch):
+    """--words off must reach retrieve: HYBRID_SEARCH=false can't turn off the Settings switch (RAG report 2026-11-22)."""
+    name = await seed(session, embedder)
+    key_file = workspace_run.load_questions(write(tmp_path, key(name)))
+    seen = []
+    real = workspace_run.retrieve
+
+    async def spy(*args, **kwargs):
+        seen.append(kwargs.get("words"))
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(workspace_run, "retrieve", spy)
+
+    await workspace_run.evaluate(session, key_file, embedder, ks=(8,), words=False)
+
+    assert seen == [False, False]
+
+
+async def test_chat_mode_scores_the_passages_chat_would_send(session, embedder, tmp_path):
+    name = await seed(session, embedder)
+    key_file = workspace_run.load_questions(write(tmp_path, key(name)))
+
+    results = await workspace_run.evaluate(session, key_file, embedder, chat_path=True)
+
+    by_id = {r.question.id: r for r in results}
+    assert by_id["both"].answered == {workspace_run.CHAT: True}
+    assert by_id["half"].met == {workspace_run.CHAT: 1}  # the far passage is its paper's last: the cap drops it
