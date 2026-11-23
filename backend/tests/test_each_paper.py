@@ -230,3 +230,89 @@ async def test_the_offline_fake_model_finds_every_paper_from_its_first_passage(s
     [reading] = await read(shared, embedder, workspace, FakeLLM())
 
     assert reading.status == "found" and [c.text for c in reading.cited] == ["Alpha passage 0"]
+
+
+# Task 2: one answer from the records.
+
+def found(title: str, cites: list[str]) -> str:
+    return json.dumps({"status": "found", "answer": f"{title} counts pills.", "cites": cites})
+
+
+async def reduced(session, embedder, titles, replies, skill=None):
+    workspace, _ = await workspace_of(session, embedder, titles)
+    the_plan = await each_paper.plan(session, workspace.id, QUESTION, model="scripted", embedder=embedder, skill=skill)
+    readings = [r async for r in each_paper.read_all(QUESTION, the_plan.tasks, ScriptedLLM(replies=replies))]
+    return the_plan, readings, each_paper.reduce_prepared(the_plan, readings)
+
+
+async def test_sources_are_the_found_records_cites_in_paper_order(shared, embedder):
+    absent = json.dumps({"status": "absent", "answer": "Not reported.", "cites": []})
+    the_plan, _, prepared = await reduced(
+        shared, embedder, ["Alpha", "Beta", "Gamma"],
+        {"Alpha": found("Alpha", ["P2", "P1"]), "Beta": absent, "Gamma": found("Gamma", ["P1"])},
+    )
+
+    order = [t.paper.title for t in the_plan.tasks if t.paper.title != "Beta"]
+    expected = {"Alpha": ["Alpha passage 1", "Alpha passage 0"], "Gamma": ["Gamma passage 0"]}
+    assert [s.text for s in prepared.sources] == [text for title in order for text in expected[title]]
+    assert prepared.prompt_version == each_paper.EACH_PAPER_PROMPT_VERSION == 1
+    assert prepared.whole_paper is False and prepared.notes == []
+
+
+async def test_the_prompt_rewrites_each_records_cites_to_its_c_labels(shared, embedder):
+    _, _, prepared = await reduced(shared, embedder, ["Alpha"], {"Alpha": found("Alpha", ["P2"])})
+
+    assert "[C1]" in prepared.prompt and "[P2]" not in prepared.prompt
+    assert "Alpha counts pills. [C1]" in prepared.prompt
+
+
+async def test_the_prompt_names_every_paper_that_does_not_cover_it(shared, embedder):
+    absent = json.dumps({"status": "absent", "answer": "Not reported.", "cites": []})
+    replies = {"Alpha": found("Alpha", ["P1"]), "Beta": absent}
+    _, _, prepared = await reduced(shared, embedder, ["Alpha", "Beta"], replies)
+
+    assert "Not covered by: Beta" in prepared.prompt
+
+
+async def test_the_prompt_says_how_many_papers_were_not_read(shared, embedder):
+    workspace, _ = await workspace_of(shared, embedder, [f"Paper {i}" for i in range(12)], chunks=2)
+    the_plan = await each_paper.plan(shared, workspace.id, QUESTION, model="scripted", embedder=embedder)
+    readings = [r async for r in each_paper.read_all(QUESTION, the_plan.tasks, ScriptedLLM())]
+
+    prepared = each_paper.reduce_prepared(the_plan, readings)
+
+    assert "Not read: 2 of 12 papers" in prepared.prompt
+
+
+async def test_a_skill_shapes_the_answer_not_the_reading(shared, embedder):
+    from app.core import skills  # noqa: PLC0415
+
+    skill = skills.SkillView(
+        id="custom:x", label="Table", description="", scope="workspace", instructions="Answer as a table.",
+        version=1, is_listed=True, is_paper_default=False, is_workspace_default=False, state="custom", lens="full",
+    )
+    llm = ScriptedLLM()
+    workspace, _ = await workspace_of(shared, embedder, ["Alpha"])
+    the_plan = await each_paper.plan(shared, workspace.id, QUESTION, model="scripted", embedder=embedder, skill=skill)
+    readings = [r async for r in each_paper.read_all(QUESTION, the_plan.tasks, llm)]
+
+    prepared = each_paper.reduce_prepared(the_plan, readings)
+
+    assert prepared.system == skills.compose(each_paper.EACH_PAPER_SYSTEM, skill)
+    assert "Answer as a table." not in llm.calls[0]
+    assert prepared.skill_label == "Table"
+
+
+async def test_the_saved_answer_keeps_its_readings_and_lists_them_again(shared, embedder):
+    from app.core import chat  # noqa: PLC0415
+
+    the_plan, readings, prepared = await reduced(shared, embedder, ["Alpha", "Beta"], {})
+    scope = chat.Scope(workspace_id=the_plan.workspace_id)
+
+    output_id = await chat.save_answer(shared, scope, QUESTION, prepared, "Both count pills [C1][C2].", "m", "c")
+
+    [answer] = await chat.list_answers(shared, scope)
+    assert answer.output.id == output_id
+    in_paper_order = [r.output_id for t in the_plan.tasks for r in readings if r.paper_id == t.paper.id]
+    assert answer.output.readings == prepared.readings == in_paper_order
+    assert [r.id for r in answer.readings] == in_paper_order

@@ -30,6 +30,10 @@ MAP_CONCURRENCY = 2  # a local server answers one at a time anyway; a cloud one 
 READING_PROMPT_VERSION = 1
 OUTPUT_KIND = "paper_reading"
 READING_SYSTEM, READING_TEMPLATE = prompts.load("paper_reading", READING_PROMPT_VERSION).split(chat.PROMPT_MARKER)
+EACH_PAPER_PROMPT_VERSION = 1
+EACH_PAPER_SYSTEM, EACH_PAPER_TEMPLATE = prompts.load("chat_each_paper", EACH_PAPER_PROMPT_VERSION).split(
+    chat.PROMPT_MARKER
+)
 
 Status = Literal["found", "absent", "no_text", "model_error"]
 
@@ -206,3 +210,46 @@ async def read_all(question: str, tasks: list[PaperTask], llm) -> AsyncIterator[
     finally:
         for future in pending:  # the reader left mid-run: stop asking for the rest
             future.cancel()
+
+
+def reduce_prepared(plan: Plan, readings: list[Reading]) -> chat.Prepared:
+    """The answer's prompt from the records, in the plan's paper order. Its sources are the found records' cited
+    passages, numbered C1..Cn, so citation pills, provenance and the answer check work as in chat."""
+    by_paper = {r.paper_id: r for r in readings}
+    ordered = [by_paper[t.paper.id] for t in plan.tasks if t.paper.id in by_paper]
+    sources: list[RetrievedChunk] = []
+    blocks, gaps = [], {"absent": [], "no_text": [], "model_error": []}
+    for reading in ordered:
+        if reading.status != "found":
+            gaps[reading.status].append(reading.label)
+            continue
+        labels = "".join(f"[C{len(sources) + i}]" for i in range(1, len(reading.cited) + 1))
+        sources += reading.cited
+        blocks.append(f"### {reading.label}\n{reading.answer} {labels}".rstrip())
+    lines = [
+        f"{heading}: {', '.join(names)}"
+        for heading, names in (
+            ("Not covered by", gaps["absent"]),
+            ("No text to read in", gaps["no_text"]),
+            ("Couldn't be read", gaps["model_error"]),
+        )
+        if names
+    ]
+    skipped = plan.papers_total - len(plan.tasks)
+    if skipped:
+        lines.append(f"Not read: {skipped} of {plan.papers_total} papers")
+    prompt = EACH_PAPER_TEMPLATE.format(
+        records="\n\n".join(blocks) or "No paper's passages answer the question.",
+        gaps="\n".join(lines),
+        question=plan.question,
+    )
+    return chat.Prepared(
+        sources=sources,
+        system=skills.compose(EACH_PAPER_SYSTEM, plan.skill),
+        prompt=prompt,
+        whole_paper=False,
+        prompt_version=EACH_PAPER_PROMPT_VERSION,
+        notes=[],
+        readings=[r.output_id for r in ordered if r.output_id is not None],
+        **chat._skill_fields(plan.skill),
+    )

@@ -92,6 +92,7 @@ class Prepared:
     skill_label: str | None = None  # the skill the question ran with, copied onto the answer (M17)
     skill_version: int | None = None
     lens: str = FULL_LENS  # the lens the sources came from; 'full' unless the skill's lens had sections here (M16)
+    readings: list[uuid.UUID] = field(default_factory=list)  # Ask each paper: the per-paper records (M8.5)
 
     @property
     def notes_used(self) -> int | None:
@@ -137,6 +138,7 @@ class Answer:
     replaced: list[SnapshotPassage | None] = field(
         default_factory=list
     )  # aligned with sources; None: no snapshot of it
+    readings: list[LLMOutput] = field(default_factory=list)  # Ask each paper's records, in the answer's order (M8.5)
 
 
 async def chunk_sources(session: AsyncSession, *where) -> list[RetrievedChunk]:
@@ -495,6 +497,7 @@ async def save_answer(
         skill_label=prepared.skill_label,
         skill_version=prepared.skill_version,
         lens=prepared.lens,
+        readings=prepared.readings,
     )
     session.add(output)
     await session.commit()
@@ -538,6 +541,9 @@ async def list_answers(session: AsyncSession, paper_id: uuid.UUID | Scope) -> li
             .order_by(Note.source_block)
         )
     ).all()
+    reading_ids = {i for o in outputs for i in o.readings}
+    rows = await session.scalars(select(LLMOutput).where(LLMOutput.id.in_(reading_ids))) if reading_ids else []
+    readings = {r.id: r for r in rows}
     saved_papers = await papers_of(session, [note_id for *_, note_id in saved])
     saved_notes: dict[uuid.UUID, list[SavedNote]] = {}
     for output_id, index, note_id in saved:
@@ -550,6 +556,7 @@ async def list_answers(session: AsyncSession, paper_id: uuid.UUID | Scope) -> li
             # None: the note was deleted, or is no longer linked to a paper in scope (spec §4.3).
             notes=[None if note_id not in by_id else _source(by_id[note_id], members) for note_id in o.source_notes],
             saved_notes=saved_notes.get(o.id, []),
+            readings=[readings[i] for i in o.readings if i in readings],
         )
         for o in outputs
     ]
