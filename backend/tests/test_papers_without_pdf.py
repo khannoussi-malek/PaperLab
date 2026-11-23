@@ -15,6 +15,7 @@ from sqlalchemy import delete, func, select, update
 
 from app.core import (
     chat,
+    chunk_headers,
     chunking,
     claims,
     evidence_cards,
@@ -305,7 +306,8 @@ async def test_create_metadata_paper_refuses_what_it_cannot_store(session):
 async def test_index_abstract_embeds_and_marks_ready(worker_session, ctx, embedder):
     paper, chunk = await indexed_abstract_paper(worker_session, ctx)
     assert (paper.status, chunk.embed_model, chunk.embedding is not None) == ("ready", "test", True)
-    assert [texts for texts, _ in embedder.calls] == [[f"search_document: {chunk.text}"]]
+    embedded = chunk_headers.embed_text(chunk.header, chunk.text)
+    assert [texts for texts, _ in embedder.calls] == [[f"search_document: {embedded}"]]
     assert paper.evidence_access == "abstract"
 
 

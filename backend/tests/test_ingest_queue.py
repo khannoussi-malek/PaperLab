@@ -92,7 +92,7 @@ class FakeRedis:
         self.deleted += keys
 
 
-async def test_a_starting_ingest_worker_frees_the_jobs_a_dead_one_left_locked():
+async def test_a_starting_ingest_worker_frees_the_jobs_a_dead_one_left_locked(worker_session):
     """The only ingest worker is starting, so nothing is really running them: otherwise each waits out arq's lock."""
     redis = FakeRedis([b"abc", b"def"])
 
@@ -101,7 +101,7 @@ async def test_a_starting_ingest_worker_frees_the_jobs_a_dead_one_left_locked():
     assert redis.deleted == ["arq:in-progress:abc", "arq:in-progress:def"]
 
 
-async def test_a_starting_ingest_worker_with_an_empty_queue_frees_nothing():
+async def test_a_starting_ingest_worker_with_an_empty_queue_frees_nothing(worker_session):
     redis = FakeRedis([])
 
     await IngestWorkerSettings.on_startup({"redis": redis})
