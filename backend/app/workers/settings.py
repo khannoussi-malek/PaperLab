@@ -26,6 +26,7 @@ from app.workers.hit_enrichment import ENRICH_JOB_TIMEOUT, enrich_hits
 from app.workers.ingest import (
     INGEST_JOB_TIMEOUT,
     MAX_TRIES,
+    add_chunk_headers,
     embed_rest,
     index_abstract,
     ingest_paper,
@@ -52,6 +53,7 @@ from app.workers.workspace_search import SEARCH_RUN_JOB_TIMEOUT, run_workspace_s
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 # SEARCH_RUN_JOB_TIMEOUT lives in workers/workspace_search.py, not here — the worker's own wall-clock deadline
 # check (C2 Important 1) is computed from that same constant, so importing it (rather than redefining a second
 # copy here) means the registered job_timeout and the loop's own backstop can never drift apart.
@@ -158,7 +160,10 @@ async def _free_dead_ingest_jobs(ctx: dict) -> None:
 
 async def _start_ingest_worker(ctx: dict) -> None:
     await _free_dead_ingest_jobs(ctx)
-    await queue_chunk_headers(ctx)
+    try:  # a database not up yet must not keep the worker from starting; the next start queues them
+        await queue_chunk_headers(ctx)
+    except Exception:
+        logger.exception("queueing chunk-header re-embeds failed; the next start tries again")
 
 
 class IngestWorkerSettings:
@@ -170,5 +175,5 @@ class IngestWorkerSettings:
     max_jobs = 1
     max_tries = MAX_TRIES
     job_timeout = INGEST_JOB_TIMEOUT + 60  # a backstop: the deadline inside the job fires first
-    functions = [ingest_paper, embed_rest, reembed_paper, index_abstract]
+    functions = [ingest_paper, embed_rest, reembed_paper, index_abstract, add_chunk_headers]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

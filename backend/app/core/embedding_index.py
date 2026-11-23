@@ -108,6 +108,12 @@ async def chunks_to_embed(session: AsyncSession, paper_id: uuid.UUID, name: str)
     return list((await session.execute(query)).all())
 
 
+async def chunks_without_headers(session: AsyncSession, paper_id: uuid.UUID) -> list:
+    """The paper's chunks embedded before chunk headers, in reading order: ids, text and section, as chunks_to_embed."""
+    query = select(Chunk.id, Chunk.text, Chunk.section_title).where(Chunk.paper_id == paper_id, Chunk.header.is_(None))
+    return list((await session.execute(query.order_by(Chunk.ordinal))).all())
+
+
 async def papers_without_headers(session: AsyncSession) -> list[tuple[uuid.UUID, int]]:
     """(paper, its chunks) for each paper with a chunk embedded before chunk headers (0082): a vector, no header.
     Smallest first, so most papers get theirs soonest."""

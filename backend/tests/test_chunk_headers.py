@@ -2,6 +2,9 @@
 <section>" before its text, while its text stays the PDF's own. Measured 2026-11-23: chat's path found apixaban q06
 and semaglutide q09 (RAG report §4)."""
 
+import uuid
+from unittest.mock import AsyncMock
+
 import pytest
 from conftest import FakeEmbedder
 from sqlalchemy import select, text
@@ -10,6 +13,7 @@ from app.core import chunk_headers, papers, queue
 from app.core.chunking import ChunkDraft
 from app.models import Chunk, Paper
 from app.workers import ingest
+from app.workers.settings import IngestWorkerSettings
 
 pytestmark = pytest.mark.anyio
 
@@ -82,7 +86,8 @@ async def headed_and_old(session, embedder) -> tuple[Paper, Paper]:
     headed = await labelled_paper(session, "Headed")
     await ingest._embed(session, headed.id, embedder)
     old = await labelled_paper(session, "Old")
-    await papers.set_embeddings(session, [c.id for c in await chunks_of(session, old.id)], [[0.1] * 768] * 2, "test")
+    ids = [c.id for c in await chunks_of(session, old.id)]
+    await papers.set_embeddings(session, ids, [[0.1] * 768] * 2, "test", None)
     await session.execute(text("UPDATE chunks SET header = NULL WHERE paper_id = :id"), {"id": old.id})
     await session.commit()
     return headed, old
@@ -94,7 +99,7 @@ async def test_a_starting_ingest_worker_queues_papers_embedded_before_headers(wo
     await ingest.queue_chunk_headers({})
     await ingest.queue_chunk_headers({})  # a restart: the job id keeps it to one
 
-    assert queue._pool.jobs == [("reembed_paper", str(old.id))]
+    assert queue._pool.jobs == [("add_chunk_headers", str(old.id))]
     assert f"chunk-headers:{old.id}" in queue._pool.job_ids
 
 
@@ -105,7 +110,7 @@ async def test_header_reembeds_are_spread_out_so_a_new_upload_never_waits_behind
     second = await labelled_paper(worker_session, "Second")
     for paper in (first, second):
         ids = [c.id for c in await chunks_of(worker_session, paper.id)]
-        await papers.set_embeddings(worker_session, ids, [[0.1] * 768] * 2, "test")
+        await papers.set_embeddings(worker_session, ids, [[0.1] * 768] * 2, "test", None)
     await worker_session.execute(text("UPDATE chunks SET header = NULL"))
     await worker_session.commit()
 
@@ -128,9 +133,39 @@ async def test_a_cloud_search_source_is_never_billed_for_headers(worker_session,
     assert queue._pool.jobs == []
 
 
-async def test_a_reembed_gives_an_old_paper_its_headers(worker_session, embedder):
+async def test_the_header_job_embeds_only_the_chunks_still_without_one(worker_session, embedder):
+    """So a big paper cut short by the job's deadline resumes where it stopped."""
     _, old = await headed_and_old(worker_session, embedder)
+    first = (await chunks_of(worker_session, old.id))[0]
+    await worker_session.execute(text("UPDATE chunks SET header = 'done' WHERE id = :id"), {"id": first.id})
+    await worker_session.commit()
+    fresh = FakeEmbedder()
 
-    await ingest.reembed_paper({"embedder": FakeEmbedder()}, str(old.id))
+    await ingest.add_chunk_headers({"embedder": fresh}, str(old.id))
 
-    assert [c.header for c in await chunks_of(worker_session, old.id)] == ["Old · Interactions", "Old"]
+    assert fresh.calls == [(["search_document: Old\nStore below 30 °C."], {})]
+    assert [c.header for c in await chunks_of(worker_session, old.id)] == ["done", "Old"]
+
+
+async def test_the_header_job_does_nothing_for_a_paper_gone_since_or_a_cloud_source(worker_session, embedder):
+    _, old = await headed_and_old(worker_session, embedder)
+    cloud = FakeEmbedder(is_local=False)
+
+    await ingest.add_chunk_headers({"embedder": embedder}, str(uuid.uuid4()))  # deleted after it was queued
+    await ingest.add_chunk_headers({"embedder": cloud}, str(old.id))  # switched to a cloud source meanwhile
+
+    assert cloud.calls == []
+    assert [c.header for c in await chunks_of(worker_session, old.id)] == [None, None]
+
+
+async def test_a_database_error_at_startup_still_starts_the_ingest_worker(worker_session, monkeypatch, caplog):
+    async def down(session):
+        raise ConnectionRefusedError("database down")
+
+    monkeypatch.setattr(ingest.embedding_sources, "active", down)
+    redis = AsyncMock(zrange=AsyncMock(return_value=[b"abc"]))
+
+    await IngestWorkerSettings.on_startup({"redis": redis})  # no exception: the worker starts
+
+    redis.delete.assert_awaited_once_with("arq:in-progress:abc")
+    assert "queueing chunk-header re-embeds failed" in caplog.text

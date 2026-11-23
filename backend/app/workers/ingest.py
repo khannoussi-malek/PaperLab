@@ -115,15 +115,24 @@ async def search_embedder(ctx: dict, session):
 
 
 async def _embed(
-    session, pid: uuid.UUID, embedder, *, missing_only: bool = False, until: float | None = None
+    session,
+    pid: uuid.UUID,
+    embedder,
+    *,
+    missing_only: bool = False,
+    headers_only: bool = False,
+    until: float | None = None,
 ) -> bool:
     """Embeds the paper's chunks in slices of EMBED_WRITE_BATCH, writing each as it is done and only while `embedder`
     is still the search source. A slice is the most a thread left running after a deadline can still do, and the
     progress anyone can see; the vectors written so far stay. A failing source never fails a paper: the old vectors
     stay and the error is kept for Settings' Try again (D155). `missing_only` skips chunks already on this source.
+    `headers_only` takes only the chunks embedded before chunk headers.
     `until` (time.monotonic) stops it after the slice that passes it; at least one slice runs, so a job always gets
     further than the last. True unless the source failed or changed."""
-    if missing_only:
+    if headers_only:
+        chunks = await embedding_index.chunks_without_headers(session, pid)
+    elif missing_only:
         chunks = await embedding_index.chunks_to_embed(session, pid, embedder.name)
     else:
         chunks = await papers.list_chunks(session, pid)
@@ -356,6 +365,26 @@ async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) ->
 HEADER_PACE = 2.0
 
 
+async def add_chunk_headers(ctx: dict, paper_id: str) -> None:
+    """Re-embeds the paper's chunks embedded before chunk headers, and only those: a paper cut short by the deadline
+    resumes where it stopped (each slice commits), and one deleted since it was queued has none left. Nothing when the
+    search source is no longer local: a cloud one would bill it."""
+    pid = uuid.UUID(paper_id)
+    async with SessionLocal() as session:
+        embedder = await search_embedder(ctx, session)
+        if embedder is None or not embedder.is_local:
+            return
+        deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
+        try:
+            async with deadline:
+                await _embed(session, pid, embedder, headers_only=True)
+        except TimeoutError:
+            if not deadline.expired():
+                raise
+            await session.rollback()
+            logger.warning("adding chunk headers to %s ran past %d s; the next start goes on", pid, INGEST_JOB_TIMEOUT)
+
+
 async def queue_chunk_headers(ctx: dict) -> None:
     """A starting ingest worker queues a re-embed of each paper embedded before chunk headers (0082), once: the job id
     keeps a restart from queueing it twice. Search keeps answering from the old vectors meanwhile (a re-embed with the
@@ -368,7 +397,7 @@ async def queue_chunk_headers(ctx: dict) -> None:
     start = 0.0
     for paper_id, chunks in pending:
         job_id = f"chunk-headers:{paper_id}"
-        await queue.enqueue("reembed_paper", str(paper_id), job_id=job_id, defer_seconds=start or None)
+        await queue.enqueue("add_chunk_headers", str(paper_id), job_id=job_id, defer_seconds=start or None)
         start += chunks / HEADER_PACE
     if pending:
         logger.info("queued %d papers to re-embed with chunk headers over %.0f minutes", len(pending), start / 60)

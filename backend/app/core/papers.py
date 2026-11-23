@@ -311,11 +311,12 @@ async def set_embeddings(
     chunk_ids: list[uuid.UUID],
     vectors: list[list[float]],
     model_name: str,
-    headers: list[str] | None = None,
+    headers: list[str] | None,
 ) -> None:
     """One executemany UPDATE by primary key, recording which source's model the vectors came from (D151): the
     embedder's name, so a switch never has to read settings. `headers`: what each chunk was embedded under
-    (chunk_headers), written with its vector so the two never disagree.
+    (chunk_headers), written with its vector so the two never disagree; required, so no new write can leave a chunk
+    looking embedded before headers (it would be queued again on every start). None only in tests of old rows.
 
     Not unnest(): pgvector's ARRAY(Vector) bind fails ("expected list or ndarray"), and 500 rows take under a second.
     """
