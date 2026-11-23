@@ -193,7 +193,8 @@ async def test_another_model_or_a_replaced_chunk_misses_the_cache(shared, embedd
     other = ScriptedLLM()
     other.model = "another"
     await read(shared, embedder, workspace, other)
-    row = (await shared.scalars(select(LLMOutput).where(LLMOutput.kind == "paper_reading"))).first()
+    mine = select(LLMOutput).where(LLMOutput.kind == "paper_reading", LLMOutput.paper_id == papers[0].id)
+    row = (await shared.scalars(mine)).first()
     await shared.execute(text("DELETE FROM chunks WHERE id = :id"), {"id": row.source_chunks[0]})
     again = ScriptedLLM()
     await read(shared, embedder, workspace, again)
@@ -316,3 +317,47 @@ async def test_the_saved_answer_keeps_its_readings_and_lists_them_again(shared, 
     in_paper_order = [r.output_id for t in the_plan.tasks for r in readings if r.paper_id == t.paper.id]
     assert answer.output.readings == prepared.readings == in_paper_order
     assert [r.id for r in answer.readings] == in_paper_order
+
+
+# Review fixes.
+
+async def test_a_record_read_from_other_passages_is_not_reused(shared, embedder):
+    """Same question, paper and model, but the passages changed (a skill's lens, a new nearer chunk): read again."""
+    workspace, papers = await workspace_of(shared, embedder, ["Alpha"])
+    await read(shared, embedder, workspace, ScriptedLLM())
+    query = embedder.vectors[f"search_query: {QUESTION}"]
+    from test_retrieval import at_spread  # noqa: PLC0415
+
+    from app.models import Chunk  # noqa: PLC0415
+
+    shared.add(Chunk(paper_id=papers[0].id, ordinal=99, page=9, bbox=[[1, 2, 3, 4]], text="Alpha nearest passage",
+                     embedding=at_spread(query, 0.01), embed_model="test", strategy_ver=1))
+    await shared.flush()
+    again = ScriptedLLM()
+
+    [reading] = await read(shared, embedder, workspace, again)
+
+    assert len(again.calls) == 1 and reading.cached is False
+
+
+async def test_an_unexpected_error_for_one_paper_is_its_model_error_and_the_run_goes_on(shared, embedder):
+    workspace, _ = await workspace_of(shared, embedder, ["Alpha", "Beta"])
+
+    class Broken(ScriptedLLM):
+        async def stream(self, system, prompt):
+            if "Paper: Alpha\n" in prompt:
+                raise ValueError("a bug in a provider")
+            async for token in super().stream(system, prompt):
+                yield token
+
+    readings = {r.label: r.status for r in await read(shared, embedder, workspace, Broken())}
+
+    assert readings == {"Alpha": "model_error", "Beta": "found"}
+
+
+async def test_a_records_own_markers_never_reach_the_answers_prompt(shared, embedder):
+    reply = json.dumps({"status": "found", "answer": "Pill counts [P2] as in [C1].", "cites": ["P1"]})
+    _, _, prepared = await reduced(shared, embedder, ["Alpha"], {"Alpha": reply})
+
+    assert "Pill counts as in. [C1]" in prepared.prompt
+    assert "[P2]" not in prepared.prompt

@@ -8,6 +8,8 @@ prompt version and model reuses it while all its passages still exist (a re-inge
 
 import asyncio
 import json
+import logging
+import re
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -36,6 +38,8 @@ EACH_PAPER_SYSTEM, EACH_PAPER_TEMPLATE = prompts.load("chat_each_paper", EACH_PA
 )
 
 Status = Literal["found", "absent", "no_text", "model_error"]
+_MARKER = re.compile(r"\[[PCN]\d+\]")
+logger = logging.getLogger(__name__)
 
 
 class _Reply(BaseModel):
@@ -80,7 +84,7 @@ def _label(paper: Paper) -> str:
 async def _cached(
     session: AsyncSession, paper: Paper, question: str, model: str, passages: list[RetrievedChunk]
 ) -> Reading | None:
-    """The newest record of this question, paper, prompt version and model whose passages all still exist."""
+    """The newest record of this question, paper, prompt version and model read from exactly these passages."""
     query = (
         select(LLMOutput)
         .where(
@@ -94,10 +98,8 @@ async def _cached(
         .limit(1)
     )
     row = await session.scalar(query)
-    if row is None:
-        return None
-    alive = await session.scalar(select(func.count()).select_from(Chunk).where(Chunk.id.in_(row.source_chunks)))
-    if alive != len(row.source_chunks):
+    # Read from exactly these passages: a skill's lens, a new chunk or a re-ingest gives others: read again.
+    if row is None or row.source_chunks != [p.id for p in passages]:
         return None
     by_id = {c.id: c for c in await chat.chunk_sources(session, Chunk.id.in_(row.cited_chunks))}
     return _from_row(row, paper, by_id)
@@ -168,6 +170,9 @@ async def _ask(question: str, task: PaperTask, llm, gate: asyncio.Semaphore) -> 
         try:
             return await claims._ask_with_retry(llm, READING_SYSTEM, _prompt(question, task), _Reply)
         except (LLMError, LLMUnavailable):
+            return None
+        except Exception:  # one paper's surprise must not end everyone's answer: it reads as that paper's model error
+            logger.exception("reading %s for Ask each paper failed unexpectedly", task.paper.id)
             return None
 
 
@@ -240,7 +245,9 @@ def reduce_prepared(plan: Plan, readings: list[Reading]) -> chat.Prepared:
             continue
         labels = "".join(f"[C{len(sources) + i}]" for i in range(1, len(reading.cited) + 1))
         sources += reading.cited
-        blocks.append(f"### {reading.label}\n{reading.answer} {labels}".rstrip())
+        # The record's own P/C labels mean nothing here: only its C numbers below do.
+        answer = " ".join(_MARKER.sub("", reading.answer).split()).replace(" .", ".")
+        blocks.append(f"### {reading.label}\n{answer} {labels}".rstrip())
     lines = [
         f"{heading}: {', '.join(names)}"
         for heading, names in (

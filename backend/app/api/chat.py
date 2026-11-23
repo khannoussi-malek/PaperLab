@@ -236,8 +236,11 @@ def to_reading(reading: each_paper.Reading) -> ReadingOut:
 
 
 def to_answer(
-    answer: chat.Answer, checked: set[uuid.UUID] = frozenset(), readings: dict[uuid.UUID, each_paper.Reading] = {}
+    answer: chat.Answer,
+    checked: set[uuid.UUID] = frozenset(),
+    readings: dict[uuid.UUID, each_paper.Reading] | None = None,
 ) -> ChatAnswer:
+    readings = readings or {}
     output = answer.output
     return ChatAnswer(
         id=output.id,
