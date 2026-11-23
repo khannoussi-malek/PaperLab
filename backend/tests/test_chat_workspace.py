@@ -1,4 +1,5 @@
 import uuid
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -204,7 +205,9 @@ async def test_workspace_prepare_retrieves_across_papers_with_per_paper_labels_a
         chat.WORKSPACE_SYSTEM_PROMPT, False, chat.WORKSPACE_PROMPT_VERSION,
     )  # fmt: skip
     assert prepared.sources[0].text == f"{run} dpr 2"
-    assert len(prepared.sources) == 6 and {s.paper_id for s in prepared.sources} == {dpr.id, bert.id}  # 3 each
+    # 3 each, or 4 for the paper whose chunks fill the best 5 (retrieval.BEST_UNCAPPED): the vectors are random.
+    per_paper = Counter(s.paper_id for s in prepared.sources)
+    assert set(per_paper) == {dpr.id, bert.id} and sorted(per_paper.values()) in ([3, 3], [3, 4])
     assert f"[C1] (Karpukhin 2020, p.3, Method)\n{run} dpr 2" in prepared.prompt
     assert "(BERT, p." in prepared.prompt
     notes_block = '[N1] (AI · Karpukhin 2020 p.1) "quote Dual encoders." — Dual encoders.\n[N2] (You · BERT p.2)'
