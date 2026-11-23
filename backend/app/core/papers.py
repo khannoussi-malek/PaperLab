@@ -307,10 +307,15 @@ async def get_paper_file(session: AsyncSession, paper_id: uuid.UUID) -> Path:
 
 
 async def set_embeddings(
-    session: AsyncSession, chunk_ids: list[uuid.UUID], vectors: list[list[float]], model_name: str
+    session: AsyncSession,
+    chunk_ids: list[uuid.UUID],
+    vectors: list[list[float]],
+    model_name: str,
+    headers: list[str] | None = None,
 ) -> None:
     """One executemany UPDATE by primary key, recording which source's model the vectors came from (D151): the
-    embedder's name, so a switch never has to read settings.
+    embedder's name, so a switch never has to read settings. `headers`: what each chunk was embedded under
+    (chunk_headers), written with its vector so the two never disagree.
 
     Not unnest(): pgvector's ARRAY(Vector) bind fails ("expected list or ndarray"), and 500 rows take under a second.
     """
@@ -318,5 +323,7 @@ async def set_embeddings(
         {"id": chunk_id, "embedding": vector, "embed_model": model_name}
         for chunk_id, vector in zip(chunk_ids, vectors, strict=True)
     ]
+    if headers is not None:
+        rows = [{**row, "header": line} for row, line in zip(rows, headers, strict=True)]
     await session.execute(update(Chunk), rows)
     await session.commit()

@@ -23,7 +23,15 @@ from app.workers.harvest import (
     harvest_medrxiv,
 )
 from app.workers.hit_enrichment import ENRICH_JOB_TIMEOUT, enrich_hits
-from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, embed_rest, index_abstract, ingest_paper, reembed_paper
+from app.workers.ingest import (
+    INGEST_JOB_TIMEOUT,
+    MAX_TRIES,
+    embed_rest,
+    index_abstract,
+    ingest_paper,
+    queue_chunk_headers,
+    reembed_paper,
+)
 from app.workers.manuscript_diagrams import (
     DIAGRAM_JOB_TIMEOUT,
     compile_manuscript_diagram,
@@ -148,11 +156,16 @@ async def _free_dead_ingest_jobs(ctx: dict) -> None:
         await ctx["redis"].delete(*(in_progress_key_prefix + job_id.decode() for job_id in job_ids))
 
 
+async def _start_ingest_worker(ctx: dict) -> None:
+    await _free_dead_ingest_jobs(ctx)
+    await queue_chunk_headers(ctx)
+
+
 class IngestWorkerSettings:
     """A paper's extraction, chunking and embedding, one paper at a time: ten at once ran the worker out of memory
     (2026-10-13). The next queued paper starts as soon as one finishes, while search runs keep the other worker."""
 
-    on_startup = _free_dead_ingest_jobs
+    on_startup = _start_ingest_worker
     queue_name = INGEST_QUEUE
     max_jobs = 1
     max_tries = MAX_TRIES

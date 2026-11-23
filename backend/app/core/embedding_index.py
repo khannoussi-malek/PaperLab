@@ -101,10 +101,17 @@ async def papers_to_embed(
 
 
 async def chunks_to_embed(session: AsyncSession, paper_id: uuid.UUID, name: str) -> list:
-    """The paper's chunks without a vector from `name`, in reading order: only their ids and text, so a long paper's
-    next slice doesn't load every vector it already has."""
-    query = select(Chunk.id, Chunk.text).where(Chunk.paper_id == paper_id, _lacking(name)).order_by(Chunk.ordinal)
+    """The paper's chunks without a vector from `name`, in reading order: only their ids, text and section, so a long
+    paper's next slice doesn't load every vector it already has."""
+    lacking = select(Chunk.id, Chunk.text, Chunk.section_title).where(Chunk.paper_id == paper_id, _lacking(name))
+    query = lacking.order_by(Chunk.ordinal)
     return list((await session.execute(query)).all())
+
+
+async def papers_without_headers(session: AsyncSession) -> list[uuid.UUID]:
+    """Papers with a chunk embedded before chunk headers (0082): a vector, no header."""
+    query = select(Chunk.paper_id).where(Chunk.embedding.is_not(None), Chunk.header.is_(None)).distinct()
+    return list(await session.scalars(query))
 
 
 async def rebuild(session: AsyncSession, source) -> Rebuild | None:

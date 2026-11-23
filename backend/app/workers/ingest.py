@@ -5,9 +5,19 @@ import uuid
 from contextlib import AsyncExitStack
 
 from arq.worker import Retry
-from sqlalchemy import update
+from sqlalchemy import select, update
 
-from app.core import embedding_index, embedding_sources, enrichment, merges, paper_sources, papers, provenance, queue
+from app.core import (
+    chunk_headers,
+    embedding_index,
+    embedding_sources,
+    enrichment,
+    merges,
+    paper_sources,
+    papers,
+    provenance,
+    queue,
+)
 from app.core.candidates import Candidate
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
@@ -117,10 +127,13 @@ async def _embed(
         chunks = await embedding_index.chunks_to_embed(session, pid, embedder.name)
     else:
         chunks = await papers.list_chunks(session, pid)
+    title = await session.scalar(select(Paper.title).where(Paper.id == pid))
     for start in range(0, len(chunks), EMBED_WRITE_BATCH):
         batch = chunks[start : start + EMBED_WRITE_BATCH]
+        headers = [chunk_headers.header(title, c.section_title) for c in batch]
         try:
-            vectors = await embedding.embed_documents(embedder, [c.text for c in batch])
+            texts = [chunk_headers.embed_text(h, c.text) for h, c in zip(headers, batch, strict=True)]
+            vectors = await embedding.embed_documents(embedder, texts)
         except (LLMUnavailable, LLMError) as exc:
             logger.warning("embedding %s with %s failed: %s", pid, embedder.label, exc)
             await embedding_sources.record_error(session, str(exc))
@@ -130,7 +143,7 @@ async def _embed(
         if await embedding_sources.active_name(session) != embedder.name:
             logger.info("the search source changed while embedding %s; the newer job embeds it", pid)
             return False
-        await papers.set_embeddings(session, [c.id for c in batch], vectors, embedder.name)
+        await papers.set_embeddings(session, [c.id for c in batch], vectors, embedder.name, headers)
         if until is not None and time.monotonic() >= until:
             return True
     return True
@@ -336,3 +349,18 @@ async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) ->
             return
         if embedded:
             logger.info("re-embedded %s with %s", pid, embedder.name)
+
+
+async def queue_chunk_headers(ctx: dict) -> None:
+    """A starting ingest worker queues a re-embed of each paper embedded before chunk headers (0082), once: the job id
+    keeps a restart from queueing it twice. Search keeps answering from the old vectors meanwhile (a re-embed with the
+    same model is no rebuild, D156). Only for a local search source: a cloud one would bill the whole library again,
+    so there only new papers get headers, and Settings' Re-index does the rest when the reader chooses."""
+    async with SessionLocal() as session:
+        if not (await embedding_sources.active(session)).is_local:
+            return
+        paper_ids = await embedding_index.papers_without_headers(session)
+    for paper_id in paper_ids:
+        await queue.enqueue("reembed_paper", str(paper_id), job_id=f"chunk-headers:{paper_id}")
+    if paper_ids:
+        logger.info("queued %d papers to re-embed with chunk headers", len(paper_ids))
