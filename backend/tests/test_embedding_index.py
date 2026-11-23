@@ -174,7 +174,7 @@ async def test_reembed_paper_embeds_every_chunk_again_with_the_configured_model_
     after = list(await session.scalars(query.execution_options(populate_existing=True)))
     assert {c.id for c in after} == set(before)  # the same chunks: answers and notes keep their sources
     assert [c.embed_model for c in after] == ["test"] * 3
-    assert embedder.calls[0][0] == [f"search_document: {paper.title} passage {i}" for i in range(3)]
+    assert embedder.calls[0][0] == [f"search_document: {paper.title}\n{paper.title} passage {i}" for i in range(3)]
     assert all(list(c.embedding) != list(before[c.id]) for c in after)
     await embedding_index.check_model(session, "test", [paper.id])
     assert ingest.reembed_paper in IngestWorkerSettings.functions  # one paper at a time (2026-10-13)
@@ -200,7 +200,7 @@ async def test_a_missing_only_job_skips_a_paper_already_on_the_active_source(ses
     await ingest.reembed_paper({"embedder": embedder}, str(done.id), True)
     await ingest.reembed_paper({"embedder": embedder}, str(waiting.id), True)
 
-    waiting_texts = [f"search_document: {waiting.title} passage {i}" for i in range(2)]
+    waiting_texts = [f"search_document: {waiting.title}\n{waiting.title} passage {i}" for i in range(2)]
     assert [texts for texts, _ in embedder.calls] == [waiting_texts]
     assert {model for model, _ in await vectors_of(session, waiting.id)} == {"test"}
 

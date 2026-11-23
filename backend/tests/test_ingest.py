@@ -10,7 +10,7 @@ from conftest import FakeEmbedder, FakeOpenAlex, recorded, unit_vector
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import embedding_sources, enrichment, paper_sources, papers
+from app.core import chunk_headers, embedding_sources, enrichment, paper_sources, papers
 from app.models import Author, Chunk, Paper, PaperStatus, paper_authors, paper_topics
 from app.providers import embedding
 from app.workers import ingest
@@ -59,7 +59,7 @@ async def test_chunks_are_embedded_with_the_document_prefix(worker_session, samp
     await ingest.ingest_paper(ctx, str(paper.id))
 
     chunks = await chunks_of(worker_session, paper.id)
-    prefixed = [f"search_document: {c.text}" for c in chunks]
+    prefixed = [f"search_document: {chunk_headers.embed_text(c.header, c.text)}" for c in chunks]
     assert embedder.calls == [(prefixed, {})]
     for chunk, text in zip(chunks, prefixed):
         assert np.allclose(chunk.embedding, unit_vector(text), atol=1e-6)
@@ -78,7 +78,8 @@ async def test_the_worker_loads_the_model_on_its_first_job_and_keeps_it(
 
     assert loads == ["load"]
     assert len(embedder.calls) == 2
-    # Nothing loads at start (D136): the main worker has no startup step, and the ingest worker's only frees locks.
+    # Nothing loads at start (D136): the main worker has no startup step, and the ingest worker's frees locks and
+    # queues papers embedded before chunk headers.
     assert getattr(WorkerSettings, "on_startup", None) is None
     await IngestWorkerSettings.on_startup({"redis": AsyncMock(zrange=AsyncMock(return_value=[]))})
     assert loads == ["load"]
@@ -127,7 +128,8 @@ async def test_once_the_model_arrives_the_queued_reembed_embeds_the_paper(worker
     chunks = await chunks_of(worker_session, paper.id)
     assert all(c.embedding is not None and c.embed_model == "test" for c in chunks)
     for chunk in chunks:
-        assert np.allclose(chunk.embedding, unit_vector(f"search_document: {chunk.text}"), atol=1e-6)
+        embedded = chunk_headers.embed_text(chunk.header, chunk.text)
+        assert np.allclose(chunk.embedding, unit_vector(f"search_document: {embedded}"), atol=1e-6)
 
 
 async def test_reembed_with_no_search_model_changes_nothing_and_says_so(worker_session, sample_pdf, ctx, caplog):
@@ -159,7 +161,9 @@ async def test_reingest_replaces_the_vectors(worker_session, sample_pdf, ctx, em
     first = await chunks_of(worker_session, paper.id)
 
     # A different model version: every text now embeds to another vector.
-    embedder.vectors = {f"search_document: {c.text}": unit_vector(f"v2 {c.text}") for c in first}
+    embedder.vectors = {
+        f"search_document: {chunk_headers.embed_text(c.header, c.text)}": unit_vector(f"v2 {c.text}") for c in first
+    }
     await ingest.ingest_paper(ctx, str(paper.id))
     second = await chunks_of(worker_session, paper.id)
 

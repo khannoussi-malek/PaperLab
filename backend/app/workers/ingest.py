@@ -5,9 +5,19 @@ import uuid
 from contextlib import AsyncExitStack
 
 from arq.worker import Retry
-from sqlalchemy import update
+from sqlalchemy import select, update
 
-from app.core import embedding_index, embedding_sources, enrichment, merges, paper_sources, papers, provenance, queue
+from app.core import (
+    chunk_headers,
+    embedding_index,
+    embedding_sources,
+    enrichment,
+    merges,
+    paper_sources,
+    papers,
+    provenance,
+    queue,
+)
 from app.core.candidates import Candidate
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
@@ -105,22 +115,34 @@ async def search_embedder(ctx: dict, session):
 
 
 async def _embed(
-    session, pid: uuid.UUID, embedder, *, missing_only: bool = False, until: float | None = None
+    session,
+    pid: uuid.UUID,
+    embedder,
+    *,
+    missing_only: bool = False,
+    headers_only: bool = False,
+    until: float | None = None,
 ) -> bool:
     """Embeds the paper's chunks in slices of EMBED_WRITE_BATCH, writing each as it is done and only while `embedder`
     is still the search source. A slice is the most a thread left running after a deadline can still do, and the
     progress anyone can see; the vectors written so far stay. A failing source never fails a paper: the old vectors
     stay and the error is kept for Settings' Try again (D155). `missing_only` skips chunks already on this source.
+    `headers_only` takes only the chunks embedded before chunk headers.
     `until` (time.monotonic) stops it after the slice that passes it; at least one slice runs, so a job always gets
     further than the last. True unless the source failed or changed."""
-    if missing_only:
+    if headers_only:
+        chunks = await embedding_index.chunks_without_headers(session, pid)
+    elif missing_only:
         chunks = await embedding_index.chunks_to_embed(session, pid, embedder.name)
     else:
         chunks = await papers.list_chunks(session, pid)
+    title = await session.scalar(select(Paper.title).where(Paper.id == pid))
     for start in range(0, len(chunks), EMBED_WRITE_BATCH):
         batch = chunks[start : start + EMBED_WRITE_BATCH]
+        headers = [chunk_headers.header(title, c.section_title) for c in batch]
         try:
-            vectors = await embedding.embed_documents(embedder, [c.text for c in batch])
+            texts = [chunk_headers.embed_text(h, c.text) for h, c in zip(headers, batch, strict=True)]
+            vectors = await embedding.embed_documents(embedder, texts)
         except (LLMUnavailable, LLMError) as exc:
             logger.warning("embedding %s with %s failed: %s", pid, embedder.label, exc)
             await embedding_sources.record_error(session, str(exc))
@@ -130,7 +152,7 @@ async def _embed(
         if await embedding_sources.active_name(session) != embedder.name:
             logger.info("the search source changed while embedding %s; the newer job embeds it", pid)
             return False
-        await papers.set_embeddings(session, [c.id for c in batch], vectors, embedder.name)
+        await papers.set_embeddings(session, [c.id for c in batch], vectors, embedder.name, headers)
         if until is not None and time.monotonic() >= until:
             return True
     return True
@@ -336,3 +358,46 @@ async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) ->
             return
         if embedded:
             logger.info("re-embedded %s with %s", pid, embedder.name)
+
+
+# Chunks a second the header re-embeds are spread at: under half the built-in model's measured rate in the worker
+# (about 5 a second, 2026-11-23), so the one ingest worker stays mostly free and an upload never waits behind them.
+HEADER_PACE = 2.0
+
+
+async def add_chunk_headers(ctx: dict, paper_id: str) -> None:
+    """Re-embeds the paper's chunks embedded before chunk headers, and only those: a paper cut short by the deadline
+    resumes where it stopped (each slice commits), and one deleted since it was queued has none left. Nothing when the
+    search source is no longer local: a cloud one would bill it."""
+    pid = uuid.UUID(paper_id)
+    async with SessionLocal() as session:
+        embedder = await search_embedder(ctx, session)
+        if embedder is None or not embedder.is_local:
+            return
+        deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
+        try:
+            async with deadline:
+                await _embed(session, pid, embedder, headers_only=True)
+        except TimeoutError:
+            if not deadline.expired():
+                raise
+            await session.rollback()
+            logger.warning("adding chunk headers to %s ran past %d s; the next start goes on", pid, INGEST_JOB_TIMEOUT)
+
+
+async def queue_chunk_headers(ctx: dict) -> None:
+    """A starting ingest worker queues a re-embed of each paper embedded before chunk headers (0082), once: the job id
+    keeps a restart from queueing it twice. Search keeps answering from the old vectors meanwhile (a re-embed with the
+    same model is no rebuild, D156). Only for a local search source: a cloud one would bill the whole library again,
+    so there only new papers get headers, and Settings' Re-index does the rest when the reader chooses."""
+    async with SessionLocal() as session:
+        if not (await embedding_sources.active(session)).is_local:
+            return
+        pending = await embedding_index.papers_without_headers(session)
+    start = 0.0
+    for paper_id, chunks in pending:
+        job_id = f"chunk-headers:{paper_id}"
+        await queue.enqueue("add_chunk_headers", str(paper_id), job_id=job_id, defer_seconds=start or None)
+        start += chunks / HEADER_PACE
+    if pending:
+        logger.info("queued %d papers to re-embed with chunk headers over %.0f minutes", len(pending), start / 60)

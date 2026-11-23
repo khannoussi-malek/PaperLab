@@ -116,6 +116,8 @@ class Chunk(Base):
     embedding: Mapped[Any | None] = mapped_column(Vector(768))
     embed_model: Mapped[str] = mapped_column(Text)
     strategy_ver: Mapped[int]
+    # What the chunk was embedded under (chunk_headers, 0082); None: embedded before headers, queued for a re-embed.
+    header: Mapped[str | None] = mapped_column(Text)
 
 
 # True when the paper has chunks; loaded with every paper so evidence_access needs no query.

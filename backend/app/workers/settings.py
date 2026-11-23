@@ -23,7 +23,16 @@ from app.workers.harvest import (
     harvest_medrxiv,
 )
 from app.workers.hit_enrichment import ENRICH_JOB_TIMEOUT, enrich_hits
-from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, embed_rest, index_abstract, ingest_paper, reembed_paper
+from app.workers.ingest import (
+    INGEST_JOB_TIMEOUT,
+    MAX_TRIES,
+    add_chunk_headers,
+    embed_rest,
+    index_abstract,
+    ingest_paper,
+    queue_chunk_headers,
+    reembed_paper,
+)
 from app.workers.manuscript_diagrams import (
     DIAGRAM_JOB_TIMEOUT,
     compile_manuscript_diagram,
@@ -44,6 +53,7 @@ from app.workers.workspace_search import SEARCH_RUN_JOB_TIMEOUT, run_workspace_s
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 # SEARCH_RUN_JOB_TIMEOUT lives in workers/workspace_search.py, not here — the worker's own wall-clock deadline
 # check (C2 Important 1) is computed from that same constant, so importing it (rather than redefining a second
 # copy here) means the registered job_timeout and the loop's own backstop can never drift apart.
@@ -148,14 +158,22 @@ async def _free_dead_ingest_jobs(ctx: dict) -> None:
         await ctx["redis"].delete(*(in_progress_key_prefix + job_id.decode() for job_id in job_ids))
 
 
+async def _start_ingest_worker(ctx: dict) -> None:
+    await _free_dead_ingest_jobs(ctx)
+    try:  # a database not up yet must not keep the worker from starting; the next start queues them
+        await queue_chunk_headers(ctx)
+    except Exception:
+        logger.exception("queueing chunk-header re-embeds failed; the next start tries again")
+
+
 class IngestWorkerSettings:
     """A paper's extraction, chunking and embedding, one paper at a time: ten at once ran the worker out of memory
     (2026-10-13). The next queued paper starts as soon as one finishes, while search runs keep the other worker."""
 
-    on_startup = _free_dead_ingest_jobs
+    on_startup = _start_ingest_worker
     queue_name = INGEST_QUEUE
     max_jobs = 1
     max_tries = MAX_TRIES
     job_timeout = INGEST_JOB_TIMEOUT + 60  # a backstop: the deadline inside the job fires first
-    functions = [ingest_paper, embed_rest, reembed_paper, index_abstract]
+    functions = [ingest_paper, embed_rest, reembed_paper, index_abstract, add_chunk_headers]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

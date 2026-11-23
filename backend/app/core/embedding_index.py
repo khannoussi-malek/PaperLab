@@ -101,10 +101,29 @@ async def papers_to_embed(
 
 
 async def chunks_to_embed(session: AsyncSession, paper_id: uuid.UUID, name: str) -> list:
-    """The paper's chunks without a vector from `name`, in reading order: only their ids and text, so a long paper's
-    next slice doesn't load every vector it already has."""
-    query = select(Chunk.id, Chunk.text).where(Chunk.paper_id == paper_id, _lacking(name)).order_by(Chunk.ordinal)
+    """The paper's chunks without a vector from `name`, in reading order: only their ids, text and section, so a long
+    paper's next slice doesn't load every vector it already has."""
+    lacking = select(Chunk.id, Chunk.text, Chunk.section_title).where(Chunk.paper_id == paper_id, _lacking(name))
+    query = lacking.order_by(Chunk.ordinal)
     return list((await session.execute(query)).all())
+
+
+async def chunks_without_headers(session: AsyncSession, paper_id: uuid.UUID) -> list:
+    """The paper's chunks embedded before chunk headers, in reading order: ids, text and section, as chunks_to_embed."""
+    query = select(Chunk.id, Chunk.text, Chunk.section_title).where(Chunk.paper_id == paper_id, Chunk.header.is_(None))
+    return list((await session.execute(query.order_by(Chunk.ordinal))).all())
+
+
+async def papers_without_headers(session: AsyncSession) -> list[tuple[uuid.UUID, int]]:
+    """(paper, its chunks) for each paper with a chunk embedded before chunk headers (0082): a vector, no header.
+    Smallest first, so most papers get theirs soonest."""
+    query = (
+        select(Chunk.paper_id, func.count())
+        .where(Chunk.embedding.is_not(None), Chunk.header.is_(None))
+        .group_by(Chunk.paper_id)
+        .order_by(func.count(), Chunk.paper_id)
+    )
+    return [(paper_id, chunks) for paper_id, chunks in await session.execute(query)]
 
 
 async def rebuild(session: AsyncSession, source) -> Rebuild | None:

@@ -253,7 +253,7 @@ async def test_embedding_progress_counts_the_chunks_with_a_vector(client, sessio
     drafts = [ChunkDraft(i, 1, [[0, 0, 1, 1]], None, f"text {i}") for i in range(5)]
     await papers.replace_chunks(session, paper.id, drafts)
     first_two = [c.id for c in await papers.list_chunks(session, paper.id)][:2]
-    await papers.set_embeddings(session, first_two, [unit_vector("a"), unit_vector("b")], "test")
+    await papers.set_embeddings(session, first_two, [unit_vector("a"), unit_vector("b")], "test", None)
 
     response = await client.get(f"/api/papers/{paper.id}/embedding-progress")
 
@@ -271,7 +271,7 @@ async def test_reingesting_a_half_embedded_paper_clears_its_vectors(client, arq,
     await session.commit()
     await papers.replace_chunks(session, paper.id, [ChunkDraft(i, 1, [[0, 0, 1, 1]], None, f"t{i}") for i in range(3)])
     first = [c.id for c in await papers.list_chunks(session, paper.id)][:1]
-    await papers.set_embeddings(session, first, [unit_vector("a")], "test")
+    await papers.set_embeddings(session, first, [unit_vector("a")], "test", None)
 
     assert (await client.post(f"/api/papers/{paper.id}/reingest")).status_code == 202
 
@@ -286,7 +286,7 @@ async def test_reingesting_a_ready_paper_keeps_it_searchable_meanwhile(client, a
     await session.commit()
     await papers.replace_chunks(session, paper.id, [ChunkDraft(0, 1, [[0, 0, 1, 1]], None, "t")])
     ids = [c.id for c in await papers.list_chunks(session, paper.id)]
-    await papers.set_embeddings(session, ids, [unit_vector("a")], "test")
+    await papers.set_embeddings(session, ids, [unit_vector("a")], "test", None)
 
     assert (await client.post(f"/api/papers/{paper.id}/reingest")).status_code == 202
 

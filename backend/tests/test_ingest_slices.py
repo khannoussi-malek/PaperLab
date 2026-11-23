@@ -7,7 +7,7 @@ from arq.worker import Retry
 from conftest import FakeArq, FakeEmbedder, unit_vector
 from sqlalchemy import select
 
-from app.core import embedding_sources, papers, queue
+from app.core import chunk_headers, embedding_sources, papers, queue
 from app.core.chunking import ChunkDraft
 from app.models import Chunk, Paper, PaperStatus
 from app.workers import ingest
@@ -55,9 +55,9 @@ def record_writes(monkeypatch) -> list[int]:
     writes = []
     real = papers.set_embeddings
 
-    async def record(session, ids, vectors, name):
+    async def record(session, ids, *args):
         writes.append(len(ids))
-        await real(session, ids, vectors, name)
+        await real(session, ids, *args)
 
     monkeypatch.setattr(papers, "set_embeddings", record)
     return writes
@@ -68,9 +68,9 @@ async def test_embedding_writes_in_slices_of_64(worker_session, embedder, monkey
     writes = []
     real = papers.set_embeddings
 
-    async def record(session, ids, vectors, name):
+    async def record(session, ids, *args):
         writes.append(len(ids))
-        await real(session, ids, vectors, name)
+        await real(session, ids, *args)
 
     monkeypatch.setattr(papers, "set_embeddings", record)
 
@@ -86,7 +86,8 @@ async def test_sliced_vectors_equal_unsliced(worker_session, embedder):
     await ingest._embed(worker_session, paper.id, embedder)
 
     for chunk in await vectors_of(worker_session, paper.id):
-        assert np.allclose(chunk.embedding, unit_vector(f"search_document: {chunk.text}"), atol=1e-6)
+        embedded = chunk_headers.embed_text(chunk.header, chunk.text)
+        assert np.allclose(chunk.embedding, unit_vector(f"search_document: {embedded}"), atol=1e-6)
 
 
 async def test_a_source_switch_mid_embed_stops_further_writes(worker_session, embedder, monkeypatch):

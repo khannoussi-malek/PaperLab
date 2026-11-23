@@ -401,7 +401,7 @@ async def test_prepare_sends_a_long_paper_as_many_passages_as_fit_the_budget(ses
     drafts = [ChunkDraft(i, i + 1, [[0, 0, 1, 1]], None, f"passage {i} " + "words " * 250) for i in range(30)]
     await papers.replace_chunks(session, paper.id, drafts)
     rows = await papers.list_chunks(session, paper.id)
-    await papers.set_embeddings(session, [c.id for c in rows], [unit_vector(c.text) for c in rows], "test")
+    await papers.set_embeddings(session, [c.id for c in rows], [unit_vector(c.text) for c in rows], "test", None)
 
     prepared = await chat.prepare(session, paper.id, "what do the passages say?", embedder=embedder)
 
