@@ -3,6 +3,8 @@ workspace's top k? HYBRID_SEARCH decides vector-only or hybrid, as it does for c
 
     docker compose exec api python -m evals.workspace_run
     docker compose exec -e HYBRID_SEARCH=true api python -m evals.workspace_run
+    docker compose exec api python -m evals.workspace_run --words off   # vectors only, whatever the switch says
+    docker compose exec api python -m evals.workspace_run --chat        # what workspace chat would send
 
 Exits 2 on a malformed file, an unknown workspace or paper, or a passage that no chunk of its paper holds: a typo in
 the key would otherwise count as a miss forever.
@@ -21,13 +23,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core import retrieval
+from app.core import chat, retrieval
 from app.core.retrieval import RetrievedChunk, retrieve
 from app.models import Chunk, Paper, Workspace, workspace_papers
 from app.providers import embedding
 from evals.run import KS, EvalError, normalize
 
 QUESTIONS = Path(__file__).with_name("workspace_questions.yaml")
+CHAT = 0  # the "k" of chat mode: every passage chat would send, after its likely papers, pool and budget
 
 
 class Passage(BaseModel):
@@ -98,13 +101,25 @@ def _met(chunks: list[RetrievedChunk], need: list[Passage], ids: dict[str, uuid.
     return any(c.paper_id == ids[p.paper] and normalize(p.contains) in normalize(c.text) for c in chunks for p in need)
 
 
-async def evaluate(session: AsyncSession, key: QuestionFile, embedder, ks=KS) -> list[Result]:
-    """One result per scored question (those with needs), in file order."""
+async def evaluate(
+    session: AsyncSession, key: QuestionFile, embedder, ks=KS, words: bool | None = None, chat_path: bool = False
+) -> list[Result]:
+    """One result per scored question (those with needs), in file order. `words` goes to retrieve as is; `chat_path`
+    scores the passages workspace chat would send instead of the top k (its one "k" is CHAT)."""
     workspace_id, ids = await _key(session, key)
+    if chat_path:
+        ks = (CHAT,)
+        members = select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == workspace_id)
+        ready = list(await session.scalars(members))
     results = []
     for q in (q for q in key.questions if q.needs):
-        chunks = await retrieve(session, q.question, workspace_id=workspace_id, k=max(ks), embedder=embedder)
-        met = {k: sum(_met(chunks[:k], need, ids) for need in q.needs) for k in ks}
+        if chat_path:
+            chunks = (await chat._workspace_sources(session, ready, q.question, embedder, chat.FULL_LENS))[0]
+        else:
+            chunks = await retrieve(
+                session, q.question, workspace_id=workspace_id, k=max(ks), embedder=embedder, words=words
+            )
+        met = {k: sum(_met(chunks[: k or None], need, ids) for need in q.needs) for k in ks}
         results.append(Result(q, answered={k: met[k] == len(q.needs) for k in ks}, met=met))
     return results
 
@@ -135,7 +150,7 @@ def _share(results: list[Result], k: int) -> str:
 def summary(results: list[Result], k: int) -> str:
     unseen = [r for r in results if not r.question.seen]
     seen = [r for r in results if r.question.seen]
-    return f"recall@{k}: {_share(results, k)} · unseen {_share(unseen, k)} · seen {_share(seen, k)}"
+    return f"recall@{k or 'chat'}: {_share(results, k)} · unseen {_share(unseen, k)} · seen {_share(seen, k)}"
 
 
 async def main(argv: list[str] | None = None) -> int:
@@ -143,6 +158,8 @@ async def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--database-url", default=settings.database_url)
     parser.add_argument("--questions", type=Path, default=QUESTIONS)
     parser.add_argument("--check-key", action="store_true", help="only check the key against the papers; no search")
+    parser.add_argument("--words", choices=("on", "off"), help="force the keyword half on or off (default: the switch)")
+    parser.add_argument("--chat", action="store_true", help="score what workspace chat would send, not the top k")
     args = parser.parse_args(argv)
     try:
         key = load_questions(args.questions)
@@ -154,19 +171,22 @@ async def main(argv: list[str] | None = None) -> int:
         engine = create_async_engine(args.database_url)
         try:
             async with AsyncSession(engine) as session:
-                results = await evaluate(session, key, embedder)
-                hybrid = await retrieval.hybrid_on(session)  # the env var or the Settings switch
+                words = None if args.words is None else args.words == "on"
+                results = await evaluate(session, key, embedder, words=words, chat_path=args.chat)
+                hybrid = await retrieval.hybrid_on(session) if words is None else words
         finally:
             await engine.dispose()
     except EvalError as exc:
         print(f"eval error: {exc}", file=sys.stderr)
         return 2
 
-    print(f"search: {'hybrid' if hybrid else 'vector only'}")
+    ks = (CHAT,) if args.chat else KS
+    print("search: chat's path (likely papers, hybrid, budget)" if args.chat else
+          f"search: {'hybrid' if hybrid else 'vector only'}")
     for r in results:
-        cells = "  ".join(f"@{k} {r.met[k]}/{len(r.question.needs)}" for k in KS)
+        cells = "  ".join(f"@{k or 'chat'} {r.met[k]}/{len(r.question.needs)}" for k in ks)
         print(f"  {r.question.id}{' (seen)' if r.question.seen else '       '}  {cells}  {r.question.question[:70]}")
-    for k in KS:
+    for k in ks:
         print(summary(results, k))
     unscored = [q.id for q in key.questions if not q.needs]
     print(f"not scored (no source in these papers): {' '.join(unscored) or 'none'}")
