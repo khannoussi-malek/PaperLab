@@ -98,6 +98,23 @@ async def test_a_starting_ingest_worker_queues_papers_embedded_before_headers(wo
     assert f"chunk-headers:{old.id}" in queue._pool.job_ids
 
 
+async def test_header_reembeds_are_spread_out_so_a_new_upload_never_waits_behind_them(worker_session, embedder):
+    """One ingest worker runs jobs in order: each paper starts once the ones before it have had time at HEADER_PACE,
+    so an upload queued now comes before every re-embed not yet due."""
+    first = await labelled_paper(worker_session, "First")
+    second = await labelled_paper(worker_session, "Second")
+    for paper in (first, second):
+        ids = [c.id for c in await chunks_of(worker_session, paper.id)]
+        await papers.set_embeddings(worker_session, ids, [[0.1] * 768] * 2, "test")
+    await worker_session.execute(text("UPDATE chunks SET header = NULL"))
+    await worker_session.commit()
+
+    await ingest.queue_chunk_headers({})
+
+    assert len(queue._pool.jobs) == 2
+    assert queue._pool.deferred == [None, 2 / ingest.HEADER_PACE]  # the first now, the next after its 2 chunks
+
+
 async def test_a_cloud_search_source_is_never_billed_for_headers(worker_session, embedder, monkeypatch):
     await headed_and_old(worker_session, embedder)
 

@@ -108,10 +108,16 @@ async def chunks_to_embed(session: AsyncSession, paper_id: uuid.UUID, name: str)
     return list((await session.execute(query)).all())
 
 
-async def papers_without_headers(session: AsyncSession) -> list[uuid.UUID]:
-    """Papers with a chunk embedded before chunk headers (0082): a vector, no header."""
-    query = select(Chunk.paper_id).where(Chunk.embedding.is_not(None), Chunk.header.is_(None)).distinct()
-    return list(await session.scalars(query))
+async def papers_without_headers(session: AsyncSession) -> list[tuple[uuid.UUID, int]]:
+    """(paper, its chunks) for each paper with a chunk embedded before chunk headers (0082): a vector, no header.
+    Smallest first, so most papers get theirs soonest."""
+    query = (
+        select(Chunk.paper_id, func.count())
+        .where(Chunk.embedding.is_not(None), Chunk.header.is_(None))
+        .group_by(Chunk.paper_id)
+        .order_by(func.count(), Chunk.paper_id)
+    )
+    return [(paper_id, chunks) for paper_id, chunks in await session.execute(query)]
 
 
 async def rebuild(session: AsyncSession, source) -> Rebuild | None:
