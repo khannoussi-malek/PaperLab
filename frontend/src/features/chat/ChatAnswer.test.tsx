@@ -152,3 +152,24 @@ describe('How this was made', () => {
     expect(screen.queryByRole('button', { name: 'How this was made' })).toBeNull()
   })
 })
+
+describe('Answer check', () => {
+  const footer = { model: 'm', connectionName: null, promptVersion: 1, skillLabel: null, lens: 'full' as const }
+
+  it('a checkable saved answer offers "Check this answer"', async () => {
+    const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query')
+    const { api } = await import('@/api/client')
+    vi.spyOn(api, 'answerCheck').mockResolvedValue(null)
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ChatAnswer {...base} outputId="out-1" footer={footer} checkable />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByRole('button', { name: 'Check this answer' })).toBeInTheDocument()
+  })
+
+  it('is not offered unless the chat says the answer is checkable', () => {
+    render(<ChatAnswer {...base} outputId="out-1" footer={footer} />)
+    expect(screen.queryByRole('button', { name: 'Check this answer' })).toBeNull()
+  })
+})

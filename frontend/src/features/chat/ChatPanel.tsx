@@ -302,6 +302,8 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
             {index === liveAt && liveAnswer()}
             <ChatAnswer
               outputId={answer.id}
+              checkable={scope.kind !== 'hit' && !answer.chart_spec}
+              hasCheck={answer.has_check}
               parentId={answer.parent_id}
               reply={reply}
               question={answer.question}

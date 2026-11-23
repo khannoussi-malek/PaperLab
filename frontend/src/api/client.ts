@@ -53,6 +53,8 @@ export type Note = components['schemas']['NoteOut']
 export type NoteKind = NonNullable<Note['kind']>
 /** How an AI answer or note was made (M33), read on request. */
 export type AnswerProvenance = components['schemas']['AnswerProvenanceOut']
+export type AnswerCheck = components['schemas']['AnswerCheckOut']
+export type AnswerCheckSentence = components['schemas']['AnswerCheckSentenceOut']
 export type AnswerPassage = components['schemas']['AnswerPassageOut']
 export type McpNoteProvenance = components['schemas']['McpNoteOut']
 export type FigureNoteCreate = components['schemas']['FigureNoteCreate']
@@ -487,6 +489,17 @@ export const api = {
   listChat: (scope: ChatScope) => request<ChatAnswer[]>(chatUrl(scope)),
   /** How a saved answer was made: its model, connection, prompt, skill and passages. */
   answerProvenance: (outputId: string) => request<AnswerProvenance>(`/api/llm-outputs/${outputId}/provenance`),
+  /** The answer's newest check (M34), or null before any. */
+  answerCheck: async (outputId: string): Promise<AnswerCheck | null> => {
+    try {
+      return await request<AnswerCheck>(`/api/chat/answers/${outputId}/check`)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null
+      throw e
+    }
+  },
+  startAnswerCheck: (outputId: string, confirmRemote = false) =>
+    request<AnswerCheck>(`/api/chat/answers/${outputId}/check`, sendJson('POST', { confirm_remote: confirmRemote })),
   /** How an AI note was made. A note an MCP client added says only where it came from. */
   noteProvenance: (noteId: string) => request<AnswerProvenance | McpNoteProvenance>(`/api/notes/${noteId}/provenance`),
   promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),

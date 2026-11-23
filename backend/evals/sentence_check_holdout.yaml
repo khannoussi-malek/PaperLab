@@ -1,0 +1,118 @@
+# Held-out answer-check cases (M34 review, 2026-11-21): written after prompt v2 and the number guard were tuned on
+# sentence_check.yaml, and run unchanged. Run: python -m evals.sentence_check_eval --config evals/sentence_check_holdout.yaml
+gates:
+  unsupported_flagged_runs: 3
+  supported_ok_runs: 2
+cases:
+- id: h-true-select-rates
+  kind: 'true'
+  answer: A primary cardiovascular event occurred in 6.5% of patients on semaglutide and 8.0% on placebo [C1].
+  passages:
+    C1: &id001
+      paper: Semaglutide and Cardiovascular Outcomes in Obesity without Diabetes
+      page: 1
+      section: null
+      text: 'RESULTS A total of 17,604 patients were enrolled; 8803 were assigned to receive semaglutide and 8801 to receive
+        placebo. The mean (±SD) duration of exposure to semaglutide or placebo was 34.2±13.7 months, and the mean duration
+        of follow-up was 39.8±9.4 months. A primary cardiovascular end-point event occurred in 569 of the 8803 patients (6.5%)
+        in the semaglutide group and in 701 of the 8801 patients (8.0%) in the placebo group (hazard ratio, 0.80; 95% confidence
+        interval, 0.72 to 0.90; P<0.001). Adverse events leading to permanent discontinuation of the trial product occurred
+        in 1461 patients (16.6%) in the semaglutide group and 718 patients (8.2%) in the placebo group (P<0.001).
+
+
+        CONCLUSIONS In patients with preexisting cardiovascular disease and overweight or obesity but without diabetes, weekly
+        subcutaneous semaglutide at a dose of 2.4 mg was superior to placebo in reducing the incidence of death from cardiovascular
+        causes, nonfatal myocardial infarction, or nonfatal stroke at a mean follow-up of 39.8 months. (Funded by Novo Nordisk;
+        SELECT ClinicalTrials.gov number, NCT03574597.)'
+  sentences:
+  - role: supported
+    accept: &id004
+    - supported
+    - partially_supported
+- id: h-missing-hazard-ratio
+  kind: missing_number
+  answer: The hazard ratio for the primary cardiovascular end point was 0.74 [C1].
+  passages:
+    C1: *id001
+  sentences:
+  - role: unsupported
+    accept: &id002
+    - partially_supported
+    - not_supported
+    - not_addressed
+- id: h-swapped-group
+  kind: contradicted
+  answer: A primary cardiovascular event occurred in 8.0% of the patients in the semaglutide group [C1].
+  passages:
+    C1: *id001
+  sentences:
+  - role: unsupported
+    accept: *id002
+- id: h-overstated-masking
+  kind: overstated
+  answer: During pre-training BERT masks every WordPiece token in each sequence [C1].
+  passages:
+    C1: &id003
+      paper: 'BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding'
+      page: 4
+      section: 3.1 Pre-training BERT
+      text: 'In order to train a deep bidirectional representation, we simply mask some percentage of the input tokens at
+        random, and then predict those masked tokens. We refer to this procedure as a “masked LM” (MLM), although it is often
+        referred to as a Cloze task in the literature (Taylor, 1953). In this case, the final hidden vectors corresponding
+        to the mask tokens are fed into an output softmax over the vocabulary, as in a standard LM. In all of our experiments,
+        we mask 15% of all WordPiece tokens in each sequence at random. In contrast to denoising auto-encoders (Vincent et
+        al., 2008), we only predict the masked words rather than reconstructing the entire input.
+
+
+        Although this allows us to obtain a bidirectional pre-trained model, a downside is that we are creating a mismatch
+        between pre-training and fine-tuning, since the [MASK] token does not appear during fine-tuning. To mitigate this,
+        we do not always replace “masked” words with the actual [MASK] token. The training data generator chooses 15% of the
+        token positions at random for prediction. If the i-th token is chosen, we replace the i-th token with (1) the [MASK]
+        token 80% of the time (2) a random token 10% of the time (3) the unchanged i-th token 10% of the time. Then, Ti will
+        be used to predict the original token with cross entropy loss. We compare variations of this procedure in Appendix
+        C.2.'
+  sentences:
+  - role: unsupported
+    accept: *id002
+- id: h-true-masking
+  kind: 'true'
+  answer: BERT masks 15% of the WordPiece tokens in each sequence at random [C1].
+  passages:
+    C1: *id003
+  sentences:
+  - role: supported
+    accept: *id004
+- id: h-contradicted-double-dose
+  kind: contradicted
+  answer: With ketoconazole, the ELIQUIS dose should be doubled [C1].
+  passages:
+    C1: &id005
+      paper: ELIQUIS
+      page: 6
+      section: 2.6 Combined P-gp and Strong CYP3A4 Inhibitors
+      text: 'For adult patients receiving ELIQUIS doses of 5 mg or 10 mg twice daily, reduce the dose by 50% when ELIQUIS
+        is coadministered with drugs that are combined P-glycoprotein (P-gp) and strong cytochrome P450 3A4 (CYP3A4) inhibitors
+        (e.g., ketoconazole, itraconazole, ritonavir) [see Clinical Pharmacology (12.3)].
+
+
+        In patients already taking 2.5 mg twice daily, avoid coadministration of ELIQUIS with combined P-gp and strong CYP3A4
+        inhibitors [see Drug Interactions (7.1)].'
+  sentences:
+  - role: unsupported
+    accept: *id002
+- id: h-true-itraconazole
+  kind: 'true'
+  answer: When ELIQUIS 5 mg twice daily is given with itraconazole, the dose is reduced by 50% [C1].
+  passages:
+    C1: *id005
+  sentences:
+  - role: supported
+    accept: *id004
+- id: h-contradicted-ritonavir
+  kind: contradicted
+  answer: Patients already taking 2.5 mg twice daily can safely take ritonavir with ELIQUIS [C1].
+  passages:
+    C1: *id005
+  sentences:
+  - role: unsupported
+    accept: *id002
