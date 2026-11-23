@@ -99,11 +99,26 @@ async def _cached(
     alive = await session.scalar(select(func.count()).select_from(Chunk).where(Chunk.id.in_(row.source_chunks)))
     if alive != len(row.source_chunks):
         return None
-    content = json.loads(row.content)
     by_id = {c.id: c for c in await chat.chunk_sources(session, Chunk.id.in_(row.cited_chunks))}
-    cited = [by_id[i] for i in row.cited_chunks if i in by_id]
+    return _from_row(row, paper, by_id)
+
+
+def _from_row(row: LLMOutput, paper: Paper | None, chunks: dict[uuid.UUID, RetrievedChunk]) -> Reading:
+    content = json.loads(row.content)
+    cited = [chunks[i] for i in row.cited_chunks if i in chunks]  # a re-ingest may have replaced some
+    label = _label(paper) if paper is not None else "A paper no longer in the library"
     low = content["status"] == "found" and not cited
-    return Reading(paper.id, _label(paper), content["status"], content["answer"], cited, row.id, True, low)
+    return Reading(row.paper_id, label, content["status"], content["answer"], cited, row.id, True, low)
+
+
+async def views_of(session: AsyncSession, rows: list[LLMOutput]) -> dict[uuid.UUID, Reading]:
+    """Saved records by id, as a history shows them: each paper's label now and the cited passages still there."""
+    if not rows:
+        return {}
+    papers = {p.id: p for p in await session.scalars(select(Paper).where(Paper.id.in_({r.paper_id for r in rows})))}
+    wanted = {i for r in rows for i in r.cited_chunks}
+    chunks = {c.id: c for c in await chat.chunk_sources(session, Chunk.id.in_(wanted))}
+    return {row.id: _from_row(row, papers.get(row.paper_id), chunks) for row in rows}
 
 
 async def plan(
