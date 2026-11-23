@@ -40,7 +40,7 @@ WITH candidates AS (
 SELECT id, paper_id, page, section_title, bbox, text, distance
 FROM (
   SELECT *, row_number() OVER (PARTITION BY paper_id ORDER BY distance) AS nth,
-    row_number() OVER (ORDER BY distance) AS overall
+    row_number() OVER (ORDER BY distance, id) AS overall  -- id: ties pick the same chunk every time
   FROM candidates
 ) AS ranked
 WHERE nth <= :per_paper OR overall <= :uncapped
@@ -123,7 +123,7 @@ ranked AS (
   SELECT c.id, c.paper_id, c.page, c.section_title, c.bbox, c.text, coalesce(c.embedding <=> :q, 2) AS distance,
     f.score,
     row_number() OVER (PARTITION BY c.paper_id ORDER BY f.score DESC, c.embedding <=> :q) AS nth,
-    row_number() OVER (ORDER BY f.score DESC, c.embedding <=> :q) AS overall
+    row_number() OVER (ORDER BY f.score DESC, c.embedding <=> :q, c.id) AS overall
   FROM fused AS f JOIN chunks AS c ON c.id = f.id
 )
 SELECT id, paper_id, page, section_title, bbox, text, distance
