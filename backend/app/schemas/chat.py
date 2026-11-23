@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     model_id: uuid.UUID | None = None  # a model from GET /api/llm/models; None asks the default
     parent_id: uuid.UUID | None = None  # the answer this question follows up; paper chat only
     skill_id: str | None = None  # the skill picked for this question; None runs the base prompt alone (M17)
+    each_paper: bool = False  # M8.5: read each paper on its own, then answer from the records (workspace chat only)
 
 
 class ChatSource(BaseModel):
@@ -78,6 +79,42 @@ class SavedNoteOut(BaseModel):
     paper_ids: list[uuid.UUID]  # the note's papers now, by title: where the card's Open goes
 
 
+ReadingStatus = Literal["found", "absent", "no_text", "model_error"]
+
+
+class ReadingEvent(BaseModel):
+    """M8.5: one paper's record, as soon as it is read (before the answer's sources)."""
+
+    paper_id: uuid.UUID
+    label: str
+    status: ReadingStatus
+    answer: str
+    cited: list[uuid.UUID]  # chunk ids, which the answer's sources then number
+    low_confidence: bool
+    cached: bool  # the same question was read on this paper with this model before
+    done: int
+    total: int
+
+
+class ReadingPassage(BaseModel):
+    chunk_id: uuid.UUID
+    page: int
+    section: str | None
+    text: str
+
+
+class ReadingOut(BaseModel):
+    """An Ask each paper answer's record of one paper, as its history shows it."""
+
+    output_id: uuid.UUID
+    paper_id: uuid.UUID
+    label: str
+    status: ReadingStatus
+    answer: str
+    cited: list[ReadingPassage]
+    low_confidence: bool
+
+
 class ChatAnswer(BaseModel):
     id: uuid.UUID
     has_check: bool = False  # M34: an answer check exists, so the UI reads it (no GET per answer otherwise)
@@ -99,6 +136,7 @@ class ChatAnswer(BaseModel):
     skill_label: str | None  # the skill that ran, copied when the answer was written; null with no skill
     lens: LensId = "full"  # the lens the answer's sources came from (M16): 'full' unless a skill's lens applied
     chart_spec: dict | None = None  # a chart answer's spec (M14): dataset/column ids, drawn like a saved chart
+    readings: list[ReadingOut] = []  # M8.5: the per-paper records of an Ask each paper answer, in paper order
 
 
 class PromoteRequest(BaseModel):

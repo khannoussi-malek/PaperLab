@@ -9,7 +9,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
-from app.core import answer_check_run, answer_provenance, chat, chat_charts, hit_chat, notes, queue, skills
+from app.core import answer_check_run, answer_provenance, chat, chat_charts, each_paper, hit_chat, notes, queue, skills
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.db import SessionLocal
 from app.providers.base import LLM, LLMError, LLMUnavailable
@@ -22,6 +22,9 @@ from app.schemas.chat import (
     DoneEvent,
     ErrorEvent,
     HitMetaEvent,
+    ReadingEvent,
+    ReadingOut,
+    ReadingPassage,
     SavedNoteOut,
     SaveSuggestion,
     SourcesEvent,
@@ -52,20 +55,39 @@ async def _prepare(
 
 
 async def prepare_answer(paper_id: uuid.UUID, payload: ChatRequest, session: SessionDep) -> chat.Prepared:
+    if payload.each_paper:
+        raise Conflict("each_paper_workspace_only")
     thread = None if payload.parent_id is None else await chat.load_thread(session, paper_id, payload.parent_id)
     skill = await skills.resolve(session, payload.skill_id, "paper")
     return await _prepare(session, chat.Scope(paper_id=paper_id), payload.question, thread, skill)
 
 
-async def prepare_workspace_answer(workspace_id: uuid.UUID, payload: ChatRequest, session: SessionDep) -> chat.Prepared:
+async def prepare_workspace_answer(
+    workspace_id: uuid.UUID, payload: ChatRequest, session: SessionDep
+) -> chat.Prepared | None:
     if payload.parent_id is not None:
         raise Conflict("follow_ups_paper_only")  # D62: until workspace follow-ups are measured
+    if payload.each_paper:
+        return None  # plan_each_paper prepares it
     skill = await skills.resolve(session, payload.skill_id, "workspace")
     return await _prepare(session, chat.Scope(workspace_id=workspace_id), payload.question, skill=skill)
 
 
+async def plan_each_paper(
+    workspace_id: uuid.UUID, payload: ChatRequest, session: SessionDep, llm: LLMDep
+) -> each_paper.Plan | None:
+    """M8.5: which papers are read and from which passages, before the stream (its errors are ordinary 404/409s)."""
+    if not payload.each_paper:
+        return None
+    skill = await skills.resolve(session, payload.skill_id, "workspace")
+    found = await each_paper.plan(session, workspace_id, payload.question, model=llm.model, skill=skill)
+    await session.commit()  # the reading can take minutes and must not hold a pooled connection
+    return found
+
+
 PreparedDep = Annotated[chat.Prepared, Depends(prepare_answer)]
-WorkspacePreparedDep = Annotated[chat.Prepared, Depends(prepare_workspace_answer)]
+WorkspacePreparedDep = Annotated[chat.Prepared | None, Depends(prepare_workspace_answer)]
+EachPaperPlanDep = Annotated[each_paper.Plan | None, Depends(plan_each_paper)]
 
 
 def error_event(message: str) -> ServerSentEvent:
@@ -74,7 +96,9 @@ def error_event(message: str) -> ServerSentEvent:
 
 # The route yields ServerSentEvent, so FastAPI can't see the payload models; listing them here puts
 # them in OpenAPI components, where openapi-typescript generates their types.
-STREAM_RESPONSES = {200: {"model": SourcesEvent | TokenEvent | DoneEvent | ErrorEvent}}
+STREAM_RESPONSES = {200: {"model": ReadingEvent | SourcesEvent | TokenEvent | DoneEvent | ErrorEvent}}
+NO_TEXT_TO_READ = "None of these papers has text to read"
+NOTHING_READ = "The model couldn't read any of these papers"
 
 
 Save = Callable[[AsyncSession, str], Awaitable[uuid.UUID]]
@@ -159,17 +183,64 @@ async def ask(
         yield event
 
 
-@router.post("/api/workspaces/{workspace_id}/chat", response_class=EventSourceResponse, responses=STREAM_RESPONSES)
-async def ask_workspace(
-    workspace_id: uuid.UUID, payload: ChatRequest, llm: LLMDep, prepared: WorkspacePreparedDep
+async def each_paper_events(
+    scope: chat.Scope, question: str, plan: each_paper.Plan, llm: LLM
 ) -> AsyncIterable[ServerSentEvent]:
-    """Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 409
-    follow_ups_paper_only, 404, 409 workspace_empty, search_not_set_up or workspace_not_indexed, 422."""
-    async for event in answer_events(chat.Scope(workspace_id=workspace_id), payload.question, prepared, llm):
+    """M8.5: a reading event per paper as its record lands, then the answer from the records as chat streams one.
+    No paper read (all without text, or the model failing on every one): an error, nothing saved."""
+    readings: list[each_paper.Reading] = []
+    async for reading in each_paper.read_all(question, plan.tasks, llm):
+        readings.append(reading)
+        yield ServerSentEvent(
+            event="reading",
+            data=ReadingEvent(
+                paper_id=reading.paper_id, label=reading.label, status=reading.status, answer=reading.answer,
+                cited=[c.id for c in reading.cited], low_confidence=reading.low_confidence, cached=reading.cached,
+                done=len(readings), total=len(plan.tasks),
+            ),
+        )
+    if not any(r.status in ("found", "absent") for r in readings):
+        textless = all(r.status == "no_text" for r in readings)
+        yield error_event(NO_TEXT_TO_READ if textless else NOTHING_READ)
+        return
+    async for event in answer_events(scope, question, each_paper.reduce_prepared(plan, readings), llm):
         yield event
 
 
-def to_answer(answer: chat.Answer, checked: set[uuid.UUID] = frozenset()) -> ChatAnswer:
+@router.post("/api/workspaces/{workspace_id}/chat", response_class=EventSourceResponse, responses=STREAM_RESPONSES)
+async def ask_workspace(
+    workspace_id: uuid.UUID,
+    payload: ChatRequest,
+    llm: LLMDep,
+    prepared: WorkspacePreparedDep,
+    plan: EachPaperPlanDep,
+) -> AsyncIterable[ServerSentEvent]:
+    """Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 409
+    follow_ups_paper_only, 404, 409 workspace_empty, search_not_set_up or workspace_not_indexed, 422. With
+    each_paper (M8.5) the papers are read one by one first, each a reading event."""
+    scope = chat.Scope(workspace_id=workspace_id)
+    if plan is not None:
+        async for event in each_paper_events(scope, payload.question, plan, llm):
+            yield event
+        return
+    async for event in answer_events(scope, payload.question, prepared, llm):
+        yield event
+
+
+def to_reading(reading: each_paper.Reading) -> ReadingOut:
+    passages = [ReadingPassage(chunk_id=c.id, page=c.page, section=c.section, text=c.text) for c in reading.cited]
+    return ReadingOut(
+        output_id=reading.output_id, paper_id=reading.paper_id, label=reading.label, status=reading.status,
+        answer=reading.answer, cited=passages, low_confidence=reading.low_confidence,
+    )
+
+
+def to_answer(
+    answer: chat.Answer,
+    checked: set[uuid.UUID] = frozenset(),
+    readings: dict[uuid.UUID, each_paper.Reading] | None = None,
+) -> ChatAnswer:
+    readings = readings or {}
     output = answer.output
     return ChatAnswer(
         id=output.id,
@@ -190,6 +261,7 @@ def to_answer(answer: chat.Answer, checked: set[uuid.UUID] = frozenset()) -> Cha
         skill_label=output.skill_label,
         lens=output.lens,
         chart_spec=output.chart_spec,
+        readings=[to_reading(readings[r.id]) for r in answer.readings if r.id in readings],
     )
 
 
@@ -222,7 +294,8 @@ async def workspace_history(workspace_id: uuid.UUID, session: SessionDep) -> lis
 
 async def _with_checks(session: AsyncSession, answers: list[chat.Answer]) -> list[ChatAnswer]:
     checked = await answer_check_run.checked_answers(session, [answer.output.id for answer in answers])
-    return [to_answer(answer, checked) for answer in answers]
+    readings = await each_paper.views_of(session, [r for answer in answers for r in answer.readings])
+    return [to_answer(answer, checked, readings) for answer in answers]
 
 
 @router.get("/api/llm-outputs/{output_id}/provenance")

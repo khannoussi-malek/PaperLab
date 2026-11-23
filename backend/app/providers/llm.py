@@ -435,6 +435,8 @@ class FakeLLM:
         from app.core.diagram import SYSTEM_PROMPT as DIAGRAM_SYSTEM_PROMPT
         from app.core.draft_review import SYSTEM_PROMPT as DRAFT_REVIEW_SYSTEM_PROMPT
         from app.core.draft_review import VERIFY_SYSTEM_PROMPT as DRAFT_VERIFY_SYSTEM_PROMPT
+        from app.core.each_paper import EACH_PAPER_SYSTEM
+        from app.core.each_paper import READING_SYSTEM as PAPER_READING_SYSTEM_PROMPT
         from app.core.evidence_cards import SYSTEM_PROMPT as EVIDENCE_CARD_SYSTEM_PROMPT
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
         from app.core.number_suggest import SYSTEM_PROMPT as NUMBER_SUGGEST_SYSTEM_PROMPT
@@ -447,8 +449,10 @@ class FakeLLM:
             tokens = FAKE_CHECK_TOKENS
         elif asks_for_notes(prompt):
             tokens = FAKE_NOTES_TOKENS
-        elif system == WORKSPACE_SYSTEM_PROMPT:
+        elif system in (WORKSPACE_SYSTEM_PROMPT, EACH_PAPER_SYSTEM):
             tokens = FAKE_WORKSPACE_TOKENS
+        elif system == PAPER_READING_SYSTEM_PROMPT:  # M8.5: every paper covers it, from its first passage
+            tokens = [json.dumps({"status": "found", "answer": "The paper addresses this.", "cites": ["P1"]})]
         elif system == NOTE_SUGGESTIONS_SYSTEM_PROMPT:
             tokens = FAKE_NOTE_SUGGESTIONS_TOKENS
         elif system == SCREENING_SYSTEM_PROMPT:

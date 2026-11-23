@@ -22,6 +22,8 @@ class LLMOutput(Base):
     # markers then render as plain text.
     source_chunks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
     cited_chunks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
+    # An Ask each paper answer's per-paper records (kind "paper_reading"), in the order they were read (M8.5).
+    readings: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
     # M33: copies of the cited passages, [{label, paper_id, page, section, text, from_abstract}], written with the
     # answer and never rewritten. NULL for answers saved before M33; [] for an answer that cites nothing.
     source_snapshot: Mapped[list[dict] | None] = mapped_column(JSONB)
