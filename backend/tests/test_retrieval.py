@@ -196,7 +196,9 @@ async def test_k_defaults_to_8(session, embedder):
     assert len(await retrieve(session, QUERY, paper_ids=[paper.id], embedder=embedder)) == 8
 
 
-async def test_a_dominant_paper_gets_at_most_3_of_k(session, embedder):
+async def test_a_dominant_paper_keeps_the_best_5_then_gets_at_most_3_of_k(session, embedder):
+    """The cap is for variety further down; it never drops one of the best BEST_UNCAPPED passages (the RAG report of
+    2026-11-22: SELECT's answer ranked 5th but was its paper's 4th). A cap the caller sets stays strict."""
     query = fresh_query(embedder)
     dominant = await add_paper(session, query, "Dominant", [0.05 + 0.01 * i for i in range(10)])
     second = await add_paper(session, query, "Second", [0.5, 0.6, 0.7, 0.8])
@@ -209,8 +211,11 @@ async def test_a_dominant_paper_gets_at_most_3_of_k(session, embedder):
     single = await retrieve(session, QUERY, paper_ids=[dominant.id], embedder=embedder)
     uncapped = await retrieve(session, QUERY, workspace_id=workspace.id, per_paper=8, embedder=embedder)
 
-    assert retrieval.MAX_PER_PAPER == 3
-    assert capped == by_ids == {dominant.id: 3, second.id: 3, third.id: 2}
+    strict = await retrieve(session, QUERY, workspace_id=workspace.id, per_paper=3, embedder=embedder)
+
+    assert (retrieval.MAX_PER_PAPER, retrieval.BEST_UNCAPPED) == (3, 5)
+    assert capped == by_ids == {dominant.id: 5, second.id: 2, third.id: 1}
+    assert Counter(r.paper_id for r in strict) == {dominant.id: 3, second.id: 3, third.id: 2}
     assert len(single) == 8  # one paper: no cap
     assert {r.paper_id for r in uncapped} == {dominant.id}
 
@@ -380,7 +385,7 @@ async def test_hybrid_search_without_a_matching_word_keeps_the_vector_order(sess
     assert [r.text for r in found] == [f"Plain chunk {i}" for i in range(6)]
 
 
-async def test_hybrid_search_keeps_the_per_paper_cap(session, embedder, monkeypatch):
+async def test_hybrid_search_keeps_the_per_paper_cap_past_the_best_5(session, embedder, monkeypatch):
     hybrid(monkeypatch, True)
     question = f"{RARE} interactions"
     query = unit_vector(uuid.uuid4().hex)
@@ -389,10 +394,10 @@ async def test_hybrid_search_keeps_the_per_paper_cap(session, embedder, monkeypa
     other = await add_texts(session, query, "Other", [(f"Other chunk {i}", 0.5 + 0.1 * i) for i in range(6)])
 
     found = await retrieve(
-        session, question, paper_ids=[dominant[0].paper_id, other[0].paper_id], k=6, embedder=embedder
+        session, question, paper_ids=[dominant[0].paper_id, other[0].paper_id], k=10, embedder=embedder
     )
 
-    assert Counter(r.paper_id for r in found) == {dominant[0].paper_id: 3, other[0].paper_id: 3}
+    assert Counter(r.paper_id for r in found) == {dominant[0].paper_id: 5, other[0].paper_id: 3}
 
 
 async def test_hybrid_search_stays_inside_the_chunk_scope(session, embedder, monkeypatch):

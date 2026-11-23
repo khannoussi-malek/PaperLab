@@ -22,6 +22,9 @@ Rect = tuple[float, float, float, float]
 # ponytail: 40 candidates can starve the cap when one paper dominates them; raise CANDIDATES if the eval shows it.
 CANDIDATES = 40
 MAX_PER_PAPER = 3
+# The cap is for variety further down the list; it never drops one of the best few. SELECT's answer ranked 5th but was
+# its paper's 4th, so 3 per paper lost it (RAG report 2026-11-22). Only the default cap; a cap the caller sets is strict.
+BEST_UNCAPPED = 5
 
 # <=> (cosine distance) is the only operator the HNSW index (vector_cosine_ops) can serve. The candidate CTE takes
 # the nearest chunks in scope; the outer query caps each paper and re-sorts, since relaxed_order (below) can return
@@ -35,8 +38,12 @@ WITH candidates AS (
   LIMIT :candidates
 )
 SELECT id, paper_id, page, section_title, bbox, text, distance
-FROM (SELECT *, row_number() OVER (PARTITION BY paper_id ORDER BY distance) AS nth FROM candidates) AS ranked
-WHERE nth <= :per_paper
+FROM (
+  SELECT *, row_number() OVER (PARTITION BY paper_id ORDER BY distance) AS nth,
+    row_number() OVER (ORDER BY distance) AS overall
+  FROM candidates
+) AS ranked
+WHERE nth <= :per_paper OR overall <= :uncapped
 ORDER BY distance
 LIMIT :k
 """
@@ -46,7 +53,6 @@ LIMIT :k
 # 1 / (RRF_K + rank)), then the same per-paper cap. The keyword score is BM25 over the scope, not ts_rank: ts_rank has
 # no IDF, so "patient" counts as much as "itraconazole", and websearch_to_tsquery ANDs every word, which a whole
 # question never matches. Matches go through the GIN index on tsv first, then only they are scored.
-# ponytail: 'english' stemming won't join "haemodialysis" to "dialysis"; the vector half has to carry those.
 # The vector ranks count from the far end: relaxed_order (below) can return `nearest` slightly out of order, and a
 # window ORDER BY distance would take that order as already sorted. Postgres can't take it as sorted DESC.
 RRF_K = 60
@@ -75,7 +81,7 @@ WITH vector AS (
 ),
 terms AS MATERIALIZED (
   SELECT DISTINCT lexeme, quote_literal(lexeme)::tsquery AS term
-  FROM unnest(tsvector_to_array(to_tsvector('english', :question))) AS lexeme
+  FROM unnest(tsvector_to_array(to_tsvector('english', spelling_us(:question)))) AS lexeme  -- as chunks.tsv (0081)
 ),
 total AS (SELECT count(*)::float AS n, avg(length(tsv)) AS mean_length FROM chunks WHERE {words} {scope}),
 weights AS MATERIALIZED (
@@ -116,12 +122,13 @@ fused AS (
 ranked AS (
   SELECT c.id, c.paper_id, c.page, c.section_title, c.bbox, c.text, coalesce(c.embedding <=> :q, 2) AS distance,
     f.score,
-    row_number() OVER (PARTITION BY c.paper_id ORDER BY f.score DESC, c.embedding <=> :q) AS nth
+    row_number() OVER (PARTITION BY c.paper_id ORDER BY f.score DESC, c.embedding <=> :q) AS nth,
+    row_number() OVER (ORDER BY f.score DESC, c.embedding <=> :q) AS overall
   FROM fused AS f JOIN chunks AS c ON c.id = f.id
 )
 SELECT id, paper_id, page, section_title, bbox, text, distance
 FROM ranked
-WHERE nth <= :per_paper
+WHERE nth <= :per_paper OR overall <= :uncapped
 ORDER BY score DESC, distance
 LIMIT :k
 """
@@ -280,7 +287,8 @@ async def retrieve(
 
     Scope: paper_ids, workspace_id, or neither (the whole library). A scope that resolves to 2+ papers (a
     workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
-    from each paper; a workspace with exactly one paper is uncapped, same as passing that one paper's id.
+    from each paper; the default also keeps the best BEST_UNCAPPED whatever their paper. A workspace with exactly one
+    paper is uncapped, same as passing that one paper's id.
     chunk_ids narrows the scope to those chunks (M16); an empty list returns [] without embedding the query.
     words=True or False mixes the keyword ranking in or leaves it out whatever the rules above and the switch say.
     """
@@ -295,7 +303,8 @@ async def retrieve(
         return []
     # The cap is decided from the resolved paper_ids, not from workspace_id itself: a workspace can resolve to
     # just one paper, which must be as uncapped as passing that paper's id directly.
-    if per_paper is None and paper_ids is not None and len(paper_ids) > 1:
+    default_cap = per_paper is None and paper_ids is not None and len(paper_ids) > 1
+    if default_cap:
         per_paper = MAX_PER_PAPER
     model = await query_embedder(session, embedder)
     try:
@@ -304,6 +313,7 @@ async def retrieve(
         raise Conflict(QUESTION_FAILED.format(reason=str(exc).rstrip("."))) from exc
     params = {"q": question, "k": k, "candidates": max(CANDIDATES, k)}
     params["per_paper"] = k if per_paper is None else per_paper
+    params["uncapped"] = BEST_UNCAPPED if default_cap else 0
     # Hybrid only across papers: inside one paper its own topic words are in most chunks, and the single-paper eval
     # lost recall (@4 0.95 -> 0.90, @8 1.00 -> 0.95); the workspace eval gained (@8 13/17 -> 16/17), 2026-11-01.
     # ponytail: a whole-library search in a one-paper library still runs hybrid; a count on every search isn't worth it.
