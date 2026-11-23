@@ -10,6 +10,7 @@ import {
   type HitMetaEvent,
   type ChatTokenEvent,
   type NoteSource,
+  type ReadingEvent,
 } from '@/api/client'
 import { useInvalidateChatHistory, useInvalidateModels } from '@/api/queries'
 import { appendSegments, citationSplitter, type Segment } from './citations'
@@ -33,6 +34,9 @@ export type ChatStream = {
   segments: Segment[]
   done: ChatDoneEvent | null
   problem: ChatProblem | null
+  /** Ask each paper (M8.5): asked in that mode, and each paper's record as it lands, before the sources. */
+  eachPaper: boolean
+  readings: ReadingEvent[]
 }
 
 /** A stream with nothing asked; the voice panel starts its answers from it too. */
@@ -49,6 +53,8 @@ export const IDLE: ChatStream = {
   segments: [],
   done: null,
   problem: null,
+  eachPaper: false,
+  readings: [],
 }
 
 const STOPPED: ChatProblem = { message: 'The answer stopped before it finished.', retryable: true, reindex: false }
@@ -87,7 +93,7 @@ export function useChatStream(
     }
   }, [])
 
-  async function ask(question: string, parentId: string | null = null) {
+  async function ask(question: string, parentId: string | null = null, eachPaper = false) {
     controller.current?.abort() // a newer question replaces whatever this panel was still asking
     const current = new AbortController()
     controller.current = current
@@ -98,11 +104,13 @@ export function useChatStream(
     const set = (updater: (s: ChatStream) => ChatStream) => live() && setStream(updater)
     const moveThread = (next: string | null) => parentId !== null && live() && onThreadMoveRef.current?.(parentId, next)
 
-    set(() => ({ ...IDLE, status: 'sources', question, parentId }))
+    set(() => ({ ...IDLE, status: 'sources', question, parentId, eachPaper }))
     const fail = (problem: ChatProblem, tail: Segment[] = []) =>
       set((s) => ({ ...s, status: 'error', problem, segments: appendSegments(s.segments, tail) }))
 
-    const response = await api.askChat(scope, question, modelId, parentId, skillId, current.signal).catch(() => null)
+    const response = await api
+      .askChat(scope, question, modelId, parentId, skillId, current.signal, eachPaper)
+      .catch(() => null)
     if (!response) return fail({ message: "Can't reach the PaperLab API.", retryable: true, reindex: false })
     if (!response.ok || !response.body) {
       // A removed model or a missing default: the dropdown refetches and falls back.
@@ -115,7 +123,10 @@ export function useChatStream(
     let splitter = citationSplitter(new Set())
     try {
       for await (const { event, data } of readSse(response.body)) {
-        if (event === 'meta') {
+        if (event === 'reading') {
+          const reading = JSON.parse(data) as ReadingEvent
+          set((s) => ({ ...s, readings: [...s.readings, reading] }))
+        } else if (event === 'meta') {
           const { source } = JSON.parse(data) as HitMetaEvent
           set((s) => ({ ...s, source }))
         } else if (event === 'sources') {
@@ -150,5 +161,5 @@ export function useChatStream(
     fail(STOPPED, splitter.flush())
   }
 
-  return { stream, ask, retry: () => ask(stream.question, stream.parentId) }
+  return { stream, ask, retry: () => ask(stream.question, stream.parentId, stream.eachPaper) }
 }

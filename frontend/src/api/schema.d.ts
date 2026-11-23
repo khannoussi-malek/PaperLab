@@ -786,7 +786,8 @@ export interface paths {
         /**
          * Ask Workspace
          * @description Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 409
-         *     follow_ups_paper_only, 404, 409 workspace_empty, search_not_set_up or workspace_not_indexed, 422.
+         *     follow_ups_paper_only, 404, 409 workspace_empty, search_not_set_up or workspace_not_indexed, 422. With
+         *     each_paper (M8.5) the papers are read one by one first, each a reading event.
          */
         post: operations["ask_workspace_api_workspaces__workspace_id__chat_post"];
         delete?: never;
@@ -4416,6 +4417,11 @@ export interface components {
             chart_spec?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Readings
+             * @default []
+             */
+            readings: components["schemas"]["ReadingOut"][];
         };
         /** ChatModelOut */
         ChatModelOut: {
@@ -4443,6 +4449,11 @@ export interface components {
             parent_id?: string | null;
             /** Skill Id */
             skill_id?: string | null;
+            /**
+             * Each Paper
+             * @default false
+             */
+            each_paper: boolean;
         };
         /** ChatSource */
         ChatSource: {
@@ -7076,6 +7087,36 @@ export interface components {
             stage2_status: string | null;
         };
         /**
+         * ReadingEvent
+         * @description M8.5: one paper's record, as soon as it is read (before the answer's sources).
+         */
+        ReadingEvent: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Label */
+            label: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "found" | "absent" | "no_text" | "model_error";
+            /** Answer */
+            answer: string;
+            /** Cited */
+            cited: string[];
+            /** Low Confidence */
+            low_confidence: boolean;
+            /** Cached */
+            cached: boolean;
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+        };
+        /**
          * ReadingIn
          * @description The reader's own record of a paper (D119). Only the fields sent change; `triage: null` clears the decision.
          */
@@ -7084,6 +7125,49 @@ export interface components {
             reading_pass?: number | null;
             /** Triage */
             triage?: ("keep" | "later" | "drop") | null;
+        };
+        /**
+         * ReadingOut
+         * @description An Ask each paper answer's record of one paper, as its history shows it.
+         */
+        ReadingOut: {
+            /**
+             * Output Id
+             * Format: uuid
+             */
+            output_id: string;
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Label */
+            label: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "found" | "absent" | "no_text" | "model_error";
+            /** Answer */
+            answer: string;
+            /** Cited */
+            cited: components["schemas"]["ReadingPassage"][];
+            /** Low Confidence */
+            low_confidence: boolean;
+        };
+        /** ReadingPassage */
+        ReadingPassage: {
+            /**
+             * Chunk Id
+             * Format: uuid
+             */
+            chunk_id: string;
+            /** Page */
+            page: number;
+            /** Section */
+            section: string | null;
+            /** Text */
+            text: string;
         };
         /** ReadingQueueOut */
         ReadingQueueOut: {
@@ -9727,7 +9811,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                    "text/event-stream": components["schemas"]["ReadingEvent"] | components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
                 };
             };
             /** @description Validation Error */
@@ -9793,7 +9877,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                    "text/event-stream": components["schemas"]["ReadingEvent"] | components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
                 };
             };
             /** @description Validation Error */
@@ -10313,7 +10397,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                    "text/event-stream": components["schemas"]["ReadingEvent"] | components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
                 };
             };
             /** @description Validation Error */
@@ -10379,7 +10463,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                    "text/event-stream": components["schemas"]["ReadingEvent"] | components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
                 };
             };
             /** @description Validation Error */

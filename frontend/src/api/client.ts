@@ -70,6 +70,9 @@ export type HitMetaEvent = components['schemas']['HitMetaEvent']
 export type ChatSourcesEvent = components['schemas']['SourcesEvent']
 export type ChatTokenEvent = components['schemas']['TokenEvent']
 export type ChatDoneEvent = components['schemas']['DoneEvent']
+export type ReadingEvent = components['schemas']['ReadingEvent']
+export type ReadingOut = components['schemas']['ReadingOut']
+export type ReadingPassage = components['schemas']['ReadingPassage']
 export type ChatErrorEvent = components['schemas']['ErrorEvent']
 export type PromoteRequest = components['schemas']['PromoteRequest']
 export type NoteSuggestion = components['schemas']['NoteSuggestionOut']
@@ -557,14 +560,24 @@ export const api = {
    * The raw response: on success its body is the SSE stream that `useChatStream` reads. `modelId` null: the default.
    * `parentId`: the saved answer this question follows up (paper chat only); null for a question on its own.
    * `skillId`: the skill the question runs with (null: No skill). A search hit's chat has no skills, so it sends none.
+   * `eachPaper` (workspace chat, M8.5): read each paper on its own first, then answer from what each says.
    */
-  askChat: (scope: ChatScope, question: string, modelId: string | null, parentId: string | null, skillId: string | null, signal?: AbortSignal) =>
+  askChat: (
+    scope: ChatScope,
+    question: string,
+    modelId: string | null,
+    parentId: string | null,
+    skillId: string | null,
+    signal?: AbortSignal,
+    eachPaper = false,
+  ) =>
     fetch(chatUrl(scope), {
       ...sendJson('POST', {
         question,
         model_id: modelId,
         parent_id: parentId,
         ...(scope.kind === 'hit' ? {} : { skill_id: skillId }),
+        ...(eachPaper ? { each_paper: true } : {}),
       }),
       signal,
     }),

@@ -16,12 +16,17 @@ import { SuggestedNote } from './SuggestedNote'
 import { AnswerCheck } from './AnswerCheck'
 import { HowThisWasMade } from './HowThisWasMade'
 import { Term } from '@/features/workspaces/Term'
+import { ReadingList, type ReadingRow } from './ReadingList'
 import { Scene3D } from '@/features/scene3d/Scene3D'
 
 const loadChatScene = () => import('@/features/scene3d/directors/chat')
 
 type Props = {
   question: string
+  /** Ask each paper's records (M8.5): `readingsLive` while papers are still being read. */
+  readings?: ReadingRow[]
+  readingsTotal?: number
+  readingsLive?: boolean
   wholePaper: boolean
   /** In label order (C1, C2, …). An entry is null when a re-ingest replaced its chunk; the list is null until known. */
   sources: (ChatSource | null)[] | null
@@ -71,6 +76,7 @@ const hintFor = (source: Cited) => ('note_id' in source ? NOTE_HINT : source.fro
 export function ChatAnswer(props: Props) {
   const { question, wholePaper, sources, notes, notesUsed, notesTotal, segments, footer, outputId, pending, checkable, hasCheck } = props
   const { animate, paperLabel, onCite, children, parentId, reply, followUp, suggestions } = props
+  const { readings, readingsTotal, readingsLive } = props
   const sourceFor = (label: string) => [...(sources ?? []), ...notes].find((source) => source?.label === label)
   const describe = (source: Cited) => describeSource(source, paperLabel?.(source.paper_id))
   const waiting = pending && segments.length === 0
@@ -123,6 +129,7 @@ export function ChatAnswer(props: Props) {
       <p className="chat-question max-w-[85%] self-end rounded-2xl rounded-br-sm bg-glass-strong px-3 py-2 text-sm whitespace-pre-wrap ring-1 ring-glass-border">
         {question}
       </p>
+      {readings && readings.length > 0 && <ReadingList readings={readings} total={readingsTotal} live={readingsLive} />}
 
       {(sources !== null || pending) && (
         // AI text sits on the opaque provenance surface, never on glass (D26).

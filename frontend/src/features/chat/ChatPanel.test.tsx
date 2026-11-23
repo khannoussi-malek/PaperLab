@@ -105,7 +105,7 @@ describe('skill picker', () => {
     expect(await screen.findByRole('combobox', { name: 'Skill' })).toHaveTextContent('Limits')
     fireEvent.change(await screen.findByLabelText('Question'), { target: { value: 'What is new?' } })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
-    expect(api.askChat).toHaveBeenCalledWith({ kind: 'paper', id: 'p1' }, 'What is new?', 'm1', null, 'builtin:limits', expect.anything())
+    expect(api.askChat).toHaveBeenCalledWith({ kind: 'paper', id: 'p1' }, 'What is new?', 'm1', null, 'builtin:limits', expect.anything(), false)
   })
 
   it('sends No skill as null, and shows the picker in a workspace chat too', async () => {
@@ -114,7 +114,35 @@ describe('skill picker', () => {
     expect(picker).toHaveTextContent('No skill')
     fireEvent.change(await screen.findByLabelText('Question'), { target: { value: 'Compare them' } })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
-    expect(api.askChat).toHaveBeenCalledWith({ kind: 'workspace', id: 'w1' }, 'Compare them', 'm1', null, null, expect.anything())
+    expect(api.askChat).toHaveBeenCalledWith({ kind: 'workspace', id: 'w1' }, 'Compare them', 'm1', null, null, expect.anything(), false)
+  })
+
+  it('offers Ask each paper in a workspace chat only, and sends it with the question', async () => {
+    renderPanel({ kind: 'workspace', id: 'w1' })
+    const toggle = await screen.findByRole('button', { name: 'Ask each paper' })
+    expect(toggle).toHaveAttribute('title', 'Asks the model once per paper, up to 10, then answers from what each says')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(await screen.findByLabelText('Question'), { target: { value: 'Compare them' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    expect(api.askChat).toHaveBeenCalledWith({ kind: 'workspace', id: 'w1' }, 'Compare them', 'm1', null, null, expect.anything(), true)
+  })
+
+  it('has no Ask each paper in a paper chat', async () => {
+    renderPanel()
+    await screen.findByRole('combobox', { name: 'Skill' })
+    expect(screen.queryByRole('button', { name: 'Ask each paper' })).not.toBeInTheDocument()
+  })
+
+  it('suggests Ask each paper for a per-paper question while it is off', async () => {
+    renderPanel({ kind: 'workspace', id: 'w1' })
+    const input = await screen.findByLabelText('Question')
+    fireEvent.change(input, { target: { value: 'What is new?' } })
+    expect(screen.queryByText('Sounds like a question for each paper')).not.toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'How does each paper define it?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sounds like a question for each paper · Ask each paper' }))
+    expect(screen.getByRole('button', { name: 'Ask each paper' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByText('Sounds like a question for each paper')).not.toBeInTheDocument()
   })
 
   it('shows no picker in a search hit chat, and sends no skill_id', async () => {

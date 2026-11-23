@@ -1,4 +1,4 @@
-import { ArrowUp, ChartColumn, CornerDownRight, MessageSquareText, Settings2, X } from 'lucide-react'
+import { ArrowUp, ChartColumn, CornerDownRight, Files, MessageSquareText, Settings2, X } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ChartSpec, ChatScope, ChatSource, Note, NoteSource, ChatAnswer as SavedAnswer } from '@/api/client'
 import { useAskChart, useChatHistory, useChatModels, usePromoteNote, useSkills } from '@/api/queries'
@@ -26,6 +26,7 @@ import { ProblemAlert } from './ProblemAlert'
 import { threadOrder } from './threads'
 import { useChatStream } from './useChatStream'
 import { useVoiceTurn } from '@/features/voice/useVoiceTurn'
+import { looksPerPaper } from './eachPaperHint'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 
 const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
@@ -103,13 +104,15 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
   }
   const stream = liveSource === 'voice' ? voice.stream : typed.stream
   const { retry } = typed
-  function ask(text: string, parentId: string | null = null) {
+  function ask(text: string, parentId: string | null = null, eachPaper = false) {
     setLiveSource('typed')
-    return typed.ask(text, parentId)
+    return typed.ask(text, parentId, eachPaper)
   }
   const [question, setQuestion] = useState('')
   // M14: the next question asks for a chart of the scope's captured data instead of a written answer.
   const [chartMode, setChartMode] = useState(false)
+  // M8.5 (workspace chat): read each paper on its own first, then answer from what each says.
+  const [eachPaper, setEachPaper] = useState(false)
   const askChart = useAskChart(scope)
   const streamSource = stream.source
   useEffect(() => {
@@ -233,7 +236,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
       return
     }
     setQuestion('')
-    void ask(text, followingId)
+    void ask(text, followingId, scope.kind === 'workspace' && eachPaper)
   }
 
   function followUp(answerId: string) {
@@ -246,6 +249,9 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
     showLive && (
       <ChatAnswer
         question={stream.question}
+        readings={stream.readings}
+        readingsTotal={stream.readings[0]?.total}
+        readingsLive={stream.status === 'sources'}
         parentId={stream.parentId}
         reply={liveReply}
         wholePaper={stream.wholePaper}
@@ -307,6 +313,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
               parentId={answer.parent_id}
               reply={reply}
               question={answer.question}
+              readings={answer.readings}
               wholePaper={answer.whole_paper}
               sources={answer.sources}
               notes={answer.notes}
@@ -399,6 +406,19 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
           <div className="flex flex-wrap gap-2">
             <ModelPicker models={chatModels.data} value={modelId} onChange={pickModel} />
             {scope.kind !== 'hit' && skills.data && <SkillPicker skills={skills.data} value={skillId} onChange={setSkillPick} />}
+            {scope.kind === 'workspace' && (
+              <Button
+                type="button"
+                size="sm"
+                variant={eachPaper ? 'secondary' : 'ghost'}
+                aria-pressed={eachPaper}
+                title="Asks the model once per paper, up to 10, then answers from what each says"
+                onClick={() => setEachPaper((on) => !on)}
+              >
+                <Files aria-hidden />
+                Ask each paper
+              </Button>
+            )}
             {scope.kind !== 'hit' && (
               <Button
                 type="button"
@@ -413,6 +433,19 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
               </Button>
             )}
           </div>
+        )}
+        {scope.kind === 'workspace' && !eachPaper && looksPerPaper(question) && (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="self-start text-muted-foreground"
+            aria-label="Sounds like a question for each paper · Ask each paper"
+            onClick={() => setEachPaper(true)}
+          >
+            <span>Sounds like a question for each paper</span>
+            <span> · Ask each paper</span>
+          </Button>
         )}
         {askChart.error && (
           <p role="alert" className="px-1 text-xs text-destructive">
