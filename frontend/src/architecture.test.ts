@@ -36,7 +36,7 @@ test('features depend on each other no more than the baseline', () => {
   const edges = new Set<string>()
   for (const [file, text] of Object.entries(sources)) {
     const own = file.split('/')[2]
-    for (const [, spec] of text.matchAll(/(?:from|import\()\s*'([^']+)'/g)) {
+    for (const [, spec] of text.matchAll(/(?:from|import\s*\(?)\s*['"`]([^'"`]+)['"`]/g)) {
       const path = spec.startsWith('@/') ? `/src/${spec.slice(2)}` : spec.startsWith('.') ? new URL(spec, `file:///src/${file.slice(2)}`).pathname : null
       const other = path?.startsWith('/src/features/') ? path.split('/')[3] : null
       if (other && other !== own) edges.add(`${own} -> ${other}`)
