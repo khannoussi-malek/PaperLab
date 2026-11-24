@@ -7,6 +7,7 @@ place at their pinned size (D136). Nothing here reads settings: callers pass the
 """
 
 import asyncio
+import contextlib
 import errno
 import hashlib
 from collections.abc import AsyncIterator
@@ -116,8 +117,10 @@ async def _fetch(client: httpx.AsyncClient, file: ModelFile, target: Path) -> As
     target.parent.mkdir(parents=True, exist_ok=True)
     have = part.stat().st_size if part.is_file() else 0
     if have < file.size:
-        async for have in _download_rest(client, file, part, have):  # the last count is read below
-            yield have
+        # Closed with _fetch, as its own `async with` was, so a stopped download releases the file and stream at once.
+        async with contextlib.aclosing(_download_rest(client, file, part, have)) as rest:
+            async for have in rest:  # the last count is read below
+                yield have
     else:
         yield have
     if have < file.size:  # the body ended early without an error: keep the part, the next try resumes it
