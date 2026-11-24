@@ -100,7 +100,11 @@ async def list_hits(
         raise InvalidInput("invalid_decision", valid=[*DECISIONS, "undecided"])
     ws = await workspace_id(session, workspace)
     items, next_cursor = await search_hits.list_hits(
-        session, ws, limit=max(1, min(limit, MAX_HITS)), after=cursor, stage1_status=status, run_id=run_id
+        session,
+        ws,
+        search_hits.HitFilters(stage1_status=status, run_id=run_id),
+        limit=max(1, min(limit, MAX_HITS)),
+        after=cursor,
     )
     return HitPage(hits=[HitOut.model_validate(item) for item in items], next_cursor=next_cursor)
 
@@ -112,8 +116,14 @@ async def get_screening_suggestions(
     """Undecided hits the model has a suggestion for, best score first."""
     ws = await workspace_id(session, workspace)
     items, next_cursor = await search_hits.list_hits(
-        session, ws, limit=max(1, min(limit, MAX_HITS)), after=cursor, stage1_status="undecided", run_id=run_id,
-        sort="ai", min_relevance=min_relevance, suggested_only=True,
+        session,
+        ws,
+        search_hits.HitFilters(
+            stage1_status="undecided", run_id=run_id, min_relevance=min_relevance, suggested_only=True
+        ),
+        limit=max(1, min(limit, MAX_HITS)),
+        after=cursor,
+        sort="ai",
     )
     return HitPage(hits=[HitOut.model_validate(item) for item in items], next_cursor=next_cursor)
 
@@ -339,7 +349,9 @@ async def snowball(
     backward, forward = DIRECTIONS[direction]
     ws = await workspace_id(session, workspace)
     async with source_clients.open_providers(session) as providers:
-        return await snowball_run.snowball(session, providers, ws, seed_paper_ids, [], backward, forward)
+        return await snowball_run.snowball(
+            session, providers, ws, seed_paper_ids, [], snowball_run.Directions(backward, forward)
+        )
 
 
 async def set_eligibility(

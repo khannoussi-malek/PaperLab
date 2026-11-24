@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.core.search.hit_links import level_of
-from app.core.search.hit_provenance import paths_to, provenance
+from app.core.search.hit_paths import paths_to
+from app.core.search.hit_provenance import provenance
 from app.domain.errors import NotFound
 from app.models import Paper
 from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink

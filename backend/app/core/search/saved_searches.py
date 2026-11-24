@@ -122,28 +122,31 @@ async def _row(session: AsyncSession, saved_search_id: uuid.UUID, workspace_id: 
     return row
 
 
+@dataclass(frozen=True)
+class SavedSearchSpec:
+    """What a new saved search runs and when: a cron `schedule` in `timezone`."""
+
+    query: str
+    schedule: str
+    timezone: str
+    sources: tuple[str, ...] | list[str] = ()
+    year_from: int | None = None
+    year_to: int | None = None
+
+
 async def create(
-    session: AsyncSession,
-    workspace_id: uuid.UUID,
-    *,
-    query: str,
-    schedule: str,
-    timezone: str,
-    sources=(),
-    year_from: int | None = None,
-    year_to: int | None = None,
-    now: datetime | None = None,
+    session: AsyncSession, workspace_id: uuid.UUID, spec: SavedSearchSpec, now: datetime | None = None
 ) -> SavedSearchView:
     await workspaces.require_writable(session, workspace_id)
-    values = {"query": query, "sources": list(sources), "year_from": year_from, "year_to": year_to}
+    values = {"query": spec.query, "sources": list(spec.sources), "year_from": spec.year_from, "year_to": spec.year_to}
     _validate(values)
     row = SavedSearch(
         workspace_id=workspace_id,
-        schedule=schedules.to_cron("cron", cron=schedule),
-        timezone=timezone,
+        schedule=schedules.to_cron("cron", cron=spec.schedule),
+        timezone=spec.timezone,
         enabled=True,
         seen_at=now or _now(),
-        **{**values, "query": query.strip()},
+        **{**values, "query": spec.query.strip()},
     )
     row.next_run_at = _schedule_next(row, row.seen_at)  # validates the time zone too
     session.add(row)

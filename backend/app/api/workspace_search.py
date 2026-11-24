@@ -18,7 +18,8 @@ from app.core.search import (
     snowball_run,
     workspace_search,
 )
-from app.core.search.hit_provenance import paths_to, provenance
+from app.core.search.hit_paths import paths_to
+from app.core.search.hit_provenance import provenance
 from app.core.search.hit_ranking import RANKED_LIMIT_MAX
 from app.core.search.prisma_export import prisma_export
 from app.domain.errors import InvalidInput
@@ -116,8 +117,18 @@ async def list_hits(
     saved_search_id: uuid.UUID | None = None, found_after: AwareDatetime | None = None,
 ) -> HitListOut:
     items, next_cursor = await search_hits.list_hits(
-        session, workspace_id, limit, after, stage1_status, acquisition_status,
-        sort=sort, min_relevance=min_relevance, saved_search_id=saved_search_id, found_after=found_after,
+        session,
+        workspace_id,
+        search_hits.HitFilters(
+            stage1_status=stage1_status,
+            acquisition_status=acquisition_status,
+            min_relevance=min_relevance,
+            saved_search_id=saved_search_id,
+            found_after=found_after,
+        ),
+        limit=limit,
+        after=after,
+        sort=sort,
     )
     return HitListOut(items=items, next_cursor=next_cursor)
 
@@ -257,7 +268,7 @@ async def snowball_route(
 ) -> SnowballOut:
     result = await snowball_run.snowball(
         session, providers, workspace_id, payload.seed_paper_ids, payload.seed_hit_ids,
-        payload.backward, payload.forward,
+        snowball_run.Directions(payload.backward, payload.forward),
     )
     return SnowballOut(new_hits=result.new_hits, skipped_seeds=result.skipped_seeds, errors=result.errors)
 
@@ -276,10 +287,7 @@ async def run_snowball_next_route(
 
 @router.put("/branch")
 async def set_branch_route(workspace_id: uuid.UUID, payload: BranchIn, session: SessionDep) -> BranchOut:
-    return await branches.set_branch(
-        session, workspace_id, hit_id=payload.hit_id, paper_id=payload.paper_id, state=payload.state,
-        directions=payload.directions, reason=payload.reason,
-    )
+    return await branches.set_branch(session, workspace_id, payload)
 
 
 @router.get("/prisma")

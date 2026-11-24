@@ -13,7 +13,7 @@ from app.domain.errors import InvalidInput, NotFound
 from app.models import workspace_papers
 from app.models.provenance import WorkspaceBranchState
 from app.models.workspace_search import WorkspaceSearchHit
-from app.schemas.search_tree import BranchOut
+from app.schemas.search_tree import BranchIn, BranchOut
 
 DIRECTIONS = ("cites", "cited_by")
 STATES = ("go_further", "stopped")
@@ -53,12 +53,11 @@ async def _check_target(session: AsyncSession, workspace_id, hit_id, paper_id) -
         raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
 
 
-async def set_branch(
-    session: AsyncSession, workspace_id: uuid.UUID, *, hit_id: uuid.UUID | None = None,
-    paper_id: uuid.UUID | None = None, state: str | None, directions: list[str], reason: str | None,
-) -> BranchOut:
+async def set_branch(session: AsyncSession, workspace_id: uuid.UUID, decision: BranchIn) -> BranchOut:
     """state=None deletes the decision (undecided). The reason is kept only for "stopped"; directions only for
     "go_further"."""
+    hit_id, paper_id, state = decision.hit_id, decision.paper_id, decision.state
+    directions, reason = decision.directions, decision.reason
     await workspaces.require_writable(session, workspace_id)
     ordered = _validate(hit_id, paper_id, state, directions, reason)
     if state is not None or hit_id is not None:  # clearing a paper's row works even once the paper has left

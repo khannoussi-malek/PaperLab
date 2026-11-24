@@ -11,7 +11,7 @@ from app.core.search import batch_fetch, source_clients
 from app.core.search.batch_fetch import _find_or_create_external_ref, _insert_hit, search_batch
 from app.core.search.candidates import normal_title
 from app.core.search.prisma_export import PrismaExport, prisma_export
-from app.core.search.snowball_run import snowball
+from app.core.search.snowball_run import Directions, snowball
 from app.core.search.workspace_search import set_eligibility
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
@@ -146,7 +146,9 @@ async def test_snowball_backward_stores_the_seeds_references_as_hits(session, fa
     await session.flush()
     await workspaces.add_paper(session, workspace.id, seed.id)
 
-    result = await snowball(session, fake_providers, workspace.id, [seed.id], [], backward=True, forward=False)
+    result = await snowball(
+        session, fake_providers, workspace.id, [seed.id], [], Directions(backward=True, forward=False)
+    )
 
     assert result.new_hits > 0
     assert result.skipped_seeds == []
@@ -176,7 +178,9 @@ async def test_snowball_keeps_one_directions_hits_when_the_other_direction_error
     await workspaces.add_paper(session, workspace.id, seed.id)
 
     try:
-        result = await snowball(session, providers, workspace.id, [seed.id], [], backward=True, forward=True)
+        result = await snowball(
+            session, providers, workspace.id, [seed.id], [], Directions(backward=True, forward=True)
+        )
     finally:
         await mixed_s2_client.aclose()
 
@@ -226,7 +230,7 @@ async def test_snowball_skips_a_seed_semantic_scholar_does_not_know_but_still_pr
 
     try:
         result = await snowball(
-            session, providers, workspace.id, [unknown_seed.id, known_seed.id], [], backward=True, forward=False
+            session, providers, workspace.id, [unknown_seed.id, known_seed.id], [], Directions(backward=True, forward=False)
         )
     finally:
         await unknown_s2_client.aclose()
@@ -274,7 +278,9 @@ async def test_snowball_does_not_duplicate_or_overwrite_an_existing_hit(session,
     session.add(existing_hit)
     await session.commit()
 
-    result = await snowball(session, fake_providers, workspace.id, [seed.id], [], backward=True, forward=False)
+    result = await snowball(
+        session, fake_providers, workspace.id, [seed.id], [], Directions(backward=True, forward=False)
+    )
 
     hits = (
         (await session.execute(select(WorkspaceSearchHit).where(WorkspaceSearchHit.external_ref_id == ref.id)))
@@ -313,7 +319,9 @@ async def test_snowball_from_a_hit_seed_with_no_paper_ever_created(session, fake
     session.add(hit)
     await session.commit()
 
-    result = await snowball(session, fake_providers, workspace.id, [], [hit.id], backward=True, forward=False)
+    result = await snowball(
+        session, fake_providers, workspace.id, [], [hit.id], Directions(backward=True, forward=False)
+    )
 
     assert result.new_hits > 0
     assert result.skipped_seeds == []
@@ -357,7 +365,9 @@ async def test_snowball_hit_seed_with_no_external_ref_id_is_skipped(session, fak
     session.add(hit)
     await session.commit()
 
-    result = await snowball(session, fake_providers, workspace.id, [], [hit.id], backward=True, forward=False)
+    result = await snowball(
+        session, fake_providers, workspace.id, [], [hit.id], Directions(backward=True, forward=False)
+    )
 
     assert result.skipped_seeds == [hit.id]
     assert result.new_hits == 0
@@ -387,7 +397,7 @@ async def test_snowball_hit_seed_in_different_workspace_raises_not_found(session
     await session.commit()
 
     with pytest.raises(NotFound):
-        await snowball(session, fake_providers, workspace_b.id, [], [hit.id], backward=True, forward=False)
+        await snowball(session, fake_providers, workspace_b.id, [], [hit.id], Directions(backward=True, forward=False))
 
 
 async def test_snowball_mixes_paper_and_hit_seeds_in_one_call(session, fake_providers):
@@ -454,7 +464,7 @@ async def test_snowball_mixes_paper_and_hit_seeds_in_one_call(session, fake_prov
 
     try:
         result = await snowball(
-            session, providers, workspace.id, [paper_seed.id], [hit_seed.id], backward=True, forward=False
+            session, providers, workspace.id, [paper_seed.id], [hit_seed.id], Directions(backward=True, forward=False)
         )
     finally:
         await mixed_s2_client.aclose()

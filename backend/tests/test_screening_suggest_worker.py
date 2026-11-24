@@ -395,7 +395,9 @@ async def free_and_closed(session, monkeypatch, pdf_dir):
     monkeypatch.setattr(pdf_links, "resolve_host", resolve)
     arq = FakeArq()
     monkeypatch.setattr(queue, "_pool", arq)
-    await snowball_run.snowball(session, providers, workspace.id, [], [hits[0].id], backward=True, forward=False)
+    await snowball_run.snowball(
+        session, providers, workspace.id, [], [hits[0].id], snowball_run.Directions(backward=True, forward=False)
+    )
     rows = (await session.execute(
         select(WorkspaceSearchHit, ExternalRef.doi)
         .join(ExternalRef, WorkspaceSearchHit.external_ref_id == ExternalRef.id)

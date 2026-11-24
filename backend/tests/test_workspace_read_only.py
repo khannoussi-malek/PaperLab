@@ -49,7 +49,11 @@ async def _workspace(session, *, read_only: bool) -> dict:
     await tags.tag_papers(session, ws.id, "Core", paper_ids=[paper.id])
     tag = (await tags.resolve(session, ws.id, ["Core"]))[0]
     saved = await saved_searches.create(
-        session, ws.id, query="sleep", schedule=schedules.to_cron("daily", time="02:00"), timezone="UTC"
+        session,
+        ws.id,
+        saved_searches.SavedSearchSpec(
+            query="sleep", schedule=schedules.to_cron("daily", time="02:00"), timezone="UTC"
+        ),
     )
     if read_only:
         await session.execute(update(Workspace).where(Workspace.id == ws.id).values(read_only=True))

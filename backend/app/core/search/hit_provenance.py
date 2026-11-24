@@ -1,7 +1,8 @@
 """Where each hit came from: the tree of searches and snowball hops that found it, and the paths to one hit."""
 
 import uuid
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import NamedTuple
 
@@ -12,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.search import search_run_results
 from app.core.search.hit_links import MAX_DEPTH
-from app.domain.errors import NotFound
 from app.models import Paper
 from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
 from app.models.references import ExternalRef
@@ -28,7 +28,6 @@ def _short(text: str | None) -> str | None:
 
 HAND = "root:hand"
 _MIN = datetime.min.replace(tzinfo=timezone.utc)
-PATHS_STEP_BUDGET = 10_000
 
 
 class _Edge(NamedTuple):
@@ -213,6 +212,96 @@ def _tree_roots(nodes: set[str], edges: list[_Edge], level: dict[str, int]) -> d
     return out
 
 
+@dataclass(frozen=True)
+class _SeedState:
+    """What each seed's hops did, keyed by node id."""
+
+    done: dict[str, set[str]]  # the directions already run
+    zero: dict[str, str | None]  # found nothing: the error or skip reason ("" = ran cleanly); None = found some
+    skipped: set[str]  # seeds the latest run could not find in Semantic Scholar: nothing left to run
+
+
+@dataclass(frozen=True)
+class _Tree:
+    node_ids: set[str]
+    edges: list[_Edge]
+    level: dict[str, int]
+    hits: dict
+    papers: dict
+    branches: dict[str, WorkspaceBranchState]
+    seeds: _SeedState
+    incoming: dict[str, int]  # links into each node
+
+
+async def _scoped_ids(
+    session: AsyncSession, workspace_id: uuid.UUID, runs: dict, all_hits_run_id: uuid.UUID | None, cap: int
+) -> tuple[set[uuid.UUID], bool]:
+    """The default scope's hits, plus `all_hits_run_id`'s hits up to `cap`; and whether a cap cut either short."""
+    ids, truncated = await _capped(session, workspace_id, await _default_scope(session, workspace_id, runs), cap)
+    if all_hits_run_id is None:
+        return ids, truncated
+    extra = list(await session.scalars(
+        select(WorkspaceSearchHit.id).where(
+            WorkspaceSearchHit.workspace_id == workspace_id, WorkspaceSearchHit.run_id == all_hits_run_id)
+        .order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(cap + 1)))
+    return ids | set(extra[:cap]), truncated or len(extra) > cap
+
+
+def _bare_papers(seeds: list) -> list[uuid.UUID]:
+    """Hand-added paper seeds (no hit): zero-found ones are still nodes."""
+    bare = []
+    for seed, hit_id in seeds:
+        if seed.get("kind") == "paper" and hit_id is None:
+            try:
+                bare.append(uuid.UUID(seed["id"]))
+            except ValueError:
+                pass
+    return bare
+
+
+def _hand_edges(bare: list[uuid.UUID], papers: dict, edges: list[_Edge]) -> list[_Edge]:
+    """A link from "Added by hand" to each held bare paper nothing else links to."""
+    held = [p for p in dict.fromkeys(bare) if p in papers]
+    linked = {e.child for e in edges}
+    return [_Edge(HAND, f"paper:{p}", "hand", None, None) for p in held if f"paper:{p}" not in linked]
+
+
+def _seed_state(seeds: list) -> _SeedState:
+    done: dict[str, set[str]] = defaultdict(set)
+    zero: dict[str, str | None] = {}
+    skipped: set[str] = set()
+    for seed, hit_id in seeds:
+        key = str(hit_id) if hit_id else f"paper:{seed.get('id')}"
+        done[key].update(seed.get("done") or [])
+        found_any = sum((seed.get("found") or {}).values())
+        zero[key] = None if found_any else (seed.get("error") or seed.get("skipped") or "")
+        (skipped.add if seed.get("skipped") else skipped.discard)(key)
+    return _SeedState(done, zero, skipped)
+
+
+async def _branches(session: AsyncSession, workspace_id: uuid.UUID) -> dict[str, WorkspaceBranchState]:
+    rows = (await session.scalars(
+        select(WorkspaceBranchState).where(WorkspaceBranchState.workspace_id == workspace_id))).all()
+    return {(str(b.hit_id) if b.hit_id else f"paper:{b.paper_id}"): b for b in rows}
+
+
+def _node(tree: _Tree, nid: str) -> ProvNode:
+    b = tree.branches.get(nid)
+    branch = ProvBranch(state=b.state, directions=b.directions, reason=b.reason) if b else None
+    if nid.startswith("paper:"):
+        paper = tree.papers[uuid.UUID(nid[6:])]
+        node = dict(title=paper.title, year=paper.year, paper_id=paper.id)
+    elif nid.endswith(":unknown"):
+        node = dict(title="Parent not recorded")
+    else:
+        h, title, year = tree.hits[uuid.UUID(nid)]
+        node = dict(title=title, year=year, decision=h.stage1_status, suggestion=h.suggestion,
+                    relevance=h.suggestion_relevance, reason=_short(h.suggestion_note), paper_id=h.paper_id)
+    return ProvNode(
+        id=nid, level=tree.level[nid], branch=branch, snowballed=sorted(tree.seeds.done.get(nid, ())),
+        paths=tree.incoming.get(nid, 0), zero_found_error=tree.seeds.zero.get(nid), **node)
+
+
 async def provenance(
     session: AsyncSession, workspace_id: uuid.UUID, *, all_hits_run_id: uuid.UUID | None = None, cap: int = 2000
 ) -> ProvenanceOut:
@@ -220,73 +309,28 @@ async def provenance(
     branched, snowballed from, or with no recorded parent, plus their ancestors. `all_hits_run_id` adds that run's
     hits up to `cap`."""
     runs = await _runs(session, workspace_id)
-    ids, truncated = await _capped(session, workspace_id, await _default_scope(session, workspace_id, runs), cap)
-    if all_hits_run_id is not None:
-        extra = list(await session.scalars(
-            select(WorkspaceSearchHit.id).where(
-                WorkspaceSearchHit.workspace_id == workspace_id, WorkspaceSearchHit.run_id == all_hits_run_id)
-            .order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(cap + 1)))
-        truncated = truncated or len(extra) > cap
-        ids.update(extra[:cap])
+    ids, truncated = await _scoped_ids(session, workspace_id, runs, all_hits_run_id, cap)
     seeds = _seeds(runs)
-    bare = []  # hand-added paper seeds (no hit): zero-found ones are still nodes
-    for seed, hit_id in seeds:
-        if seed.get("kind") == "paper" and hit_id is None:
-            try:
-                bare.append(uuid.UUID(seed["id"]))
-            except ValueError:
-                pass
+    bare = _bare_papers(seeds)
     hits, papers, edges, refound = await _graph(session, workspace_id, ids, runs, bare)
-    bare = [p for p in bare if p in papers]
-    for p in bare:
-        if not any(e.child == f"paper:{p}" for e in edges):
-            edges.append(_Edge(HAND, f"paper:{p}", "hand", None, None))
-    node_ids = {str(h) for h in hits} | {f"paper:{p}" for p in papers if any(e.child == f"paper:{p}" for e in edges)}
+    edges = edges + _hand_edges(bare, papers, edges)
+    linked = {e.child for e in edges}
+    node_ids = {str(h) for h in hits} | {f"paper:{p}" for p in papers if f"paper:{p}" in linked}
     node_ids |= {e.parent for e in edges if e.parent.endswith(":unknown")}
     level = _levels(node_ids, edges)
-    branch_rows = (await session.scalars(
-        select(WorkspaceBranchState).where(WorkspaceBranchState.workspace_id == workspace_id))).all()
-    branches = {(str(b.hit_id) if b.hit_id else f"paper:{b.paper_id}"): b for b in branch_rows}
-    done: dict[str, set[str]] = defaultdict(set)
-    zero: dict[str, str | None] = {}
-    skipped: set[str] = set()  # seeds the latest run could not find in Semantic Scholar: nothing left to run
-    for seed, hit_id in seeds:
-        key = str(hit_id) if hit_id else f"paper:{seed.get('id')}"
-        done[key].update(seed.get("done") or [])
-        if not sum((seed.get("found") or {}).values()):  # "" = ran cleanly and found nothing
-            zero[key] = seed.get("error") or seed.get("skipped") or ""
-        else:
-            zero[key] = None
-        (skipped.add if seed.get("skipped") else skipped.discard)(key)
-    incoming: dict[str, int] = defaultdict(int)
-    for e in edges:
-        incoming[e.child] += 1
-
-    nodes = []
-    for nid in sorted(node_ids, key=lambda n: (level[n], n)):
-        b = branches.get(nid)
-        branch = ProvBranch(state=b.state, directions=b.directions, reason=b.reason) if b else None
-        if nid.startswith("paper:"):
-            paper = papers[uuid.UUID(nid[6:])]
-            node = dict(title=paper.title, year=paper.year, paper_id=paper.id)
-        elif nid.endswith(":unknown"):
-            node = dict(title="Parent not recorded")
-        else:
-            h, title, year = hits[uuid.UUID(nid)]
-            node = dict(title=title, year=year, decision=h.stage1_status, suggestion=h.suggestion,
-                        relevance=h.suggestion_relevance, reason=_short(h.suggestion_note), paper_id=h.paper_id)
-        nodes.append(ProvNode(
-            id=nid, level=level[nid], branch=branch, snowballed=sorted(done.get(nid, ())), paths=incoming[nid],
-            zero_found_error=zero.get(nid), **node))
-
+    tree = _Tree(
+        node_ids, edges, level, hits, papers, await _branches(session, workspace_id), _seed_state(seeds),
+        Counter(e.child for e in edges),
+    )
+    nodes = [_node(tree, nid) for nid in sorted(node_ids, key=lambda n: (level[n], n))]
     links = [ProvLink(parent=e.parent, child=e.child, kind=e.kind, run_id=e.run_id, created_at=e.created_at)
              for e in edges]
     return ProvenanceOut(
-        nodes=nodes, links=links, roots=await _roots(session, workspace_id, runs, node_ids, edges, level, hits),
-        levels=_level_stats(nodes, edges, level, runs, refound, skipped), truncated=truncated)
+        nodes=nodes, links=links, roots=await _roots(session, workspace_id, runs, tree),
+        levels=_level_stats(nodes, edges, level, runs, refound, tree.seeds.skipped), truncated=truncated)
 
 
-async def _roots(session, workspace_id, runs, node_ids, edges, level, hits) -> list[ProvRoot]:
+async def _roots(session: AsyncSession, workspace_id: uuid.UUID, runs: dict, tree: _Tree) -> list[ProvRoot]:
     counts = dict((await session.execute(
         select(WorkspaceHitLink.run_id, func.count()).where(
             WorkspaceHitLink.workspace_id == workspace_id, WorkspaceHitLink.kind == "search")
@@ -301,22 +345,19 @@ async def _roots(session, workspace_id, runs, node_ids, edges, level, hits) -> l
     hidden = dict((await session.execute(  # excluded search hits the cap left off the tree
         select(WorkspaceSearchHit.run_id, func.count()).where(
             WorkspaceSearchHit.workspace_id == workspace_id, WorkspaceSearchHit.stage1_status == "not_relevant",
-            WorkspaceSearchHit.source_method.not_like("snowball%"), WorkspaceSearchHit.id != all_(_array(hits)))
+            WorkspaceSearchHit.source_method.not_like("snowball%"), WorkspaceSearchHit.id != all_(_array(tree.hits)))
         .group_by(WorkspaceSearchHit.run_id))).all())
-    on_tree: dict[str, int] = defaultdict(int)
-    for root in _tree_roots(node_ids, edges, level).values():
-        if root:
-            on_tree[root] += 1
+    on_tree = Counter(root for root in _tree_roots(tree.node_ids, tree.edges, tree.level).values() if root)
     labels = await search_run_results.run_labels(session, runs.values())
-    roots = []
-    for run in sorted(runs.values(), key=lambda r: r.started_at):
-        rid = f"root:{run.id}"
-        if counts.get(run.id) or on_tree[rid]:
-            roots.append(ProvRoot(
-                id=rid, label=labels[run.id], hit_count=counts.get(run.id, 0), on_tree=on_tree[rid],
-                excluded_hidden=hidden.get(run.id, 0)))
+    roots = [
+        ProvRoot(
+            id=f"root:{run.id}", label=labels[run.id], hit_count=counts.get(run.id, 0),
+            on_tree=on_tree[f"root:{run.id}"], excluded_hidden=hidden.get(run.id, 0))
+        for run in sorted(runs.values(), key=lambda r: r.started_at)
+        if counts.get(run.id) or on_tree[f"root:{run.id}"]
+    ]
     if on_tree[HAND]:
-        papers = sum(n.startswith("paper:") for n in node_ids)
+        papers = sum(n.startswith("paper:") for n in tree.node_ids)
         roots.append(ProvRoot(id=HAND, label="Added by hand", hit_count=papers, on_tree=on_tree[HAND]))
     return roots
 
@@ -354,32 +395,3 @@ def _level_stats(
 def _screened(node: ProvNode) -> bool:
     """Bare papers and synthetic parents have nothing to screen."""
     return node.id.startswith("paper:") or node.id.endswith(":unknown") or node.decision is not None
-
-
-async def paths_to(
-    session: AsyncSession, workspace_id: uuid.UUID, hit_id: uuid.UUID, limit: int = 20
-) -> list[list[ProvLink]]:
-    """Every root-to-hit path, shortest first. Walks up from the hit over simple paths only (no repeated node).
-    ponytail: the search stops after PATHS_STEP_BUDGET expansions, so a hit buried in a dense
-    cross-linked graph may return fewer than `limit` paths."""
-    owned = await session.scalar(select(WorkspaceSearchHit.id).where(
-        WorkspaceSearchHit.id == hit_id, WorkspaceSearchHit.workspace_id == workspace_id))
-    if owned is None:
-        raise NotFound(f"hit {hit_id} not found")
-    _, _, edges, _ = await _graph(session, workspace_id, {hit_id}, await _runs(session, workspace_id))
-    above = defaultdict(list)
-    for e in edges:
-        above[e.child].append(e)
-    found: list[tuple[_Edge, ...]] = []
-    queue = deque([(str(hit_id), (), frozenset({str(hit_id)}))])
-    for _ in range(PATHS_STEP_BUDGET):  # breadth-first over partial paths, so complete ones come out shortest first
-        if not queue or len(found) >= limit:
-            break
-        node, tail, visited = queue.popleft()
-        if not above[node]:
-            found.append(tail)
-        queue.extend((e.parent, (e, *tail), visited | {e.parent}) for e in above[node] if e.parent not in visited)
-    return [
-        [ProvLink(parent=e.parent, child=e.child, kind=e.kind, run_id=e.run_id, created_at=e.created_at) for e in p]
-        for p in found
-    ]

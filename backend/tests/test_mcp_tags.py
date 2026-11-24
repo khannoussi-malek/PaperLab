@@ -133,7 +133,9 @@ async def _free_hit(session, label):
     every = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
     providers = source_clients.build_providers(every, discovery_fake.transport())
     try:
-        await snowball_run.snowball(session, providers, ws.id, [paper.id], [], backward=True, forward=False)
+        await snowball_run.snowball(
+            session, providers, ws.id, [paper.id], [], snowball_run.Directions(backward=True, forward=False)
+        )
     finally:
         await providers.aclose()
     hits = result(await call("list_hits", workspace=ws.name))["hits"]
