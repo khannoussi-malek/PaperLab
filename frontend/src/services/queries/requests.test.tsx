@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { Candidate } from '@/entities'
 import { AlreadyInLibraryError, api } from '@/services/api'
-import { useAddPublishedVersion, useCitationRequests, useManuscriptRequests, usePaperDataRequests } from '@/services/queries'
+import { useAddPublishedVersion, useCitationRequests, useDataRequests, useManuscriptRequests } from '@/services/queries'
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -26,10 +26,13 @@ test('the manuscript requests are bound to their manuscript and keep one identit
   expect(result.current).not.toBe(first)
 })
 
-test("the capture dialogs' reads go to the paper they were opened on", async () => {
+test("the capture dialogs' reads are one object for every render and every paper", async () => {
   const preview = vi.spyOn(api, 'previewTable').mockResolvedValue({} as never)
-  const { result } = renderHook(() => usePaperDataRequests('p1'))
-  await result.current.previewTable(3, [0, 0, 1, 1])
+  const { result, rerender } = renderHook(() => useDataRequests())
+  const first = result.current
+  rerender()
+  expect(result.current).toBe(first) // AddNumberDialog's effect runs again only for new text
+  await first.previewTable('p1', 3, [0, 0, 1, 1])
   expect(preview).toHaveBeenCalledWith('p1', 3, [0, 0, 1, 1])
 })
 

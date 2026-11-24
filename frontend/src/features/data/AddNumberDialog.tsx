@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import type { NumberCandidate } from '@/entities'
-import { useDatasetMutations, usePaperDataRequests } from '@/services/queries'
+import { useDataRequests, useDatasetMutations } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { pressable } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -47,7 +47,7 @@ const fieldsOf = (candidate: NumberCandidate) => ({
 /** Opens on a text selection with the numbers found in it, and saves the chosen one as a row in the paper's numbers dataset. */
 export function AddNumberDialog({ paperId, anchor, onClose }: Props) {
   const { addNumber } = useDatasetMutations()
-  const { numberCandidates } = usePaperDataRequests(paperId)
+  const { numberCandidates } = useDataRequests()
   const [candidates, setCandidates] = useState<NumberCandidate[] | null>(null)
   const [candidatesError, setCandidatesError] = useState<string | null>(null)
   const [chosen, setChosen] = useState(0)

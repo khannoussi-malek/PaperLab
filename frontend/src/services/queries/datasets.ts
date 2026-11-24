@@ -1,5 +1,4 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo } from 'react'
 import { api } from '@/services/api'
 import type { ChartSpec, DatasetCreate, GridIn, NumberCreate } from '@/entities'
 import { keys } from './core'
@@ -106,13 +105,11 @@ export const useNumberSuggestions = (paperId: string, sectionTitle: string | nul
     retry: false,
   })
 
-/** One-off reads the capture dialogs make while they open; the dialogs keep what comes back as editable state. */
-export function usePaperDataRequests(paperId: string) {
-  return useMemo(
-    () => ({
-      numberCandidates: (text: string) => api.numberCandidates(text),
-      previewTable: (page: number, region: [number, number, number, number]) => api.previewTable(paperId, page, region),
-    }),
-    [paperId],
-  )
+const dataRequests = {
+  numberCandidates: (text: string) => api.numberCandidates(text),
+  previewTable: (paperId: string, page: number, region: [number, number, number, number]) => api.previewTable(paperId, page, region),
 }
+
+/** One-off reads the capture dialogs make while they open; the dialogs keep what comes back as editable state. The
+ * same object every render, so an effect that lists one of these runs only when its own inputs change. */
+export const useDataRequests = () => dataRequests
