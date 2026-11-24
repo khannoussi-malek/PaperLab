@@ -1,9 +1,8 @@
-import { useQueries } from '@tanstack/react-query'
 import { FolderInput, History, Trash2 } from 'lucide-react'
 import { DownloadMenu } from '@/features/manuscripts/DownloadMenu'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, ApiError } from '@/services/api'
-import { useCompileManuscript, useManuscript, useManuscriptPapers, usePapersFollowCompile, usePinPaper } from '@/services/queries'
+import { ApiError } from '@/services/api'
+import { useCompileManuscript, useManuscript, useManuscriptFiles, useManuscriptPapers, useManuscriptRequests, usePapersFollowCompile, usePinPaper } from '@/services/queries'
 import { AppShell } from '@/layout/AppShell'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/features/library/ErrorAlert'
@@ -41,6 +40,7 @@ import { useLeaveWarning } from '@/features/manuscripts/useLeaveWarning'
 /** The writing studio: files and outline | source | PDF. `file` is the `?file=` of the route; null is the main file. */
 export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscriptId: string; file: string | null; line?: number | null }) {
   const manuscript = useManuscript(manuscriptId)
+  const requests = useManuscriptRequests(manuscriptId)
   const libraryPapers = useManuscriptPapers(manuscriptId)
   const pin = usePinPaper()
   const pinPaper = useCallback((paperId: string) => pin.mutate({ id: manuscriptId, paperId }), [pin.mutate, manuscriptId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -114,9 +114,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const path = data && (file && data.files.some((f) => f.path === file) ? file : data.main_file)
   // Same keys as the editor's own query, so the open file is fetched once; the others feed the outline.
   const texFiles = (data?.files ?? []).filter((f) => f.path.endsWith('.tex'))
-  const texQueries = useQueries({
-    queries: texFiles.map((f) => ({ queryKey: ['manuscripts', manuscriptId, 'file', f.path], queryFn: () => api.getManuscriptFile(manuscriptId, f.path) })),
-  })
+  const texQueries = useManuscriptFiles(manuscriptId, texFiles.map((f) => f.path))
   const texts = texQueries.map((q) => q.data?.text).join('\u0000')
   const fileTexts = useMemo(() => {
     const files = Object.fromEntries(texFiles.flatMap((f, i) => (texQueries[i].data ? [[f.path, texQueries[i].data.text]] : [])))
@@ -147,8 +145,8 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const inverseId = useRef(0)
   const showInPdf = useCallback((f: string, ln: number) => {
     const id = ++forwardId.current
-    api.syncForward(manuscriptId, f, ln).then((r) => { if (id === forwardId.current) setTarget((t) => ({ page: r.page, y: r.y, n: (t?.n ?? 0) + 1 })) }, () => {})
-  }, [manuscriptId])
+    requests.syncForward(f, ln).then((r) => { if (id === forwardId.current) setTarget((t) => ({ page: r.page, y: r.y, n: (t?.n ?? 0) + 1 })) }, () => {})
+  }, [requests])
   const goodStamp = data?.compile_status === 'ok' ? data.compiled_at : null
   // A compile started by an edit from the PDF keeps the PDF where it is. `editCompile` holds compiled_at when it
   // started; once a compile is stored after that, a good one's stamp becomes `stillStamp`: no forward lookup for it,
@@ -177,7 +175,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const sourceAt = (page: number, x: number, y: number) => {
     const id = ++inverseId.current
     const from = path
-    api.syncInverse(manuscriptId, page, x, y).then((r) => {
+    requests.syncInverse(page, x, y).then((r) => {
       if (id !== inverseId.current || from !== latest.current.path) return // a newer click, or another file opened meanwhile
       if (!isOwn(r.file)) return // made by LaTeX (main.bbl): nothing of the user's to open
       if (r.file === path) setJump((j) => ({ line: r.line, n: (j?.n ?? 0) + 1 }))
@@ -193,7 +191,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     const id = ++editId.current
     const from = path
     void (async () => {
-      const r = await api.syncInverse(manuscriptId, page, x, y)
+      const r = await requests.syncInverse(page, x, y)
       if (id !== editId.current || from !== latest.current.path) return // a newer double-click, or another file opened meanwhile
       if (!isOwn(r.file)) { // a file LaTeX wrote (main.bbl): nothing to edit or open
         setEdit({ id, anchor, file: r.file, line: r.line, at: null, initial: '', generated: true })
@@ -201,7 +199,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
       }
       let text: string | undefined = r.file === from ? textsRef.current[r.file] : undefined // the editor's buffer when it is open
       if (text === undefined) {
-        const fresh = await api.getManuscriptFile(manuscriptId, r.file)
+        const fresh = await requests.getFile(r.file)
         if (id !== editId.current || from !== latest.current.path) return
         text = fresh.text
       }
@@ -225,11 +223,11 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
         return
       }
     } else {
-      const lines = (await api.getManuscriptFile(manuscriptId, target))
+      const lines = await requests.getFile(target)
       const row = lines.text.split('\n')
       if (row[at.line - 1]?.slice(at.start, at.end) !== initial) throw changed
       row[at.line - 1] = row[at.line - 1].slice(0, at.start) + replacement + row[at.line - 1].slice(at.end)
-      try { await api.saveManuscriptFile(manuscriptId, target, row.join('\n'), lines.updated_at) }
+      try { await requests.saveFile(target, row.join('\n'), lines.updated_at) }
       catch (e) { throw e instanceof ApiError && e.code === 'file_changed' ? changed : e }
     }
     setEdit(null)

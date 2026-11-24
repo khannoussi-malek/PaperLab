@@ -1,4 +1,5 @@
 export * from './chat'
+export * from './citations'
 export * from './core'
 export * from './datasets'
 export * from './discovery'

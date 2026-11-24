@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/services/api'
+import { AlreadyInLibraryError, api } from '@/services/api'
 import { sameCandidate, type Candidate, type SearchResult } from '@/entities'
 import { keys } from './core'
 
@@ -63,5 +63,34 @@ export function useAddCandidate(workspaceId?: string) {
         client.invalidateQueries({ queryKey: keys.discovery, refetchType: 'none' }),
       ])
     },
+  })
+}
+
+export type PublishedOutcome = { kind: 'added' } | { kind: 'owned'; paperId: string } | { kind: 'no-pdf' } | { kind: 'not-found' }
+
+/** Looks the published DOI up the way Find papers does, and adds it only when a free PDF is listed. */
+async function addPublished(doi: string): Promise<PublishedOutcome> {
+  const { results } = await api.searchPapers(doi)
+  const found = results.find((c) => c.doi?.toLowerCase() === doi.toLowerCase())
+  if (!found) return { kind: 'not-found' }
+  if (found.paper_id) return { kind: 'owned', paperId: found.paper_id }
+  if (found.pdf_urls.length === 0) return { kind: 'no-pdf' }
+  try {
+    await api.addCandidate(found)
+  } catch (error) {
+    if (error instanceof AlreadyInLibraryError) return { kind: 'owned', paperId: error.paperId }
+    throw error
+  }
+  return { kind: 'added' }
+}
+
+/** Adds a preprint's published version; an added paper refreshes the library and the workspaces. */
+export function useAddPublishedVersion(doi: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => addPublished(doi),
+    onSuccess: (outcome) =>
+      outcome.kind === 'added' &&
+      Promise.all([client.invalidateQueries({ queryKey: keys.papers }), client.invalidateQueries({ queryKey: keys.workspaces })]),
   })
 }

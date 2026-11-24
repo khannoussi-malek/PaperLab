@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { api } from '@/services/api'
 import type { ChartSpec, DatasetCreate, GridIn, NumberCreate } from '@/entities'
 import { keys } from './core'
@@ -91,4 +92,27 @@ export function useChartMutations() {
       onSuccess: everything,
     }),
   }
+}
+
+/** A section's numbers as the model found them (D33). Asked once per opening: the model costs time, so nothing
+ * refetches by itself. */
+export const useNumberSuggestions = (paperId: string, sectionTitle: string | null) =>
+  useQuery({
+    queryKey: ['papers', paperId, 'number-suggestions', sectionTitle],
+    queryFn: () => api.suggestNumbers(paperId, sectionTitle),
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+
+/** One-off reads the capture dialogs make while they open; the dialogs keep what comes back as editable state. */
+export function usePaperDataRequests(paperId: string) {
+  return useMemo(
+    () => ({
+      numberCandidates: (text: string) => api.numberCandidates(text),
+      previewTable: (page: number, region: [number, number, number, number]) => api.previewTable(paperId, page, region),
+    }),
+    [paperId],
+  )
 }

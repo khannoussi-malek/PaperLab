@@ -1,8 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
 import { Quote } from "lucide-react";
 import { useState } from "react";
-import { useWorkspacePapers } from '@/services/queries'
-import { api, citationsUrl, zoteroZipUrl } from '@/services/api'
+import { useCitationRequests, useCitationsPreview, useWorkspacePapers } from '@/services/queries'
+import { citationsUrl, zoteroZipUrl } from '@/services/api'
 import { glass } from "@/components/glass";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -123,12 +122,8 @@ function ApaDialog({
   workspaceId: string;
   onClose: () => void;
 }) {
-  const preview = useQuery({
-    queryKey: ["citations", workspaceId, "apa-html"],
-    queryFn: () => api.citationsText(workspaceId, "apa-html"),
-    retry: false,
-    gcTime: 0,
-  });
+  const preview = useCitationsPreview(workspaceId);
+  const requests = useCitationRequests(workspaceId);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,7 +131,7 @@ function ApaDialog({
     setError(null);
     let plain: string;
     try {
-      plain = await api.citationsText(workspaceId, "apa");
+      plain = await requests.plainText();
     } catch (e) {
       return setError(plainError(e as Error));
     }

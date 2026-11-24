@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { sileo } from 'sileo'
 import type { ManuscriptFile } from '@/entities'
-import { api, isConflict } from '@/services/api'
-import { useManuscriptTemplates } from '@/services/queries'
+import { isConflict } from '@/services/api'
+import { useManuscriptFile, useManuscriptRequests, useManuscriptTemplates } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { BLUEPRINT_PATH, latexTitle, parseBlueprint, starterBlueprint } from './blueprint'
 
@@ -15,18 +15,15 @@ type Props = { manuscriptId: string; files: ManuscriptFile[]; mainFile: string; 
 export function BlueprintPanel({ manuscriptId, files, mainFile, title, template }: Props) {
   const queryClient = useQueryClient()
   const present = files.some((f) => f.path === BLUEPRINT_PATH)
-  const query = useQuery({
-    queryKey: ['manuscripts', manuscriptId, 'file', BLUEPRINT_PATH],
-    queryFn: () => api.getManuscriptFile(manuscriptId, BLUEPRINT_PATH),
-    enabled: present,
-  })
+  const query = useManuscriptFile(manuscriptId, present ? BLUEPRINT_PATH : null, { refetchOnWindowFocus: true })
+  const requests = useManuscriptRequests(manuscriptId)
   const templates = useManuscriptTemplates()
   const bands = templates.data?.find((t) => t.name === template)?.section_words
   const create = useMutation({
     mutationFn: async () => {
-      const main = files.some((f) => f.path === mainFile) ? await api.getManuscriptFile(manuscriptId, mainFile) : null
+      const main = files.some((f) => f.path === mainFile) ? await requests.getFile(mainFile) : null
       const plainTitle = (main && latexTitle(main.text)) || title // the paper's \title, else the stored name
-      return api.saveManuscriptFile(manuscriptId, BLUEPRINT_PATH, starterBlueprint(plainTitle, bands), null)
+      return requests.saveFile(BLUEPRINT_PATH, starterBlueprint(plainTitle, bands), null)
     },
     onError: (e) => {
       if (!isConflict(e, 'file_exists')) sileo.error({ title: "Couldn't create the blueprint" }) // already there: the refresh shows it

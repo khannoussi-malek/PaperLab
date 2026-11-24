@@ -1,7 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { useRef } from 'react'
-import { api } from '@/services/api'
-import { keys, PAPERS_POLL_MS } from '@/services/queries'
+import { useEmbeddingProgress } from '@/services/queries'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 
@@ -18,11 +16,7 @@ export function timeLeft(done: number, total: number, startDone: number, seconds
 
 /** How far a paper's embedding has got. Mount it only while the paper is embedding: it polls for as long as it's up. */
 export function EmbeddingProgress({ paperId, className }: { paperId: string; className?: string }) {
-  const { data, dataUpdatedAt } = useQuery({
-    queryKey: keys.embeddingProgress(paperId),
-    queryFn: () => api.embeddingProgress(paperId),
-    refetchInterval: PAPERS_POLL_MS,
-  })
+  const { data, dataUpdatedAt } = useEmbeddingProgress(paperId)
   const start = useRef<{ done: number; at: number } | null>(null)
   if (!data?.total) return null
   start.current ??= { done: data.done, at: dataUpdatedAt }

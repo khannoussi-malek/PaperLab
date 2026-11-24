@@ -1,8 +1,8 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Role, SectionReview, SectionSpan } from '@/entities'
-import { api, ApiError, reviewReportHref } from '@/services/api'
-import { useManuscriptFile, useSaveManuscriptFile } from '@/services/queries'
+import { ApiError, reviewReportHref } from '@/services/api'
+import { useManuscriptFile, useManuscriptRequests, useSaveManuscriptFile } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
@@ -83,6 +83,7 @@ export function SourcePane(props: Props) {
   const { manuscriptId, path, errors, jumpTo, compiling, compileError, onCompile, onText } = props
   const file = useManuscriptFile(manuscriptId, path)
   const save = useSaveManuscriptFile()
+  const requests = useManuscriptRequests(manuscriptId)
   const live = useRef({ ...props, mutate: save.mutateAsync })
   live.current = { ...props, mutate: save.mutateAsync }
   const base = useRef<string | null>(null) // the file's updated_at as we last saw it
@@ -135,7 +136,7 @@ export function SourcePane(props: Props) {
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const announceOutside = async () => {
-    const reason = await api.listManuscriptSnapshots(manuscriptId).then((s) => s[0]?.reason, () => undefined)
+    const reason = await requests.snapshots().then((s) => s[0]?.reason, () => undefined)
     if (!mounted.current || (reason !== undefined && OWN_REASONS.includes(reason))) return // this tab's own change
     setNotice(reason === 'before_mcp' ? 'Updated by Claude (MCP)' : reason === undefined ? 'Updated' : 'Updated elsewhere')
   }
@@ -266,7 +267,7 @@ export function SourcePane(props: Props) {
     const now = textNow.current
     if (now === null) return
     // ponytail: a failed locate reads as "no section here"; say more if it ever happens in practice
-    const spans = await api.locateSections(manuscriptId, path, now).then((r) => r.sections, () => [] as SectionSpan[])
+    const spans = await requests.locateSections(path, now).then((r) => r.sections, () => [] as SectionSpan[])
     const cursor = reviewHandleRef?.cursor() ?? 0
     const section = again ? spans.find((s) => s.title === again.title) ?? null : sectionAt(spans, cursor)
     setSectionTarget({ at: again ? section?.start ?? 0 : cursor, section, role: again?.role_source === 'chosen' ? again.role : undefined, gone: !!again && !section })
@@ -322,7 +323,7 @@ export function SourcePane(props: Props) {
       {file.error && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{file.error.message}</AlertDescription></Alert>}
       <div className="min-h-0 flex-1">
         {text === null ? (!file.error && <TabSkeleton label="Loading file" />) : (
-          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} onFindEvidence={props.onFindEvidence} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} registerFindEvidence={props.registerFindEvidence} registerReview={setReviewHandle} reviewLocate={(t) => api.locateSentences(manuscriptId, t).then((r) => r.sentences)} onSave={() => void compileNow()} />
+          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} onFindEvidence={props.onFindEvidence} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} registerFindEvidence={props.registerFindEvidence} registerReview={setReviewHandle} reviewLocate={(t) => requests.locateSentences(t).then((r) => r.sentences)} onSave={() => void compileNow()} />
         )}
       </div>
       {isTex && (
