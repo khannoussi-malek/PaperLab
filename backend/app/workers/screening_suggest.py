@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 from collections.abc import Collection
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import select, text
@@ -83,6 +84,87 @@ async def _backfill_abstracts(ctx: dict, workspace: Workspace, run_ids: list[str
             logger.exception("abstract backfill before pre-screening %s failed; judging what is there", workspace.id)
 
 
+@dataclass(frozen=True)
+class _Job:
+    llm: object
+    label: str  # "connection · model", stored on each suggestion
+    deadline: float  # time.monotonic() past which the job stops
+    scope: set[uuid.UUID] | None  # the runs whose hits are suggested; None for all
+
+
+def _store(hit: WorkspaceSearchHit, suggestion: SuggestionV2, label: str) -> None:
+    hit.suggestion, hit.suggestion_reason = suggestion.verdict, suggestion.reason
+    hit.suggestion_note = suggestion.note
+    # No abstract means no model was called, so there is no model to name.
+    hit.suggestion_model = None if "no_abstract" in suggestion.flags else label
+    hit.suggestion_relevance, hit.suggestion_quotes = suggestion.relevance, suggestion.quotes
+    hit.suggestion_confidence, hit.suggestion_flags = suggestion.confidence, suggestion.flags
+    hit.suggestion_prompt_version = SCREENING_PROMPT_VERSION
+    hit.suggested_at = datetime.now(timezone.utc)
+
+
+async def _queue(ctx: dict, session, workspace: Workspace, run_ids: list[str] | None, scope) -> tuple[list, dict]:
+    """(the hit ids to suggest, in order, up to the total; hit id -> (hit, ref)), after the abstracts backfill."""
+    wid = workspace.id
+    queued_before = len(suggestion_queue(await load_pool(session, wid), run_ids=scope))
+    await _backfill_abstracts(ctx, workspace, run_ids)
+    session.expire_all()  # the backfill wrote through its own session: read its abstracts, not ours
+    await session.refresh(workspace)
+    pool = await load_pool(session, wid)
+    rows = {hit.id: (hit, ref) for hit, ref in pool.rows}
+    queue_ids = suggestion_queue(pool, run_ids=scope)
+    # The backfill can reopen hits: count them too, unless a cap set the total lower (D265).
+    if workspace.suggest_total >= queued_before and len(queue_ids) != workspace.suggest_total:
+        workspace.suggest_total = len(queue_ids)
+        await session.commit()
+    return queue_ids[: workspace.suggest_total or None], rows
+
+
+async def _suggest_each(session, workspace: Workspace, job: _Job, queue_ids: list, rows: dict) -> bool:
+    """Suggests each queued hit still undecided, until a Stop or the deadline. True when the deadline stopped it."""
+    for hit_id in queue_ids:
+        await session.refresh(workspace)
+        if workspace.suggest_status != "running":
+            return False
+        if time.monotonic() >= job.deadline:
+            return True
+        hit, ref = rows[hit_id]
+        await session.refresh(hit)
+        if hit.stage1_status is not None or hit.suggestion is not None or not hit_text(hit, ref).strip():
+            continue  # decided (or suggested) since the job started
+        _store(hit, await _suggest_one(job.llm, workspace, hit, ref), job.label)
+        workspace.suggest_done += 1
+        await session.commit()
+    return False
+
+
+async def _run(ctx: dict, session, workspace: Workspace, run_ids: list[str] | None) -> None:
+    """The job's work once it holds the lock: suggest the queued hits, then auto-import on a normal finish."""
+    connection, model = await llm_connections.resolve(session, None)
+    llm = build_llm(connection, model.name, transport=ctx.get("transport"))
+    deadline = time.monotonic() + SUGGEST_JOB_TIMEOUT - SAFETY_MARGIN  # the backfill counts against it
+    # A multi-run job names its runs; otherwise the single run (or none) the start recorded.
+    scope = (
+        {uuid.UUID(r) for r in run_ids} if run_ids is not None
+        else None if workspace.suggest_run_id is None else {workspace.suggest_run_id}
+    )
+    job = _Job(llm, f"{connection.label} · {model.name}", deadline, scope)
+    queue_ids, rows = await _queue(ctx, session, workspace, run_ids, scope)
+    hit_deadline = await _suggest_each(session, workspace, job, queue_ids, rows)
+    # Only a normal finish imports: not a Stop (pressed during the last hit too) or the deadline.
+    await session.refresh(workspace)
+    if hit_deadline and workspace.suggest_status == "running":
+        workspace.suggest_error = (
+            f"Stopped at the {SUGGEST_JOB_TIMEOUT // 3600}-hour limit after {workspace.suggest_done} of "
+            f"{workspace.suggest_total}; press Suggest to continue with the rest."
+        )
+    if (
+        workspace.suggest_status == "running" and time.monotonic() < deadline
+        and workspace.auto_import_min_relevance is not None
+    ):
+        await _auto_import(session, workspace, scope)
+
+
 async def suggest_screening(ctx: dict, workspace_id: str, run_ids: list[str] | None = None) -> None:
     wid = uuid.UUID(workspace_id)
     # The advisory lock is session-level: Postgres ties it to one physical connection, not to our ORM `session`
@@ -108,62 +190,7 @@ async def suggest_screening(ctx: dict, workspace_id: str, run_ids: list[str] | N
                 # commit/rollback either way), but leaving this open would sit "idle in transaction" for up to
                 # SUGGEST_JOB_TIMEOUT, holding back autovacuum the whole time.
                 await lock_conn.commit()
-                connection, model = await llm_connections.resolve(session, None)
-                llm = build_llm(connection, model.name, transport=ctx.get("transport"))
-                label = f"{connection.label} · {model.name}"
-                deadline = time.monotonic() + SUGGEST_JOB_TIMEOUT - SAFETY_MARGIN  # the backfill counts against it
-                # A multi-run job names its runs; otherwise the single run (or none) the start recorded.
-                scope = (
-                    {uuid.UUID(r) for r in run_ids} if run_ids is not None
-                    else None if workspace.suggest_run_id is None else {workspace.suggest_run_id}
-                )
-                queued_before = len(suggestion_queue(await load_pool(session, wid), run_ids=scope))
-                await _backfill_abstracts(ctx, workspace, run_ids)
-                session.expire_all()  # the backfill wrote through its own session: read its abstracts, not ours
-                await session.refresh(workspace)
-                pool = await load_pool(session, wid)
-                rows = {hit.id: (hit, ref) for hit, ref in pool.rows}
-                hit_deadline = False
-                queue_ids = suggestion_queue(pool, run_ids=scope)
-                # The backfill can reopen hits: count them too, unless a cap set the total lower (D265).
-                if workspace.suggest_total >= queued_before and len(queue_ids) != workspace.suggest_total:
-                    workspace.suggest_total = len(queue_ids)
-                    await session.commit()
-                queue_ids = queue_ids[: workspace.suggest_total or None]
-                for hit_id in queue_ids:
-                    await session.refresh(workspace)
-                    if workspace.suggest_status != "running":
-                        break
-                    if time.monotonic() >= deadline:
-                        hit_deadline = True
-                        break
-                    hit, ref = rows[hit_id]
-                    await session.refresh(hit)
-                    if hit.stage1_status is not None or hit.suggestion is not None or not hit_text(hit, ref).strip():
-                        continue  # decided (or suggested) since the job started
-                    suggestion = await _suggest_one(llm, workspace, hit, ref)
-                    hit.suggestion, hit.suggestion_reason = suggestion.verdict, suggestion.reason
-                    hit.suggestion_note = suggestion.note
-                    # No abstract means no model was called, so there is no model to name.
-                    hit.suggestion_model = None if "no_abstract" in suggestion.flags else label
-                    hit.suggestion_relevance, hit.suggestion_quotes = suggestion.relevance, suggestion.quotes
-                    hit.suggestion_confidence, hit.suggestion_flags = suggestion.confidence, suggestion.flags
-                    hit.suggestion_prompt_version = SCREENING_PROMPT_VERSION
-                    hit.suggested_at = datetime.now(timezone.utc)
-                    workspace.suggest_done += 1
-                    await session.commit()
-                # Only a normal finish imports: not a Stop (pressed during the last hit too) or the deadline.
-                await session.refresh(workspace)
-                if hit_deadline and workspace.suggest_status == "running":
-                    workspace.suggest_error = (
-                        f"Stopped at the {SUGGEST_JOB_TIMEOUT // 3600}-hour limit after {workspace.suggest_done} of "
-                        f"{workspace.suggest_total}; press Suggest to continue with the rest."
-                    )
-                if (
-                    workspace.suggest_status == "running" and time.monotonic() < deadline
-                    and workspace.auto_import_min_relevance is not None
-                ):
-                    await _auto_import(session, workspace, scope)
+                await _run(ctx, session, workspace, run_ids)
             except (LLMUnavailable, Conflict) as exc:
                 workspace.suggest_error = (
                     "Set up a chat model in Settings first" if isinstance(exc, Conflict) else str(exc)

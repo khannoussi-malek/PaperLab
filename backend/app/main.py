@@ -111,71 +111,84 @@ async def lifespan(app: FastAPI):
     await app.state.arq.aclose()
 
 
+# Included in this order: it is the order routes match in.
+ROUTERS = (
+    health.router,
+    papers.router,
+    triage.router,
+    lenses.router,
+    briefs.router,
+    checks.router,
+    reading_bridge_api.router,
+    reading_bridge_api.workspace_router,
+    notes.router,
+    chat.router,
+    workspaces.router,
+    citations_api.router,
+    workspace_search_api.router,
+    saved_searches_api.router,
+    evidence_cards_api.router,
+    manuscripts_api.router,
+    reporting_guidelines_api.router,
+    manuscript_review_api.router,
+    manuscript_checks_api.router,
+    manuscript_doi_check_api.router,
+    manuscript_section_review_api.router,
+    manuscript_draft_review_api.router,
+    manuscript_diagrams_api.router,
+    datasets.router,
+    charts.router,
+    llm.router,
+    embedding.router,
+    novelty.router,
+    discovery.router,
+    graph.router,
+    paper_sources_api.router,
+    references_api.router,
+    links.router,
+    mcp_api.router,
+    setup_api.router,
+    voice.router,
+    skills_api.router,
+)
+
+
+def _error_extras(exc: DomainError) -> dict:
+    """The details a DomainError's body carries beside its code."""
+    # no_free_pdf says what it tried and where a free copy may be (M63)
+    extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
+    # extras: manuscript file and cap (M27a), allowed/max
+    for key in ("path", "limit", "count", "allowed", "max", "available", "likely_calls", "max_calls"):
+        if key in exc.details:
+            extra[key] = exc.details[key]
+    if "updated_at" in exc.details:  # file_changed: the file's clock; pydantic's UTC form (Z) matches the bodies
+        extra["updated_at"] = TypeAdapter(datetime).dump_python(exc.details["updated_at"], mode="json")
+    for key in ("model", "host"):  # remote_model_needs_confirm names the model and where the text would go
+        if key in exc.details:
+            extra[key] = str(exc.details[key])
+    for key in ("paper_id", "kept_id"):  # already_in_library (M66) and paper_merged (R19) say which paper
+        if key in exc.details:
+            extra[key] = str(exc.details[key])
+    return extra
+
+
+async def _domain_error(_: Request, exc: DomainError) -> JSONResponse:
+    return JSONResponse({"detail": str(exc), **_error_extras(exc)}, status_code=STATUS_BY_ERROR.get(type(exc), 400))
+
+
+async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+    # FastAPI's own handler echoes each error's `input`, and a model-level error echoes the whole body: an API
+    # key sent in the wrong shape would come back in the response. Same body otherwise.
+    errors = [{key: value for key, value in error.items() if key != "input"} for error in exc.errors()]
+    return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="PaperLab", lifespan=lifespan)
-    app.include_router(health.router)
-    app.include_router(papers.router)
-    app.include_router(triage.router)
-    app.include_router(lenses.router)
-    app.include_router(briefs.router)
-    app.include_router(checks.router)
-    app.include_router(reading_bridge_api.router)
-    app.include_router(reading_bridge_api.workspace_router)
-    app.include_router(notes.router)
-    app.include_router(chat.router)
-    app.include_router(workspaces.router)
-    app.include_router(citations_api.router)
-    app.include_router(workspace_search_api.router)
-    app.include_router(saved_searches_api.router)
-    app.include_router(evidence_cards_api.router)
-    app.include_router(manuscripts_api.router)
-    app.include_router(reporting_guidelines_api.router)
-    app.include_router(manuscript_review_api.router)
-    app.include_router(manuscript_checks_api.router)
-    app.include_router(manuscript_doi_check_api.router)
-    app.include_router(manuscript_section_review_api.router)
-    app.include_router(manuscript_draft_review_api.router)
-    app.include_router(manuscript_diagrams_api.router)
-    app.include_router(datasets.router)
-    app.include_router(charts.router)
-    app.include_router(llm.router)
-    app.include_router(embedding.router)
-    app.include_router(novelty.router)
-    app.include_router(discovery.router)
-    app.include_router(graph.router)
-    app.include_router(paper_sources_api.router)
-    app.include_router(references_api.router)
-    app.include_router(links.router)
-    app.include_router(mcp_api.router)
-    app.include_router(setup_api.router)
-    app.include_router(voice.router)
-    app.include_router(skills_api.router)
-
-    @app.exception_handler(DomainError)
-    async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
-        # no_free_pdf says what it tried and where a free copy may be (M63)
-        extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
-        # extras: manuscript file and cap (M27a), allowed/max
-        for key in ("path", "limit", "count", "allowed", "max", "available", "likely_calls", "max_calls"):
-            if key in exc.details:
-                extra[key] = exc.details[key]
-        if "updated_at" in exc.details:  # file_changed: the file's clock; pydantic's UTC form (Z) matches the bodies
-            extra["updated_at"] = TypeAdapter(datetime).dump_python(exc.details["updated_at"], mode="json")
-        for key in ("model", "host"):  # remote_model_needs_confirm names the model and where the text would go
-            if key in exc.details:
-                extra[key] = str(exc.details[key])
-        for key in ("paper_id", "kept_id"):  # already_in_library (M66) and paper_merged (R19) say which paper
-            if key in exc.details:
-                extra[key] = str(exc.details[key])
-        return JSONResponse({"detail": str(exc), **extra}, status_code=STATUS_BY_ERROR.get(type(exc), 400))
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
-        # FastAPI's own handler echoes each error's `input`, and a model-level error echoes the whole body: an API
-        # key sent in the wrong shape would come back in the response. Same body otherwise.
-        errors = [{key: value for key, value in error.items() if key != "input"} for error in exc.errors()]
-        return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
-
+    for router in ROUTERS:
+        app.include_router(router)
+    app.add_exception_handler(DomainError, _domain_error)
+    app.add_exception_handler(RequestValidationError, _validation_error)
     serve_frontend(app, settings.frontend_dist)
     return app
 

@@ -96,8 +96,8 @@ async def test_ingest_aligns_from_the_crossref_fetch_it_already_made(session, fa
 async def test_backfill_align_selects_full_papers_and_corrects_them(session):
     full = await add_paper(session, doi=f"10.9999/align-{uuid.uuid4().hex[:8]}", year=2023, **FULL)
     client, _ = fake_crossref(crossref_work())
-    assert (await backfill_biblio.run(session, client, None, delay=0, only=[full.id]))["checked"] == 0
-    summary = await backfill_biblio.run(session, client, None, delay=0, only=[full.id], align=True)
+    assert (await backfill_biblio.run(session, (client, None), delay=0, only=[full.id]))["checked"] == 0
+    summary = await backfill_biblio.run(session, (client, None), delay=0, only=[full.id], align=True)
     await session.refresh(full)
     assert summary == {"checked": 1, "updated": 1}
     assert (full.year, full.venue, full.pages) == (2024, "Journal of Secondary Gifted Education", "289-297")
@@ -131,7 +131,7 @@ async def full_paper(session, **fields):
 async def test_backfill_align_leaves_a_pdf_paper_with_a_doi_read_off_its_page_alone(session):
     paper = await full_paper(session, field_sources={"identifiers": "pdf"})
     client, _ = fake_crossref(crossref_work())
-    summary = await backfill_biblio.run(session, client, None, delay=0, only=[paper.id], align=True)
+    summary = await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id], align=True)
     await session.refresh(paper)
     assert summary["updated"] == 0 and (paper.year, paper.venue, paper.pages) == (2023, None, "289")
 
@@ -140,7 +140,7 @@ async def test_backfill_align_leaves_a_pdf_paper_with_a_doi_read_off_its_page_al
 async def test_a_pdf_stamped_doi_is_trusted_once_openalex_the_owner_or_no_pdf_vouches_for_it(session, trust):
     paper = await full_paper(session, field_sources={"identifiers": "pdf"}, **trust)
     client, _ = fake_crossref(crossref_work())
-    await backfill_biblio.run(session, client, None, delay=0, only=[paper.id], align=True)
+    await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id], align=True)
     await session.refresh(paper)
     assert paper.year == 2024
 
@@ -175,15 +175,15 @@ def test_only_a_plain_numeric_range_upgrades_the_page(page, pages):
 async def test_a_second_align_run_changes_nothing(session):
     paper = await full_paper(session)
     client, _ = fake_crossref(crossref_work())
-    first = await backfill_biblio.run(session, client, None, delay=0, only=[paper.id], align=True)
-    second = await backfill_biblio.run(session, client, None, delay=0, only=[paper.id], align=True)
+    first = await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id], align=True)
+    second = await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id], align=True)
     assert (first["updated"], second["updated"]) == (1, 0)
 
 
 async def test_a_manual_stamp_is_kept_while_the_field_is_corrected(session):
     paper = await full_paper(session, manual_fields=["title"], field_sources={"bibliographic": "manual"})
     client, _ = fake_crossref(crossref_work())
-    await backfill_biblio.run(session, client, None, delay=0, only=[paper.id], align=True)
+    await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id], align=True)
     await session.refresh(paper)
     assert paper.year == 2024 and paper.field_sources["bibliographic"] == "manual"
     assert paper.field_sources["citation"] == "crossref"
@@ -192,7 +192,7 @@ async def test_a_manual_stamp_is_kept_while_the_field_is_corrected(session):
 async def test_a_plain_backfill_fills_but_never_aligns(session):
     paper = await full_paper(session, pmid=None)
     client, _ = fake_crossref(crossref_work())
-    summary = await backfill_biblio.run(session, client, None, delay=0, only=[paper.id])
+    summary = await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id])
     await session.refresh(paper)
     assert summary["checked"] == 1 and (paper.year, paper.pages) == (2023, "289")
 
@@ -204,7 +204,7 @@ async def test_the_report_lists_every_change_and_each_one_is_logged(session, tmp
     client, _ = fake_crossref(crossref_work(volume="10"))
     report = tmp_path / "changes.csv"
     with caplog.at_level("INFO", logger="app.core.papers.enrichment"):
-        await backfill_biblio.run(session, client, None, delay=0, only=[paper.id], align=True, report=report)
+        await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id], align=True, report=report)
     rows = list(csv.DictReader(report.open()))
     assert {(r["field"], r["old"], r["new"]) for r in rows} == {
         ("volume", "", "10"),

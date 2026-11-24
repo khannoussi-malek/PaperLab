@@ -7,6 +7,7 @@ place at their pinned size (D136). Nothing here reads settings: callers pass the
 """
 
 import asyncio
+import contextlib
 import errno
 import hashlib
 from collections.abc import AsyncIterator
@@ -89,6 +90,25 @@ def _open_part(part: Path, resume: bool):
     return part.open("ab" if resume else "wb")
 
 
+async def _download_rest(client: httpx.AsyncClient, file: ModelFile, part: Path, have: int) -> AsyncIterator[int]:
+    """Appends the rest of `file` to its part (or restarts it when the server sends the whole file), yielding how many
+    bytes the part holds: first where it starts from, then after each write."""
+    headers = {"Range": f"bytes={have}-"} if have else {}
+    async with client.stream("GET", url(file), headers=headers) as response:
+        if response.status_code not in (200, 206):
+            raise DownloadError(f"Hugging Face answered {response.status_code}. Try again later.")
+        if response.status_code == 200:
+            have = 0  # the whole file came back, not the rest of it: start the part again
+        yield have
+        with _open_part(part, resume=have > 0) as out:
+            async for chunk in response.aiter_bytes(CHUNK):
+                out.write(chunk)
+                have += len(chunk)
+                yield have
+                if have > file.size:  # a misbehaving CDN: stop instead of streaming until the disk is full
+                    break
+
+
 async def _fetch(client: httpx.AsyncClient, file: ModelFile, target: Path) -> AsyncIterator[int]:
     """Writes `file` to its .part, resuming from what the part holds, and renames it to `target` once its sha256
     matches. Yields how many bytes the part holds: once the response has settled where it really starts from (a
@@ -97,20 +117,10 @@ async def _fetch(client: httpx.AsyncClient, file: ModelFile, target: Path) -> As
     target.parent.mkdir(parents=True, exist_ok=True)
     have = part.stat().st_size if part.is_file() else 0
     if have < file.size:
-        headers = {"Range": f"bytes={have}-"} if have else {}
-        async with client.stream("GET", url(file), headers=headers) as response:
-            if response.status_code not in (200, 206):
-                raise DownloadError(f"Hugging Face answered {response.status_code}. Try again later.")
-            if response.status_code == 200:
-                have = 0  # the whole file came back, not the rest of it: start the part again
-            yield have
-            with _open_part(part, resume=have > 0) as out:
-                async for chunk in response.aiter_bytes(CHUNK):
-                    out.write(chunk)
-                    have += len(chunk)
-                    yield have
-                    if have > file.size:  # a misbehaving CDN: stop instead of streaming until the disk is full
-                        break
+        # Closed with _fetch, as its own `async with` was, so a stopped download releases the file and stream at once.
+        async with contextlib.aclosing(_download_rest(client, file, part, have)) as rest:
+            async for have in rest:  # the last count is read below
+                yield have
     else:
         yield have
     if have < file.size:  # the body ended early without an error: keep the part, the next try resumes it

@@ -121,6 +121,22 @@ class OpenAICompatibleLLM:
         self._transport = transport  # tests pass httpx.MockTransport
         self.last_model: str | None = None  # the model the last answer's chunks named: a router may pick one
 
+    def _line_contents(self, line: str) -> list[str] | None:
+        """The answer text one streamed line carries ([] for none), or None at the end of the stream."""
+        if not line.startswith("data:"):  # blank separators and `: keep-alive` comments
+            return []
+        data = line.removeprefix("data:").strip()
+        if data == "[DONE]":
+            return None
+        chunk = json.loads(data)
+        # A failure after the 200 (OpenRouter sends one when the upstream model fails mid-answer).
+        if "error" in chunk:
+            raise LLMError(f"{self.connection_name}: {provider_message(data, self._api_key)}")
+        self.last_model = chunk.get("model") or self.last_model
+        # Only answer text: reasoning models also stream `reasoning_content` deltas.
+        deltas = (choice.get("delta") or {} for choice in chunk.get("choices") or [])
+        return [content for delta in deltas if (content := delta.get("content"))]
+
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
         body = {
             "model": self.model,
@@ -138,20 +154,11 @@ class OpenAICompatibleLLM:
                         self.connection_name, response.status_code, response.text, self._api_key, self.model
                     )
                 async for line in response.aiter_lines():
-                    if not line.startswith("data:"):  # blank separators and `: keep-alive` comments
-                        continue
-                    data = line.removeprefix("data:").strip()
-                    if data == "[DONE]":
+                    contents = self._line_contents(line)
+                    if contents is None:
                         return
-                    chunk = json.loads(data)
-                    # A failure after the 200 (OpenRouter sends one when the upstream model fails mid-answer).
-                    if "error" in chunk:
-                        raise LLMError(f"{self.connection_name}: {provider_message(data, self._api_key)}")
-                    self.last_model = chunk.get("model") or self.last_model
-                    for choice in chunk.get("choices") or []:
-                        # Only answer text: reasoning models also stream `reasoning_content` deltas.
-                        if content := (choice.get("delta") or {}).get("content"):
-                            yield content
+                    for content in contents:
+                        yield content
         except httpx.ConnectError as exc:
             raise LLMUnavailable(f"Can't reach {self.host}") from exc
         except (httpx.HTTPError, ValueError) as exc:  # ValueError: a data line that isn't JSON

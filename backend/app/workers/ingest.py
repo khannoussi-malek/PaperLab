@@ -3,6 +3,7 @@ import logging
 import time
 import uuid
 from contextlib import AsyncExitStack
+from dataclasses import dataclass, field
 
 from arq.worker import Retry
 from sqlalchemy import select, update
@@ -187,6 +188,82 @@ async def _fail_clean(session, pid: uuid.UUID, error: str) -> None:
     await papers.set_status(session, pid, PaperStatus.FAILED, error=error)
 
 
+@dataclass
+class _Progress:
+    """How far an ingest got, filled in as its stages run: the timing log reads it on every path (a failure too), and
+    the merge after a finished ingest reads the collisions and the PDF's own evidence."""
+
+    started: float
+    marks: list[tuple[str, float]]  # each stage's start; a stage runs until the next
+    chunks: int = 0
+    pages: int = 0
+    collisions: list[enrichment.Collision] = field(default_factory=list)  # set only once the paper is ready
+    evidence: Candidate = field(default_factory=lambda: Candidate(""))  # what the PDF itself says (R15c)
+
+
+async def _skipped(ctx: dict, pid: uuid.UUID) -> bool:
+    """True when this job has nothing to do: the paper has no PDF, or it was stopped too many times (marked failed)."""
+    async with SessionLocal() as session:
+        if (await papers.get_paper(session, pid)).file_path is None:  # extract(None) would "succeed" and wipe chunks
+            logger.info("ingest of %s skipped: the paper has no PDF", pid)
+            return True
+    if ctx.get("job_try", 1) >= MAX_TRIES:
+        async with SessionLocal() as session:
+            await papers.set_status(session, pid, PaperStatus.FAILED, error=INTERRUPTED.format(times=MAX_TRIES - 1))
+        logger.warning("ingest of %s stopped %d times; marked failed", pid, MAX_TRIES - 1)
+        return True
+    return False
+
+
+async def _extract_and_chunk(session, paper: Paper, progress: _Progress):
+    pid = paper.id
+    await papers.set_status(session, pid, PaperStatus.EXTRACTING)
+    doc = await asyncio.to_thread(extract, paper.file_path)
+    progress.evidence = merges.pdf_evidence(doc.title, doc.metadata)  # before enrichment, whatever the title lock
+    # extract() can take seconds; re-read the lock right before deciding, in case a PATCH landed meanwhile.
+    await session.refresh(paper, ["openalex_id", "manual_fields"])
+
+    # Enriched or corrected titles beat the font heuristic; don't overwrite them on re-runs.
+    keep = paper.openalex_id is not None or "title" in paper.manual_fields
+    title = provenance.stamp({"title": doc.title}, "pdf") if doc.title and not keep else {}
+    progress.marks.append(("chunking", time.monotonic()))
+    progress.pages = doc.page_count
+    await papers.set_status(session, pid, PaperStatus.CHUNKING, page_count=doc.page_count, **title)
+    drafts = chunk_blocks(doc.blocks)
+    await papers.replace_chunks(session, pid, drafts)
+    progress.chunks = len(drafts)
+    return doc
+
+
+async def _stages(ctx: dict, session, paper: Paper, progress: _Progress) -> None:
+    pid = paper.id
+    doc = await _extract_and_chunk(session, paper, progress)
+    embedder = await search_embedder(ctx, session)
+    if embedder is None:
+        logger.info("no search model: %s is ready without vectors", pid)
+    else:
+        progress.marks.append(("embedding", time.monotonic()))
+        await papers.set_status(session, pid, PaperStatus.EMBEDDING)
+        if await _embed_a_slice(session, pid, embedder):
+            logger.info("%s: %d chunks, the rest of the embedding is queued", pid, progress.chunks)
+            return
+    progress.marks.append(("enriching", time.monotonic()))
+    progress.collisions = await _finish(session, ctx.get("transport"), pid, doc)
+    logger.info("ingested %s: %d pages, %d chunks", pid, doc.page_count, progress.chunks)
+
+
+async def _failed(session, pid: uuid.UUID, exc: Exception, deadline) -> None:
+    await session.rollback()
+    # Only the deadline's own timeout, not another one (a database command's, say).
+    if isinstance(exc, TimeoutError) and deadline.expired():
+        logger.warning("ingest of %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
+        # (An embed error mid-ingest and a re-embed timeout leave earlier slices.)
+        await _fail_clean(session, pid, timed_out(INGEST_JOB_TIMEOUT))
+    else:
+        logger.exception("ingest failed for %s", pid)
+        await papers.set_status(session, pid, PaperStatus.FAILED, error=f"{type(exc).__name__}: {exc}")
+
+
 async def ingest_paper(ctx: dict, paper_id: str) -> None:
     """uploaded -> extracting -> chunking -> embedding -> enriching -> ready, or failed with status_error. A paper too
     long to embed in one slice stays at embedding, and `embed_rest` takes it from there.
@@ -197,69 +274,23 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
     ctx["embedder"] and an httpx transport in ctx["transport"].
     """
     pid = uuid.UUID(paper_id)
-    async with SessionLocal() as session:
-        if (await papers.get_paper(session, pid)).file_path is None:  # extract(None) would "succeed" and wipe chunks
-            logger.info("ingest of %s skipped: the paper has no PDF", pid)
-            return
-    if ctx.get("job_try", 1) >= MAX_TRIES:
-        async with SessionLocal() as session:
-            await papers.set_status(session, pid, PaperStatus.FAILED, error=INTERRUPTED.format(times=MAX_TRIES - 1))
-        logger.warning("ingest of %s stopped %d times; marked failed", pid, MAX_TRIES - 1)
+    if await _skipped(ctx, pid):
         return
     async with SessionLocal() as session:
         paper = await papers.get_paper(session, pid)
         started = time.monotonic()
-        marks: list[tuple[str, float]] = [("extracting", started)]  # each stage's start; a stage runs until the next
-        chunks = pages = 0
-        collisions: list[enrichment.Collision] = []  # set only once the paper is ready
-        evidence = Candidate("")  # what the PDF itself says, for the merge (R15c); set once extracted
+        progress = _Progress(started, [("extracting", started)])
         deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
         try:
             async with deadline:
-                await papers.set_status(session, pid, PaperStatus.EXTRACTING)
-                doc = await asyncio.to_thread(extract, paper.file_path)
-                evidence = merges.pdf_evidence(doc.title, doc.metadata)  # before enrichment, whatever the title lock
-                # extract() can take seconds; re-read the lock right before deciding, in case a PATCH landed meanwhile.
-                await session.refresh(paper, ["openalex_id", "manual_fields"])
-
-                # Enriched or corrected titles beat the font heuristic; don't overwrite them on re-runs.
-                keep = paper.openalex_id is not None or "title" in paper.manual_fields
-                title = provenance.stamp({"title": doc.title}, "pdf") if doc.title and not keep else {}
-                marks.append(("chunking", time.monotonic()))
-                pages = doc.page_count
-                await papers.set_status(session, pid, PaperStatus.CHUNKING, page_count=doc.page_count, **title)
-                drafts = chunk_blocks(doc.blocks)
-                await papers.replace_chunks(session, pid, drafts)
-                chunks = len(drafts)
-
-                embedder = await search_embedder(ctx, session)
-                if embedder is None:
-                    logger.info("no search model: %s is ready without vectors", pid)
-                else:
-                    marks.append(("embedding", time.monotonic()))
-                    await papers.set_status(session, pid, PaperStatus.EMBEDDING)
-                    if await _embed_a_slice(session, pid, embedder):
-                        logger.info("%s: %d chunks, the rest of the embedding is queued", pid, len(drafts))
-                        return
-
-                marks.append(("enriching", time.monotonic()))
-                collisions = await _finish(session, ctx.get("transport"), pid, doc)
-                logger.info("ingested %s: %d pages, %d chunks", pid, doc.page_count, len(drafts))
+                await _stages(ctx, session, paper, progress)
         except Exception as exc:
-            await session.rollback()
-            # Only the deadline's own timeout, not another one (a database command's, say).
-            if isinstance(exc, TimeoutError) and deadline.expired():
-                logger.warning("ingest of %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
-                # (An embed error mid-ingest and a re-embed timeout leave earlier slices.)
-                await _fail_clean(session, pid, timed_out(INGEST_JOB_TIMEOUT))
-            else:
-                logger.exception("ingest failed for %s", pid)
-                await papers.set_status(session, pid, PaperStatus.FAILED, error=f"{type(exc).__name__}: {exc}")
+            await _failed(session, pid, exc, deadline)
         finally:  # the success, timeout and failure paths all say where the time went
-            logger.info(_timings(pid, marks, started, chunks, pages))
+            logger.info(_timings(pid, progress.marks, started, progress.chunks, progress.pages))
     # The very last step: ingest queues no job for the paper, so nothing of ingest's finds M gone after a merge.
-    if collisions:
-        await _merge_after_ingest(pid, collisions, evidence)
+    if progress.collisions:
+        await _merge_after_ingest(pid, progress.collisions, progress.evidence)
 
 
 async def embed_rest(ctx: dict, paper_id: str) -> None:

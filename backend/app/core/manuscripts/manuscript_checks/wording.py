@@ -80,24 +80,28 @@ def _sentence(blanked: str, spans: list[tuple[int, int, str]], start: int, end: 
     return blanked[left : min(ends) if ends else len(blanked)]
 
 
-def _overclaim(ctx: CheckContext) -> list[Finding]:
+def _file_overclaims(path: str, text: str) -> list[Finding]:
     found = []
-    for path in sorted(p for p in ctx.files if p.endswith(".tex")):
-        text = ctx.files[path]
-        blanked, scan = prose(text)
-        spans = None  # found lazily: most files never hit a guarded rule
-        for rule in load_rules()["overclaim"]:
-            for m in rule.pattern.finditer(scan):
-                if rule.skip_after and rule.skip_after.match(scan, m.end()):
+    blanked, scan = prose(text)
+    spans = None  # found lazily: most files never hit a guarded rule
+    for rule in load_rules()["overclaim"]:
+        for m in rule.pattern.finditer(scan):
+            if rule.skip_after and rule.skip_after.match(scan, m.end()):
+                continue
+            if rule.skip_sentence:
+                spans = sentence_spans(text) if spans is None else spans
+                raw = _sentence(blanked, spans, m.start(), m.end())
+                if any(g.search(raw) for g in rule.skip_sentence):
                     continue
-                if rule.skip_sentence:
-                    spans = sentence_spans(text) if spans is None else spans
-                    raw = _sentence(blanked, spans, m.start(), m.end())
-                    if any(g.search(raw) for g in rule.skip_sentence):
-                        continue
-                shown = " ".join(m.group().split())
-                found.append(Finding("wording.overclaim", rule.severity, path, blanked.count("\n", 0, m.start()) + 1,
-                                     f'"{shown}" is a strong claim: {rule.why}', rule.hint))
+            shown = " ".join(m.group().split())
+            found.append(Finding("wording.overclaim", rule.severity, path, blanked.count("\n", 0, m.start()) + 1,
+                                 f'"{shown}" is a strong claim: {rule.why}', rule.hint))
+    return found
+
+
+def _overclaim(ctx: CheckContext) -> list[Finding]:
+    tex = sorted(p for p in ctx.files if p.endswith(".tex"))
+    found = [finding for path in tex for finding in _file_overclaims(path, ctx.files[path])]
     return sorted(found, key=lambda f: (f.file, f.line))
 
 

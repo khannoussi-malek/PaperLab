@@ -44,8 +44,7 @@ def _selection(columns, only: list[uuid.UUID] | None = None, align: bool = False
 
 async def run(
     session: AsyncSession,
-    crossref_http: httpx.AsyncClient | None,
-    openalex_http: httpx.AsyncClient | None,
+    clients: tuple[httpx.AsyncClient | None, httpx.AsyncClient | None],
     *,
     delay: float = DELAY,
     only: list[uuid.UUID] | None = None,
@@ -59,7 +58,7 @@ async def run(
     changes: list[tuple] = []
     try:
         for paper_id, doi, *before in rows:
-            asked = await enrichment.fill_biblio(session, paper_id, crossref_http, openalex_http, align=align)
+            asked = await enrichment.fill_biblio(session, paper_id, *clients, align=align)  # (Crossref, OpenAlex)
             after = (await session.execute(select(*columns).where(Paper.id == paper_id))).one()
             summary["updated"] += list(after) != before
             changes += [(paper_id, doi, n, old, new) for n, old, new in zip(names, before, after) if old != new]
@@ -133,7 +132,7 @@ async def main(
             if source_types:
                 summary = await run_source_types(session, cr, report=report)
             else:
-                summary = await run(session, cr, oa, align=align, report=report)
+                summary = await run(session, (cr, oa), align=align, report=report)
         finally:
             for client in (cr, oa):
                 if client:
