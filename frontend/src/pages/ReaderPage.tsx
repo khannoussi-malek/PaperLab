@@ -1,119 +1,39 @@
-import { Table2, Undo2 } from 'lucide-react'
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import type { Note, NoteKind } from '@/entities'
-import { paperFileUrl, PaperMergedError } from '@/services/api'
-import { useChunksOnPage, useDataset, useNoteMutations, useNotes, usePaper, usePaperDatasets, useReferences } from '@/services/queries'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { glass } from '@/components/glass'
-import { fadeIn, popIn } from '@/components/motion'
+import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
 import { readerHref, type ReaderTab, type ReaderTarget } from '@/router/route'
 import { cn } from '@/lib/utils'
-import { ChatPanel } from '@/features/chat/ChatPanel'
 import { AddNumberDialog } from '@/features/datasets/AddNumberDialog'
 import { CaptureTableDialog } from '@/features/datasets/CaptureTableDialog'
-import { DataPanel } from '@/features/datasets/DataPanel'
-import { NumberMarks } from '@/features/datasets/NumberMarks'
-import { numberMarks, tableMarkerAt, tableMarks } from '@/features/datasets/pageMarks'
 import { useCaptureDrag } from '@/features/datasets/useCaptureDrag'
-import { LensFade } from '@/features/lenses/LensFade'
-import { LensPanel } from '@/features/lenses/LensPanel'
 import { LensPicker } from '@/features/lenses/LensPicker'
 import { useLensReader } from '@/features/lenses/useLensReader'
-import { SimilarTab } from '@/features/discovery/SimilarTab'
-import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '@/components/highlightColors'
-import { NoteHoverCard } from '@/features/notes/NoteHoverCard'
-import { NotesPanel } from '@/features/notes/NotesPanel'
-import { ReferencesTab } from '@/features/references/ReferencesTab'
-import { CitationCard } from '@/features/reader/CitationCard'
-import { CitationLinks } from '@/features/reader/CitationLinks'
-import type { Citation } from '@/features/reader/citations'
-import { pdfRectToCss, type PdfRect } from '@/lib/coords'
+import { browserStorage } from '@/components/highlightColors'
 import { loadPanelWidth, panelTrack, savePanelWidth } from '@/components/panelWidth'
 import { READER_PANEL } from '@/features/reader/panelWidth'
-import { citationAt, clientPointToPdf, notesAt, rectContains } from '@/features/reader/hitTest'
-import { PdfPage } from '@/features/reader/PdfPage'
-import { SelectionCopyButton } from '@/features/reader/SelectionCopyButton'
-import { ReaderContextMenu, type ContextMenuState } from '@/features/reader/ReaderContextMenu'
-import { PaperDetailsPanel } from '@/features/reader/PaperDetailsPanel'
+import { ReaderContextMenu } from '@/features/reader/ReaderContextMenu'
 import { PaperTagChips } from '@/features/reader/PaperTagChips'
 import { ReaderToolbar } from '@/features/reader/ReaderToolbar'
 import { ReadingContextBanner } from '@/features/reader/ReadingContextBanner'
 import { PublishedVersionBanner } from '@/features/reader/PublishedVersionBanner'
 import { RetractionBanner } from '@/features/reader/RetractionBanner'
-import { EvidencePanel } from '@/features/evidence/EvidencePanel'
-import { RightPanel } from '@/features/reader/RightPanel'
-import { readAbstractSelection, readSelection, type NoteDraft, type SelectionAnchor } from '@/features/reader/selection'
+import { groupHighlights } from '@/features/reader/pageHighlights'
+import { ReaderPages } from '@/features/reader/ReaderPages'
+import { ReaderSidePanel } from '@/features/reader/ReaderSidePanel'
 import { useCitations } from '@/features/reader/useCitations'
-import { useHoverCard } from '@/features/reader/useHoverCard'
+import { useFlash } from '@/features/reader/useFlash'
+import { useNoteComposer } from '@/features/reader/useNoteComposer'
+import { useNoteFocus } from '@/features/reader/useNoteFocus'
+import { useReaderDocument } from '@/features/reader/useReaderDocument'
+import { useReaderMarks } from '@/features/reader/useReaderMarks'
+import { useReaderPointer } from '@/features/reader/useReaderPointer'
+import { useReaderTarget } from '@/features/reader/useReaderTarget'
 import { useJumpBack } from '@/features/reader/useJumpBack'
-import { usePdfDocument } from '@/features/reader/usePdfDocument'
 import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from '@/features/reader/zoom'
 
-/** One drawn rect. `color` is its note's colour, or null for the pending selection (drawn with the draft token). */
-type PageHighlight = {
-  key: string
-  noteId: string | null
-  color: string | null
-  provenance?: Note['provenance']
-  rect: PdfRect
-  /** A figure note's rect: an outline in the note's colour, not a fill. */
-  figure?: boolean
-}
-
-export function groupHighlights(notes: Note[], draft: NoteDraft | null, paperId: string) {
-  const byPage = new Map<number, PageHighlight[]>()
-  const add = (page: number, highlight: PageHighlight) =>
-    byPage.set(page, [...(byPage.get(page) ?? []), highlight])
-
-  for (const note of notes) {
-    note.anchors.forEach((anchor, a) => {
-      if (anchor.paper_id !== paperId) return
-      anchor.bbox.forEach((rect, r) =>
-        add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, color: note.color, provenance: note.provenance, rect, figure: note.kind === 'figure' }),
-      )
-    })
-  }
-  draft?.rects.forEach((rect, r) => add(draft.page, { key: `draft-${r}`, noteId: null, color: null, rect }))
-  return byPage
-}
-
-const HOVER_CARD_GAP_PT = 4
-const FLASH_MS = 1500
-const SAVE_FIRST = 'Save or cancel the note you are writing first.'
-
-/** A cited chunk being shown; `id` restarts the flash when the same citation is clicked again. */
-type Flash = { id: number; page: number; rects: PdfRect[] }
-
-const STILL_EMBEDDING = 'Still preparing full search. Until it finishes, long papers answer from keyword matches.'
-
-/** The reader's one scroll path: notes, hovered highlights and cited chunks are all brought into view with it. */
-function scrollToElement(selector: string, block: ScrollLogicalPosition) {
-  document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block })
-}
-
-/** A replaced citation (M33) has no passage box left, so it brings its page to the top instead. */
-const scrollToPage = (page: number) => scrollToElement(`[data-page="${page}"]`, 'start')
-
-/** The rects of these notes' highlights on one page. */
-const noteRects = (highlights: PageHighlight[], noteIds: string[]) =>
-  highlights.filter((h) => h.noteId !== null && noteIds.includes(h.noteId)).map((h) => h.rect)
-
-/** Places a hover card just below the lowest of `rects` (the hovered notes', or a citation's link), aligned with the leftmost. */
-function hoverCardPosition(rects: PdfRect[], scale: number) {
-  const left = Math.min(...rects.map((r) => r[0]))
-  const bottom = Math.max(...rects.map((r) => r[3]))
-  return { left: left * scale, top: (bottom + HOVER_CARD_GAP_PT) * scale }
-}
-
-/** The pointer in PDF points on the page under it, or null when it isn't over a page. */
-function pointOnPage(event: MouseEvent, scale: number) {
-  const element = (event.target as Element).closest<HTMLElement>('.pdf-page')
-  if (!element) return null
-  const point = clientPointToPdf({ x: event.clientX, y: event.clientY }, element.getBoundingClientRect(), scale)
-  return { page: Number(element.dataset.page), point }
-}
+export { groupHighlights } from '@/features/reader/pageHighlights'
 
 type Props = {
   paperId: string
@@ -123,128 +43,13 @@ type Props = {
 }
 
 export function ReaderPage({ paperId, tab, target }: Props) {
-  const paper = usePaper(paperId)
-  // Asked for once the paper says it has a PDF: one saved without asks for nothing and shows its details instead.
-  // Details that failed to load say nothing either way, so the PDF is still tried.
-  const mergedInto = paper.error instanceof PaperMergedError ? paper.error.keptId : null
-  // A merged paper's id leads to the paper it became (R19); its own file, chunks and notes answer 410 too. The tab
-  // and target in the query stay: M's chunks and notes moved to K with their ids.
-  useEffect(() => {
-    if (!mergedInto) return
-    const query = window.location.hash.split('?')[1]
-    window.location.replace(query ? `${readerHref(mergedInto)}?${query}` : readerHref(mergedInto))
-  }, [mergedInto])
-  const noPdf = paper.data?.has_pdf === false
-  const { doc, error: pdfError } = usePdfDocument(paper.data?.has_pdf || (paper.isError && !mergedInto) ? paperFileUrl(paperId) : null)
-  const notesQuery = useNotes(paperId)
-  const mutations = useNoteMutations()
+  const { paper, noPdf, doc, pdfError, notesQuery, notes } = useReaderDocument(paperId)
+  const { tableMarksByPage, numberMarksByPage } = useReaderMarks(paperId)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const scale = ZOOM_STEPS[zoomIndex]
-  const [draft, setDraft] = useState<NoteDraft | null>(null)
-  const [wholePaperDraft, setWholePaperDraft] = useState<{ kind: NoteKind | null } | null>(null)
-  const [numberDraft, setNumberDraft] = useState<SelectionAnchor | null>(null)
-  const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
-  const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
-  // A Papers save took a note off this paper; it stays said until a save keeps one here (Spec note 17).
-  const [movedToNotes, setMovedToNotes] = useState(false)
-  // Ids of hover-card notes being edited; the card stays open while any is.
-  const [editingNoteIds, setEditingNoteIds] = useState<string[]>([])
-  const setNoteEditing = useCallback((noteId: string, editing: boolean) => {
-    setEditingNoteIds((ids) => {
-      if (editing === ids.includes(noteId)) return ids // unchanged: same array, no re-render
-      return editing ? [...ids, noteId] : ids.filter((id) => id !== noteId)
-    })
-  }, [])
-  const hoverCard = useHoverCard(editingNoteIds.length > 0)
-  const citationsByPage = useCitations(doc)
-  // D149: fetched as soon as the pass finds a citation, so the first hover is instant. A read only (the References tab
-  // still queues the first lookup, D78), and the tab shares its cache.
-  const references = useReferences(paperId, 'cites', citationsByPage.size > 0)
-  const [overCitation, setOverCitation] = useState(false)
-  const pagesRef = useRef<HTMLElement>(null)
-  const jumpBack = useJumpBack(pagesRef, scale)
-  const [menu, setMenu] = useState<ContextMenuState | null>(null)
-  const [flash, setFlash] = useState<Flash | null>(null)
-  const promotedNoteId = useRef<string | null>(null)
-  const shownTargetId = useRef<string | null>(null)
-  const targetChunks = useChunksOnPage(paperId, target?.kind === 'chunk' ? target.page : null)
   const [error, setError] = useState<string | null>(null)
-  const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth(READER_PANEL, browserStorage()))
-  const datasets = usePaperDatasets(paperId)
-  const tableMarksByPage = useMemo(() => tableMarks(datasets.data ?? []), [datasets.data])
-  const numbersDatasetId = datasets.data?.find((d) => d.kind === 'numbers')?.id ?? null
-  const numbersDataset = useDataset(numbersDatasetId)
-  const numberMarksByPage = useMemo(() => numberMarks(numbersDataset.data), [numbersDataset.data])
-  const typedPaperNote = useRef(false) // the whole-paper composer holds text the reader typed
-  // A selection or figure box never discards it; one that would is told to wait (an empty or template-only composer is replaced).
-  const blockedByTypedNote = () => {
-    if (typedPaperNote.current) setError(SAVE_FIRST)
-    return typedPaperNote.current
-  }
-  const captureDrag = useCaptureDrag(scale, (page, region) => {
-    if (blockedByTypedNote()) return
-    setWholePaperDraft(null)
-    setDraft({ page, rects: [region], quotedText: `Figure on p. ${page}`, figure: true })
-    showTab('notes')
-  })
-  const { capturing, capture } = captureDrag
-
-  useEffect(() => savePanelWidth(READER_PANEL, browserStorage(), panelWidth), [panelWidth])
-  const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
-
-  const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
-
-  // Rendering the flash first gives the scroll a target, even on a page whose canvas hasn't rendered yet.
-  // A flash asked for before the PDF has loaded (Show in paper clicked straight after opening) waits for `doc`,
-  // since until then no page exists to draw it on or scroll to.
-  useEffect(() => {
-    if (!flash || !doc) return
-    // A passage with no boxes (a citation whose chunk a re-ingest replaced) still takes the reader to its page.
-    if (flash.rects.length === 0) scrollToPage(flash.page)
-    else scrollToElement('.chunk-flash', 'center')
-    const timer = window.setTimeout(() => setFlash(null), FLASH_MS)
-    return () => window.clearTimeout(timer)
-  }, [flash, doc])
-
-  const flashChunk = (page: number, rects: PdfRect[]) => setFlash({ id: Date.now(), page, rects })
-  const lensReader = useLensReader(paperId, tab, flashChunk)
-
-  // Once the Notes tab is showing, bring a just-promoted note's card into view.
-  useEffect(() => {
-    if (tab !== 'notes' || !promotedNoteId.current) return
-    scrollToElement(`article.note[data-note-id="${promotedNoteId.current}"]`, 'nearest')
-    promotedNoteId.current = null
-  }, [tab])
-
   // replace, not assign: switching tabs shouldn't add history entries for Back to walk through.
   const showTab = (next: ReaderTab) => window.location.replace(readerHref(paperId, next))
-
-  // A one-shot target from the hash. Once the PDF and what the target needs have loaded, it goes
-  // through the same path as a citation click or a note click, then leaves the hash so a reload doesn't repeat it.
-  // replaceState fires no hashchange and adds no history entry, so Back still returns to where the link was.
-  // A paper without a PDF has no page to show a passage on: any target but a note (a chat link's page 0) is dropped.
-  useEffect(() => {
-    if (noPdf && target?.kind !== 'note') {
-      if (window.location.hash !== readerHref(paperId, tab)) window.history.replaceState(null, '', readerHref(paperId, tab))
-      return
-    }
-    if ((!doc && !noPdf) || !target || shownTargetId.current === target.id) return
-    if (target.kind === 'chunk') {
-      if (!targetChunks.data) return
-      const chunk = targetChunks.data.find((c) => c.id === target.id)
-      if (chunk) flashChunk(chunk.page, chunk.bbox)
-    } else if (target.kind === 'region') {
-      flashChunk(target.page, target.rects)
-    } else if (target.kind === 'page') {
-      scrollToPage(target.page)
-    } else {
-      if (!notesQuery.data) return
-      const note = notesQuery.data.find((n) => n.id === target.id)
-      if (note) focusNote(note)
-    }
-    shownTargetId.current = target.id
-    window.history.replaceState(null, '', readerHref(paperId, tab))
-  })
 
   /** Runs a mutation; failures show in the alert instead of throwing. */
   async function attempt(action: () => Promise<unknown>): Promise<boolean> {
@@ -257,124 +62,37 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     }
   }
 
-  /** A citation's click, or Enter on its button: to its entry in the reference list, by the one scroll path (D147). */
-  function jumpTo(citation: Citation, viaKeyboard: boolean) {
-    // A note being edited keeps the card (D147): closing it here would unmount NoteCard and lose the unsaved edit.
-    if (editingNoteIds.length === 0) hoverCard.close()
-    jumpBack.save(citation, viaKeyboard)
-    flashChunk(citation.jump.page, citation.jump.rects)
-  }
-
-  /** A click on a citation jumps to its entry; one on a captured table's marker opens the Data tab. */
-  function handlePageClick(event: MouseEvent) {
-    if (capturing || readSelection(scale).kind !== 'none') return
-    // A card's own clicks stay the card's, even over another citation; a citation button's click (Enter or Space)
-    // has no pointer position and has already jumped.
-    if ((event.target as Element).closest('.note-hover-card, .citation-card, .citation-link')) return
-    const where = pointOnPage(event, scale)
-    if (!where) return
-    const citation = citationAt(citationsByPage.get(where.page) ?? [], where.point)
-    if (citation) jumpTo(citation, false)
-    else if (tableMarkerAt(tableMarksByPage.get(where.page) ?? [], where.point)) showTab('data')
-  }
-
-  function captureSelection(event: MouseEvent) {
-    if (capturing) return captureDrag.endDrag(event)
-    if (event.button !== 0) return // a right-click opens the menu instead
-    const result = readSelection(scale)
-    if (result.kind === 'invalid') setError(result.reason)
-    const anchor = result.kind === 'anchor' ? result.anchor : noPdf ? readAbstractSelection() : null
-    if (anchor) {
-      if (blockedByTypedNote()) return
-      setError(null)
-      setDraft(anchor)
-      setWholePaperDraft(null)
-      if (tab !== 'notes') showTab('notes') // the composer lives on the Notes tab
-    }
-  }
-
-  async function saveDraft(body: string, kind: NoteKind | null = null, color: string = draftColor): Promise<boolean> {
-    if (!draft) return false
-    if (draft.figure) {
-      const figure = { paper_id: paperId, page: draft.page, region: draft.rects[0], body, color }
-      const done = await attempt(() => mutations.createFigure.mutateAsync(figure))
-      if (done) {
-        saveLastColor(browserStorage(), color)
-        setDraft(null)
-      }
-      return done
-    }
-    const kindField = kind ? { kind } : {}
-    // A paper without a PDF has no page to anchor on: the note goes on the paper, its body led by the abstract's words.
-    const note = noPdf
-      ? { body, color, paper_id: paperId, quote: draft.quotedText, ...kindField }
-      : { body, color, anchor: { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText }, ...kindField }
-    const saved = await attempt(() => mutations.create.mutateAsync(note))
-    if (saved) {
-      saveLastColor(browserStorage(), color)
-      setDraft(null)
-      window.getSelection()?.removeAllRanges()
-    }
-    return saved
-  }
-
-  async function savePaperNote(body: string, kind: NoteKind | null): Promise<boolean> {
-    const saved = await attempt(() =>
-      mutations.create.mutateAsync({ body, color: draftColor, paper_id: paperId, ...(kind ? { kind } : {}) }),
-    )
-    if (saved) setWholePaperDraft(null) // closes one Write it or New note opened; a no-PDF paper's own composer is not a draft
-    return saved
-  }
-
-  function newPaperNote() {
-    setDraft(null)
-    setWholePaperDraft({ kind: null })
-  }
-
-  async function highlightDraft(color: string) {
-    setDraftColor(color)
-    await saveDraft('', null, color)
-  }
-
-  const updateNoteBody = (note: Note, body: string, kind?: NoteKind | null) =>
-    attempt(() => mutations.update.mutateAsync({ id: note.id, body, ...(kind === undefined ? {} : { kind }) }))
-
-  const recolorNote = (note: Note, color: string) =>
-    attempt(() => mutations.update.mutateAsync({ id: note.id, color }))
-
-  async function deleteNote(note: Note) {
-    if (!window.confirm('Delete this note?')) return
-    await attempt(() => mutations.remove.mutateAsync(note.id))
-  }
-
-  function focusNote(note: Pick<Note, 'id'>) {
-    setActiveNoteId(note.id)
-    const highlighted = notes.some((n) => n.id === note.id && n.anchors.some((a) => a.paper_id === paperId))
-    if (highlighted) return scrollToElement(`.highlight[data-note-id="${note.id}"]`, 'center')
-    // A note on the whole paper has no highlight: its card in the Notes tab is where it is.
-    if (tab === 'notes') return scrollToElement(`article.note[data-note-id="${note.id}"]`, 'nearest')
-    promotedNoteId.current = note.id // the effect on `tab` scrolls to it once the Notes tab shows
+  const {
+    draft, setDraft, wholePaperDraft, setWholePaperDraft, numberDraft, setNumberDraft, draftColor, setDraftColor,
+    movedToNotes, setMovedToNotes, blockedByTypedNote, saveDraft, savePaperNote, newPaperNote, paperNoteDirty,
+    highlightDraft, updateNoteBody, recolorNote, deleteNote, focusComposer, addNumberFromDraft,
+  } = useNoteComposer({ paperId, noPdf, attempt, setError })
+  const captureDrag = useCaptureDrag(scale, (page, region) => {
+    if (blockedByTypedNote()) return
+    setWholePaperDraft(null)
+    setDraft({ page, rects: [region], quotedText: `Figure on p. ${page}`, figure: true })
     showTab('notes')
-  }
+  })
+  const { capturing, capture } = captureDrag
 
-  function showPromotedNote(note: Note) {
-    setActiveNoteId(note.id)
-    promotedNoteId.current = note.id
-    showTab('notes')
-  }
+  const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth(READER_PANEL, browserStorage()))
+  useEffect(() => savePanelWidth(READER_PANEL, browserStorage(), panelWidth), [panelWidth])
+  const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
 
-  function editNote(note: Note) {
-    const anchor = note.anchors.find((a) => a.paper_id === paperId)
-    if (!anchor) return
-    hoverCard.open({ kind: 'notes', page: anchor.page, noteIds: [note.id], editNoteId: note.id })
-    // Same race as focusComposer: the closing menu's focus scope can steal focus back from the new textarea.
-    // Scoped to this note: another note's hover or panel card can also have an "Edit note" textarea open.
-    window.setTimeout(() =>
-      document
-        .querySelector<HTMLTextAreaElement>(`.note-hover-card [data-note-id="${note.id}"] textarea[aria-label="Edit note"]`)
-        ?.focus(),
-    )
-  }
+  const { flash, flashChunk } = useFlash(doc)
+  const lensReader = useLensReader(paperId, tab, flashChunk)
+  const { activeNoteId, setActiveNoteId, focusNote, showPromotedNote } = useNoteFocus(paperId, tab, notes, showTab)
+  useReaderTarget({ paperId, tab, target, doc, noPdf, notesQuery, flashChunk, focusNote })
+
+  const citationsByPage = useCitations(doc)
+  const pagesRef = useRef<HTMLElement>(null)
+  const jumpBack = useJumpBack(pagesRef, scale)
+  const pointer = useReaderPointer({
+    paperId, scale, saveJump: (citation, viaKeyboard) => jumpBack.save(citation, viaKeyboard), noPdf, tab, notes, citationsByPage, highlightsByPage, tableMarksByPage, draft, setDraft,
+    setWholePaperDraft, setError, blockedByTypedNote, setActiveNoteId, showTab, flashChunk,
+    capturing, endCaptureDrag: captureDrag.endDrag,
+  })
+  const { hoverCard, overCitation, menu, setMenu } = pointer
 
   /** Answers whether the text reached the clipboard, so a button can show it worked; a refusal goes to the alert. */
   function copyToClipboard(text: string): Promise<boolean> {
@@ -390,85 +108,6 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   /** The skip link's target: the side panel's tab list, or its first focusable element (the active tab). */
   function focusSidePanel() {
     document.querySelector<HTMLElement>('#reader-panel-tabs [role="tab"]')?.focus()
-  }
-
-  function focusComposer() {
-    // After the menu has finished closing, or its focus handling takes focus straight back.
-    window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note"]')?.focus())
-  }
-
-  /** Both entry points (the draft menu and the composer) open the dialog on the pending selection. */
-  function addNumberFromDraft() {
-    setNumberDraft(draft)
-  }
-
-  /** The pointer left the card and what it shows: close soon, unless keyboard focus is on that citation or in its card. */
-  function leaveCard() {
-    const open = hoverCard.target
-    if (open?.kind === 'citation' && document.activeElement?.closest(`[data-citation-id="${open.citationId}"]`)) return
-    hoverCard.leave()
-  }
-
-  /**
-   * Shows the citation or the notes under the pointer (a citation inside a highlight wins, D147); for notes, scrolls the
-   * panel to the first one, only when that set changes.
-   */
-  function trackHover(event: MouseEvent) {
-    if ((event.target as Element).closest('.note-hover-card, .citation-card')) {
-      hoverCard.stay()
-      return
-    }
-    const where = event.buttons === 0 ? pointOnPage(event, scale) : null // no preview while dragging a selection
-    const citation = where ? citationAt(citationsByPage.get(where.page) ?? [], where.point) : null
-    setOverCitation(citation !== null)
-    if (where && citation) {
-      hoverCard.show({ kind: 'citation', page: where.page, citationId: citation.id })
-      return
-    }
-    const noteIds = where ? notesAt(highlightsByPage.get(where.page) ?? [], where.point) : []
-    if (!where || noteIds.length === 0) {
-      leaveCard()
-      return
-    }
-    if (!hoverCard.show({ kind: 'notes', page: where.page, noteIds })) return
-    setActiveNoteId(noteIds[0])
-    scrollToElement(`article.note[data-note-id="${noteIds[0]}"]`, 'nearest')
-  }
-
-  /** Keyboard focus reached a citation's button (D147): its card opens, unless a note in the card is being edited. */
-  function focusCitation(citation: Citation) {
-    hoverCard.show({ kind: 'citation', page: citation.page, citationId: citation.id })
-  }
-
-  /** Focus left a citation and its card, or Escape: close its card, if it is the one open. */
-  function closeCitationCard(citation: Citation) {
-    const open = hoverCard.target
-    if (open?.kind === 'citation' && open.citationId === citation.id) hoverCard.close()
-  }
-
-  /** Right-click on a highlight or the pending selection opens our menu; anywhere else keeps the browser's. */
-  function openContextMenu(event: MouseEvent) {
-    const where = pointOnPage(event, scale)
-    if (!where) return
-    const [noteId] = notesAt(highlightsByPage.get(where.page) ?? [], where.point)
-    const note = notes.find((n) => n.id === noteId)
-    // Once the composer opens it takes focus and the live selection is gone, so the draft is the usual target.
-    // A selection that is still live (no composer yet) becomes the draft.
-    const live = readSelection(scale)
-    const pending = live.kind === 'anchor' ? live.anchor : draft
-    const onPending =
-      pending !== null && pending.page === where.page && pending.rects.some((rect) => rectContains(rect, where.point))
-    if (!note && !(pending && onPending)) return
-
-    event.preventDefault()
-    hoverCard.close()
-    if (note) {
-      const quote = note.anchors.find((a) => a.paper_id === paperId)?.quoted_text ?? ''
-      setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'note', note, quote } })
-    } else if (pending) {
-      setDraft(pending)
-      setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'draft', quote: pending.quotedText, ...('figure' in pending && pending.figure ? { figure: true as const } : {}) } })
-    }
   }
 
   const hover = hoverCard.target
@@ -529,184 +168,76 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         </Alert>
       )}
 
-      <section
-        ref={pagesRef}
-        className={cn(
-          'overflow-auto p-4',
-          capturing && 'cursor-crosshair select-none',
-          // PDF.js's own stylesheet gives the text layer a text cursor, unlayered: only an !important utility beats it.
-          overCitation && !capturing && 'cursor-pointer [&_.textLayer_span]:cursor-pointer!',
-        )}
-        onMouseDown={captureDrag.startDrag}
-        onMouseUp={captureSelection}
-        onClick={handlePageClick}
-        onMouseMove={capturing ? captureDrag.moveDrag : trackHover}
-        onMouseLeave={leaveCard}
-        onScroll={jumpBack.onScroll}
-        onContextMenu={openContextMenu}
-      >
-        {noPdf && paper.data && <PaperDetailsPanel paper={paper.data} />}
-        {doc &&
-          Array.from({ length: doc.numPages }, (_, i) => i + 1).map((pageNumber) => (
-            <PdfPage key={pageNumber} doc={doc} pageNumber={pageNumber} scale={scale}>
-              <LensFade rects={lensReader.fadeOn(pageNumber)} scale={scale} />
-              {(highlightsByPage.get(pageNumber) ?? []).map((h) => (
-                <div
-                  key={h.key}
-                  data-note-id={h.noteId ?? undefined}
-                  className={cn(
-                    'highlight absolute rounded-xs',
-                    h.figure ? 'figure bg-transparent outline-2' : 'mix-blend-multiply',
-                    h.noteId === null && 'draft bg-highlight-draft',
-                    // An outline, not a colour swap: any colour can be the note's own.
-                    h.noteId !== null && h.noteId === activeNoteId && 'active outline-2 outline-offset-1 outline-primary',
-                  )}
-                  style={{
-                    ...pdfRectToCss(h.rect, scale),
-                    ...(h.figure ? { outlineColor: h.noteId === activeNoteId ? undefined : (h.color ?? undefined) } : { backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }),
-                  }}
-                />
-              ))}
-              {(tableMarksByPage.get(pageNumber) ?? []).map((mark) => (
-                <Fragment key={mark.datasetId}>
-                  <div className="table-region absolute rounded-xs outline-1 outline-primary/40" style={pdfRectToCss(mark.region, scale)} />
-                  {/* Fixed light colours: the marker sits on the paper, which stays white in both themes. */}
-                  <div className="table-marker absolute grid place-items-center rounded-xs bg-white/90 ring-1 ring-blue-600/40" style={pdfRectToCss(mark.marker, scale)}>
-                    <Table2 aria-hidden className="size-3.5 text-blue-600" />
-                  </div>
-                </Fragment>
-              ))}
-              <NumberMarks marks={numberMarksByPage.get(pageNumber) ?? []} scale={scale} />
-              {draft?.page === pageNumber && draft.rects.length > 0 && !draft.figure && (
-                <SelectionCopyButton
-                  style={{
-                    left: draft.rects[draft.rects.length - 1][0] * scale,
-                    top: draft.rects[draft.rects.length - 1][3] * scale + 4,
-                  }}
-                  onCopy={() => copyToClipboard(draft.quotedText)}
-                />
-              )}
-              {captureDrag.box?.page === pageNumber && (
-                <div className="capture-box absolute bg-primary/10 outline-2 outline-primary" style={pdfRectToCss(captureDrag.box.rect, scale)} />
-              )}
-              {flash?.page === pageNumber &&
-                flash.rects.map((rect, r) => (
-                  <div
-                    key={`${flash.id}-${r}`}
-                    className="chunk-flash absolute rounded-xs bg-highlight-draft outline-2 outline-offset-1 outline-primary mix-blend-multiply motion-safe:animate-pulse"
-                    style={pdfRectToCss(rect, scale)}
-                  />
-                ))}
-              {hover?.kind === 'notes' && hover.page === pageNumber && hoveredNotes.length > 0 && (
-                <NoteHoverCard
-                  notes={hoveredNotes}
-                  paperId={paperId}
-                  style={hoverCardPosition(noteRects(highlightsByPage.get(pageNumber) ?? [], hover.noteIds), scale)}
-                  editNoteId={hover.editNoteId}
-                  onPointerEnter={hoverCard.stay}
-                  onPointerLeave={hoverCard.leave}
-                  onEditingChange={setNoteEditing}
-                  onUpdate={updateNoteBody}
-                  onColorChange={recolorNote}
-                  onDelete={deleteNote}
-                />
-              )}
-              <CitationLinks
-                citations={citationsByPage.get(pageNumber) ?? []}
-                scale={scale}
-                openId={hover?.kind === 'citation' && hover.page === pageNumber ? hover.citationId : null}
-                renderCard={(citation) => (
-                  <CitationCard
-                    citation={citation}
-                    references={references}
-                    style={hoverCardPosition([citation.rect], scale)}
-                    onPointerEnter={hoverCard.stay}
-                    onPointerLeave={leaveCard}
-                    onOpenReferences={() => showTab('references')}
-                  />
-                )}
-                onFocusIn={focusCitation}
-                onFocusOut={closeCitationCard}
-                onEscape={closeCitationCard}
-                onJump={(citation) => jumpTo(citation, true)}
-              />
-            </PdfPage>
-          ))}
-        {/* The way back from a citation jump, at the foot of the pages while they scroll. No height of its own. */}
-        {jumpBack.spot && (
-          <div className="pointer-events-none sticky bottom-4 flex h-0 items-end justify-center">
-            <Button
-              key={jumpBack.spot.id}
-              ref={jumpBack.pillRef}
-              variant="ghost"
-              className={cn(glass, 'pointer-events-auto origin-bottom rounded-full border-glass-border bg-glass-strong shadow-lg', popIn)}
-              onClick={jumpBack.back}
-            >
-              <Undo2 aria-hidden />
-              Back to page {jumpBack.spot.page}
-            </Button>
-          </div>
-        )}
-      </section>
+      <ReaderPages
+        pagesRef={pagesRef}
+        doc={doc}
+        paper={paper.data}
+        noPdf={noPdf}
+        scale={scale}
+        capturing={capturing}
+        overCitation={overCitation}
+        captureDrag={captureDrag}
+        pointer={pointer}
+        jumpBack={jumpBack}
+        highlightsByPage={highlightsByPage}
+        tableMarksByPage={tableMarksByPage}
+        numberMarksByPage={numberMarksByPage}
+        citationsByPage={citationsByPage}
+        layers={{
+          paperId,
+          scale,
+          lensReader,
+          activeNoteId,
+          draft,
+          onCopyQuote: copyToClipboard,
+          captureBox: captureDrag.box,
+          flash,
+          hover,
+          hoveredNotes,
+          hoverCard,
+          setNoteEditing: pointer.setNoteEditing,
+          onUpdateNote: updateNoteBody,
+          onColorNote: recolorNote,
+          onDeleteNote: deleteNote,
+          references: pointer.references,
+          onOpenReferences: () => showTab('references'),
+          leaveCard: pointer.leaveCard,
+          focusCitation: pointer.focusCitation,
+          closeCitationCard: pointer.closeCitationCard,
+          jumpTo: pointer.jumpTo,
+        }}
+      />
 
-      <RightPanel
+      <ReaderSidePanel
+        paperId={paperId}
+        paper={paper.data}
+        noPdf={noPdf}
         tab={tab}
-        onTabChange={showTab}
-        width={panelWidth}
+        showTab={showTab}
+        panelWidth={panelWidth}
         onWidthChange={setPanelWidth}
-        notes={
-          <NotesPanel
-            paperId={paperId}
-            hasPdf={!noPdf}
-            onCite={(source) => flashChunk(source.page, source.bbox ?? [])}
-            hasAbstract={Boolean(paper.data?.abstract)}
-            wholePaperDraft={wholePaperDraft}
-            onNewPaperNote={newPaperNote}
-            onCancelPaperNote={() => setWholePaperDraft(null)}
-            onPaperNoteDirty={(dirty) => {
-              typedPaperNote.current = dirty && wholePaperDraft !== null // a no-PDF paper's own composer is no draft
-              if (!dirty) setError((e) => (e === SAVE_FIRST ? null : e))
-            }}
-            onSavePaperNote={savePaperNote}
-            notes={notes}
-            draft={draft}
-            draftColor={draftColor}
-            activeNoteId={activeNoteId}
-            onDraftColorChange={setDraftColor}
-            onSaveDraft={saveDraft}
-            onCancelDraft={() => setDraft(null)}
-            onAddNumber={addNumberFromDraft}
-            onSelectNote={focusNote}
-            onUpdateNote={updateNoteBody}
-            onColorNote={recolorNote}
-            onDeleteNote={deleteNote}
-            movedToNotes={movedToNotes}
-            onPapersSaved={(saved) => setMovedToNotes(!saved.paper_ids.includes(paperId))}
-          />
-        }
-        chat={
-          <ChatPanel
-            scope={{ kind: 'paper', id: paperId }}
-            notice={paper.data?.status === 'embedding' ? STILL_EMBEDDING : undefined}
-            // A cited passage flashes on its page, a cited abstract scrolls into view; a cited note is focused as if
-            // picked in the Notes tab.
-            onCite={(source) =>
-              !('bbox' in source)
-                ? focusNote({ id: source.note_id })
-                : source.from_abstract
-                  ? scrollToElement('.paper-abstract', 'center')
-                  : source.replaced
-                    ? scrollToPage(source.page)
-                    : flashChunk(source.page, source.bbox ?? [])
-            }
-            onPromoted={showPromotedNote}
-          />
-        }
-        data={<DataPanel paperId={paperId} onShowRegion={flashChunk} />}
-        similar={<SimilarTab paperId={paperId} active={tab === 'similar'} />}
-        references={<ReferencesTab paperId={paperId} active={tab === 'references'} />}
-        evidence={<EvidencePanel paperId={paperId} hasPdf={!noPdf} onShowRegion={flashChunk} />}
-        lens={<LensPanel paperId={paperId} reader={lensReader} hasPdf={!noPdf} />}
+        lensReader={lensReader}
+        notes={notes}
+        draft={draft}
+        draftColor={draftColor}
+        onDraftColorChange={setDraftColor}
+        activeNoteId={activeNoteId}
+        wholePaperDraft={wholePaperDraft}
+        movedToNotes={movedToNotes}
+        onMovedToNotesChange={setMovedToNotes}
+        onNewPaperNote={newPaperNote}
+        onCancelPaperNote={() => setWholePaperDraft(null)}
+        onPaperNoteDirty={paperNoteDirty}
+        onSavePaperNote={savePaperNote}
+        onSaveDraft={saveDraft}
+        onCancelDraft={() => setDraft(null)}
+        onAddNumber={addNumberFromDraft}
+        onSelectNote={focusNote}
+        onShowPromotedNote={showPromotedNote}
+        onUpdateNote={updateNoteBody}
+        onColorNote={recolorNote}
+        onDeleteNote={deleteNote}
+        onFlashChunk={flashChunk}
       />
 
       {numberDraft && (
@@ -738,7 +269,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         menu={menu}
         onClose={() => setMenu(null)}
         onColorNote={(note, color) => void recolorNote(note, color)}
-        onEditNote={editNote}
+        onEditNote={pointer.editNote}
         onDeleteNote={(note) => void deleteNote(note)}
         onHighlightDraft={(color) => void highlightDraft(color)}
         onAddNote={focusComposer}
