@@ -30,7 +30,7 @@ const mk = (id: string, title: string, extra: Partial<Paper> = {}) =>
 const papers = [mk('1', 'Alpha cells'), mk('2', 'Beta blockers'), mk('3', 'Alpha waves')]
 const ui = (view: 'list' | 'triage', list = papers, onExit = vi.fn()) => (
   <QueryClientProvider client={new QueryClient()}>
-    <PaperList papers={list} view={view} selection={{ selected: new Set(), onToggle: vi.fn() }} triageScope="library" sourceLabel="your library" onTriageExit={onExit} />
+    <PaperList papers={list} view={view} selection={{ selected: new Set(), onToggle: vi.fn() }} triage={{ scope: 'library', sourceLabel: 'your library', onExit }} />
   </QueryClientProvider>
 )
 const desk = () => screen.getByRole('group', { name: 'Triage' })
@@ -103,7 +103,7 @@ it('Show kept papers in the list sets the Reading filter to Keep and shows the l
   const list = [mk('1', 'Alpha cells', { triage: 'keep' }), mk('2', 'Beta blockers')]
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <PaperList papers={list} view="triage" triageScope="library" sourceLabel="your library" onShowKept={onShowKept} />
+      <PaperList papers={list} view="triage" triage={{ scope: 'library', sourceLabel: 'your library', onShowKept }} />
     </QueryClientProvider>,
   )
   fireEvent.click(screen.getByLabelText('Include decided papers'))
