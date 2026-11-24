@@ -48,7 +48,7 @@ vi.mock('@/features/notes/NotesPanel', () => ({
     return null
   },
 }))
-vi.mock('@/features/data/DataPanel', () => ({ DataPanel: () => null }))
+vi.mock('@/features/datasets/DataPanel', () => ({ DataPanel: () => null }))
 vi.mock('@/services/queries/lenses', () => ({
   usePaperSections: () => ({ data: undefined }),
   usePaperChunks: () => ({ data: undefined }),
@@ -60,7 +60,7 @@ vi.mock('@/features/evidence/EvidencePanel', () => ({ EvidencePanel: () => null 
 vi.mock('@/features/library/GetPdfActions', () => ({ GetPdfActions: () => null }))
 vi.mock('@/features/reader/PaperTagChips', () => ({ PaperTagChips: () => null }))
 vi.mock('@/features/reader/ReadingContextBanner', () => ({ ReadingContextBanner: () => null }))
-vi.mock('@/features/reading/ReadingControl', () => ({
+vi.mock('@/features/triage/ReadingControl', () => ({
   ReadingControl: (props: NonNullable<typeof state.reading>) => {
     state.reading = props
     return null

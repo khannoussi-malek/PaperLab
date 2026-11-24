@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { Hit, ProvNode } from '@/entities'
 import { refreshTree, usePatchSearchHit, useSetBranch } from '@/services/queries'
 import { Button } from '@/components/ui/button'
-import { EXCLUDE_REASONS, reasonLabel } from '@/features/workspace-search/hitReview'
+import { EXCLUDE_REASONS, reasonLabel } from '@/features/search/hitReview'
 import type { BranchTarget } from '../BranchControl'
 import type { Grab } from './useGrab'
 

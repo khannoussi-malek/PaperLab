@@ -21,7 +21,7 @@ const state = vi.hoisted(() => ({
   createFigure: vi.fn(),
   onFigure: null as null | ((page: number, region: number[]) => void),
 }))
-vi.mock('@/features/data/useCaptureDrag', () => ({
+vi.mock('@/features/datasets/useCaptureDrag', () => ({
   useCaptureDrag: (_scale: number, onFigure: (page: number, region: number[]) => void) => {
     state.onFigure = onFigure
     return { capturing: false, tableMode: false, drawingFigure: false, setCapturing: () => {}, setDrawingFigure: () => {}, box: null, capture: null, closeCapture: () => {}, startDrag: () => {}, moveDrag: () => {}, endDrag: () => {} }
@@ -54,7 +54,7 @@ vi.mock('@/features/notes/NotesPanel', () => ({
     return null
   },
 }))
-vi.mock('@/features/data/DataPanel', () => ({ DataPanel: () => null }))
+vi.mock('@/features/datasets/DataPanel', () => ({ DataPanel: () => null }))
 vi.mock('@/services/queries/lenses', () => ({
   usePaperSections: () => ({ data: undefined }),
   usePaperChunks: () => ({ data: undefined }),
@@ -66,7 +66,7 @@ vi.mock('@/features/evidence/EvidencePanel', () => ({ EvidencePanel: () => null 
 vi.mock('@/features/library/GetPdfActions', () => ({ GetPdfActions: () => null }))
 vi.mock('@/features/reader/PaperTagChips', () => ({ PaperTagChips: () => null }))
 vi.mock('@/features/reader/ReadingContextBanner', () => ({ ReadingContextBanner: () => null }))
-vi.mock('@/features/reading/ReadingControl', () => ({ ReadingControl: () => null }))
+vi.mock('@/features/triage/ReadingControl', () => ({ ReadingControl: () => null }))
 vi.mock('@/features/reader/PaperDetailsDialog', () => ({ PaperDetailsDialog: () => null }))
 vi.mock('@/components/mode-toggle', () => ({ ModeToggle: () => null }))
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })

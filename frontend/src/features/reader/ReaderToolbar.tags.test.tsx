@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import type { Paper } from '@/entities'
 import { ReaderToolbar } from './ReaderToolbar'
 
-vi.mock('../reading/ReadingControl', () => ({ ReadingControl: () => null }))
+vi.mock('@/features/triage/ReadingControl', () => ({ ReadingControl: () => null }))
 vi.mock('./PaperDetailsDialog', () => ({ PaperDetailsDialog: () => null }))
 vi.mock('@/components/mode-toggle', () => ({ ModeToggle: () => null }))
 

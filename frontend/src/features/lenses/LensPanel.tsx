@@ -4,7 +4,7 @@ import { ErrorAlert, LoadError } from '@/components/ErrorAlert'
 import { NO_PDF_LENS_TEXT, lensNotice, lensSections } from './lenses'
 import { BriefCard } from './BriefCard'
 import { SectionRow } from './SectionRow'
-import { NumberSuggestionsDialog } from '../data/NumberSuggestionsDialog'
+import { NumberSuggestionsDialog } from '@/features/datasets/NumberSuggestionsDialog'
 import { useBriefStream } from './useBriefStream'
 import type { LensReader } from './useLensReader'
 

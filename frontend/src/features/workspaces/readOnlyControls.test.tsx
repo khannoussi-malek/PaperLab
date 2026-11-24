@@ -6,7 +6,7 @@ import * as queries from '@/services/queries'
 import { READ_ONLY_TEXT } from '@/lib/errorWords'
 import { ReadOnlyContext } from './readOnlyContext'
 import { TagPicker } from './TagPicker'
-import { SavedSearches } from '../workspace-search/SavedSearches'
+import { SavedSearches } from '@/features/search/SavedSearches'
 
 afterEach(() => {
   cleanup()

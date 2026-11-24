@@ -7,7 +7,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { datasetMeta, datasetSource } from '../data/datasetMeta'
+import { datasetMeta, datasetSource } from '@/features/datasets/datasetMeta'
 
 type Props = {
   open: boolean
