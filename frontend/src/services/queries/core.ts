@@ -63,10 +63,10 @@ export const keys = {
   searchHitsRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits'] as const,
   rankedHits: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'ranked'] as const,
   screening: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'screening'] as const,
-  // A prefix of every usePrismaExport key (whatever `runs`) — small and cheap to invalidate wholesale, unlike
-  // searchHitsRoot's multi-thousand-row pool above.
   snowballNext: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'snowball-next'] as const,
   provenance: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'provenance'] as const,
+  // A prefix of every usePrismaExport key (whatever `runs`) — small and cheap to invalidate wholesale, unlike
+  // searchHitsRoot's multi-thousand-row pool above.
   prismaRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma'] as const,
   prisma: (workspaceId: string, runs: string) => [...keys.prismaRoot(workspaceId), runs] as const,
   // Every dataset query starts with this; a saved grid or a captured number refreshes every list and detail.

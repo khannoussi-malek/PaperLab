@@ -91,3 +91,7 @@ export function useWorkspaceMembership() {
       ]),
   })
 }
+
+/** Every note anchored in a workspace's papers, each once, by paper title then reading position. */
+export const useWorkspaceNotes = (id: string) =>
+  useQuery({ queryKey: keys.workspaceNotes(id), queryFn: () => api.listWorkspaceNotes(id) })

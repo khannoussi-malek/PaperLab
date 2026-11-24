@@ -27,7 +27,6 @@ export const notesApi = {
   /** Replaces a note's papers; a passage on a paper left out goes with it. */
   setNotePapers: (noteId: string, paperIds: string[]) =>
     request<Note>(`/api/notes/${noteId}/papers`, sendJson('PUT', { paper_ids: paperIds })),
-  listWorkspaceNotes: (id: string) => request<Note[]>(`/api/workspaces/${id}/notes`),
   /** How an AI note was made. A note an MCP client added says only where it came from. */
   noteProvenance: (noteId: string) => request<AnswerProvenance | McpNoteProvenance>(`/api/notes/${noteId}/provenance`),
   promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),
@@ -37,4 +36,8 @@ export const notesApi = {
     request<NoteSuggestionsOut>(`/api/papers/${paperId}/notes/suggest`, { method: 'POST' }),
   noteCounts: (ids: string[]) =>
     request<components['schemas']['NoteCountsOut']>('/api/papers/note-counts', sendJson('POST', { paper_ids: ids })).then((r) => r.counts),
+  attachChart: (noteId: string, chartId: string) =>
+    request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'PUT' }),
+  detachChart: (noteId: string, chartId: string) =>
+    request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'DELETE' }),
 }

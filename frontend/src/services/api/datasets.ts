@@ -38,8 +38,4 @@ export const datasetsApi = {
   /** The current cells a spec names, for a saved chart or an unsaved one in the builder. */
   resolveChart: (spec: ChartSpec) => request<ResolvedData>('/api/charts/resolve', sendJson('POST', { spec })),
   addChartToNote: (chartId: string) => request<Note>(`/api/charts/${chartId}/note`, { method: 'POST' }),
-  attachChart: (noteId: string, chartId: string) =>
-    request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'PUT' }),
-  detachChart: (noteId: string, chartId: string) =>
-    request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'DELETE' }),
 }

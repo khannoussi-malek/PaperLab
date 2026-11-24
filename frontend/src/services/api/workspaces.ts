@@ -1,5 +1,5 @@
 import { request, sendJson } from '../http'
-import type { PackageImportResult, PackageRecordExists, Paper, Workspace } from '@/entities'
+import type { PackageImportResult, PackageRecordExists, Note, Paper, Workspace } from '@/entities'
 
 export const notesZipUrl = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}/notes.zip`
 
@@ -33,6 +33,7 @@ export const workspacesApi = {
     request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),
   deleteWorkspace: (id: string) => request<void>(`/api/workspaces/${id}`, { method: 'DELETE' }),
   makeWorkspaceEditable: (id: string) => request<Workspace>(`/api/workspaces/${id}/make-editable`, { method: 'POST' }),
+  listWorkspaceNotes: (id: string) => request<Note[]>(`/api/workspaces/${id}/notes`),
   listWorkspacePapers: (id: string) => request<Paper[]>(`/api/workspaces/${id}/papers`),
   addToWorkspace: (workspaceId: string, paperId: string) =>
     request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'PUT' }),

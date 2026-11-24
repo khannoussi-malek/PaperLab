@@ -39,7 +39,6 @@ export function useSaveSuggestion() {
   })
 }
 
-/** How a saved answer was made; read only when its disclosure opens, so chat history stays as fast. */
 const answerCheckKey = (outputId: string) => ['llm-outputs', outputId, 'check'] as const
 const CHECK_POLL_MS = 2000
 
@@ -60,5 +59,6 @@ export function useStartAnswerCheck(outputId: string) {
   })
 }
 
+/** How a saved answer was made; read only when its disclosure opens, so chat history stays as fast. */
 export const useAnswerProvenance = (outputId: string, enabled: boolean) =>
   useQuery({ queryKey: ['llm-outputs', outputId, 'provenance'] as const, queryFn: () => api.answerProvenance(outputId), enabled })

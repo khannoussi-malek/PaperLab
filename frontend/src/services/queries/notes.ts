@@ -41,10 +41,6 @@ export function usePromoteNote() {
 export const useNoteProvenance = (noteId: string, enabled: boolean) =>
   useQuery({ queryKey: ['notes', noteId, 'provenance'] as const, queryFn: () => api.noteProvenance(noteId), enabled })
 
-/** Every note anchored in a workspace's papers, each once, by paper title then reading position. */
-export const useWorkspaceNotes = (id: string) =>
-  useQuery({ queryKey: keys.workspaceNotes(id), queryFn: () => api.listWorkspaceNotes(id) })
-
 /** Create, edit, recolour and delete a note: any of them can change what every notes list shows (reader, workspace
  * Notes tabs and counts, the Notes page). */
 export function useNoteMutations() {
