@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 from app.core import screening, workspace_search
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from tests.screening_pool import make_pool
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

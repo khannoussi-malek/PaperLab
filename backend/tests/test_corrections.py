@@ -5,7 +5,7 @@ from conftest import recorded
 
 from app.core import enrichment
 from app.core.enrichment import PdfHints
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 DIR = Path(__file__).resolve().parent.parent / "reporting_guidelines"
 ORDER = ("prisma2020", "strobe", "consort", "ml")  # the picker's order; a new file goes at the end until listed here

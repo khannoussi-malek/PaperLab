@@ -10,7 +10,7 @@ from sqlalchemy import delete, select, update
 
 from app.core import manuscript_evidence as ev
 from app.core import manuscript_papers, manuscripts, queue, retrieval, workspaces
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 from app.models import Chunk, LLMModel, LLMOutput, Manuscript, ManuscriptEvidence, Paper, Workspace
 from app.workers import manuscript_evidence as worker
 

@@ -10,20 +10,17 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import groupby
 from operator import attrgetter
-from typing import Literal, NamedTuple, get_args
+from typing import NamedTuple, get_args
 
 from sqlalchemy import delete, exists, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import InvalidInput
 from app.core.papers import get_paper
+from app.domain.errors import InvalidInput
+from app.domain.sections import Role, Source
 from app.models import Chunk, section_role_overrides
 
-Role = Literal[
-    "abstract", "intro", "related", "method", "results", "discussion", "limitations", "conclusion", "back", "other"
-]
-Source = Literal["user", "keyword", "inherited", "position", "none"]
 ROLES: tuple[Role, ...] = get_args(Role)
 
 

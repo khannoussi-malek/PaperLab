@@ -4,7 +4,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.core.chart_spec import (
+from app.domain.chart_spec import (
     MAX_COLORS,
     MAX_DIMENSIONS,
     MAX_ROW_FILTER,

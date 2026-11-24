@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 from app.core import notes
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.models import Note, Paper, Provenance
 
 pytestmark = pytest.mark.anyio

@@ -11,8 +11,8 @@ from sqlalchemy import delete
 from test_note_papers import paper_only_note
 
 from app.core import library, notes, papers, workspaces
-from app.core.chunking import ChunkDraft
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.chunking import ChunkDraft
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, Paper, Provenance
 
 pytestmark = pytest.mark.anyio

@@ -2,8 +2,8 @@ import pytest
 from sqlalchemy import delete, text
 
 from app.core import discovery, pdf_links, references
-from app.core.errors import Conflict
 from app.core.paper_sources import SOURCES, SourceSettings
+from app.domain.errors import Conflict
 from app.models import Paper
 from app.providers import (
     acm_dl,

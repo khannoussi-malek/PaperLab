@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import manuscripts
-from app.core.errors import NotFound
 from app.core.manuscript_review import LIVE, _item_status, _latest, run_out
+from app.domain.errors import NotFound
 from app.models import ManuscriptClaimCheck as Check
 from app.models import ManuscriptClaimDismissal, Paper
 

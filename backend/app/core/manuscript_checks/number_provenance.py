@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from app.core.manuscript_bib import CITE
 from app.core.manuscript_checks.base import Check, CheckContext, Finding
 from app.core.manuscript_sentences import _blank_comments, _mask
-from app.core.numbers import parse_number, tokens
+from app.domain.numbers import parse_number, tokens
 
 NAME = "numbers.unbacked"
 DATA_SUFFIXES = (".csv", ".json")

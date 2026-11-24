@@ -11,7 +11,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery, paper_events, paper_sources, papers, queue
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import Paper
 
 logger = logging.getLogger(__name__)

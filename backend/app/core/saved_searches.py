@@ -12,8 +12,8 @@ from sqlalchemy import update as update_rows
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import paper_sources, queue, schedules, workspace_search, workspaces, year_range
-from app.core.errors import InvalidInput, NotFound
 from app.core.source_registry import DISCOVERY_SOURCE_IDS
+from app.domain.errors import InvalidInput, NotFound
 from app.models import SavedSearch
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 

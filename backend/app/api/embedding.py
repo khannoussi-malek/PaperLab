@@ -15,9 +15,9 @@ from pydantic import BaseModel, ConfigDict
 from app.api.deps import SessionDep, TransportDep
 from app.config import settings
 from app.core import chat, embedding_index, embedding_sources, retrieval
-from app.core.errors import Conflict, InvalidInput
 from app.core.queue import INGEST_QUEUE
 from app.db import SessionLocal
+from app.domain.errors import Conflict, InvalidInput
 from app.providers import embedding, search_model
 from app.providers.base import LLMError, LLMUnavailable, ModelNotPulled, WrongDimensions
 from app.schemas.llm import ModelName

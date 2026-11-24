@@ -9,9 +9,9 @@ from sqlalchemy import delete, select
 
 from app.core import discovery, papers, retrieved_hits, tags, workspace_search, workspaces
 from app.core.candidates import normal_title
-from app.core.errors import Conflict
 from app.core.prisma_export import prisma_export
 from app.core.workspace_search import import_hits, upload_hit_pdf
+from app.domain.errors import Conflict
 from app.models import Paper, PaperMerge, paper_tags, workspace_papers
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace

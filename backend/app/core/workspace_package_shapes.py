@@ -17,7 +17,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.core.lenses import LensId
+from app.domain.sections import LensId
 from app.models import NoteKind, Provenance
 
 Text = StrictStr | None

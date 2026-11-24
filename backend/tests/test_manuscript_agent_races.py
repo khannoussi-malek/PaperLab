@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 
 from app.core import manuscript_agent as agent
 from app.core import manuscript_history, manuscripts
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import Manuscript, ManuscriptSnapshot
 from tests.conftest import TEST_DATABASE_URL
 

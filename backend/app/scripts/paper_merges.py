@@ -16,8 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery, merges
-from app.core.candidates import Candidate, normal_title
+from app.core.candidates import normal_title
 from app.db import SessionLocal
+from app.domain.candidates import Candidate
 from app.models import Paper, PaperMerge
 from app.providers.extraction import extract_title
 

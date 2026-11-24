@@ -1,7 +1,6 @@
 # ruff: noqa: E501
 import pytest
 
-from app.core.errors import InvalidInput
 from app.core.manuscript_sections import (
     check_title,
     drop_input,
@@ -13,6 +12,7 @@ from app.core.manuscript_sections import (
     set_title,
     split,
 )
+from app.domain.errors import InvalidInput
 
 MAIN = "\\begin{document}\n\\input{sections/intro}\n\\clearpage\n\\input{sections/method.tex}\n% \\input{sections/old}\n\\bibliography{paperlab}\n\\end{document}\n"
 

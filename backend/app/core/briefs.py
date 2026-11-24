@@ -24,9 +24,9 @@ from app.core.chat import (
     parse_citations,
     snapshot_passages,
 )
-from app.core.errors import Conflict, InvalidInput
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk
+from app.domain.errors import Conflict, InvalidInput
 from app.models import Chunk, LLMOutput, PaperStatus
 
 OUTPUT_KIND = "brief"  # the llm_outputs.kind of a brief, as claims.py and evidence_cards.py name theirs

@@ -12,8 +12,8 @@ from pdf_papers import chunked_paper
 from sqlalchemy import func, select
 
 from app.core import discovery, papers, pdf_links, pipeline, workspaces
-from app.core.candidates import Candidate
-from app.core.errors import Conflict
+from app.domain.candidates import Candidate
+from app.domain.errors import Conflict
 from app.models import Paper, PaperStatus
 from app.providers import discovery_fake, unpaywall
 

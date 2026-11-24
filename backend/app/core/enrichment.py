@@ -21,10 +21,10 @@ from sqlalchemy import delete, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import Conflict, InvalidInput
 from app.core.papers import abstract_drafts, get_paper, replace_chunks
 from app.core.provenance import stamp, stamp_edited
-from app.core.source_types import (
+from app.domain.errors import Conflict, InvalidInput
+from app.domain.source_types import (
     ARXIV_DOI_PREFIX,
     PREPRINT_SERVERS,
     is_preprint_copy,

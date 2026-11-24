@@ -15,8 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core import paper_sources
-from app.core.candidates import Candidate, from_acl_anthology, from_biorxiv_entry, from_iacr_eprint
+from app.core.candidates import from_acl_anthology, from_biorxiv_entry, from_iacr_eprint
 from app.db import SessionLocal
+from app.domain.candidates import Candidate
 from app.models import ExternalRef
 from app.models.harvest import HarvestCursor
 from app.providers import acl_anthology, biorxiv, iacr_eprint

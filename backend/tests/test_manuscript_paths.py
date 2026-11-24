@@ -1,7 +1,7 @@
 import pytest
 
-from app.core.errors import InvalidInput
 from app.core.manuscript_paths import is_text, validate_path
+from app.domain.errors import InvalidInput
 
 
 @pytest.mark.parametrize(

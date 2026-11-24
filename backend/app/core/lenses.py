@@ -3,15 +3,14 @@ never hard-codes which roles a lens reads."""
 
 import uuid
 from dataclasses import dataclass
-from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import sections
-from app.core.errors import InvalidInput
-from app.core.sections import Role, Section
+from app.core.sections import Section
+from app.domain.errors import InvalidInput
+from app.domain.sections import LensId, Role
 
-LensId = Literal["full", "key_ideas", "critical", "method", "related"]
 # Key ideas' position fallback: this many non-back chunks from each end of the paper.
 POSITION_CHUNKS = 3
 

@@ -782,7 +782,7 @@ async def test_import_hits_skips_a_held_paper_deleted_mid_import_and_imports_the
     session, client, discovery_api, monkeypatch
 ):
     from app.core import workspaces
-    from app.core.errors import NotFound
+    from app.domain.errors import NotFound
     from app.models import Paper
     from app.models.workspace_search import WorkspaceSearchHit
 

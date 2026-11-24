@@ -8,7 +8,7 @@ from test_note_papers import paper_only_note
 from test_search_rebuild import OLLAMA_NAME, switched
 
 from app.core import graph, paper_links, papers, workspaces
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.models import (
     Author,
     Chunk,

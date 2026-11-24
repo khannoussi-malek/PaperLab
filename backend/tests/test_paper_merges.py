@@ -11,9 +11,9 @@ from test_pdf_upgrade import awaiting
 from test_retrieved_hits import failed_hit, paper, workspace
 
 from app.core import merges, notes, papers, retrieved_hits, tags, workspaces
-from app.core.candidates import Candidate
-from app.core.chunking import ChunkDraft
-from app.core.errors import NotFound
+from app.domain.candidates import Candidate
+from app.domain.chunking import ChunkDraft
+from app.domain.errors import NotFound
 from app.models import EvidenceCard, Paper, PaperMerge, section_role_overrides
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit
 

@@ -23,10 +23,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections, workspaces
-from app.core.errors import DomainError
 from app.core.screening import load_pool
 from app.core.screening_suggest import suggest
 from app.db import SessionLocal
+from app.domain.errors import DomainError
 from app.providers.llm import build_llm
 
 CONFIG = Path(__file__).with_name("screening.yaml")

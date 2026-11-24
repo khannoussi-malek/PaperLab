@@ -9,8 +9,8 @@ import uuid
 from sqlalchemy import func, select, update
 
 from app.core import llm_connections, section_review
-from app.core.errors import DomainError, error_code
 from app.db import SessionLocal
+from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptSectionReview as Row
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm import build_llm

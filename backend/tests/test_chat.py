@@ -9,9 +9,9 @@ from test_note_papers import paper_only_note
 from test_sections import SECTIONED, critical_skill, sectioned_paper
 
 from app.core import chat, papers, prompts, skills
-from app.core.chunking import ChunkDraft
-from app.core.errors import Conflict, NotFound
 from app.core.retrieval import RetrievedChunk
+from app.domain.chunking import ChunkDraft
+from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus
 from app.providers import embedding
 

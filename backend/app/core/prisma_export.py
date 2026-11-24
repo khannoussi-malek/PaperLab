@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import search_run_results
 from app.core.hit_links import provenance
-from app.core.errors import NotFound
 from app.core.source_registry import NAMES
 from app.core.workspace_search import PER_SOURCE_PASS_LIMIT, get_run
+from app.domain.errors import NotFound
 from app.models import Paper
 from app.models.workspace import Workspace
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun

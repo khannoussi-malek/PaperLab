@@ -3,9 +3,9 @@
 import logging
 from dataclasses import dataclass
 
-from app.core.errors import InvalidInput
 from app.core.manuscript_checks import blueprint, citations, latex_hygiene, number_provenance, pdf, references, wording
 from app.core.manuscript_checks.base import SEVERITIES, Check, CheckContext, Cost, Finding
+from app.domain.errors import InvalidInput
 
 logger = logging.getLogger(__name__)
 

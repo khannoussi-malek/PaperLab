@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import citations, claim_text, llm_connections, llm_json, notes, prompts, quotes, retrieval
 from app.core.claim_text import RefEntry
 from app.core.enrichment import normalize_doi
-from app.core.errors import DomainError, InvalidInput, NotFound
+from app.domain.errors import DomainError, InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm import build_llm

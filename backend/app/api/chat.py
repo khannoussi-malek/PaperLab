@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
 from app.core import answer_check_run, answer_provenance, chat, chat_charts, each_paper, hit_chat, notes, queue, skills
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.db import SessionLocal
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.providers.base import LLM, LLMError, LLMUnavailable
 from app.schemas.answer_check import AnswerCheckOut, AnswerCheckRequest
 from app.schemas.chat import (

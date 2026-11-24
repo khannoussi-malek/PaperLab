@@ -1,6 +1,7 @@
 import pytest
 
-from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, merge, surname
+from app.core.candidates import from_arxiv, from_core, from_crossref, merge, surname
+from app.domain.candidates import Candidate
 
 ARXIV_ENTRY = {
     "arxiv_id": "1706.03762", "title": "Attention Is All You Need", "year": 2017, "doi": None,

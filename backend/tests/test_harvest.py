@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 import pytest
 from sqlalchemy import select
 
-from app.core.candidates import Candidate
+from app.domain.candidates import Candidate
 from app.models import ExternalRef
 from app.models.harvest import HarvestCursor
 from app.workers.harvest import harvest_ingest_candidate

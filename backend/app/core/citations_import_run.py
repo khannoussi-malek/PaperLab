@@ -22,7 +22,7 @@ from app.core import citations_import_apply as cia
 from app.core import queue, workspaces
 from app.core.citations_bundle_read import MAX_ZIP_BYTES, Bundle
 from app.core.citations_import import MAX_BYTES, CitationsImportError, ImportEntry
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.schemas.citations_import import ImportCountsOut, ImportPreviewOut, ImportProgressOut, ImportResultOut
 
 FILE_MAX_BYTES = MAX_BYTES  # one references file

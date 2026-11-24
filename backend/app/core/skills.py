@@ -14,9 +14,9 @@ from sqlalchemy import select, text
 from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.lenses import LENSES
 from app.core.prompts import PROMPTS_DIR
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Skill
 
 logger = logging.getLogger(__name__)

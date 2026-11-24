@@ -7,9 +7,9 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import paper_sources
-from app.core.errors import InvalidInput
 from app.core.manuscript_checks import service
 from app.core.manuscript_checks.references_doi import DEADLINE_SECONDS, DoiCheckResult, check_dois, doi_entries
+from app.domain.errors import InvalidInput
 from app.providers import crossref
 
 new_client = crossref.new_client  # tests replace this with a client on a mock transport

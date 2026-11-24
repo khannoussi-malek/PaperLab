@@ -11,9 +11,9 @@ import uuid
 from sqlalchemy import func, select, update
 
 from app.core import claim_detect, claims, llm_connections, queue
-from app.core.errors import DomainError, error_code
 from app.core.manuscript_review import JOB
 from app.db import SessionLocal
+from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptClaimCheck as Check
 from app.models import ManuscriptReviewRun as Run
 from app.providers.llm import build_llm

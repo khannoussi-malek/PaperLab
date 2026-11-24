@@ -18,9 +18,9 @@ from sqlalchemy import func, select
 
 from app.core import citations_import_apply as cia
 from app.core import discovery, notes, papers, queue, tags, workspaces
-from app.core.candidates import Candidate
 from app.core.citations_bundle_read import Bundle, read_bundle
 from app.core.citations_import import CitationsImportError, ImportEntry
+from app.domain.candidates import Candidate
 from app.models import Note, Paper, Provenance, note_papers
 from app.workers import citations_import as worker
 

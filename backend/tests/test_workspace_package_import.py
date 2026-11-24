@@ -22,7 +22,7 @@ from app.core import (
     workspace_package,
     workspaces,
 )  # fmt: skip
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.models import LLMOutput, Paper, PaperStatus, Workspace, note_papers
 from app.models.workspace import workspace_papers
 from tests.test_workspace_package_export import ALPHA_TEXT, BETA_TEXT, _draft, _seeded, cited_answer

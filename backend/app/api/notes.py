@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response, UploadFile
 
 from app.api.deps import LLMByModelIdDep, SessionDep
 from app.core import answer_provenance, note_suggestions, notes, notes_markdown
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.providers.base import LLMError, LLMUnavailable
 from app.schemas.chat import AnswerProvenanceOut, McpNoteOut, PromoteRequest, to_provenance
 from app.schemas.note_suggestions import NoteSuggestionOut, NoteSuggestionsOut

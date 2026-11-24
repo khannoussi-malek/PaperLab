@@ -9,8 +9,8 @@ import uuid
 from sqlalchemy import func, select, update
 
 from app.core import draft_review
-from app.core.errors import DomainError, error_code
 from app.db import SessionLocal
+from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptDraftReview as Row
 from app.providers.base import LLMError, LLMUnavailable
 from app.workers.manuscript_section_review import _model  # the default connection's model, as there

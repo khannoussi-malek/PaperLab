@@ -5,7 +5,7 @@ import uuid
 
 from app.core import manuscript_history, manuscripts
 from app.core import manuscript_sections as sec
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 
 REASON = "before_sections"
 

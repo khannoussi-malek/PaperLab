@@ -17,7 +17,7 @@ from test_chat_workspace_api import make_paper, make_workspace, query_model  # n
 
 from app.api.deps import get_discovery
 from app.core import papers, queue, saved_searches, schedules, tags, workspace_package, workspace_search, workspaces
-from app.core.errors import Conflict, NotFound
+from app.domain.errors import Conflict, NotFound
 from app.models import Workspace
 from tests.test_workspace_package_import import _package, _paper
 

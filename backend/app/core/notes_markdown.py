@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import notes, workspaces
 from app.core.citations_export import bibtex_keys, csl_item, filename_slug
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.models import Note, Paper, Provenance, Workspace, note_anchors, note_papers
 
 LABELS = {"human": "You", "llm": "AI", "llm_edited": "AI · edited"}

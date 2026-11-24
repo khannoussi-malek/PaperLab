@@ -13,7 +13,7 @@ import statistics
 from dataclasses import dataclass
 from typing import Literal
 
-from app.core.numbers import parse_number
+from app.domain.numbers import parse_number
 
 Rect = tuple[float, float, float, float]
 

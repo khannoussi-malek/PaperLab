@@ -10,8 +10,8 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from app.api.deps import SessionDep, TransportDep
 from app.core import llm_connections
-from app.core.errors import InvalidInput
 from app.db import SessionLocal
+from app.domain.errors import InvalidInput
 from app.models import LLMConnection
 from app.providers import llm, ollama_admin
 from app.providers.base import LLMError, LLMUnavailable

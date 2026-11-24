@@ -7,7 +7,7 @@ from pdf_papers import chunked_paper
 from sqlalchemy import select
 
 from app.core import citations_export, pipeline, tags, workspaces
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 from app.models import Paper, workspace_papers
 
 pytestmark = pytest.mark.anyio

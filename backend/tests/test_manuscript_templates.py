@@ -8,7 +8,7 @@ import pytest
 from app.config import settings
 from app.core import latex_compile as lc
 from app.core import manuscript_templates as mt
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 NAMES = sorted(mt.TEMPLATES)
 SLUGS = ["introduction", "related-work", "method", "results", "discussion", "conclusion"]

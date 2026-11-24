@@ -10,8 +10,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.papers import get_paper
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import PaperLink
 
 LABEL_MAX_CHARS = 80

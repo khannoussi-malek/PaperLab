@@ -15,9 +15,9 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import chat
-from app.core.errors import Conflict, DomainError, error_code
 from app.core.voice_text import SentenceSplitter, heard_text, speakable
 from app.db import SessionLocal
+from app.domain.errors import Conflict, DomainError, error_code
 from app.models.voice_turn import VoiceTurn
 from app.providers.base import LLM, LLMError, LLMUnavailable, Speech, SpeechUnavailable
 from app.providers.embedding import query_embed_ms

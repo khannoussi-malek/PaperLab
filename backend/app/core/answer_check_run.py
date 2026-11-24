@@ -22,7 +22,7 @@ from app.core.answer_check import (
 )
 from app.core.answer_check_text import answer_sentences
 from app.core.answer_provenance import MAX_SNAPSHOT_CHARS
-from app.core.errors import Conflict, NotFound
+from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMOutput, Paper
 from app.providers.llm import build_llm
 

@@ -16,7 +16,7 @@ depends_on = None
 
 SOURCE_TYPES = "'journal_article','proceedings','book','chapter','preprint','magazine','thesis','other'"
 
-# Mirrors app.core.source_types (OpenAlex mapping + the arXiv-DOI rule); no network. Only fills rows still NULL.
+# Mirrors app.domain.source_types (OpenAlex mapping + the arXiv-DOI rule); no network. Only fills rows still NULL.
 BACKFILL_SQL = """
 UPDATE papers SET source_type = CASE
     WHEN lower(doi) LIKE '10.48550/arxiv.%' THEN 'preprint'

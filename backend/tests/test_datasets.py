@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import delete, insert
 
 from app.core import datasets
-from app.core.datasets import CellIn, ColumnIn, GridIn, RowIn
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Chart, Paper, chart_datasets
 
 pytestmark = pytest.mark.anyio

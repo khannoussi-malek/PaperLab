@@ -12,7 +12,7 @@ from test_manuscript_papers import setup
 from app.core import draft_review, manuscripts, queue
 from app.core import draft_review_issues as di
 from app.core import manuscript_draft_review as mdr
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 from app.models import LLMConnection, LLMModel, Manuscript
 from app.models import ManuscriptDraftReview as Row
 from app.providers.base import LLMError, LLMUnavailable

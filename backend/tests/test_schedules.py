@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.core import schedules
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 UTC = timezone.utc
 

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app import main
 from app.api import llm as llm_api
 from app.config import settings
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.models import LLMModel
 from app.providers import ollama_admin
 

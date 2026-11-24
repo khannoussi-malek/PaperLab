@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import manuscript_review as review
 from app.core import manuscript_review_all as review_all
 from app.core import manuscript_review_report as report
-from app.core.errors import InvalidInput, NotFound, error_code
+from app.domain.errors import InvalidInput, NotFound, error_code
 from app.schemas.manuscript_review import ReportItemOut, ReviewRunOut
 
 MAX_ITEMS = 200

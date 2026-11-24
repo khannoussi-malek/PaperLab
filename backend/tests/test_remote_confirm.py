@@ -9,7 +9,7 @@ from test_manuscript_papers import setup
 from app.core import llm_connections, manuscripts, queue
 from app.core import manuscript_review as mr
 from app.core import manuscript_section_review as msr
-from app.core.errors import Conflict, NotFound
+from app.domain.errors import Conflict, NotFound
 from app.models import LLMConnection, LLMModel, ManuscriptClaimCheck
 from app.workers import manuscript_review as review_worker
 

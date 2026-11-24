@@ -10,7 +10,7 @@ from test_manuscript_papers import setup
 from test_remote_confirm import _remote
 
 from app.core import manuscript_draft_review, manuscripts
-from app.core.errors import DomainError, error_code
+from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptDraftReview as Row
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]

@@ -1,4 +1,4 @@
-from app.core.table_grid import CAPTION_NAME_CHARS, GridCell, Word, caption_name, split_header, words_to_grid
+from app.domain.table_grid import CAPTION_NAME_CHARS, GridCell, Word, caption_name, split_header, words_to_grid
 
 
 def word(x0: float, top: float, text: str, width: float | None = None, height: float = 10) -> Word:

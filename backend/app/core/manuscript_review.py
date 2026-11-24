@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections, manuscript_papers, manuscripts, queue
 from app.core import manuscript_paths as paths
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.manuscript_sentences import (
     Sentence,
     in_range,
@@ -22,6 +21,7 @@ from app.core.manuscript_sentences import (
     scoped_plain,
     split_sentences,
 )
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import (
     ManuscriptClaimCheck,
     ManuscriptClaimDismissal,

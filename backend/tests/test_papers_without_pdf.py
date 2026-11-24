@@ -16,7 +16,6 @@ from sqlalchemy import delete, func, select, update
 from app.core import (
     chat,
     chunk_headers,
-    chunking,
     claims,
     evidence_cards,
     library,
@@ -27,7 +26,8 @@ from app.core import (
     tags,
     workspaces,
 )
-from app.core.errors import Conflict, InvalidInput
+from app.domain import chunking
+from app.domain.errors import Conflict, InvalidInput
 from app.models import Chunk, EvidenceCard, LLMOutput, Paper
 from app.providers import embedding
 from app.workers import ingest

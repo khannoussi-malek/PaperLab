@@ -18,10 +18,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import prisma_export, search_run_results
-from app.core.candidates import Candidate, normal_title
+from app.core.candidates import normal_title
 from app.core.redact import redact
 from app.core.workspace_package_shapes import CursorState, StatsRow
 from app.core.workspace_search import _find_or_create_external_ref
+from app.domain.candidates import Candidate
 from app.models import Paper
 from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
 from app.models.references import ExternalRef

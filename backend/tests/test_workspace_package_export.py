@@ -11,10 +11,10 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.core import chat, citations_bundle_read, notes, papers, prisma_export, tags, workspace_package, workspaces
-from app.core.chunking import ChunkDraft
-from app.core.errors import Conflict, NotFound
 from app.core.hit_links import record_links
 from app.core.notes import Anchor
+from app.domain.chunking import ChunkDraft
+from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMConnection, LLMOutput, Note, PaperSources, Workspace, note_papers
 from app.models.provenance import WorkspaceBranchState
 from app.models.references import ExternalRef

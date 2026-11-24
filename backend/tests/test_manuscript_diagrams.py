@@ -12,7 +12,7 @@ from test_manuscript_papers import setup
 from app.config import settings
 from app.core import diagram_compile, queue
 from app.core import manuscript_diagrams as md
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel
 from app.models import ManuscriptDiagram as Row
 from app.providers.llm import FakeLLM

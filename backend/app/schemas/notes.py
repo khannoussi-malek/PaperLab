@@ -4,7 +4,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.core.notes import DEFAULT_COLOR
+from app.domain.constants import DEFAULT_COLOR
 from app.models import NoteKind
 from app.schemas.papers import Rect
 

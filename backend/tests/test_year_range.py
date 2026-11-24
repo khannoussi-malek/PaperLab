@@ -3,7 +3,7 @@
 import pytest
 
 from app.core import year_range
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 
 @pytest.mark.parametrize("filters", [{}, {"year_from": None, "year_to": None}])

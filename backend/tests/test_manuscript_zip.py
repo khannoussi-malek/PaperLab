@@ -5,7 +5,7 @@ import pytest
 
 from app.core import manuscript_paths as paths
 from app.core import manuscript_zip
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 
 TEX = "\\documentclass{article}\\begin{document}Hi\\end{document}"
 

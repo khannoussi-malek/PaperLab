@@ -9,7 +9,7 @@ from datetime import datetime
 
 from sqlalchemy import case, func, tuple_
 
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.models.workspace_search import WorkspaceSearchHit as Hit
 
 # Unsuggested hits have no relevance (valid scores are 1-5), so 0 sorts them last.

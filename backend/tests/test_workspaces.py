@@ -5,7 +5,7 @@ from sqlalchemy import func, insert, select, text, update
 from test_note_papers import paper_only_note
 
 from app.core import notes, workspaces
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Note, Paper, Provenance, note_anchors, note_papers, workspace_papers
 
 pytestmark = pytest.mark.anyio

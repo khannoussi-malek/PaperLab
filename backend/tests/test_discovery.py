@@ -6,8 +6,8 @@ from conftest import recorded_discovery
 
 from app.core import discovery
 from app.core.discovery import Candidate
-from app.core.errors import Conflict
 from app.core.paper_sources import SourceSettings
+from app.domain.errors import Conflict
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

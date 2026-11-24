@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import delete, select
 
 from app.core import references
-from app.core.errors import Conflict, NotFound
+from app.domain.errors import Conflict, NotFound
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
 
 # Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these

@@ -6,12 +6,12 @@ from pydantic import AwareDatetime
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.core import branches, hit_suggest, screening, snowball_next, workspace_search
-from app.core.errors import InvalidInput
 from app.core.hit_links import paths_to, provenance
 from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.prisma_export import prisma_export
 from app.core.queue import INGEST_QUEUE
 from app.core.screening import RANKED_LIMIT_MAX
+from app.domain.errors import InvalidInput
 from app.schemas.workspace_search import (
     AcceptSuggestions,
     AcceptSuggestionsOut,

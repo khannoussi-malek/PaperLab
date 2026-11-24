@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import delete
 
 from app.core import paper_sources
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.models import PaperSources
 
 pytestmark = pytest.mark.anyio

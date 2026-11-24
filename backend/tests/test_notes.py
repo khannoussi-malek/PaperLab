@@ -7,8 +7,8 @@ from pdf_papers import TWICE, TWO_LINE_QUOTE, TWO_PARAGRAPH_QUOTE, chunked_paper
 from sqlalchemy import func, select
 
 from app.core import notes, papers
-from app.core.chunking import ChunkDraft
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.chunking import ChunkDraft
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMOutput, Note, Paper, Provenance, note_anchors
 from app.providers.extraction import quote_rects
 
@@ -193,7 +193,7 @@ async def test_a_quote_from_a_block_two_overlapping_chunks_share_is_one_place(se
     paper = await make_paper(session, page_count=1)  # its PDF isn't here, so a quote is placed on its paragraph
     shared = [72.0, 300.0, 540.0, 340.0]
     closing = "Both chunks repeat this closing paragraph. It says overlap twice, then overlap twice again."
-    # Chunking a paper with no headings carries a chunk's last block into the next (core/chunking.py).
+    # Chunking a paper with no headings carries a chunk's last block into the next (domain/chunking.py).
     await papers.replace_chunks(
         session,
         paper.id,

@@ -321,7 +321,7 @@ def fake_diagram_reply(prompt: str) -> str:
 
 def fake_number_suggest_reply(prompt: str) -> str:
     """Up to three numbers of the section, each with its sentence (at most 25 words) as the quote (D33)."""
-    from app.core.numbers import find_numbers  # providers never import core at module level
+    from app.domain.numbers import find_numbers  # providers never import core at module level
 
     text = prompt.split("\n\n", 1)[-1]
     found = []

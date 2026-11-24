@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 
 from app.config import settings
 from app.core import embedding_index, embedding_sources, llm_connections
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import Chunk, Note, Paper
 from app.providers import embedding
 from app.workers import ingest

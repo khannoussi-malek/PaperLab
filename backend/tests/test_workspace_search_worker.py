@@ -663,7 +663,7 @@ def _endless_titled_pages(monkeypatch, source: str = "arxiv", page_size: int = 5
     """An endless source whose items map to distinct papers (title = its offset), so hits really get stored.
     Returns the cursors the source was asked for."""
     from app.core import workspace_search as core_module
-    from app.core.candidates import Candidate
+    from app.domain.candidates import Candidate
 
     asked: list[int] = []
 

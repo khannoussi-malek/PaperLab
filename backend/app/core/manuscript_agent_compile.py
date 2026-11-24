@@ -11,7 +11,7 @@ import pymupdf
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import manuscripts
-from app.core.errors import InvalidInput, NotFound
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Manuscript
 
 MAX_ERRORS = 50

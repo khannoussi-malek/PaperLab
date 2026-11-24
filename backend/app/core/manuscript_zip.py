@@ -6,7 +6,7 @@ import stat
 import zipfile
 
 from app.core import manuscript_paths as paths
-from app.core.errors import Conflict, DomainError, InvalidInput
+from app.domain.errors import Conflict, DomainError, InvalidInput
 
 IMPORTED_BIB = "paperlab-imported.bib"
 LATEXMKRC = "$pdf_mode = 5;  # XeLaTeX\n"

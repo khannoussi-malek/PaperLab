@@ -8,8 +8,8 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import bindparam, insert, select, text
 
 from app.core import retrieval
-from app.core.errors import Conflict
 from app.core.retrieval import retrieve
+from app.domain.errors import Conflict
 from app.models import Chunk, Paper, Workspace, workspace_papers
 from app.providers import embedding
 

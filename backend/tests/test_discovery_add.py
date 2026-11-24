@@ -7,8 +7,8 @@ from sqlalchemy import select
 
 from app.core import discovery, enrichment, pdf_links
 from app.core.discovery import Candidate
-from app.core.errors import Conflict
 from app.core.paper_sources import SourceSettings
+from app.domain.errors import Conflict
 from app.models import Paper, PaperStatus
 from app.workers import ingest
 

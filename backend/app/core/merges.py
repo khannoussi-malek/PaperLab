@@ -12,10 +12,10 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery, retrieved_hits
-from app.core.candidates import Candidate
 from app.core.enrichment import Collision, normalize_doi, pdf_hints, short_id
-from app.core.errors import NotFound
-from app.core.papers import ABSTRACT_PAGE
+from app.domain.candidates import Candidate
+from app.domain.constants import ABSTRACT_PAGE
+from app.domain.errors import NotFound
 from app.models import Paper, PaperEvent, PaperMerge
 from app.models.workspace_search import WorkspaceSearchHit
 

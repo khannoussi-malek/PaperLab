@@ -4,7 +4,7 @@ import pytest
 from pdf_papers import chunked_paper
 
 from app.core import library, novelty, workspaces
-from app.core.errors import InvalidInput, NotFound
+from app.domain.errors import InvalidInput, NotFound
 
 pytestmark = pytest.mark.anyio
 

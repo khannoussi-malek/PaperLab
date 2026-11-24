@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import func, select, text
 
 from app.core import skills
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Skill
 
 pytestmark = pytest.mark.anyio

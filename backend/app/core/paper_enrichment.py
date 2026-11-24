@@ -15,7 +15,7 @@ from app.core.candidates import s2_triage
 from app.core.enrichment import normalize_doi, openalex_published
 from app.core.hit_enrichment import CHUNK, batch_with_backoff
 from app.core.provenance import sources_of
-from app.core.source_types import ARXIV_DOI_PREFIX, is_preprint_copy, peer_reviewed_of
+from app.domain.source_types import ARXIV_DOI_PREFIX, is_preprint_copy, peer_reviewed_of
 from app.models.paper import Paper
 from app.models.workspace import workspace_papers
 from app.providers import openalex

@@ -10,7 +10,7 @@ from conftest import FakeEmbedder
 from sqlalchemy import select, text
 
 from app.core import chunk_headers, papers, queue
-from app.core.chunking import ChunkDraft
+from app.domain.chunking import ChunkDraft
 from app.models import Chunk, Paper
 from app.workers import ingest
 from app.workers.settings import IngestWorkerSettings

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from app.core.source_types import evidence_access, peer_reviewed_of, source_type_of
+from app.domain.source_types import evidence_access, peer_reviewed_of, source_type_of
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

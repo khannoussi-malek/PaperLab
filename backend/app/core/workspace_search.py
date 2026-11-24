@@ -32,14 +32,15 @@ from app.core import (
     year_range,
 )
 from app.core.branches import default_branch_on_decision
-from app.core.candidates import Candidate, from_s2, merge, normal_title
+from app.core.candidates import from_s2, merge, normal_title
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
 from app.core.source_registry import MAPPERS as _MAPPERS
 from app.core.source_registry import PAGE_FUNCS as _PAGE_FUNCS
 from app.core.source_registry import PAGE_SIZE_BY_SOURCE
 from app.core.source_registry import STARTING_CURSOR_VALUE as _STARTING_CURSOR_VALUE
-from app.core.source_types import peer_reviewed_of
+from app.domain.candidates import Candidate
+from app.domain.source_types import peer_reviewed_of
 from app.models.references import ExternalRef, paper_references
 from app.models.workspace_search import (
     SearchRunEligibility,
@@ -372,7 +373,7 @@ async def _insert_hit(
 
 
 from app.core import papers, workspaces
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, workspace_papers
 
 # OpenAlex's `page` cursor is 1-based; every other source's is a 0-based offset (Task 2's convention — the

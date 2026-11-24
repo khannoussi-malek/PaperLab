@@ -6,7 +6,7 @@ from test_manuscript_review import doc as template_doc
 from app.core import manuscript_review as mr
 from app.core import manuscript_review_all as ra
 from app.core import manuscripts
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 from app.models import LLMConnection, LLMModel, ManuscriptFile, ManuscriptReviewRun
 from app.workers import manuscript_review as worker
 

@@ -38,7 +38,7 @@ class Paper(Base):
     year: Mapped[int | None]
     venue: Mapped[str | None] = mapped_column(Text)
     type: Mapped[str | None] = mapped_column(Text)
-    # M39 F6: see app.core.source_types. evidence_access is derived (the property below), never stored.
+    # M39 F6: see app.domain.source_types. evidence_access is derived (the property below), never stored.
     source_type: Mapped[str | None] = mapped_column(Text)
     peer_reviewed: Mapped[str] = mapped_column(Text, server_default=text("'unknown'"))
     published_doi: Mapped[str | None] = mapped_column(Text)
@@ -61,7 +61,7 @@ class Paper(Base):
     # Columns the user corrected by hand. Extraction and enrichment never overwrite them.
     manual_fields: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     file_path: Mapped[str | None] = mapped_column(Text)  # NULL: saved without a PDF
-    details_source: Mapped[str | None] = mapped_column(Text)  # app.core.source_types.DetailsSource; CHECK in 0050
+    details_source: Mapped[str | None] = mapped_column(Text)  # app.domain.source_types.DetailsSource; CHECK in 0050
     # R22: {group: source}, which source last filled each group of details (app.core.provenance). No CHECK on values.
     field_sources: Mapped[dict[str, str]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     # R20: when the weekly re-check last looked for a free PDF, and found | none | error (CHECK in 0053).
@@ -94,7 +94,7 @@ class Paper(Base):
 
     @property
     def evidence_access(self) -> str:
-        from app.core.source_types import evidence_access
+        from app.domain.source_types import evidence_access
 
         return evidence_access(self.abstract, self.status, self.has_chunks, self.has_pdf)
 

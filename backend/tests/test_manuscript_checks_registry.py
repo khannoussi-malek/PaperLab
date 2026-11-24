@@ -4,9 +4,9 @@ from types import MappingProxyType
 
 import pytest
 
-from app.core.errors import InvalidInput
 from app.core.manuscript_checks.base import Check, CheckContext, Finding, ManuscriptInfo
 from app.core.manuscript_checks.registry import run_selected, select
+from app.domain.errors import InvalidInput
 
 INFO = ManuscriptInfo("m", "main.tex", "never", None, None, None)
 CTX = CheckContext(MappingProxyType({}), frozenset(), INFO)

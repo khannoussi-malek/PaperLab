@@ -12,7 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.api import voice
 from app.api.deps import resolve_speech
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.main import create_app
 from app.providers.llm import FakeLLM
 from app.providers.speech import FakeSpeech

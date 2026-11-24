@@ -10,7 +10,7 @@ import pytest
 from app.core import discovery, pdf_links
 from app.core.candidates import from_europe_pmc
 from app.core.discovery import Candidate
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 from app.providers import europe_pmc, pmc_opendata
 
 pytestmark = pytest.mark.anyio

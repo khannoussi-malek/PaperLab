@@ -21,9 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import chat, claims, prompts, skills, workspaces
 from app.core.answer_provenance import snapshot
-from app.core.errors import Conflict
 from app.core.retrieval import RetrievedChunk, likely_papers, retrieve, searchable
 from app.db import SessionLocal
+from app.domain.errors import Conflict
 from app.models import Chunk, LLMOutput, Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable
 

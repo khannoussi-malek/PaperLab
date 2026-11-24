@@ -7,7 +7,7 @@ from app.core import manuscript_review as mr
 from app.core import manuscript_review_all as ra
 from app.core import manuscript_review_report as rep
 from app.core import manuscripts
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.models import ManuscriptFile, ManuscriptReviewRun
 
 pytestmark = pytest.mark.anyio

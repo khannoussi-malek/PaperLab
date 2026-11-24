@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy import select
 
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models.workspace_search import WorkspaceSearchHit
 from evals import screening_eval as ev
 from tests.screening_pool import make_pool

@@ -6,8 +6,8 @@ import uuid
 import pytest
 
 from app.core import library
-from app.core.errors import InvalidInput, NotFound
 from app.core.retrieval import RetrievedChunk
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

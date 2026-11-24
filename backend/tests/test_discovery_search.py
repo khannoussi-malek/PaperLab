@@ -7,9 +7,10 @@ import httpx
 import pytest
 
 from app.core import discovery
-from app.core.candidates import Candidate, from_iacr_eprint
-from app.core.errors import Conflict
+from app.core.candidates import from_iacr_eprint
 from app.core.paper_sources import SourceSettings
+from app.domain.candidates import Candidate
+from app.domain.errors import Conflict
 from app.models import Paper
 from app.providers import iacr_eprint
 from app.workers.harvest import harvest_ingest_candidate

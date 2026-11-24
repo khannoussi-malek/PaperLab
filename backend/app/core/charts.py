@@ -9,10 +9,10 @@ from typing import Literal
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chart_spec import ChartSpec, ChartSpecAdapter, SeriesChart, references
 from app.core.datasets import clean_name
-from app.core.errors import InvalidInput, NotFound
 from app.core.notes import Anchor
+from app.domain.chart_spec import ChartSpec, ChartSpecAdapter, SeriesChart, references
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Chart, Dataset, DatasetColumn, DatasetRow, Paper, cell_table, chart_datasets, note_charts
 
 COPY_SUFFIX = " (copy)"

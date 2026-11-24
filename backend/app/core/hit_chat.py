@@ -14,7 +14,7 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import chat
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.models import Paper, PaperStatus
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchHit

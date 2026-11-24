@@ -8,8 +8,8 @@ from conftest import recorded
 from sqlalchemy import update
 
 from app.core import citations_import_apply, discovery, enrichment, paper_enrichment, papers, provenance
-from app.core.candidates import Candidate
 from app.core.citations_import import ImportEntry
+from app.domain.candidates import Candidate
 from app.models import Paper
 from tests.test_enrichment import BERT_DOI, BERT_WORK, add_paper, hints
 from tests.test_paper_biblio import CROSSREF, DOI, openalex_work

@@ -20,10 +20,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import embedding_sources
-from app.core.errors import InvalidInput
 from app.core.papers import get_paper
 from app.core.references import IN_LIBRARY
 from app.core.workspaces import get as get_workspace
+from app.domain.errors import InvalidInput
 
 MAX_HOPS = 3
 # D107: a threshold draws a hairball (every pair of the owner's papers scores >= 0.8 cosine); the top 3 are right.
