@@ -1,7 +1,8 @@
 """Function-level clean-code caps: length, parameters and nesting, for every function in app/.
 
-Each exception set is keyed `path::qualname` and may only shrink: a test fails when a listed function is within its
-cap again (or gone), so a fix also drops its entry.
+Each exception list maps `path::qualname` to the size recorded when it was listed. A listed function may not grow past
+that size, and the lists may only shrink: a test fails when a listed function is within its cap again (or gone), so a
+fix also drops its entry.
 """
 
 import ast
@@ -11,98 +12,98 @@ BACKEND = Path(__file__).resolve().parent.parent
 APP = BACKEND / "app"
 
 MAX_FUNCTION_LINES = 50
-MAX_PARAMS = 6  # self/cls not counted
+MAX_PARAMS = 6  # self/cls not counted; *args and **kwargs count one each
 MAX_NESTING = 4  # if/for/while/with/try/match levels inside one function; a nested def counts on its own
 
 ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "websocket", "api_route"}
 BLOCKS = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast.Try, ast.TryStar, ast.Match)
 FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
-LONG: set[str] = {
-    "app/api/chat_stream.py::stream_output",
-    "app/core/chat/chat.py::prepare",
-    "app/core/chat/claims.py::verify_claim",
-    "app/core/chat/claims_batch.py::verify_claims",
-    "app/core/chat/retrieval.py::retrieve",
-    "app/core/citations/citations.py::find",
-    "app/core/citations/reference_listing.py::library_listing",
-    "app/core/citations/references.py::_upsert",
-    "app/core/manuscripts/draft_review.py::review",
-    "app/core/manuscripts/manuscript_checks/number_provenance.py::_file",
-    "app/core/manuscripts/manuscript_draft_review.py::start",
-    "app/core/manuscripts/manuscript_evidence.py::find",
-    "app/core/manuscripts/manuscript_review.py::start",
-    "app/core/manuscripts/manuscript_section_review.py::start",
-    "app/core/notes/charts.py::resolve",
-    "app/core/notes/evidence_cards.py::request_cards",
-    "app/core/papers/enrichment.py::fill_biblio",
-    "app/core/papers/library.py::search",
-    "app/core/search/batch_fetch.py::_find_or_create_external_ref",
-    "app/core/search/batch_fetch.py::_store_candidates_as_hits",
-    "app/core/search/batch_fetch.py::search_batch",
-    "app/core/search/hit_import.py::import_hits",
-    "app/core/search/hit_import.py::upload_hit_pdf",
-    "app/core/search/hit_provenance.py::provenance",
-    "app/core/search/prisma_export.py::prisma_export",
-    "app/core/search/search_hits.py::list_hits",
-    "app/core/search/snowball_run.py::snowball",
-    "app/core/workspaces/package_screening_import.py::rebuild",
-    "app/core/workspaces/reading_bridge.py::reading_queue",
-    "app/core/workspaces/workspace_package.py::_parts",
-    "app/main.py::create_app",
-    "app/providers/llm_fake.py::_replies",
-    "app/scripts/tectonic_sandbox_check.py::main",
-    "app/workers/ingest.py::ingest_paper",
-    "app/workers/screening_suggest.py::suggest_screening",
-    "app/workers/workspace_search.py::run_workspace_search",
+LONG: dict[str, int] = {
+    "app/api/chat_stream.py::stream_output": 53,
+    "app/core/chat/chat.py::prepare": 71,
+    "app/core/chat/claims.py::verify_claim": 63,
+    "app/core/chat/claims_batch.py::verify_claims": 77,
+    "app/core/chat/retrieval.py::retrieve": 79,
+    "app/core/citations/citations.py::find": 51,
+    "app/core/citations/reference_listing.py::library_listing": 52,
+    "app/core/citations/references.py::_upsert": 55,
+    "app/core/manuscripts/draft_review.py::review": 59,
+    "app/core/manuscripts/manuscript_checks/number_provenance.py::_file": 51,
+    "app/core/manuscripts/manuscript_draft_review.py::start": 51,
+    "app/core/manuscripts/manuscript_evidence.py::find": 52,
+    "app/core/manuscripts/manuscript_review.py::start": 52,
+    "app/core/manuscripts/manuscript_section_review.py::start": 71,
+    "app/core/notes/charts.py::resolve": 54,
+    "app/core/notes/evidence_cards.py::request_cards": 65,
+    "app/core/papers/enrichment.py::fill_biblio": 60,
+    "app/core/papers/library.py::search": 68,
+    "app/core/search/batch_fetch.py::_find_or_create_external_ref": 88,
+    "app/core/search/batch_fetch.py::_store_candidates_as_hits": 63,
+    "app/core/search/batch_fetch.py::search_batch": 92,
+    "app/core/search/hit_import.py::import_hits": 97,
+    "app/core/search/hit_import.py::upload_hit_pdf": 67,
+    "app/core/search/hit_provenance.py::provenance": 71,
+    "app/core/search/prisma_export.py::prisma_export": 133,
+    "app/core/search/search_hits.py::list_hits": 71,
+    "app/core/search/snowball_run.py::snowball": 116,
+    "app/core/workspaces/package_screening_import.py::rebuild": 71,
+    "app/core/workspaces/reading_bridge.py::reading_queue": 51,
+    "app/core/workspaces/workspace_package.py::_parts": 51,
+    "app/main.py::create_app": 67,
+    "app/providers/llm_fake.py::_replies": 51,
+    "app/scripts/tectonic_sandbox_check.py::main": 53,
+    "app/workers/ingest.py::ingest_paper": 73,
+    "app/workers/screening_suggest.py::suggest_screening": 98,
+    "app/workers/workspace_search.py::run_workspace_search": 106,
 }
-WIDE: set[str] = {
-    "app/core/chat/chat_answers.py::save_answer",
-    "app/core/chat/claims.py::_write_output",
-    "app/core/chat/claims.py::verify_claim",
-    "app/core/chat/retrieval.py::retrieve",
-    "app/core/citations/citations_import_apply.py::_isolated",
-    "app/core/citations/citations_import_apply.py::_one",
-    "app/core/citations/citations_import_apply.py::apply",
-    "app/core/citations/citations_import_route.py::route",
-    "app/core/citations/citations_import_run.py::start",
-    "app/core/manuscripts/draft_review.py::_lenses",
-    "app/core/manuscripts/manuscript_agent.py::edit_file",
-    "app/core/manuscripts/manuscript_review.py::start",
-    "app/core/manuscripts/manuscript_section_review.py::start",
-    "app/core/notes/capture.py::add_number",
-    "app/core/notes/checks.py::_retrieved",
-    "app/core/notes/datasets.py::create_dataset",
-    "app/core/papers/enrichment.py::fill_biblio",
-    "app/core/papers/library.py::search",
-    "app/core/papers/merges.py::merge",
-    "app/core/papers/pipeline.py::create_saved_search",
-    "app/core/papers/pipeline.py::verify_claim",
-    "app/core/papers/pipeline_add.py::_add_found",
-    "app/core/search/batch_fetch.py::_insert_hit",
-    "app/core/search/batch_fetch.py::_store_candidates_as_hits",
-    "app/core/search/branches.py::set_branch",
-    "app/core/search/discovery.py::add",
-    "app/core/search/hit_provenance.py::_roots",
-    "app/core/search/saved_searches.py::create",
-    "app/core/search/search_hits.py::list_hits",
-    "app/core/search/snowball_run.py::_seed_entry",
-    "app/core/search/snowball_run.py::_store_hop",
-    "app/core/search/snowball_run.py::snowball",
-    "app/core/workspaces/briefs.py::save_brief",
-    "app/core/workspaces/package_import.py::_papers_into",
-    "app/core/workspaces/package_screening_import.py::_place_hit",
-    "app/core/workspaces/triage.py::decide",
-    "app/scripts/backfill_biblio.py::run",
+WIDE: dict[str, int] = {
+    "app/core/chat/chat_answers.py::save_answer": 8,
+    "app/core/chat/claims.py::_write_output": 7,
+    "app/core/chat/claims.py::verify_claim": 7,
+    "app/core/chat/retrieval.py::retrieve": 9,
+    "app/core/citations/citations_import_apply.py::_isolated": 7,
+    "app/core/citations/citations_import_apply.py::_one": 7,
+    "app/core/citations/citations_import_apply.py::apply": 8,
+    "app/core/citations/citations_import_route.py::route": 8,
+    "app/core/citations/citations_import_run.py::start": 7,
+    "app/core/manuscripts/draft_review.py::_lenses": 7,
+    "app/core/manuscripts/manuscript_agent.py::edit_file": 7,
+    "app/core/manuscripts/manuscript_review.py::start": 7,
+    "app/core/manuscripts/manuscript_section_review.py::start": 7,
+    "app/core/notes/capture.py::add_number": 8,
+    "app/core/notes/checks.py::_retrieved": 7,
+    "app/core/notes/datasets.py::create_dataset": 7,
+    "app/core/papers/enrichment.py::fill_biblio": 7,
+    "app/core/papers/library.py::search": 9,
+    "app/core/papers/merges.py::merge": 7,
+    "app/core/papers/pipeline.py::create_saved_search": 11,
+    "app/core/papers/pipeline.py::verify_claim": 7,
+    "app/core/papers/pipeline_add.py::_add_found": 7,
+    "app/core/search/batch_fetch.py::_insert_hit": 7,
+    "app/core/search/batch_fetch.py::_store_candidates_as_hits": 10,
+    "app/core/search/branches.py::set_branch": 7,
+    "app/core/search/discovery.py::add": 7,
+    "app/core/search/hit_provenance.py::_roots": 7,
+    "app/core/search/saved_searches.py::create": 9,
+    "app/core/search/search_hits.py::list_hits": 12,
+    "app/core/search/snowball_run.py::_seed_entry": 9,
+    "app/core/search/snowball_run.py::_store_hop": 7,
+    "app/core/search/snowball_run.py::snowball": 7,
+    "app/core/workspaces/briefs.py::save_brief": 7,
+    "app/core/workspaces/package_import.py::_papers_into": 7,
+    "app/core/workspaces/package_screening_import.py::_place_hit": 7,
+    "app/core/workspaces/triage.py::decide": 11,
+    "app/scripts/backfill_biblio.py::run": 7,
 }
-DEEP: set[str] = {
-    "app/core/manuscripts/manuscript_checks/wording.py::_overclaim",
-    "app/providers/llm.py::OpenAICompatibleLLM.stream",
-    "app/providers/search_model.py::_fetch",
-    "app/workers/evidence_cards.py::generate_evidence_cards",
-    "app/workers/ingest.py::ingest_paper",
-    "app/workers/screening_suggest.py::suggest_screening",
-    "app/workers/workspace_search.py::run_workspace_search",
+DEEP: dict[str, int] = {
+    "app/core/manuscripts/manuscript_checks/wording.py::_overclaim": 5,
+    "app/providers/llm.py::OpenAICompatibleLLM.stream": 5,
+    "app/providers/search_model.py::_fetch": 5,
+    "app/workers/evidence_cards.py::generate_evidence_cards": 5,
+    "app/workers/ingest.py::ingest_paper": 5,
+    "app/workers/screening_suggest.py::suggest_screening": 5,
+    "app/workers/workspace_search.py::run_workspace_search": 6,
 }
 
 
@@ -110,7 +111,7 @@ def functions():
     """(key, node) for every function and method in app/, key = path::Outer.inner."""
     for path in sorted(APP.rglob("*.py")):
         rel = path.relative_to(BACKEND)
-        stack: list[tuple[ast.AST, str]] = [(ast.parse(path.read_text()), "")]
+        stack: list[tuple[ast.AST, str]] = [(ast.parse(path.read_text(encoding="utf-8")), "")]
         while stack:
             node, prefix = stack.pop()
             for child in ast.iter_child_nodes(node):
@@ -131,7 +132,8 @@ def length(fn: ast.AST) -> int:
 def params(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     a = fn.args
     names = [*a.posonlyargs, *a.args, *a.kwonlyargs]
-    return len(names) - (1 if names and names[0].arg in ("self", "cls") else 0)
+    star = (a.vararg is not None) + (a.kwarg is not None)
+    return len(names) + star - (1 if names and names[0].arg in ("self", "cls") else 0)
 
 
 def is_route(fn: ast.AST) -> bool:
@@ -144,12 +146,13 @@ def is_route(fn: ast.AST) -> bool:
 
 def nesting(node: ast.AST, depth: int = 0) -> int:
     """Deepest block level inside `node`, not looking into nested functions, classes or lambdas. An `elif` is the
-    same level as its `if`."""
+    same level as its `if` (it starts in the `if`'s column; an `if` inside an `else:` is indented)."""
     deepest = depth
     for child in ast.iter_child_nodes(node):
         if isinstance(child, (*FUNCTIONS, ast.ClassDef, ast.Lambda)):
             continue
-        if isinstance(child, ast.If) and isinstance(node, ast.If) and node.orelse == [child]:
+        elif_ = isinstance(child, ast.If) and isinstance(node, ast.If) and node.orelse == [child]
+        if elif_ and child.col_offset == node.col_offset:
             deepest = max(deepest, nesting(child, depth))  # elif
         elif isinstance(child, BLOCKS):
             deepest = max(deepest, nesting(child, depth + 1))
@@ -158,13 +161,16 @@ def nesting(node: ast.AST, depth: int = 0) -> int:
     return deepest
 
 
-def over(measure, cap: int, skip=lambda fn: False) -> set[str]:
-    return {key for key, fn in functions() if not skip(fn) and measure(fn) > cap}
+def over(measure, cap: int, skip=lambda fn: False) -> dict[str, int]:
+    sizes = {key: measure(fn) for key, fn in functions() if not skip(fn)}
+    return {key: size for key, size in sizes.items() if size > cap}
 
 
-def check(found: set[str], allowed: set[str], name: str, cap: int, what: str):
-    assert sorted(found - allowed) == [], f"bring these to {cap} {what} or fewer"
-    assert sorted(allowed - found) == [], f"drop these from {name}: within the cap now (or gone)"
+def check(found: dict[str, int], allowed: dict[str, int], name: str, cap: int, what: str):
+    assert sorted(found.keys() - allowed.keys()) == [], f"bring these to {cap} {what} or fewer"
+    grown = sorted(f"{key}: {allowed[key]} -> {size}" for key, size in found.items() if size > allowed.get(key, size))
+    assert grown == [], f"these listed functions grew; bring them back to their recorded {what} or below"
+    assert sorted(allowed.keys() - found.keys()) == [], f"drop these from {name}: within the cap now (or gone)"
 
 
 def test_functions_stay_short():
@@ -199,6 +205,8 @@ def test_nesting_counts_blocks_not_elif_or_nested_defs():
     ).body[0]
     assert nesting(fn) == 3  # elif → with → try; g's three ifs count for g alone
     assert nesting(fn.body[-1]) == 3
+    else_if = ast.parse("def h(x):\n    if x:\n        pass\n    else:\n        if not x:\n            pass\n").body[0]
+    assert nesting(else_if) == 2  # an if inside else: is a level deeper, unlike elif
 
 
 def test_routes_are_told_apart_from_helpers():
