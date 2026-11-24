@@ -299,9 +299,20 @@ async def _attach_bundled(session, held: uuid.UUID, bundle: Bundle | None, index
     return True
 
 
+@dataclass(frozen=True)
+class ImportOptions:
+    """Where the papers go and how a missing PDF is handled: looked for as a free copy (`fetch_free_pdfs`), or the
+    paper saved from its details alone (`save_without_pdf`)."""
+
+    workspace_id: uuid.UUID | None = None
+    fetch_free_pdfs: bool = True
+    save_without_pdf: bool = False
+
+
 async def _one(
-    session, entry, workspace_id, providers, bundle: Bundle | None, index: int, save_without_pdf: bool = False
+    session, entry, options: ImportOptions, providers, bundle: Bundle | None, index: int
 ) -> ImportResult:
+    workspace_id = options.workspace_id
     held = await _held(session, entry)
     if held is not None:
         attached = await _attach_bundled(session, held, bundle, index)
@@ -309,7 +320,7 @@ async def _one(
             already_in_library=1, pdfs_attached=int(attached), notes=await _file(session, held, entry, workspace_id)
         )
     made, missing, from_zip = await _new_paper(session, entry, providers, bundle, index)
-    if made is None and save_without_pdf:  # NO_PDF: fetching was off or the entry has no DOI/arXiv id to look by
+    if made is None and options.save_without_pdf:  # NO_PDF: fetching was off, or no DOI/arXiv id to look by
         return await _save_without_pdf(session, entry, workspace_id, looked_for_pdf=missing is not NO_PDF)
     if made is None:
         return ImportResult(needs_pdf=[{name: getattr(entry, name) for name in ENTRY_RECORD} | missing])
@@ -328,9 +339,9 @@ async def _one(
     return ImportResult(imported=1, pdfs_attached=int(from_zip), notes=added)
 
 
-async def _isolated(session, entry, workspace_id, providers, bundle, index, save_without_pdf) -> ImportResult:
+async def _isolated(session, entry, options: ImportOptions, providers, bundle, index) -> ImportResult:
     try:
-        return await _one(session, entry, workspace_id, providers, bundle, index, save_without_pdf)
+        return await _one(session, entry, options, providers, bundle, index)
     except (CitationsImportError, DomainError) as exc:
         await session.rollback()
         return ImportResult(failed=[{"title": entry.title, "reason": str(exc)}])
@@ -343,10 +354,8 @@ async def _isolated(session, entry, workspace_id, providers, bundle, index, save
 async def apply(
     session: AsyncSession,
     entries: list[ImportEntry],
+    options: ImportOptions = ImportOptions(),
     *,
-    workspace_id: uuid.UUID | None = None,
-    fetch_free_pdfs: bool = True,
-    save_without_pdf: bool = False,
     bundle: Bundle | None = None,
     progress: Progress | None = None,
     deadline: float | None = None,
@@ -354,8 +363,8 @@ async def apply(
     """The entries as papers, one at a time (the zip's PDFs are read one by one). Raises NotFound for an unknown
     workspace before anything is created; anything else an entry raises is listed in `failed`. Past `deadline` (a
     time.monotonic() value) the entries left are listed in `not_reached` and `stopped` says so."""
-    if workspace_id is not None:
-        await workspaces.require_writable(session, workspace_id)
+    if options.workspace_id is not None:
+        await workspaces.require_writable(session, options.workspace_id)
     result = ImportResult()
     async with contextlib.AsyncExitStack() as stack:
         opened: list[source_clients.Providers] = []
@@ -373,13 +382,7 @@ async def apply(
                     raise TimeoutError
                 async with asyncio.timeout(budget):  # one slow fetch must not outrun the job's own timeout
                     one = await _isolated(
-                        session,
-                        entry,
-                        workspace_id,
-                        providers if fetch_free_pdfs else None,
-                        bundle,
-                        index,
-                        save_without_pdf,
+                        session, entry, options, providers if options.fetch_free_pdfs else None, bundle, index
                     )
             except TimeoutError:  # _one discards a paper it made when cancelled
                 await session.rollback()

@@ -492,7 +492,9 @@ async def test_a_needs_pdf_item_keeps_every_field_of_its_entry_through_the_resul
         source_type="journal", tags=["t"], collection="C", notes=["n"], files=["f.pdf"],
     )
 
-    result = await cia.apply(session, [entry], fetch_free_pdfs=False)  # what the import itself builds
+    result = await cia.apply(
+        session, [entry], options=cia.ImportOptions(fetch_free_pdfs=False)
+    )  # what the import itself builds
 
     record = {name: getattr(entry, name) for name in cia.ENTRY_RECORD}
     assert ImportResultOut(**asdict(result)).model_dump()["needs_pdf"] == [record | {"tried": [], "free_copies": []}]

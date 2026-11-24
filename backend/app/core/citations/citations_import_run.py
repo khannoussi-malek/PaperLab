@@ -9,7 +9,7 @@ import os
 import re
 import time
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import IO
 
@@ -123,15 +123,16 @@ async def preview(
 
 
 async def start(
-    session: AsyncSession, name: str, source: bytes | IO[bytes], *, workspace_id: uuid.UUID | None = None,
-    new_workspace_name: str | None = None, fetch_free_pdfs: bool = True, save_without_pdf: bool = False,
-) -> ImportProgressOut:  # fmt: skip
+    session: AsyncSession, name: str, source: bytes | IO[bytes], options: cia.ImportOptions = cia.ImportOptions(), *,
+    new_workspace_name: str | None = None,
+) -> ImportProgressOut:
     """Imports the file inline (state finished) or queues the job (state queued, with its id). `source` is the bytes
     or a seekable file (a zip is read from it, never whole). The file is parsed once; a new workspace is made only
     once it has parsed, so a bad file creates nothing, and removed again if the import then fails to start. Raises
     InvalidInput (too big, unreadable, both a workspace and a new name), NotFound (unknown workspace), Conflict (the
     new name is taken)."""
     _check_size(name, source)
+    workspace_id = options.workspace_id
     if workspace_id is not None and new_workspace_name is not None:
         raise InvalidInput("Choose an existing workspace or a new one, not both.")
     if workspace_id is not None:
@@ -143,8 +144,7 @@ async def start(
             made = workspace_id = (await workspaces.create(session, new_workspace_name)).id
         try:
             outcome = await citations_import_route.route(
-                session, name, source, entries, bundle, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
-                save_without_pdf=save_without_pdf,
+                session, name, source, entries, bundle, replace(options, workspace_id=workspace_id)
             )
         except BaseException:
             # In practice only the job's enqueue fails here (apply keeps each entry's failure to itself), so the
@@ -175,12 +175,9 @@ async def start_from(
     if not (path_or_text or "").strip():
         raise InvalidInput("path_or_text_or_job_id_required")
     workspace_id = await workspaces.by_name(session, workspace) if workspace is not None else None
+    options = cia.ImportOptions(workspace_id, fetch_free_pdfs, save_without_pdf)
     if _is_text(path_or_text):
-        data = path_or_text.encode()
-        return await start(
-            session, RAW_TEXT_NAME, data, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
-            save_without_pdf=save_without_pdf,
-        )
+        return await start(session, RAW_TEXT_NAME, path_or_text.encode(), options)
     path = Path(path_or_text.strip())
     try:
         size = path.stat().st_size if path.is_file() else None
@@ -191,10 +188,7 @@ async def start_from(
     if size > cap(path.name):
         raise InvalidInput(too_big(path.name))
     with open(path, "rb") as file:
-        return await start(
-            session, path.name, file, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
-            save_without_pdf=save_without_pdf,
-        )
+        return await start(session, path.name, file, options)
 
 
 async def poll(job_id: str, path_or_text: str | None = None) -> ImportProgressOut:
