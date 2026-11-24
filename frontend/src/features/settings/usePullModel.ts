@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { LLMModel, PullDoneEvent, PullErrorEvent, PullProgressEvent } from '@/entities'
 import { api, errorDetail } from '@/services/api'
 import { useInvalidateModels } from '@/services/queries'
-import { readSse } from '@/features/chat/sse'
+import { readSse } from '@/services/sse'
 
 export type PullState =
   | { status: 'idle' }

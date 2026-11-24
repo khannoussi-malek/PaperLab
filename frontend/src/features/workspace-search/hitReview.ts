@@ -1,5 +1,5 @@
 import type { Hit } from '@/entities'
-import { SOURCE_NAMES } from '@/features/discovery/candidateMeta'
+import { SOURCE_NAMES } from '@/entities/candidateMeta'
 
 /** Stage-1 exclusion reasons, shared by HitMenu's "Not relevant…" submenu and HitPreview's reason select —
  * kept out of either component file so Fast Refresh doesn't warn about a non-component export. */

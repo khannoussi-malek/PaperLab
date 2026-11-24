@@ -10,10 +10,10 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { ExitTestRow } from '@/features/checks/ExitTestRow'
-import { ErrorAlert } from '@/features/library/ErrorAlert'
+import { ErrorAlert } from '@/components/ErrorAlert'
 import { cn } from '@/lib/utils'
 import { ReadingHistory } from './ReadingHistory'
-import { LEVELS, nextPass, PASSES, readingChip, TRIAGES, UNDECIDED_LABEL, type Pass, type Triage } from './passes'
+import { LEVELS, nextPass, PASSES, readingChip, TRIAGES, UNDECIDED_LABEL, type Pass, type Triage } from '@/entities/passes'
 
 type Props = {
   paper: Paper

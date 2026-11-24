@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { usePaperBriefs, useSetSectionRole } from '@/services/queries/lenses'
-import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
+import { ErrorAlert, LoadError } from '@/components/ErrorAlert'
 import { NO_PDF_LENS_TEXT, lensNotice, lensSections } from './lenses'
 import { BriefCard } from './BriefCard'
 import { SectionRow } from './SectionRow'

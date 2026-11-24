@@ -2,7 +2,7 @@ import type { Nodes, Parents } from 'mdast'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
-import { MARKER } from './citations'
+import { MARKER } from '@/components/citations'
 
 export type Tag =
   | 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'blockquote' | 'ul' | 'ol' | 'li' | 'hr' | 'pre' | 'code'

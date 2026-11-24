@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Paper } from '@/entities'
-import { emptyListText, matchesReading, nextPass, PASSES, readingChip, type Triage } from './passes'
+import { emptyListText, matchesReading, nextPass, PASSES, readingChip, type Triage } from '@/entities/passes'
 
 describe('PASSES exit-test kinds', () => {
   it('gives passes 1 to 3 their note kind and leaves the five Cs as they were', () => {

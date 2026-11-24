@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { byline, matchesPaper, pageCountLabel, paperLabel, shortAuthors } from './paperMeta'
+import { byline, matchesPaper, pageCountLabel, paperLabel, shortAuthors } from '@/entities/paperMeta'
 
 describe('shortAuthors', () => {
   it('lists up to two names, then "et al."', () => {

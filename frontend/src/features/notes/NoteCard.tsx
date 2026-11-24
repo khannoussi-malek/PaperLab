@@ -26,7 +26,7 @@ import { HighlightColorPicker } from './HighlightColorPicker'
 import { KindSelect } from './KindSelect'
 import { KIND_LABEL, swapTemplate } from './noteKinds'
 import { NoteCharts } from './NoteCharts'
-import { ProvenanceBadge } from './ProvenanceBadge'
+import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { HowThisWasMade } from '@/features/chat/HowThisWasMade'
 
 type Props = {

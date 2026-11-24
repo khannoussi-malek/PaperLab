@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useContinueSearchRun, useSearchRuns } from '@/services/queries'
 import { Button } from '@/components/ui/button'
-import { Term } from '@/features/workspaces/Term'
+import { Term } from '@/components/Term'
 import { cn } from '@/lib/utils'
-import { plural } from '@/features/charts/chartMeta'
+import { plural } from '@/entities/chartMeta'
 import { relative } from './schedule'
-import { snowballLine } from './snowballText'
+import { snowballLine } from '@/entities/snowballText'
 import { continueLabel, continueRefusal, pausedText } from './continueText'
 
 /** The workspace's recent search runs, collapsed under Saved searches; picking one opens it (its id goes in the URL). */

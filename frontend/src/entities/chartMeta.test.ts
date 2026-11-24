@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chartMeta, plural, relativeTime } from './chartMeta'
+import { chartMeta, plural, relativeTime } from '@/entities/chartMeta'
 
 const NOW = Date.parse('2026-09-20T12:00:00Z')
 const ago = (seconds: number) => new Date(NOW - seconds * 1000).toISOString()

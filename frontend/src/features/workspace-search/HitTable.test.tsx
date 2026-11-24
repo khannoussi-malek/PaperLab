@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { HitTable } from './HitTable'
 import type { Hit } from '@/entities'
 import { api } from '@/services/api'
-import { GLOSSARY } from '@/features/workspaces/glossary'
+import { GLOSSARY } from '@/components/glossary'
 import { sileo } from 'sileo'
 
 /** The row list only — excludes the preview panel, which also renders the current hit's title/byline. Always

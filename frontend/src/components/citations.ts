@@ -1,5 +1,5 @@
 import type { ChatSource, NoteSource } from '@/entities'
-import { PROVENANCE_LABEL } from '@/features/notes/ProvenanceBadge'
+import { PROVENANCE_LABEL } from '@/components/ProvenanceBadge'
 import { chunkHref, pageHref, readerHref } from '@/router/route'
 
 /** Where a passage opens in the reader. A replaced one (M33) opens its page, since its box no longer exists. */

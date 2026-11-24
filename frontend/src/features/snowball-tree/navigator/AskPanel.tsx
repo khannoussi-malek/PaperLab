@@ -5,7 +5,7 @@ import { useSearchHit, useWorkspacePapers } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { ChatPanel } from '@/features/chat/ChatPanel'
 import { noteHref } from '@/router/route'
-import { sourceReaderHref } from '@/features/chat/citations'
+import { sourceReaderHref } from '@/components/citations'
 
 const NARROW = '(max-width: 900px)'
 const isNarrow = () => typeof window.matchMedia === 'function' && window.matchMedia(NARROW).matches

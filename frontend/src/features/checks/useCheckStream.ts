@@ -3,9 +3,9 @@ import type { ChatErrorEvent, ChatSource, ChatSourcesEvent, ChatTokenEvent, Note
 import { api, errorDetail } from '@/services/api'
 import { useChatModels } from '@/services/queries'
 import { loadChatModel } from '@/features/chat/chatModel'
-import type { ChatProblem } from '@/features/chat/refusals'
-import { readSse } from '@/features/chat/sse'
-import { browserStorage } from '@/features/notes/highlightColors'
+import type { ChatProblem } from '@/entities/refusals'
+import { readSse } from '@/services/sse'
+import { browserStorage } from '@/components/highlightColors'
 import { checkProblem, streamedLine, type CheckLine } from './exitTest'
 import { useInvalidateChecks } from '@/services/queries/noteChecks'
 

@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import type { LevelStats, ProvenanceOut, ProvNode } from '@/entities'
-import { friendlySnowballError } from '@/features/workspace-search/snowballText'
+import { friendlySnowballError } from '@/entities/snowballText'
 import { cn } from '@/lib/utils'
 import { BOX_H, BOX_W, COL, ROOT_W, PARENT_NOT_RECORDED, isUnknown, tidyLayout, type Box, type Layout } from './layout'
 import { decisionWord, levelHeader } from './levelText'

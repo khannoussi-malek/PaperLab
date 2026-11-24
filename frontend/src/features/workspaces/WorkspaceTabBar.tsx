@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { WorkspaceTab } from '@/router/route'
-import { Term } from './Term'
+import { Term } from '@/components/Term'
 import { GROUP_LABELS, WORKSPACE_TABS, tabAriaLabel } from './workspaceTabs'
 
 type Counts = Partial<Record<WorkspaceTab, number>>

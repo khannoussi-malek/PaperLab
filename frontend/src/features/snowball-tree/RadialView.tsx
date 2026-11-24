@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef, useState } from 'react'
 import type { ProvenanceOut } from '@/entities'
-import { useBoxSize } from '@/features/graph/useBoxSize'
+import { useBoxSize } from '@/lib/useBoxSize'
 import { cn } from '@/lib/utils'
 import { isUnknown, PARENT_NOT_RECORDED, tidyLayout } from './layout'
 import { toRadial, RING, type RadialBox } from './radial'

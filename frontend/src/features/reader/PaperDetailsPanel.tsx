@@ -1,6 +1,6 @@
 import type { Paper } from '@/entities'
 import { GetPdfActions } from '@/features/library/GetPdfActions'
-import { Term } from '@/features/workspaces/Term'
+import { Term } from '@/components/Term'
 import { detailsSourceLine } from './detailsSource'
 import { NoPdfBadge } from './SourceBadges'
 

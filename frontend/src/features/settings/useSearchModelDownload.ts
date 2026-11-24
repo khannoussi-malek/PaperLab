@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { DownloadDoneEvent, DownloadErrorEvent, DownloadProgressEvent } from '@/entities'
 import { api, errorDetail } from '@/services/api'
 import { useInvalidateEmbedding } from '@/services/queries'
-import { readSse } from '@/features/chat/sse'
+import { readSse } from '@/services/sse'
 import { refusedDownload, type DownloadState } from './searchModel'
 
 // One download per tab, shared by every Download button (Settings, the library notice, chat), so each shows the same

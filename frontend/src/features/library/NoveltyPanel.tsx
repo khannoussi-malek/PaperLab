@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { codeInWords } from '@/lib/errorWords'
 import { readerHref } from '@/router/route'
-import { ErrorAlert } from './ErrorAlert'
+import { ErrorAlert } from '@/components/ErrorAlert'
 
 const MAX_CHARS = 6000
 

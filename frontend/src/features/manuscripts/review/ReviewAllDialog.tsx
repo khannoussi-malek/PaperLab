@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useReviewEstimate } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { RemoteConfirm } from './RemoteConfirm'
+import { RemoteConfirm } from '@/components/RemoteConfirm'
 import { useStartReviewAll } from './useReview'
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`

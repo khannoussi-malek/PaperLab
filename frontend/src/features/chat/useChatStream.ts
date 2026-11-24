@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChatDoneEvent, ChatErrorEvent, ChatScope, ChatSource, ChatSourcesEvent, HitMetaEvent, ChatTokenEvent, NoteSource, ReadingEvent } from '@/entities'
 import { api, errorDetail } from '@/services/api'
 import { useInvalidateChatHistory, useInvalidateModels } from '@/services/queries'
-import { appendSegments, citationSplitter, type Segment } from './citations'
-import { refusal, type ChatProblem } from './refusals'
-import { readSse } from './sse'
+import { appendSegments, citationSplitter, type Segment } from '@/components/citations'
+import { refusal, type ChatProblem } from '@/entities/refusals'
+import { readSse } from '@/services/sse'
 
 /** `sources`: asked, nothing streamed yet. `sources` stays null until its event arrives. */
 export type ChatStream = {

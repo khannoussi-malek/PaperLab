@@ -1,6 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Term } from '@/features/workspaces/Term'
+import { Term } from '@/components/Term'
 
 export const SourceBadge = ({ edited }: { edited: boolean }) => (
   <Badge variant="secondary">{edited ? 'AI · edited' : 'AI'}</Badge>

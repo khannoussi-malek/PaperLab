@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { CHART_INK } from '@/features/charts/palette'
 import { FADED, nodeColor, nodeLabel } from './graphModel'
 import { MISSING_YEARS_HINT, timelineLayout, type TimeAxis } from './timelineModel'
-import { useBoxSize } from './useBoxSize'
+import { useBoxSize } from '@/lib/useBoxSize'
 import type { ViewProps } from './viewModel'
 
 const ARROW = 'timeline-arrow'

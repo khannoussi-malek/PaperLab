@@ -2,7 +2,7 @@ import { useSnowball } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { workspaceHref } from '@/router/route'
 import { snowballMessage } from './ScreeningTab'
-import { friendlySnowballError } from './snowballText'
+import { friendlySnowballError } from '@/entities/snowballText'
 
 /** The visible way to start a snowball from one hit, and to walk the tree from it. */
 export function HitSnowball({ workspaceId, hitId }: { workspaceId: string; hitId: string }) {

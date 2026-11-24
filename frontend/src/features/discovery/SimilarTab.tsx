@@ -1,5 +1,5 @@
 import { useSimilarPapers } from '@/services/queries'
-import { LoadError } from '@/features/library/ErrorAlert'
+import { LoadError } from '@/components/ErrorAlert'
 import { CandidateList } from './CandidateList'
 
 /** The reader's Similar tab. Asks Semantic Scholar only once the tab has been opened. */

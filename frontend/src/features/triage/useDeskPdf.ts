@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Paper } from '@/entities'
-import { browserStorage } from '@/features/notes/highlightColors'
+import { browserStorage } from '@/components/highlightColors'
 import type { DeskLayout } from './layout'
 import type { DeskTab } from './PdfTabs'
 

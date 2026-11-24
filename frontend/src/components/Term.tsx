@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Info } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { GLOSSARY, type GlossaryKey } from './glossary'
+import { GLOSSARY, type GlossaryKey } from '@/components/glossary'
 
 /** A jargon word with its plain-language explanation. Opens on keyboard focus, after a short hover delay, and on
  * tap (click toggles); a tap never reaches a clickable parent row. Never nest it inside a button, link or tab trigger. */

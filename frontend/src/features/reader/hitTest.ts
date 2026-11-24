@@ -1,4 +1,4 @@
-import type { PdfRect } from './coords'
+import type { PdfRect } from '@/lib/coords'
 
 /** One drawn highlight rect; `noteId` is null for the unsaved draft. */
 export type NoteRect = { noteId: string | null; rect: PdfRect }

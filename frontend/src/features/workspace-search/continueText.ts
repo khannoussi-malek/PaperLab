@@ -1,4 +1,4 @@
-import { plural } from '@/features/charts/chartMeta'
+import { plural } from '@/entities/chartMeta'
 
 type Continuable = { status: string; sources_left?: string[]; paused_sources?: string[] }
 

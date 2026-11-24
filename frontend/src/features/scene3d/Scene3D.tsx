@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { hasWebGL } from '@/features/graph/viewModel'
-import { useBoxSize } from '@/features/graph/useBoxSize'
+import { useBoxSize } from '@/lib/useBoxSize'
 import { useChartTheme } from '@/features/charts/useChartTheme'
 import { cn } from '@/lib/utils'
 

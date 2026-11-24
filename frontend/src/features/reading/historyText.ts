@@ -1,5 +1,5 @@
 import type { TriageEvent } from '@/entities'
-import { readingChip, type Triage } from './passes'
+import { readingChip, type Triage } from '@/entities/passes'
 
 const PILES: Record<string, string> = {
   read_closely: 'Read closely',

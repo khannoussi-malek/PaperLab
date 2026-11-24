@@ -1,5 +1,5 @@
 import type { Note, NoteKind } from '@/entities'
-import { PASSES } from '../reading/passes'
+import { PASSES } from '@/entities/passes'
 
 export const KIND_LABEL: Record<NoteKind, string> = {
   five_cs: 'Five Cs',

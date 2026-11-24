@@ -1,4 +1,4 @@
-import { paperLabel } from '@/features/library/paperMeta'
+import { paperLabel } from '@/entities/paperMeta'
 import { FIVE_CS, LATE_CHIP_KEYS, offersReason, PILES, REASONS, type Pile } from './piles'
 
 type Who = Parameters<typeof paperLabel>[0]

@@ -1,6 +1,6 @@
-import { SOURCE_NAMES } from '@/features/discovery/candidateMeta'
+import { SOURCE_NAMES } from '@/entities/candidateMeta'
 import type { SearchRun } from '@/entities'
-import { plural } from '@/features/charts/chartMeta'
+import { plural } from '@/entities/chartMeta'
 
 const STATE_WORDS: Record<string, string> = {
   complete: 'finished',

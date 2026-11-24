@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Candidate } from '@/entities'
-import { candidateKey, citationsLabel, pageLink } from './candidateMeta'
+import { candidateKey, citationsLabel, pageLink } from '@/entities/candidateMeta'
 
 const ids = { doi: null, external_ids: {} }
 

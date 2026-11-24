@@ -1,5 +1,5 @@
 import type { Paper } from '@/entities'
-import { quietStatus } from '@/features/library/paperMeta'
+import { quietStatus } from '@/entities/paperMeta'
 import { PILE_ORDER, type Pile } from './piles'
 
 export type Order = 'oldest' | 'newest' | 'title' | 'year_desc' | 'year_asc' | 'cited' | 'list' | 'shuffle'

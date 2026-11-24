@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import type { PdfRect } from '../reader/coords'
+import type { PdfRect } from '@/lib/coords'
 import type { PDFDocumentProxy, PDFPageProxy } from '../reader/pdfjs'
 import { fromPreview, type Grid, toGridIn } from './gridModel'
 import { GridEditor } from './GridEditor'

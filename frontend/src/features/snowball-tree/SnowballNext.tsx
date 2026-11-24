@@ -1,6 +1,6 @@
 import { useRunSnowballNext, useSnowballNext } from '@/services/queries'
 import { Button } from '@/components/ui/button'
-import { friendlySnowballError } from '@/features/workspace-search/snowballText'
+import { friendlySnowballError } from '@/entities/snowballText'
 
 const WORD: Record<string, string> = { cites: 'Its references', cited_by: 'Papers citing it' }
 

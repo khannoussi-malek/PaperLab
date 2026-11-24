@@ -1,5 +1,5 @@
 import type { ChatSource } from '@/entities'
-import { MARKER } from './citations'
+import { MARKER } from '@/components/citations'
 
 /** What "Save as note" sends. No chunk ids means there is nothing to anchor on, so saving is disabled. */
 export type PromoteDraft = { body: string; chunkIds: string[] }

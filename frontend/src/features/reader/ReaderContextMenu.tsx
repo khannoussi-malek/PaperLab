@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { PRESET_COLORS } from '../notes/highlightColors'
+import { PRESET_COLORS } from '@/components/highlightColors'
 
 export type ContextTarget = { kind: 'note'; note: Note; quote: string } | { kind: 'draft'; quote: string; figure?: true }
 

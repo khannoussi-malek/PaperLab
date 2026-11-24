@@ -1,5 +1,5 @@
 import type { Check, Note, NoteKind } from '@/entities'
-import { refusal, type ChatProblem } from '@/features/chat/refusals'
+import { refusal, type ChatProblem } from '@/entities/refusals'
 import type { ExitKind } from '@/features/notes/noteKinds'
 
 export type CheckLine = Check['lines'][number]
