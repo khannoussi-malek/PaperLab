@@ -18,7 +18,7 @@ from app.domain.candidates import Candidate
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
-from app.providers import arxiv, discovery_fake, semantic_scholar
+from app.providers import arxiv, discovery_fake, discovery_fake_data, semantic_scholar
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
@@ -32,7 +32,7 @@ async def fake_providers():
     """Every source on, routed to discovery_fake's real MockTransport — same pattern as test_discovery_fake.py's own
     `fake_providers` fixture. search_batch's merge/dedup then runs against the real fake provider (Task 11's
     PAGE_PAPERS fixture), not a hand-rolled mock of provider responses."""
-    every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
+    every_source = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCES, True))
     providers = source_clients.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
@@ -103,7 +103,7 @@ async def test_search_batch_preserves_existing_screening_state(session, fake_pro
     # Pre-seed its ExternalRef + a WorkspaceSearchHit already screened by a user (this run's spec P2's global
     # constraint: a hit already in the pool — this run or an earlier one — keeps its screening state).
     run = await _new_run(session, ["arxiv"])
-    title, doi = discovery_fake.PAGE_PAPERS[0]
+    title, doi = discovery_fake_data.PAGE_PAPERS[0]
     ref = ExternalRef(title=title, doi=doi)
     session.add(ref)
     await session.flush()
@@ -257,7 +257,7 @@ async def test_snowball_does_not_duplicate_or_overwrite_an_existing_hit(session,
     # transaction. Resolving through _find_or_create_external_ref (the same path snowball itself uses) rather
     # than inserting a fresh row guarantees the pre-seeded hit attaches to the exact row snowball will later
     # dedup against, instead of racing an untiebroken DOI match against a leftover duplicate.
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    free_title, free_doi, _ = discovery_fake_data.PAPERS[0]
     ref = await _find_or_create_external_ref(session, Candidate(title=free_title, doi=free_doi))
     await session.flush()
     prior_run = WorkspaceSearchRun(
@@ -296,7 +296,7 @@ async def test_snowball_from_a_hit_seed_with_no_paper_ever_created(session, fake
     workspace = Workspace(name=f"snowball-hit-seed-{uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    free_title, free_doi, _ = discovery_fake_data.PAPERS[0]
     ref = ExternalRef(title=free_title, doi=free_doi)
     session.add(ref)
     await session.flush()
@@ -402,8 +402,8 @@ async def test_snowball_mixes_paper_and_hit_seeds_in_one_call(session, fake_prov
     their own one new hit."""
     from app.models import Paper
 
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
-    landing_title, landing_doi, _ = discovery_fake.PAPERS[1]
+    free_title, free_doi, _ = discovery_fake_data.PAPERS[0]
+    landing_title, landing_doi, _ = discovery_fake_data.PAPERS[1]
     paper_seed_ref_doi = "10.5555/paperlab-mixed-from-paper-seed"
     hit_seed_ref_doi = "10.5555/paperlab-mixed-from-hit-seed"
 

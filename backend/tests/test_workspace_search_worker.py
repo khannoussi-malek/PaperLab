@@ -14,7 +14,7 @@ from app.core.search.batch_fetch import PAGE_SIZE_BY_SOURCE, SOURCE_ERROR_CAP
 from app.models import PaperSources
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
-from app.providers import discovery_fake
+from app.providers import discovery_fake, discovery_fake_data
 from app.workers import workspace_search as worker_module
 
 pytestmark = [
@@ -402,8 +402,8 @@ async def test_worker_records_stats_json_after_a_batch(session, worker):
     await worker_module.run_workspace_search(worker, str(run.id))
 
     reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
-    assert reloaded.stats_json["last_batch_new_hits"] == len(discovery_fake.PAGE_PAPERS)
-    assert reloaded.stats_json["per_source_raw_count"] == {"arxiv": len(discovery_fake.PAGE_PAPERS)}
+    assert reloaded.stats_json["last_batch_new_hits"] == len(discovery_fake_data.PAGE_PAPERS)
+    assert reloaded.stats_json["per_source_raw_count"] == {"arxiv": len(discovery_fake_data.PAGE_PAPERS)}
 
 
 async def test_worker_backs_off_when_another_worker_holds_the_lock(session, worker, monkeypatch):

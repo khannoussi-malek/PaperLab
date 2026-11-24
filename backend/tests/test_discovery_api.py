@@ -10,7 +10,7 @@ from app.config import settings
 from app.core.papers import paper_sources
 from app.core.search import discovery, free_copy
 from app.models import Paper, PaperSources
-from app.providers import discovery_fake
+from app.providers import discovery_fake_data
 
 pytestmark = pytest.mark.anyio
 
@@ -226,8 +226,8 @@ async def test_the_discovery_dependency_serves_the_fake_offline_and_closes_its_c
         providers = await anext(dependency)
         assert providers.client("openalex") is None  # off by default, fake or not
         assert providers.client("semantic_scholar").headers["x-api-key"] == "secret-key"
-        assert providers.client("unpaywall").params["email"] == discovery_fake.MAILTO  # fake stands in for the email
-        assert (await providers.pdf.get(f"{discovery_fake.PDF_HOST}/paper.pdf")).content.startswith(b"%PDF")
+        assert providers.client("unpaywall").params["email"] == discovery_fake_data.MAILTO  # fake stands in for the email
+        assert (await providers.pdf.get(f"{discovery_fake_data.PDF_HOST}/paper.pdf")).content.startswith(b"%PDF")
 
     assert providers.client("semantic_scholar").is_closed and providers.pdf.is_closed
     assert providers.client("unpaywall").is_closed

@@ -18,7 +18,7 @@ from app.core.search.source_registry import SOURCE_IDS
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
-from app.providers import discovery_fake
+from app.providers import discovery_fake, discovery_fake_data
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm_fake import FakeLLM
 from app.workers import screening_suggest as worker_module
@@ -381,7 +381,7 @@ async def free_and_closed(session, monkeypatch, pdf_dir):
     """A workspace whose pool holds the offline `free` and `closed` papers (a snowball hop lands them), with
     source_clients.open_providers answering from the same fake and a FakeArq behind queue.enqueue."""
     workspace, hits = await make_pool(session, [("seed", None)])
-    every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
+    every = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
     providers = source_clients.build_providers(every, discovery_fake.transport())
 
     @asynccontextmanager
@@ -402,7 +402,7 @@ async def free_and_closed(session, monkeypatch, pdf_dir):
         .where(WorkspaceSearchHit.workspace_id == workspace.id)
     )).all()
     by_doi = {doi: hit for hit, doi in rows}
-    free, closed = by_doi[f"{discovery_fake.DOI_PREFIX}free"], by_doi[f"{discovery_fake.DOI_PREFIX}closed"]
+    free, closed = by_doi[f"{discovery_fake_data.DOI_PREFIX}free"], by_doi[f"{discovery_fake_data.DOI_PREFIX}closed"]
     hits[0].suggestion = "include"
     for hit in (free, closed):
         hit.suggestion, hit.suggestion_relevance = "include", 5  # already suggested: the queue is empty

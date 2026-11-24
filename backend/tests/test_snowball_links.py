@@ -20,14 +20,14 @@ from app.models.references import ExternalRef
 from app.models.saved_search import SavedSearch
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
-from app.providers import discovery_fake, semantic_scholar
+from app.providers import discovery_fake, discovery_fake_data, semantic_scholar
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
 
 @pytest.fixture
 async def fake_providers():
-    every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
+    every_source = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCES, True))
     providers = source_clients.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
@@ -443,7 +443,7 @@ async def test_skipped_seed_records_reason(session, fake_providers):
 async def test_runs_list_exposes_snowball_stats(session, client, fake_providers_all):
     ws = await client.post("/api/workspaces", json={"name": f"Snowball stats list {uuid.uuid4().hex[:8]}"})
     workspace_id = uuid.UUID(ws.json()["id"])
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    free_title, free_doi, _ = discovery_fake_data.PAPERS[0]
     prior = WorkspaceSearchRun(
         workspace_id=workspace_id, query_text="prior", filters_json={}, query_overrides_json={},
         sources_json=["arxiv"], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},

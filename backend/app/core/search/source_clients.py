@@ -12,7 +12,7 @@ from app.core.papers import paper_sources, pdf_links
 from app.core.papers.paper_sources import SourceSettings
 from app.core.search import source_registry
 from app.core.search.pdf_download import PDF_USER_AGENT
-from app.providers import discovery_fake
+from app.providers import discovery_fake, discovery_fake_data
 
 PDF_TIMEOUT = httpx.Timeout(10.0, read=30.0)
 
@@ -68,7 +68,7 @@ async def open_providers(session: AsyncSession) -> AsyncIterator[Providers]:
     if settings.discovery_provider == "fake":
         transport = discovery_fake.transport()
         # The fake answers Unpaywall offline, so its placeholder can stand in for the email Unpaywall needs.
-        sources = replace(sources, contact_email=sources.contact_email or discovery_fake.MAILTO)
+        sources = replace(sources, contact_email=sources.contact_email or discovery_fake_data.MAILTO)
     providers = build_providers(sources, transport)
     if transport is not None:
         providers.pdf.event_hooks["request"].clear()  # the fake's hosts never resolve, and nothing leaves the process

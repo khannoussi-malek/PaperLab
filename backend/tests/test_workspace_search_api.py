@@ -7,7 +7,7 @@ import pytest
 from app.api.deps import get_discovery
 from app.core.papers.paper_sources import SOURCES, SourceSettings
 from app.core.search import source_clients
-from app.providers import discovery_fake
+from app.providers import discovery_fake, discovery_fake_data
 
 pytestmark = pytest.mark.anyio
 
@@ -23,7 +23,7 @@ def discovery_api(app, discovery_fakes):
 @pytest.fixture
 async def fake_providers_all(app):
     """Every source on, routed to discovery_fake's MockTransport — for snowball and search_batch tests."""
-    every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
+    every_source = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCES, True))
     providers = source_clients.build_providers(every_source, discovery_fake.transport())
     app.dependency_overrides[get_discovery] = lambda: providers
     yield providers
@@ -1277,7 +1277,7 @@ async def test_snowball_route_stores_hits_and_returns_counts(session, client, fa
     workspace_id = ws.json()["id"]
 
     # Create and add a seed paper that the fake S2 provider has references for
-    # doi="10.5555/paperlab-e2e-free" is one of the discovery_fake.PAPERS fixtures
+    # doi="10.5555/paperlab-e2e-free" is one of the discovery_fake_data.PAPERS fixtures
     seed = Paper(
         title="PaperLab Find Papers Fixture", doi="10.5555/paperlab-e2e-free", file_path="/nonexistent.pdf"
     )
@@ -1347,7 +1347,7 @@ async def test_snowball_route_with_seed_hit_ids_only_returns_200(session, client
     ws = await client.post("/api/workspaces", json={"name": f"Snowball hit seed route test {uuid.uuid4().hex[:8]}"})
     workspace_id = ws.json()["id"]
 
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    free_title, free_doi, _ = discovery_fake_data.PAPERS[0]
     ref = ExternalRef(title=free_title, doi=free_doi)
     session.add(ref)
     await session.flush()

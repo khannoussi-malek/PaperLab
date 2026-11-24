@@ -18,7 +18,7 @@ from app.core.workspaces import workspaces
 from app.models import Note, Paper
 from app.models.note import Provenance
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchCursor
-from app.providers import discovery_fake
+from app.providers import discovery_fake, discovery_fake_data
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 RUN = uuid.uuid4().hex[:8]
@@ -124,7 +124,7 @@ async def run_with_hits(session, label: str, query: str = "bert"):
     """A workspace with one finished batch of hits from the offline fake sources (arXiv + Semantic Scholar)."""
     ws = await new_workspace(session, label)
     run = await workspace_search.start_run(session, ws.id, query, {}, ["arxiv", "semantic_scholar"])
-    every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
+    every = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
     providers = source_clients.build_providers(every, discovery_fake.transport())
     try:
         await batch_fetch.search_batch(session, providers, run)
@@ -199,15 +199,15 @@ async def test_import_hit_queues_ingest_for_a_free_pdf_and_not_for_a_failure(ses
     # The offline search routes only serve the pagination fixtures; the free/closed papers come from a snowball hop
     # (Semantic Scholar's references route), which lands them in the same hit pool.
     seed = result(await call("list_hits", workspace=f"Import {RUN}"))["hits"][0]["id"]
-    every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
+    every = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
     providers = source_clients.build_providers(every, discovery_fake.transport())
     try:
         await snowball_run.snowball(session, providers, ws.id, [], [uuid.UUID(seed)], backward=True, forward=False)
     finally:
         await providers.aclose()
     hits = result(await call("list_hits", workspace=f"Import {RUN}"))["hits"]
-    free = next(h for h in hits if h["doi"] == f"{discovery_fake.DOI_PREFIX}free")
-    closed = next(h for h in hits if h["doi"] == f"{discovery_fake.DOI_PREFIX}closed")
+    free = next(h for h in hits if h["doi"] == f"{discovery_fake_data.DOI_PREFIX}free")
+    closed = next(h for h in hits if h["doi"] == f"{discovery_fake_data.DOI_PREFIX}closed")
 
     ok = result(await call("import_hit", workspace=f"Import {RUN}", hit_id=free["id"]))
     failed = result(await call("import_hit", workspace=f"Import {RUN}", hit_id=closed["id"]))
@@ -225,7 +225,7 @@ async def test_import_of_an_unknown_hit_is_not_found(session):
 async def test_snowball_from_a_library_paper_adds_hits(session, tmp_path):
     ws = await new_workspace(session, "Snow")
     paper, _, _ = await chunked_paper(session, tmp_path, title="Seed paper")
-    paper.doi = f"{discovery_fake.DOI_PREFIX}free"
+    paper.doi = f"{discovery_fake_data.DOI_PREFIX}free"
     await session.commit()
     await workspaces.add_paper(session, ws.id, paper.id)
 
@@ -240,7 +240,7 @@ async def test_snowball_from_a_library_paper_adds_hits(session, tmp_path):
 async def test_snowball_backward_tags_hits_backward_only(session, tmp_path):
     ws = await new_workspace(session, "Back")
     paper, _, _ = await chunked_paper(session, tmp_path, title="Seed paper")
-    paper.doi = f"{discovery_fake.DOI_PREFIX}free"
+    paper.doi = f"{discovery_fake_data.DOI_PREFIX}free"
     await session.commit()
     await workspaces.add_paper(session, ws.id, paper.id)
 
