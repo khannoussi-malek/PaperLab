@@ -1,41 +1,37 @@
 import { FolderInput, History, Trash2 } from 'lucide-react'
 import { DownloadMenu } from '@/features/manuscripts/DownloadMenu'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ApiError } from '@/services/api'
-import { useCompileManuscript, useManuscript, useManuscriptFiles, useManuscriptPapers, useManuscriptRequests, usePapersFollowCompile, usePinPaper } from '@/services/queries'
+import { useCompileManuscript, useManuscript, useManuscriptPapers, useManuscriptRequests, usePapersFollowCompile, usePinPaper } from '@/services/queries'
 import { AppShell } from '@/layout/AppShell'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/components/ErrorAlert'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { manuscriptHref, workspaceHref } from '@/router/route'
-import { errorsFor, parseCompileErrors } from '@/features/manuscripts/compileErrors'
+import { errorsFor } from '@/features/manuscripts/compileErrors'
 import { manuscriptFailure } from '@/features/manuscripts/errors'
-import { FileList } from '@/features/manuscripts/FileList'
-import { BlueprintPanel } from '@/features/manuscripts/BlueprintPanel'
-import { FinalStepsChecklist } from '@/features/manuscripts/FinalStepsChecklist'
-import { GuidelineChecklist } from '@/features/manuscripts/GuidelineChecklist'
 import { DeleteManuscriptDialog, MoveManuscriptDialog } from '@/features/manuscripts/ManuscriptDialogs'
 import { HistoryDialog } from '@/features/manuscripts/HistoryDialog'
 import { Breadcrumb } from '@/features/manuscripts/Breadcrumb'
-import { crumbsAt, outline } from '@/features/manuscripts/outline'
-import { SectionList } from '@/features/manuscripts/SectionList'
-import { openRowIndex, sectionRows, sectionText, type SectionRow } from '@/features/manuscripts/sections'
+import { crumbsAt } from '@/features/manuscripts/outline'
+import { SectionsColumn } from '@/features/manuscripts/SectionsColumn'
 import { DeckColumn } from '@/features/manuscripts/deck/DeckColumn'
 import { StudioColumns } from '@/features/manuscripts/StudioColumns'
 import { CheckPanel } from '@/features/manuscripts/CheckPanel'
-import { PdfPane, type PdfTarget } from '@/features/manuscripts/PdfPane'
+import { PdfPane } from '@/features/manuscripts/PdfPane'
 import { PdfEditBox } from '@/features/manuscripts/PdfEditBox'
-import { findEditable, type Span } from '@/features/manuscripts/pdfEdit'
 import { MANUSCRIPT_PAPERS, MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from '@/features/manuscripts/pdfPanel'
-import type { SaveState } from '@/features/manuscripts/autosave'
-import { keptTexts, useKeptTexts } from '@/features/manuscripts/keptTexts'
+import { keptTexts } from '@/features/manuscripts/keptTexts'
 import { KeptTextAlert } from '@/features/manuscripts/KeptTextAlert'
 import { JumpPalette } from '@/features/manuscripts/JumpPalette'
-import { jumpTargets, type Target } from '@/features/manuscripts/jumpTargets'
-import type { PreambleEdit } from '@/features/manuscripts/results/insertBlock'
 import { useInsertBlock } from '@/features/manuscripts/results/useInsertBlock'
 import { SourcePane } from '@/features/manuscripts/SourcePane'
-import { useLeaveWarning } from '@/features/manuscripts/useLeaveWarning'
+import { useUnsavedTexts } from '@/features/manuscripts/useUnsavedTexts'
+import { useStudioLinks } from '@/features/manuscripts/useStudioLinks'
+import { useStudioCommands } from '@/features/manuscripts/useStudioCommands'
+import { useManuscriptTexts } from '@/features/manuscripts/useManuscriptTexts'
+import { usePdfSync } from '@/features/manuscripts/usePdfSync'
+import { usePdfEdit } from '@/features/manuscripts/usePdfEdit'
+import { useStudioNavigation } from '@/features/manuscripts/useStudioNavigation'
 
 /** The writing studio: files and outline | source | PDF. `file` is the `?file=` of the route; null is the main file. */
 export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscriptId: string; file: string | null; line?: number | null }) {
@@ -47,209 +43,36 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const compile = useCompileManuscript()
   const data = manuscript.data
   usePapersFollowCompile(manuscriptId, data?.compiled_at)
-  const [live, setLive] = useState<Record<string, string>>({})
   const [jump, setJump] = useState<{ line: number; n: number } | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [dialog, setDialog] = useState<'move' | 'delete' | null>(null)
-  const kept = useKeptTexts(manuscriptId) // text a closed file could not save; lives outside the page
-  const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({})
-  const [savedTick, setSavedTick] = useState(0) // bumps when a save settles, not when a file is opened
-  const prevStates = useRef<Record<string, SaveState>>({})
-  useEffect(() => {
-    const settled = Object.entries(saveStates).some(([p, s]) => s === 'saved' && prevStates.current[p] !== undefined && prevStates.current[p] !== 'saved')
-    prevStates.current = saveStates
-    if (settled) setSavedTick((t) => t + 1)
-  }, [saveStates])
-  const flushRef = useRef<(() => Promise<boolean>) | null>(null)
-  useLeaveWarning(Object.values(saveStates).some((s) => s !== 'saved')) // kept texts are warned about in App
-  const onText = useCallback(
-    (p: string, text: string | null) =>
-      setLive((l) => (text === null ? Object.fromEntries(Object.entries(l).filter(([k]) => k !== p)) : { ...l, [p]: text })),
-    [],
-  )
-  const flushCurrent = useCallback(async () => (await flushRef.current?.()) ?? true, [])
+  const { kept, savedTick, onState, flushRef, flushCurrent, registerFlush } = useUnsavedTexts(manuscriptId)
+  const {
+    replaceRef, registerReplace, registerInsert, hasEditor, insertAtCursor, registerFindEvidence, findFromDeck,
+    openKey, evidenceAsk, reveal, showCited, findEvidence, clearEvidence, revealPdf,
+  } = useStudioLinks()
+  const { paletteOpen, setPaletteOpen, sectionAsk, ask } = useStudioCommands()
   const [cursor, setCursor] = useState<{ path: string; line: number } | null>(null)
-  const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
-  const replaceRef = useRef<((line: number, start: number, end: number, text: string) => void) | null>(null)
-  const registerReplace = useCallback((f: typeof replaceRef.current) => { replaceRef.current = f }, [])
-  const insertRef = useRef<((text: string, block?: boolean, preamble?: PreambleEdit) => void) | null>(null)
-  const registerInsert = useCallback((f: typeof insertRef.current) => { insertRef.current = f }, [])
-  const findRef = useRef<(() => boolean) | null>(null)
-  const registerFindEvidence = useCallback((f: typeof findRef.current) => { findRef.current = f }, [])
-  const findFromDeck = useCallback(() => findRef.current?.() ?? false, [])
-  const insertAtCursor = useCallback((text: string, block = false, preamble?: PreambleEdit) => {
-    if (!insertRef.current) return false
-    insertRef.current(text, block, preamble)
-    return true
-  }, [])
-  const [openKey, setOpenKey] = useState<{ key: string; n: number } | null>(null)
-  const [evidenceAsk, setEvidenceAsk] = useState<{ doc: string; from: number; to: number; n: number } | null>(null)
-  const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null)
-  const showCited = useCallback((key: string) => {
-    setOpenKey((k) => ({ key, n: (k?.n ?? 0) + 1 }))
-    setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
-  }, [])
-  const asks = useRef(0) // never restarts, so an ask after Clear is never mistaken for one the deck already ran
-  const findEvidence = useCallback((doc: string, from: number, to: number) => {
-    setEvidenceAsk({ doc, from, to, n: ++asks.current })
-    setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
-  }, [])
-  const clearEvidence = useCallback(() => setEvidenceAsk(null), []) // a remounted deck must not ask it again
-  // Only an explicit Show in PDF brings the PDF forward (its tab, when it shares one with Papers); following a compile never does.
-  const revealPdf = useCallback(() => setReveal((r) => ({ id: 'pdf', n: (r?.n ?? 0) + 1 })), [])
-  const [paletteOpen, setPaletteOpen] = useState(false)
-  const [sectionAsk, setSectionAsk] = useState<{ kind: 'new' | 'split'; n: number } | null>(null)
-  useEffect(() => { // Cmd/Ctrl+K anywhere in the studio; CodeMirror leaves it alone, so it bubbles up from the editor too
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== 'k' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.defaultPrevented) return
-      if (document.querySelector('[role=dialog][data-state=open]')) return // History, Move, Delete or the palette itself
-      e.preventDefault()
-      setPaletteOpen(true)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
-  const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
-
   const path = data && (file && data.files.some((f) => f.path === file) ? file : data.main_file)
-  // Same keys as the editor's own query, so the open file is fetched once; the others feed the outline.
-  const texFiles = (data?.files ?? []).filter((f) => f.path.endsWith('.tex'))
-  const texQueries = useManuscriptFiles(manuscriptId, texFiles.map((f) => f.path))
-  const texts = texQueries.map((q) => q.data?.text).join('\u0000')
-  const fileTexts = useMemo(() => {
-    const files = Object.fromEntries(texFiles.flatMap((f, i) => (texQueries[i].data ? [[f.path, texQueries[i].data.text]] : [])))
-    return { ...files, ...live }
-  }, [texts, live])
-  const allTexts = useMemo(() => Object.values(fileTexts), [fileTexts])
-  // The section being written (its key changes when another one is opened), for the deck's order and ranking.
-  const section = useMemo(() => {
-    if (!data || !path) return { key: '', text: '' }
-    const rows = sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path)))
-    const row = rows[openRowIndex(rows, path, cursor && cursor.path === path ? cursor.line : 1)]
-    return row && !row.missing ? { key: `${row.path}:${row.line}`, text: sectionText(fileTexts, row) } : { key: path, text: fileTexts[path] ?? '' }
-  }, [fileTexts, data, path, cursor])
-  const items = useMemo(() => (data ? outline(fileTexts, data.main_file) : []), [data?.main_file, fileTexts])
-  const errorsByFile = useMemo(
-    () => parseCompileErrors(data?.compile_errors).reduce<Record<string, number>>((n, e) => (e.file ? { ...n, [e.file]: (n[e.file] ?? 0) + 1 } : n), {}),
-    [data?.compile_errors],
-  )
+  const { onText, setLive, fileTexts, allTexts, section, items, rows } = useManuscriptTexts(manuscriptId, data, path, cursor)
+  const textsRef = useRef(fileTexts)
+  textsRef.current = fileTexts
+  const cursorLine = cursor && cursor.path === path ? cursor.line : 1 // a cursor belongs to the file it is in
   const errors = useMemo(() => (path && data ? errorsFor(data.compile_errors, path) : []), [data?.compile_errors, path])
+  const isOwn = (f: string) => data?.files.some((x) => x.path === f) ?? false
 
   useEffect(() => setJump(path === file && line ? { line, n: 1 } : null), [path, file, line]) // a jump belongs to the file it was made in; ?line= starts one
 
-  const [target, setTarget] = useState<PdfTarget | null>(null)
-  const latest = useRef({ path, line: line ?? 1 })
-  latest.current = { path, line: cursor && cursor.path === path ? cursor.line : (line ?? 1) }
-  // Best effort and silent: no index, no match or no network just leaves the PDF where it is.
-  const forwardId = useRef(0) // only the newest forward lookup may move the PDF
-  const inverseId = useRef(0)
-  const showInPdf = useCallback((f: string, ln: number) => {
-    const id = ++forwardId.current
-    requests.syncForward(f, ln).then((r) => { if (id === forwardId.current) setTarget((t) => ({ page: r.page, y: r.y, n: (t?.n ?? 0) + 1 })) }, () => {})
-  }, [requests])
-  const goodStamp = data?.compile_status === 'ok' ? data.compiled_at : null
-  // A compile started by an edit from the PDF keeps the PDF where it is. `editCompile` holds compiled_at when it
-  // started; once a compile is stored after that, a good one's stamp becomes `stillStamp`: no forward lookup for it,
-  // and PdfPane leaves its PDF at the scroll it has. Set during render, so the PDF and the stamp arrive together.
-  const [editCompile, setEditCompile] = useState<{ from: string | null } | null>(null)
-  const [stillStamp, setStillStamp] = useState<string | null>(null)
-  if (editCompile && data && data.compiled_at !== editCompile.from) {
-    if (goodStamp) setStillStamp(goodStamp)
-    setEditCompile(null)
-  }
-  const seenStamp = useRef<string | null>(null)
-  useEffect(() => { // once per new good compile, and when a file opens on one; never per cursor move
-    const fresh = goodStamp !== seenStamp.current
-    seenStamp.current = goodStamp
-    if (fresh && goodStamp && goodStamp === stillStamp) return // the compile of an edit from the PDF
-    if (goodStamp && latest.current.path) showInPdf(latest.current.path, latest.current.line)
-  }, [goodStamp, path, showInPdf, stillStamp])
-
+  const { target, stillStamp, showInPdf, sourceAt, latest, setEditCompile } = usePdfSync({ manuscriptId, requests, data, path, line, cursor, setJump, isOwn })
+  const { edit, setEdit, editAt, saveEdit } = usePdfEdit({ manuscriptId, requests, data, path, latest, isOwn, textsRef, replaceRef, flushCurrent, compile, setEditCompile })
   const compiling = compile.isPending || data?.compile_status === 'running' || data?.compile_requested === true
-  const cursorLine = cursor && cursor.path === path ? cursor.line : 1 // a cursor belongs to the file it is in
-  const jumpTo = (f: string, line: number) => {
-    if (f === path) { setJump((j) => ({ line, n: (j?.n ?? 0) + 1 })); showInPdf(f, line) }
-    else window.location.assign(manuscriptHref(manuscriptId, f, line))
-  }
-  const isOwn = (f: string) => data?.files.some((x) => x.path === f) ?? false
-  const sourceAt = (page: number, x: number, y: number) => {
-    const id = ++inverseId.current
-    const from = path
-    requests.syncInverse(page, x, y).then((r) => {
-      if (id !== inverseId.current || from !== latest.current.path) return // a newer click, or another file opened meanwhile
-      if (!isOwn(r.file)) return // made by LaTeX (main.bbl): nothing of the user's to open
-      if (r.file === path) setJump((j) => ({ line: r.line, n: (j?.n ?? 0) + 1 }))
-      else window.location.assign(manuscriptHref(manuscriptId, r.file, r.line))
-    }, () => {})
-  }
-  // Edit from the PDF: the sentence behind a double-clicked word, or a note that LaTeX made it.
-  const [edit, setEdit] = useState<{ id: number; anchor: DOMRect; file: string; line: number; at: Span | null; initial: string; notice?: string; generated?: boolean } | null>(null)
-  const editId = useRef(0)
-  const textsRef = useRef(fileTexts)
-  textsRef.current = fileTexts
-  const editAt = (page: number, x: number, y: number, word: string, anchor: DOMRect) => {
-    const id = ++editId.current
-    const from = path
-    void (async () => {
-      const r = await requests.syncInverse(page, x, y)
-      if (id !== editId.current || from !== latest.current.path) return // a newer double-click, or another file opened meanwhile
-      if (!isOwn(r.file)) { // a file LaTeX wrote (main.bbl): nothing to edit or open
-        setEdit({ id, anchor, file: r.file, line: r.line, at: null, initial: '', generated: true })
-        return
-      }
-      let text: string | undefined = r.file === from ? textsRef.current[r.file] : undefined // the editor's buffer when it is open
-      if (text === undefined) {
-        const fresh = await requests.getFile(r.file)
-        if (id !== editId.current || from !== latest.current.path) return
-        text = fresh.text
-      }
-      const lines = text.split('\n')
-      const whole = lines[r.line - 1] === undefined ? null : { line: r.line, start: 0, end: lines[r.line - 1].length }
-      const at = word ? findEditable(lines, r.line, word) : whole // E on the pane has no word: the whole SyncTeX line
-      setEdit({ id, anchor, file: r.file, line: r.line, at, initial: at ? lines[at.line - 1].slice(at.start, at.end) : '' })
-    })().catch(() => {}) // no index or no network: stay quiet
-  }
-  const saveEdit = async (replacement: string) => {
-    if (!edit?.at) return
-    const { file: target, at, initial } = edit
-    const changed = new Error('This file changed since. Open it in the editor to edit it.')
-    if (target === latest.current.path) {
-      const now = textsRef.current[target]?.split('\n')[at.line - 1]?.slice(at.start, at.end)
-      if (now !== initial || !replaceRef.current) throw changed // typed over since the box opened
-      replaceRef.current(at.line, at.start, at.end, replacement)
-      if (!(await flushCurrent())) { // saved before compiling, so the compile sees it
-        // The text is in the editor, so a retry here could never match; the editor shows why it didn't save.
-        setEdit({ ...edit, id: ++editId.current, at: null, notice: "Your change is in the editor but couldn't be saved yet. The editor shows why." })
-        return
-      }
-    } else {
-      const lines = await requests.getFile(target)
-      const row = lines.text.split('\n')
-      if (row[at.line - 1]?.slice(at.start, at.end) !== initial) throw changed
-      row[at.line - 1] = row[at.line - 1].slice(0, at.start) + replacement + row[at.line - 1].slice(at.end)
-      try { await requests.saveFile(target, row.join('\n'), lines.updated_at) }
-      catch (e) { throw e instanceof ApiError && e.code === 'file_changed' ? changed : e }
-    }
-    setEdit(null)
-    setEditCompile({ from: data?.compiled_at ?? null })
-    compile.mutate(manuscriptId, { onError: () => setEditCompile(null) })
-  }
+  const { jumpTo, targets, singleFile, pick, openSection, stepSection } = useStudioNavigation({
+    manuscriptId, data, path, cursorLine, rows, items, fileTexts, papers: libraryPapers.data, setJump, showInPdf, showCited,
+  })
   const insertBlock = useInsertBlock({
     manuscriptId, mainFile: data?.main_file ?? null, openPath: path ?? null, getText: (p) => textsRef.current[p],
-    hasEditor: () => !!insertRef.current, insert: insertAtCursor,
+    hasEditor, insert: insertAtCursor,
   })
-  const rows = useMemo(() => (data ? sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path))) : []), [data, fileTexts])
-  const targets = useMemo(() => jumpTargets(rows, items, fileTexts, libraryPapers.data ?? []), [rows, items, fileTexts, libraryPapers.data])
-  const singleFile = rows.length > 0 && rows.every((r) => r.inMain)
-  const ask = (kind: 'new' | 'split') => setSectionAsk((a) => ({ kind, n: (a?.n ?? 0) + 1 }))
-  const pick = (t: Target) => (t.kind === 'paper' ? showCited(t.key) : jumpTo(t.file, t.line))
-  const openSection = (row: SectionRow) => jumpTo(row.path, row.inMain ? row.line : 1)
-  const stepSection = (step: -1 | 1) => {
-    if (!data || !path) return
-    const at = openRowIndex(rows, path, cursorLine)
-    const next = rows[at === -1 && step === 1 ? 0 : at + step]
-    if (next && !next.missing) openSection(next)
-  }
 
   return (
     <AppShell
@@ -286,28 +109,18 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                 label: 'Sections',
                 limits: MANUSCRIPT_SECTIONS,
                 content: (
-                  <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto py-2">
-                    <SectionList
-                      manuscriptId={manuscriptId}
-                      main={data.main_file}
-                      texts={fileTexts}
-                      filePaths={data.files.map((f) => f.path)}
-                      errorsByFile={errorsByFile}
-                      current={{ path, line: cursorLine }}
-                      items={items}
-                      flushCurrent={flushCurrent}
-                      onOpen={openSection}
-                      onJump={jumpTo}
-                      request={sectionAsk}
-                    />
-                    <details className="px-0">
-                      <summary className="cursor-pointer px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">All files</summary>
-                      <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file} flushCurrent={flushCurrent} />
-                    </details>
-                    <BlueprintPanel manuscriptId={manuscriptId} files={data.files} mainFile={data.main_file} title={data.title} template={data.template} />
-                    <FinalStepsChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
-                    <GuidelineChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
-                  </div>
+                  <SectionsColumn
+                    manuscriptId={manuscriptId}
+                    data={data}
+                    path={path}
+                    cursorLine={cursorLine}
+                    fileTexts={fileTexts}
+                    items={items}
+                    sectionAsk={sectionAsk}
+                    flushCurrent={flushCurrent}
+                    jumpTo={jumpTo}
+                    openSection={openSection}
+                  />
                 ),
               },
               {
