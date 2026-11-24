@@ -32,13 +32,15 @@ test('the hover card stays open on the way to it and manages the note without th
   await expect(panelCard).toContainText('second thought')
 
   // Colour and Delete sit in the card's own menu. The menu renders outside the card, yet using it keeps the card (its
-  // trigger) mounted; once the menu closes with the pointer elsewhere, the card closes as on any leave.
+  // trigger) mounted; once the menu closes with the pointer elsewhere, the card closes after the usual leave delay, and
+  // pointing at the highlight again brings it back.
   await hoverCard.getByRole('button', { name: 'Note actions' }).click()
   await page.getByRole('menuitem', { name: 'Colour' }).click()
   await page.getByLabel('Custom colour').fill('#ff00aa')
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(255, 0, 170, 0.4)')
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
+  await expect(hoverCard).toHaveCount(0)
 
   await line.hover()
   page.once('dialog', (dialog) => dialog.accept())
