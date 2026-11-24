@@ -78,11 +78,19 @@ async def test_attaching_needs_an_existing_note_and_chart(session):
 
 async def test_a_chart_note_is_anchored_on_each_table_region_and_each_captured_number(session):
     bert, xlnet = await make_paper(session, "BERT"), await make_paper(session, "XLNet")
-    table = await datasets.create_dataset(session, "Table 2: SQuAD 1.1 results.", "table",
-                                          two_columns(("BERT-L", "90.9"), page=7), paper_id=bert.id, page=7,
-                                          region=REGION)  # fmt: skip
-    first = await capture.add_number(session, xlnet.id, "XLNet F1", "94.5", "F1", 7, [(100.0, 300.0, 140.0, 312.0)])
-    await capture.add_number(session, xlnet.id, "not charted", "1.0", "", 8, [(100.0, 500.0, 140.0, 512.0)])
+    table = await datasets.create_dataset(
+        session,
+        "Table 2: SQuAD 1.1 results.",
+        "table",
+        two_columns(("BERT-L", "90.9"), page=7),
+        datasets.TableSource(paper_id=bert.id, page=7, region=REGION),
+    )
+    first = await capture.add_number(
+        session, xlnet.id, capture.NumberText("XLNet F1", "94.5", "F1"), 7, [(100.0, 300.0, 140.0, 312.0)]
+    )
+    await capture.add_number(
+        session, xlnet.id, capture.NumberText("not charted", "1.0", ""), 8, [(100.0, 500.0, 140.0, 512.0)]
+    )
     numbers = await datasets.get_dataset(session, first.dataset_id)
     mine = await datasets.create_dataset(session, "My runs", "user", two_columns(("mine", "92")))
     # The numbers series charts only the first captured number.

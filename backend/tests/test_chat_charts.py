@@ -40,7 +40,7 @@ async def scores(session, paper: Paper, name="Table 3") -> datasets.DatasetView:
         rows=[RowIn(None, [_cell(a), _cell(b), _cell(c)]) for a, b, c in [("ours", "92", "90"), ("base", "85", "80")]],
     )
     return await datasets.create_dataset(
-        session, name, "table", grid, paper_id=paper.id, page=1, region=(70.0, 60.0, 290.0, 240.0)
+        session, name, "table", grid, datasets.TableSource(paper_id=paper.id, page=1, region=(70.0, 60.0, 290.0, 240.0))
     )
 
 

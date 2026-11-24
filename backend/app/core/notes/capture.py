@@ -85,13 +85,23 @@ async def _number_columns(session: AsyncSession, dataset: Dataset) -> dict[str, 
     return by_name
 
 
+@dataclass(frozen=True)
+class NumberText:
+    """A number as the reader captured it: its label, the selected text holding the value, and its unit."""
+
+    label: str
+    raw: str
+    unit: str
+
+
 async def add_number(
-    session: AsyncSession, paper_id: uuid.UUID, label: str, raw: str, unit: str, page: int, bbox: list[Rect],
-    *, suggested: bool = False,
+    session: AsyncSession, paper_id: uuid.UUID, number: NumberText, page: int, bbox: list[Rect], *,
+    suggested: bool = False,
 ) -> NumberAdded:
     """Appends a row (label, value, unit) to the paper's numbers dataset, creating it on first use. The value cell is
     anchored on the selected text. `suggested`: an AI suggestion (D33), whose label the model wrote and is marked so;
     its value is still the paper's own text at the quote."""
+    label, raw, unit = number.label, number.raw, number.unit
     paper = await get_paper(session, paper_id)
     _check_page(paper, page)
     if not bbox:

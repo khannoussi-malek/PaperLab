@@ -30,12 +30,6 @@ LONG: dict[str, int] = {
 WIDE: dict[str, int] = {
     # The search core: ten callers and nine test fakes pass these keyword options by name.
     "app/core/chat/retrieval.py::retrieve": 9,
-    "app/core/manuscripts/manuscript_agent.py::edit_file": 7,
-    "app/core/notes/capture.py::add_number": 8,
-    "app/core/notes/checks.py::_retrieved": 7,
-    "app/core/notes/datasets.py::create_dataset": 7,
-    "app/core/workspaces/briefs.py::save_brief": 7,
-    "app/core/workspaces/package_import.py::_papers_into": 7,
     "app/scripts/backfill_biblio.py::run": 7,
 }
 DEEP: dict[str, int] = {

@@ -172,17 +172,21 @@ async def test_edit_file_cases(session):
     mid = await new(session)
     await agent.write_file(session, mid, "main.tex", "one\ntwo\nthree two\n", await updated(session, mid, "main.tex"))
     cur = lambda: updated(session, mid, "main.tex")  # noqa: E731
-    out = await agent.edit_file(session, mid, "main.tex", "one\ntwo", "1\n2 \\x 100%", await cur())
+    out = await agent.edit_file(session, mid, "main.tex", agent.TextEdit("one\ntwo", "1\n2 \\x 100%"), await cur())
     assert await text(session, mid, "main.tex") == "1\n2 \\x 100%\nthree two\n" and out.snapshot_id
     count = len(await snaps(session, mid))
-    assert (await code(agent.edit_file(session, mid, "main.tex", "zzz", "y", await cur()), Conflict))[0] == "no_match"
-    msg, details = await code(agent.edit_file(session, mid, "main.tex", "t", "y", await cur()), Conflict)
+    assert (await code(agent.edit_file(session, mid, "main.tex", agent.TextEdit("zzz", "y"), await cur()), Conflict))[
+        0
+    ] == "no_match"
+    msg, details = await code(
+        agent.edit_file(session, mid, "main.tex", agent.TextEdit("t", "y"), await cur()), Conflict
+    )
     assert msg == "ambiguous_match" and details["count"] == 2
-    assert (await code(agent.edit_file(session, mid, "main.tex", "", "y", await cur()), InvalidInput))[
+    assert (await code(agent.edit_file(session, mid, "main.tex", agent.TextEdit("", "y"), await cur()), InvalidInput))[
         0
     ] == "empty_old_text"
     stale = (await cur()) - timedelta(seconds=1)
-    msg, details = await code(agent.edit_file(session, mid, "main.tex", "three", "y", stale), Conflict)
+    msg, details = await code(agent.edit_file(session, mid, "main.tex", agent.TextEdit("three", "y"), stale), Conflict)
     assert msg == "file_changed" and details["updated_at"] == await cur()
     assert len(await snaps(session, mid)) == count
 
@@ -284,7 +288,7 @@ async def test_hostile_paths_are_refused_everywhere_with_no_row_and_no_snapshot(
     calls = [
         agent.create_file(session, mid, path, "x"),
         agent.write_file(session, mid, path, "x", now),
-        agent.edit_file(session, mid, path, "a", "b", now),
+        agent.edit_file(session, mid, path, agent.TextEdit("a", "b"), now),
         agent.add_figure(session, mid, path, PNG),
         agent.rename_file(session, mid, "main.tex", path, now),
     ]
@@ -358,7 +362,9 @@ async def test_snapshot_has_ai_log_columns(session):
 async def test_each_write_logs_tool_path_and_reason(session):
     mid = await new(session)
     base = await updated(session, mid, "main.tex")
-    await agent.edit_file(session, mid, "main.tex", "\\begin{document}", "\\begin{document}\n", base, reason="  tidy  ")
+    await agent.edit_file(
+        session, mid, "main.tex", agent.TextEdit("\\begin{document}", "\\begin{document}\n"), base, reason="  tidy  "
+    )
     await agent.create_file(session, mid, "sections/new.tex", "x", reason=None)
     log = {(s.ai_tool, s.ai_path, s.ai_reason) for s in await snaps(session, mid)}
     assert log == {("edit_manuscript_file", "main.tex", "tidy"), ("create_manuscript_file", "sections/new.tex", None)}
@@ -367,7 +373,9 @@ async def test_each_write_logs_tool_path_and_reason(session):
 async def test_nul_in_reason_never_blocks_the_write_and_is_not_logged(session):
     mid = await new(session)
     base = await updated(session, mid, "main.tex")
-    await agent.edit_file(session, mid, "main.tex", "\\begin{document}", "\\begin{document}\n", base, reason="a\x00b\x00 ")
+    await agent.edit_file(
+        session, mid, "main.tex", agent.TextEdit("\\begin{document}", "\\begin{document}\n"), base, reason="a\x00b\x00 "
+    )
     assert "\\begin{document}\n" in await text(session, mid, "main.tex")
     logged = [s.ai_reason for s in await snaps(session, mid) if s.ai_tool == "edit_manuscript_file"]
     assert logged == ["ab"]
@@ -389,7 +397,9 @@ async def test_write_rename_delete_log_and_blank_or_long_reasons(session):
 async def test_failed_write_leaves_no_log_and_owner_snapshots_stay_clean(session):
     mid = await new(session)
     base = await updated(session, mid, "main.tex")
-    await code(agent.edit_file(session, mid, "main.tex", "NOPE-NOT-THERE", "y", base, reason="r"), Conflict)
+    await code(
+        agent.edit_file(session, mid, "main.tex", agent.TextEdit("NOPE-NOT-THERE", "y"), base, reason="r"), Conflict
+    )
     assert await snaps(session, mid) == []
     await manuscript_history.take(session, mid, "autosave")
     owner = await snaps(session, mid, "autosave")

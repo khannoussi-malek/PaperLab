@@ -34,7 +34,11 @@ async def test_a_region_preview_is_a_grid_read_from_the_page_ready_to_save(sessi
     assert len(cell.bbox) == 1 and TABLE_REGION[0] <= cell.bbox[0][0] < cell.bbox[0][2] <= TABLE_REGION[2]
 
     saved = await datasets.create_dataset(
-        session, preview.name, "table", preview.grid, paper_id=paper.id, page=1, region=TABLE_REGION
+        session,
+        preview.name,
+        "table",
+        preview.grid,
+        datasets.TableSource(paper_id=paper.id, page=1, region=TABLE_REGION),
     )
     assert (saved.rows[1].cells[1].value, saved.rows[1].cells[1].error, saved.rows[1].cells[1].origin) == (
         90.9, 0.2, "extracted"
@@ -69,8 +73,10 @@ async def test_a_preview_needs_a_paper_with_its_file_a_page_in_range_and_a_real_
 async def test_captured_numbers_go_into_one_numbers_dataset_per_paper(session, table_pdf):
     paper = await make_paper(session, table_pdf, page_count=3)
 
-    first = await capture.add_number(session, paper.id, " SQuAD F1 ", "90.9", " F1 ", 2, SELECTION)
-    second = await capture.add_number(session, paper.id, "EM", "88.5 ± 0.3", "", 3, [(72.0, 400.0, 130.0, 410.0)])
+    first = await capture.add_number(session, paper.id, capture.NumberText(" SQuAD F1 ", "90.9", " F1 "), 2, SELECTION)
+    second = await capture.add_number(
+        session, paper.id, capture.NumberText("EM", "88.5 ± 0.3", ""), 3, [(72.0, 400.0, 130.0, 410.0)]
+    )
 
     assert first.dataset_id == second.dataset_id
     view = await datasets.get_dataset(session, first.dataset_id)
@@ -87,22 +93,22 @@ async def test_captured_numbers_go_into_one_numbers_dataset_per_paper(session, t
 async def test_a_captured_number_must_parse_and_have_a_label_page_and_short_unit(session, table_pdf):
     paper = await make_paper(session, table_pdf, page_count=3)
     with pytest.raises(InvalidInput, match="is not a number"):
-        await capture.add_number(session, paper.id, "F1", "high", "", 1, SELECTION)
+        await capture.add_number(session, paper.id, capture.NumberText("F1", "high", ""), 1, SELECTION)
     with pytest.raises(InvalidInput):
-        await capture.add_number(session, paper.id, "  ", "90.9", "", 1, SELECTION)
+        await capture.add_number(session, paper.id, capture.NumberText("  ", "90.9", ""), 1, SELECTION)
     with pytest.raises(InvalidInput):
-        await capture.add_number(session, paper.id, "F1", "90.9", "x" * 41, 1, SELECTION)
+        await capture.add_number(session, paper.id, capture.NumberText("F1", "90.9", "x" * 41), 1, SELECTION)
     with pytest.raises(InvalidInput):
-        await capture.add_number(session, paper.id, "F1", "90.9", "", 4, SELECTION)
+        await capture.add_number(session, paper.id, capture.NumberText("F1", "90.9", ""), 4, SELECTION)
     with pytest.raises(InvalidInput):
-        await capture.add_number(session, paper.id, "F1", "90.9", "", 1, [])
+        await capture.add_number(session, paper.id, capture.NumberText("F1", "90.9", ""), 1, [])
     with pytest.raises(NotFound):
-        await capture.add_number(session, uuid.uuid4(), "F1", "90.9", "", 1, SELECTION)
+        await capture.add_number(session, uuid.uuid4(), capture.NumberText("F1", "90.9", ""), 1, SELECTION)
 
 
 async def test_a_renamed_or_missing_numbers_column_is_found_by_name_or_added_back(session, table_pdf):
     paper = await make_paper(session, table_pdf, page_count=3)
-    first = await capture.add_number(session, paper.id, "F1", "90.9", "F1", 1, SELECTION)
+    first = await capture.add_number(session, paper.id, capture.NumberText("F1", "90.9", "F1"), 1, SELECTION)
     view = await datasets.get_dataset(session, first.dataset_id)
     label, value, _ = view.columns
     # The owner drops the Unit column and moves Value first.
@@ -113,7 +119,7 @@ async def test_a_renamed_or_missing_numbers_column_is_found_by_name_or_added_bac
     )  # fmt: skip
     await datasets.save_grid(session, first.dataset_id, without_unit)
 
-    await capture.add_number(session, paper.id, "EM", "88.5", "EM", 1, SELECTION)
+    await capture.add_number(session, paper.id, capture.NumberText("EM", "88.5", "EM"), 1, SELECTION)
 
     after = await datasets.get_dataset(session, first.dataset_id)
     assert [c.name for c in after.columns] == ["Value", "Label", "Unit"]

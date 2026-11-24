@@ -1104,7 +1104,9 @@ async def edit_manuscript_file(
     can restore from History, marked as a Claude edit. Change only what was asked: the owner's own words are theirs.
     Optionally pass `reason`: one short line on why, shown next to this edit in History."""
     async with sessions() as session:
-        return await manuscript_agent.edit_file(session, manuscript_id, path, old_text, new_text, base, reason)
+        return await manuscript_agent.edit_file(
+            session, manuscript_id, path, manuscript_agent.TextEdit(old_text, new_text), base, reason
+        )
 
 
 @mcp.tool(annotations=DESTRUCTIVE)

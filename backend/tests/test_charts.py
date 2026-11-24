@@ -27,9 +27,12 @@ async def bert_table(session) -> datasets.DatasetView:
     session.add(paper)
     await session.commit()
     return await datasets.create_dataset(
-        session, "Table 2", "table", grid(("System", "F1"), ("BERT-B", "88.5 ± 0.3"), ("BERT-L", "90.9"), page=7),
-        paper_id=paper.id, page=7, region=(70, 60, 290, 240),
-    )  # fmt: skip
+        session,
+        "Table 2",
+        "table",
+        grid(("System", "F1"), ("BERT-B", "88.5 ± 0.3"), ("BERT-L", "90.9"), page=7),
+        datasets.TableSource(paper_id=paper.id, page=7, region=(70, 60, 290, 240)),
+    )
 
 
 async def my_runs(session) -> datasets.DatasetView:

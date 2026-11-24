@@ -242,18 +242,21 @@ async def _upsert(session: AsyncSession, table, dataset_id: uuid.UUID, items, fi
     return [item.id if item.id is not None else next(created) for item in items]
 
 
+@dataclass(frozen=True)
+class TableSource:
+    """Where a captured table came from: its paper, page and the region drawn on it."""
+
+    paper_id: uuid.UUID | None = None
+    page: int | None = None
+    region: Rect | None = None
+
+
 async def create_dataset(
-    session: AsyncSession,
-    name: str,
-    kind: str,
-    grid: GridIn,
-    *,
-    paper_id: uuid.UUID | None = None,
-    page: int | None = None,
-    region: Rect | None = None,
+    session: AsyncSession, name: str, kind: str, grid: GridIn, source: TableSource = TableSource()
 ) -> DatasetView:
     """A captured `table` (from a paper page and the region drawn on it) or the owner's own `user` data. The `numbers`
     dataset is only ever created by capturing a number."""
+    paper_id, page, region = source.paper_id, source.page, source.region
     if kind == "numbers":
         raise InvalidInput("a numbers dataset is created by capturing a number from a paper")
     if kind == "table":
