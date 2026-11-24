@@ -79,14 +79,15 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   useEffect(() => savePanelWidth(READER_PANEL, browserStorage(), panelWidth), [panelWidth])
   const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
 
+  // Before useFlash: Back's focus (keyboard jump) must run before the flash scrolls to its passage, or it scrolls away.
+  const citationsByPage = useCitations(doc)
+  const pagesRef = useRef<HTMLElement>(null)
+  const jumpBack = useJumpBack(pagesRef, scale)
   const { flash, flashChunk } = useFlash(doc)
   const lensReader = useLensReader(paperId, tab, flashChunk)
   const { activeNoteId, setActiveNoteId, focusNote, showPromotedNote } = useNoteFocus(paperId, tab, notes, showTab)
   useReaderTarget({ paperId, tab, target, doc, noPdf, notesQuery, flashChunk, focusNote })
 
-  const citationsByPage = useCitations(doc)
-  const pagesRef = useRef<HTMLElement>(null)
-  const jumpBack = useJumpBack(pagesRef, scale)
   const pointer = useReaderPointer({
     paperId, scale, saveJump: (citation, viaKeyboard) => jumpBack.save(citation, viaKeyboard), noPdf, tab, notes, citationsByPage, highlightsByPage, tableMarksByPage, draft, setDraft,
     setWholePaperDraft, setError, blockedByTypedNote, setActiveNoteId, showTab, flashChunk,
