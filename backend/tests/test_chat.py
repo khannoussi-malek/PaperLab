@@ -160,7 +160,9 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
 
     answer = "Because [C3] and [C1][C3]."
 
-    output_id = await chat_answers.save_answer(session, paper.id, "why?", prepared, answer, "qwen3:8b", "Ollama")
+    output_id = await chat_answers.save_answer(
+        session, paper.id, "why?", prepared, chat_answers.Reply(answer, "qwen3:8b", "Ollama")
+    )
 
     row = await session.get(LLMOutput, output_id)
     ids = [s.id for s in prepared.sources]
@@ -476,7 +478,7 @@ async def test_save_answer_records_the_lens_it_was_written_from(session):
     prepared = await chat.prepare(session, paper.id, "Is it sound?", skill=await critical_skill(session))
 
     output_id = await chat_answers.save_answer(
-        session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake"
+        session, paper.id, "Is it sound?", prepared, chat_answers.Reply("Fine [C1].", "fake", "Fake")
     )
 
     assert (await session.get(LLMOutput, output_id)).lens == "critical"
@@ -487,7 +489,7 @@ async def test_an_answer_without_a_skill_records_the_full_lens(session):
     prepared = await chat.prepare(session, paper.id, "Is it sound?")
 
     output_id = await chat_answers.save_answer(
-        session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake"
+        session, paper.id, "Is it sound?", prepared, chat_answers.Reply("Fine [C1].", "fake", "Fake")
     )
 
     assert (await session.get(LLMOutput, output_id)).lens == "full"

@@ -98,7 +98,11 @@ async def cited_answer(session, ws, alpha, beta) -> uuid.UUID:
         sources=sources, system="", prompt="", whole_paper=False, skill_label="Plain English", skill_version=2
     )
     return await chat_answers.save_answer(
-        session, chat.Scope(workspace_id=ws.id), "Does sleep help?", prepared, ANSWER, "qwen3:8b", "Ollama"
+        session,
+        chat.Scope(workspace_id=ws.id),
+        "Does sleep help?",
+        prepared,
+        chat_answers.Reply(ANSWER, "qwen3:8b", "Ollama"),
     )
 
 

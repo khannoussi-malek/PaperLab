@@ -20,7 +20,6 @@ BLOCKS = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast
 FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 LONG: dict[str, int] = {
-    "app/api/chat_stream.py::stream_output": 53,
     "app/core/citations/citations.py::find": 51,
     "app/core/citations/reference_listing.py::library_listing": 52,
     "app/core/citations/references.py::_upsert": 55,
@@ -43,7 +42,6 @@ LONG: dict[str, int] = {
     "app/workers/workspace_search.py::run_workspace_search": 106,
 }
 WIDE: dict[str, int] = {
-    "app/core/chat/chat_answers.py::save_answer": 8,
     # The search core: ten callers and nine test fakes pass these keyword options by name.
     "app/core/chat/retrieval.py::retrieve": 9,
     "app/core/citations/citations_import_apply.py::_isolated": 7,

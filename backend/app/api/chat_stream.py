@@ -25,6 +25,31 @@ NOTHING_READ = "The model couldn't read any of these papers"
 Save = Callable[[AsyncSession, str], Awaitable[uuid.UUID]]
 
 
+def _sources_event(prepared: chat.Prepared) -> SourcesEvent:
+    return SourcesEvent(
+        whole_paper=prepared.whole_paper,
+        sources=to_sources(prepared.sources),
+        notes=to_notes(prepared.notes),
+        notes_used=prepared.notes_used,
+        notes_total=prepared.notes_total,
+    )
+
+
+def _done_event(prepared: chat.Prepared, llm: LLM, content: str, output_id: uuid.UUID) -> DoneEvent:
+    """The finished output, with the sources and notes its text cites."""
+    cited = [f"C{i}" for i in chat_answers.parse_citations(content, len(prepared.sources))]
+    cited += [f"N{i}" for i in chat_answers.parse_citations(content, len(prepared.notes), "N")]
+    return DoneEvent(
+        output_id=output_id,
+        model=llm.model,
+        connection_name=llm.connection_name,
+        prompt_version=prepared.prompt_version,
+        cited=cited,
+        skill_label=prepared.skill_label,
+        lens=prepared.lens,
+    )
+
+
 async def stream_output(
     prepared: chat.Prepared, llm: LLM, save: Save, noun: str, log_as: str, log_for: object
 ) -> AsyncIterable[ServerSentEvent]:
@@ -34,14 +59,7 @@ async def stream_output(
     ("answer", "brief") and `log_as` in the logs ("chat answer", "brief"), because chat's tests assert its log text;
     `log_for` names what a failed save was for (chat's scope, a brief's paper and lens).
     Shared by chat and M16's briefs (and M22's check, D175)."""
-    sources = SourcesEvent(
-        whole_paper=prepared.whole_paper,
-        sources=to_sources(prepared.sources),
-        notes=to_notes(prepared.notes),
-        notes_used=prepared.notes_used,
-        notes_total=prepared.notes_total,
-    )
-    yield ServerSentEvent(event="sources", data=sources)
+    yield ServerSentEvent(event="sources", data=_sources_event(prepared))
     parts: list[str] = []
     try:
         async for text in llm.stream(prepared.system, prepared.prompt):
@@ -66,18 +84,7 @@ async def stream_output(
         yield error_event(f"The {noun} couldn't be saved")
         return
 
-    cited = [f"C{i}" for i in chat_answers.parse_citations(content, len(prepared.sources))]
-    cited += [f"N{i}" for i in chat_answers.parse_citations(content, len(prepared.notes), "N")]
-    done = DoneEvent(
-        output_id=output_id,
-        model=llm.model,
-        connection_name=llm.connection_name,
-        prompt_version=prepared.prompt_version,
-        cited=cited,
-        skill_label=prepared.skill_label,
-        lens=prepared.lens,
-    )
-    yield ServerSentEvent(event="done", data=done)
+    yield ServerSentEvent(event="done", data=_done_event(prepared, llm, content, output_id))
 
 
 async def answer_events(
@@ -87,7 +94,7 @@ async def answer_events(
 
     async def save(session: AsyncSession, content: str) -> uuid.UUID:
         return await chat_answers.save_answer(
-            session, scope, question, prepared, content, llm.model, llm.connection_name, parent_id
+            session, scope, question, prepared, chat_answers.Reply(content, llm.model, llm.connection_name), parent_id
         )
 
     async for event in stream_output(prepared, llm, save, "answer", "chat answer", scope):

@@ -60,7 +60,7 @@ async def test_save_answer_writes_the_cited_passages_in_the_same_row(session):
     prepared = await chat.prepare(session, paper.id, "why?")
 
     output_id = await chat_answers.save_answer(
-        session, paper.id, "why?", prepared, "Because [C3] and [C1].", "m", "Ollama"
+        session, paper.id, "why?", prepared, chat_answers.Reply("Because [C3] and [C1].", "m", "Ollama")
     )
 
     row = await session.get(LLMOutput, output_id)
@@ -79,7 +79,9 @@ async def test_an_answer_that_cites_nothing_stores_an_empty_snapshot(session):
     paper = await make_paper(session, ["one", "two"])
     prepared = await chat.prepare(session, paper.id, "why?")
 
-    output_id = await chat_answers.save_answer(session, paper.id, "why?", prepared, "No source here.", "m", "Ollama")
+    output_id = await chat_answers.save_answer(
+        session, paper.id, "why?", prepared, chat_answers.Reply("No source here.", "m", "Ollama")
+    )
 
     assert (await session.get(LLMOutput, output_id)).source_snapshot == []
 
@@ -116,7 +118,9 @@ def drafts(texts: list[str]) -> list[ChunkDraft]:
 
 async def answer_citing(session, paper_id, content: str) -> uuid.UUID:
     prepared = await chat.prepare(session, paper_id, "why?")
-    return await chat_answers.save_answer(session, paper_id, "why?", prepared, content, "m", "Ollama")
+    return await chat_answers.save_answer(
+        session, paper_id, "why?", prepared, chat_answers.Reply(content, "m", "Ollama")
+    )
 
 
 async def test_a_reingest_keeps_each_citation_on_its_page_and_the_passage_still_in_the_paper(session):
@@ -279,7 +283,9 @@ async def test_a_removed_paper_is_said_so_and_does_not_make_the_answer_out_of_da
     scope = chat.Scope(workspace_id=space.id)
     sources = await chat.chunk_sources(session, Chunk.paper_id.in_([kept.id, removed.id]))
     prepared = chat.Prepared(sources=sources, system="", prompt="", whole_paper=False)
-    output_id = await chat_answers.save_answer(session, scope, "why?", prepared, "[C1] [C2]", "m", "Ollama")
+    output_id = await chat_answers.save_answer(
+        session, scope, "why?", prepared, chat_answers.Reply("[C1] [C2]", "m", "Ollama")
+    )
     await session.delete(await session.get(Paper, removed.id))
     await session.flush()
 

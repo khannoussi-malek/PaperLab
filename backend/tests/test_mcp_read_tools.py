@@ -240,7 +240,7 @@ async def answer_on(session, scope: chat.Scope | uuid.UUID, question: str, sourc
         sources=list(sources), system="", prompt="", whole_paper=True, skill_label=skill_label
     )  # fmt: skip
     output_id = await chat_answers.save_answer(
-        session, scope, question, prepared, f"Answer to {question} [C1].", "qwen3:8b", "Ollama"
+        session, scope, question, prepared, chat_answers.Reply(f"Answer to {question} [C1].", "qwen3:8b", "Ollama")
     )
     output = await session.get(LLMOutput, output_id)
     # Rows saved in one transaction share now(): give each its own time, as answers asked one after another have.

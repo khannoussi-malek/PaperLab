@@ -47,18 +47,22 @@ class Answer:
     readings: list[LLMOutput] = field(default_factory=list)  # Ask each paper's records, in the answer's order (M8.5)
 
 
+@dataclass(frozen=True)
+class Reply:
+    """A model's answer and who wrote it: the model and the connection, by name."""
+
+    content: str
+    model: str
+    connection_name: str
+
+
 async def save_answer(
-    session: AsyncSession,
-    paper_id: uuid.UUID | Scope,
-    question: str,
-    prepared: Prepared,
-    content: str,
-    model: str,
-    connection_name: str,
+    session: AsyncSession, paper_id: uuid.UUID | Scope, question: str, prepared: Prepared, reply: Reply,
     parent_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Note citations aren't stored separately: they follow from content and source_notes. The model and connection
     names are copied, so renaming or deleting the connection later never changes the answer."""
+    content = reply.content
     scope = _scope(paper_id)
     source_ids = [s.id for s in prepared.sources]
     cited = parse_citations(content, len(source_ids))
@@ -74,8 +78,8 @@ async def save_answer(
         source_notes=[n.id for n in prepared.notes],
         notes_used=prepared.notes_used,
         notes_total=prepared.notes_total,
-        model=model,
-        connection_name=connection_name,
+        model=reply.model,
+        connection_name=reply.connection_name,
         prompt_version=prepared.prompt_version,
         whole_paper=prepared.whole_paper,
         parent_id=parent_id,
