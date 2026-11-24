@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { LEVELS, TRIAGES, UNDECIDED_LABEL, type Triage } from '@/entities/passes'
-import { snowballMessage } from '@/features/workspace-search/ScreeningTab'
+import { snowballMessage } from '@/features/search/ScreeningTab'
 import { friendlySnowballError } from '@/entities/snowballText'
 import { workspaceHref } from '@/router/route'
 import { cn } from '@/lib/utils'

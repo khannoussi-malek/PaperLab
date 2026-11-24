@@ -26,12 +26,12 @@ vi.mock('@/features/workspaces/WorkspacePapers', () => ({
     return <button onClick={() => props.onTagsChange(['rct'], 'all')}>pick</button>
   },
 }))
-vi.mock('@/features/workspace-search/ManualAcquisitionTab', () => ({ ManualAcquisitionTab: () => null }))
-vi.mock('@/features/workspace-search/PrismaTab', () => ({ PrismaTab: () => null }))
-vi.mock('@/features/workspace-search/ReadingQueueTab', () => ({ ReadingQueueTab: (props: unknown) => { seen.reading = props; return null } }))
-vi.mock('@/features/workspace-search/ScreeningTab', () => ({ ScreeningTab: () => null }))
+vi.mock('@/features/search/ManualAcquisitionTab', () => ({ ManualAcquisitionTab: () => null }))
+vi.mock('@/features/search/PrismaTab', () => ({ PrismaTab: () => null }))
+vi.mock('@/features/search/ReadingQueueTab', () => ({ ReadingQueueTab: (props: unknown) => { seen.reading = props; return null } }))
+vi.mock('@/features/search/ScreeningTab', () => ({ ScreeningTab: () => null }))
 vi.mock('@/features/snowball-tree/SnowballTreeTab', () => ({ SnowballTreeTab: () => null }))
-vi.mock('@/features/workspace-search/SearchTab', () => ({ SearchTab: () => null }))
+vi.mock('@/features/search/SearchTab', () => ({ SearchTab: () => null }))
 vi.mock('@/features/evidence/EvidenceTab', () => ({ EvidenceTab: () => null }))
 vi.mock('@/features/manuscripts/ManuscriptList', () => ({ ManuscriptList: () => null }))
 vi.mock('@/features/workspaces/WorkspaceChat', () => ({ WorkspaceChat: () => null }))

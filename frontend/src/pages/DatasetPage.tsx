@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { chartsHref, newChartHref, readerHref, type CellFocus } from '@/router/route'
 import { cn } from '@/lib/utils'
-import { ChartsUsingDataDialog } from '@/features/data/ChartsUsingDataDialog'
-import { datasetSource } from '@/features/data/datasetMeta'
-import { chartsLosingColumns, fromDataset, type Grid, toGridIn } from '@/features/data/gridModel'
-import { GridEditor } from '@/features/data/GridEditor'
+import { ChartsUsingDataDialog } from '@/features/datasets/ChartsUsingDataDialog'
+import { datasetSource } from '@/features/datasets/datasetMeta'
+import { chartsLosingColumns, fromDataset, type Grid, toGridIn } from '@/features/datasets/gridModel'
+import { GridEditor } from '@/features/datasets/GridEditor'
 
 type Props = { datasetId: string; focus: CellFocus | null }
 

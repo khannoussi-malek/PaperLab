@@ -1,0 +1,84 @@
+import { useCallback, useEffect, useState, type MouseEvent } from 'react'
+import type { PdfRect } from '@/lib/coords'
+import { clientPointToPdf } from '@/features/reader/hitTest'
+import { dragRegion } from '@/features/datasets/pageMarks'
+
+type Point = [number, number]
+type Drag = { page: number; start: Point; end: Point }
+
+/** The pointer in PDF points on a rendered page, kept on that page even when it strays off it. */
+function pointKeptOnPage(event: MouseEvent, page: HTMLElement, scale: number) {
+  const box = page.getBoundingClientRect()
+  const size = { width: box.width / scale, height: box.height / scale }
+  const [x, y] = clientPointToPdf({ x: event.clientX, y: event.clientY }, box, scale)
+  const point: Point = [Math.min(Math.max(x, 0), size.width), Math.min(Math.max(y, 0), size.height)]
+  return { point, size }
+}
+
+const pageElement = (page: number) => document.querySelector<HTMLElement>(`.pdf-page[data-page="${page}"]`)
+
+/**
+ * The reader's capture mode: while on, a drag on a page draws a box, and releasing it on a table-sized region
+ * turns the mode off and hands back `{ page, region }` for the capture dialog. Escape leaves the mode.
+ */
+export function useCaptureDrag(scale: number, onFigure: (page: number, region: PdfRect) => void) {
+  const [mode, setMode] = useState<'table' | 'figure' | null>(null)
+  const capturing = mode !== null
+  const [drag, setDrag] = useState<Drag | null>(null)
+  // Every way out of the mode (Escape, the toggle, a finished drag) goes through here, so no box outlives it.
+  // One mode, so a figure box and a table box can't both be on.
+  const setModeTo = useCallback((next: 'table' | 'figure' | null) => {
+    setMode(next)
+    if (!next) setDrag(null)
+  }, [])
+  const setCapturing = useCallback((on: boolean) => setModeTo(on ? 'table' : null), [setModeTo])
+  const setDrawingFigure = useCallback((on: boolean) => setModeTo(on ? 'figure' : null), [setModeTo])
+  const [capture, setCapture] = useState<{ page: number; region: PdfRect } | null>(null)
+
+  useEffect(() => {
+    if (!capturing) return
+    const leave = (event: KeyboardEvent) => event.key === 'Escape' && setModeTo(null)
+    window.addEventListener('keydown', leave)
+    return () => window.removeEventListener('keydown', leave)
+  }, [capturing, setModeTo])
+
+  function startDrag(event: MouseEvent) {
+    const page = capturing && event.button === 0 ? (event.target as Element).closest<HTMLElement>('.pdf-page') : null
+    if (!page) return
+    event.preventDefault() // no text selection starts
+    const { point } = pointKeptOnPage(event, page, scale)
+    setDrag({ page: Number(page.dataset.page), start: point, end: point })
+  }
+
+  function moveDrag(event: MouseEvent) {
+    const page = drag && pageElement(drag.page)
+    if (!drag || !page) return
+    if (event.buttons === 0) return setDrag(null) // released outside the pages
+    setDrag({ ...drag, end: pointKeptOnPage(event, page, scale).point })
+  }
+
+  // Ends at the release point, not the last stored one: the final move may not have rendered yet.
+  function endDrag(event: MouseEvent) {
+    const page = drag && pageElement(drag.page)
+    setDrag(null)
+    if (!drag || !page) return
+    const { point, size } = pointKeptOnPage(event, page, scale)
+    const region = dragRegion(drag.start, point, size)
+    if (!region) return
+    if (mode === 'figure') onFigure(drag.page, region)
+    else setCapture({ page: drag.page, region })
+    setModeTo(null)
+  }
+
+  const box = drag && {
+    page: drag.page,
+    rect: [
+      Math.min(drag.start[0], drag.end[0]),
+      Math.min(drag.start[1], drag.end[1]),
+      Math.max(drag.start[0], drag.end[0]),
+      Math.max(drag.start[1], drag.end[1]),
+    ] as PdfRect,
+  }
+
+  return { capturing, tableMode: mode === 'table', setCapturing, drawingFigure: mode === 'figure', setDrawingFigure, box, capture, closeCapture: () => setCapture(null), startDrag, moveDrag, endDrag }
+}
