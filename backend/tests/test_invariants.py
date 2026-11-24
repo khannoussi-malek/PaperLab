@@ -24,14 +24,16 @@ def test_core_never_imports_fastapi():
 
 
 def test_mcp_server_has_no_sql_and_imports_only_core_services():
-    """Tool bodies stay thin (roadmap M6): any logic, and every query, belongs in app.core."""
+    """Tool bodies stay thin (roadmap M6): any logic, and every query, belongs in app.core
+    (pure types in app.domain)."""
     source = (BACKEND / "mcp_server/server.py").read_text()
     tree = ast.parse(source)
     imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
     imported |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
     ours = {name for name in imported if name.split(".")[0] == "app"}
     others = {name.split(".")[0] for name in imported - ours} - set(sys.stdlib_module_names)
-    assert ours and all(name == "app.db" or name.split(".")[:2] == ["app", "core"] for name in ours), ours
+    layers = (["app", "core"], ["app", "domain"])
+    assert ours and all(name == "app.db" or name.split(".")[:2] in layers for name in ours), ours
     assert others == {"mcp", "pydantic"}  # pydantic only for tool argument bounds (Field), never models or logic
     assert "sqlalchemy" not in source and not SQL_CALL.search(source)
 
