@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { LoadingState } from './LoadingState'
 
 describe('LoadingState', () => {
@@ -24,11 +23,6 @@ describe('LoadingState', () => {
     render(<LoadingState failureCount={1} />)
     expect(screen.getByText("The app didn't answer; trying again…")).toBeInTheDocument()
     expect(screen.queryByText('Still loading…')).toBeNull()
-  })
-
-  it('works inside TabSkeleton too', () => {
-    render(<TabSkeleton label="Loading notes" failureCount={2} />)
-    expect(screen.getByText("The app didn't answer; trying again…")).toBeInTheDocument()
   })
 
   it('leaves no timer behind after unmount', () => {

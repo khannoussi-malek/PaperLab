@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { sameCandidate } from '@/features/discovery/candidateMeta'
 import { api } from '@/services/api'
-import type { Candidate, SearchResult } from '@/entities'
+import { sameCandidate, type Candidate, type SearchResult } from '@/entities'
 import { keys } from './core'
 
 /** Checks an idea against the library. Read-only, so nothing to invalidate. */

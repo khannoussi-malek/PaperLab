@@ -36,5 +36,6 @@ export const api = {
 }
 
 export { AlreadyInLibraryError, ApiError, errorDetail, isConflict, NoFreePdfError, PaperMergedError } from '../http'
+export { ALREADY_SAVED } from './chat'
 export { citationsUrl, zoteroZipUrl } from './citations'
 export { notesZipUrl, packageRecordUrl, packageUrl } from './workspaces'

@@ -10,6 +10,44 @@
       // Playwright's fixture callback is named `use`, which the rule takes for a React hook; e2e has no React.
       "files": ["e2e/**"],
       "rules": { "react/rules-of-hooks": "off" }
+    },
+    // Layers: entities <- services <- components/lib <- features <- layout <- pages <- router. Each folder may import
+    // only from the layers before it, so a dependency always points inward.
+    {
+      "files": ["src/entities/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["@/services", "@/services/**", "@/features/**", "@/components/**", "@/layout/**", "@/pages/**", "@/router/**", "@/lib/**"],
+          "message": "entities hold types and pure rules only; they import nothing from the app."
+        }] }]
+      }
+    },
+    {
+      "files": ["src/services/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["@/features/**", "@/components/**", "@/layout/**", "@/pages/**", "@/router/**"],
+          "message": "services sit under the UI: move what they need into services, entities or lib."
+        }] }]
+      }
+    },
+    {
+      "files": ["src/components/**", "src/lib/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["@/features/**", "@/layout/**", "@/pages/**", "@/router/RouterView", "@/router/lazyPage"],
+          "message": "shared code must not know about features, layout or pages: pass what it needs in as props."
+        }] }]
+      }
+    },
+    {
+      "files": ["src/features/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["@/layout/**", "@/pages/**", "@/router/RouterView", "@/router/lazyPage"],
+          "message": "features sit under layout and pages; only pages put them on screen."
+        }] }]
+      }
     }
   ]
 }
