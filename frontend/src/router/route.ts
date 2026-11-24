@@ -230,8 +230,18 @@ export const samePage = (oldURL: string, newURL: string) => new URL(oldURL).hash
 const listeners = new Set<() => void>()
 function notifyAll(event: HashChangeEvent) {
   const notify = () => listeners.forEach((listener) => listener())
-  if (samePage(event.oldURL, event.newURL)) notify()
-  else withViewTransition(notify)
+  if (samePage(event.oldURL, event.newURL)) return notify()
+  const fade = () => withViewTransition(notify)
+  const ready = loadPage(parseRoute(window.location.hash))
+  if (ready) void ready.then(fade, notify) // a page whose code fails still opens, to show its Try again
+  else fade()
+}
+
+// The router sets this to fetch a page's code before the fade starts, so a navigation fades to the page itself and
+// not to its Loading… (each page is a lazily loaded chunk). This file stays free of page imports.
+let loadPage: (route: Route) => Promise<unknown> | undefined = () => undefined
+export function loadPagesWith(load: typeof loadPage) {
+  loadPage = load
 }
 
 function subscribe(onChange: () => void) {
