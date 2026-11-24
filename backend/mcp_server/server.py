@@ -822,9 +822,10 @@ async def create_saved_search(
     0 = Sunday), or a cron expression. Pass the owner's IANA time zone (e.g. Europe/Berlin); otherwise times are UTC.
     New hits land in the workspace for screening; PaperLab must be running at that time."""
     async with sessions() as session:
-        return await pipeline.create_saved_search(
-            session, workspace, query, schedule, time, weekday, cron, sources, year_from, year_to, timezone
+        request = pipeline.SavedSearchRequest(
+            query, schedule, time, weekday, cron, sources, year_from, year_to, timezone
         )
+        return await pipeline.create_saved_search(session, workspace, request)
 
 
 @mcp.tool(annotations=READ_ONLY)

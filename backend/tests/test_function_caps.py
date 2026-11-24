@@ -63,8 +63,6 @@ WIDE: dict[str, int] = {
     "app/core/notes/capture.py::add_number": 8,
     "app/core/notes/checks.py::_retrieved": 7,
     "app/core/notes/datasets.py::create_dataset": 7,
-    "app/core/papers/merges.py::merge": 7,
-    "app/core/papers/pipeline.py::create_saved_search": 11,
     "app/core/papers/pipeline.py::verify_claim": 7,
     "app/core/workspaces/briefs.py::save_brief": 7,
     "app/core/workspaces/package_import.py::_papers_into": 7,

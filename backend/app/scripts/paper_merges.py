@@ -109,7 +109,7 @@ async def _apply(session: AsyncSession, merged_id: uuid.UUID, kept_id: uuid.UUID
     "imported": the merge has no better word for a script-run merge."""
     evidence = merges.pdf_evidence(*await asyncio.to_thread(extract_title, file_path))
     how = await merges.arrival(session, merged_id, "imported")
-    return await merges.merge(session, merged_id, kept_id, evidence=evidence, how=how)
+    return await merges.merge(session, merged_id, kept_id, proof=merges.MergeProof(evidence=evidence), how=how)
 
 
 def _describe(result: merges.MergeResult) -> str:

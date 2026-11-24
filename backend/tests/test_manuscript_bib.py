@@ -159,7 +159,7 @@ async def test_merging_two_papers_pinned_in_one_manuscript_keeps_both_keys(sessi
     await session.commit()
     assert len(keys) == 2
 
-    result = await merges.merge(session, m.id, k_id, identifier=PROOF, evidence=EVIDENCE)
+    result = await merges.merge(session, m.id, k_id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
     assert result.status == "merged"
 
     draft = await manuscripts.get(session, draft_id)

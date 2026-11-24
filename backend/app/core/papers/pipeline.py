@@ -145,27 +145,34 @@ async def list_notes(
     ]
 
 
+@dataclass(frozen=True)
+class SavedSearchRequest:
+    """A saved search as the MCP tool asks for it: daily or weekly at `time` (weekday 0 = Sunday), or a cron."""
+
+    query: str
+    schedule: str = "daily"
+    time: str | None = "02:00"
+    weekday: int | None = None
+    cron: str | None = None
+    sources: list[str] | None = None
+    year_from: int | None = None
+    year_to: int | None = None
+    timezone: str = "UTC"
+
+
 async def create_saved_search(
-    session: AsyncSession, workspace: str, query: str, schedule: str = "daily", time: str | None = "02:00",
-    weekday: int | None = None, cron: str | None = None, sources: list[str] | None = None,
-    year_from: int | None = None, year_to: int | None = None, timezone: str = "UTC",
+    session: AsyncSession, workspace: str, request: SavedSearchRequest
 ) -> saved_searches.SavedSearchView:
     ws = await workspace_id(session, workspace)
-    if (cron is not None and schedule != "cron") or (weekday is not None and schedule != "weekly"):
+    r = request
+    if (r.cron is not None and r.schedule != "cron") or (r.weekday is not None and r.schedule != "weekly"):
         raise InvalidInput("invalid_schedule", hint="cron needs schedule='cron'; weekday needs schedule='weekly'.")
-    expression = schedules.to_cron(schedule, time=time, weekday=weekday, cron=cron)
-    return await saved_searches.create(
-        session,
-        ws,
-        saved_searches.SavedSearchSpec(
-            query=query,
-            schedule=expression,
-            timezone=timezone,
-            sources=sources or [],
-            year_from=year_from,
-            year_to=year_to,
-        ),
+    expression = schedules.to_cron(r.schedule, time=r.time, weekday=r.weekday, cron=r.cron)
+    spec = saved_searches.SavedSearchSpec(
+        query=r.query, schedule=expression, timezone=r.timezone, sources=r.sources or [], year_from=r.year_from,
+        year_to=r.year_to,
     )
+    return await saved_searches.create(session, ws, spec)
 
 
 async def list_saved_searches(session: AsyncSession, workspace: str) -> list[saved_searches.SavedSearchView]:
