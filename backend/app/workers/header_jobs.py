@@ -6,7 +6,8 @@ import uuid
 from app.core.papers import embedding_index, embedding_sources
 from app.core.platform import queue
 from app.db import SessionLocal
-from app.workers.ingest import INGEST_JOB_TIMEOUT, _embed, logger, search_embedder
+from app.workers import ingest
+from app.workers.ingest import logger
 
 # Chunks a second the header re-embeds are spread at: under half the built-in model's measured rate in the worker
 # (about 5 a second, 2026-11-23), so the one ingest worker stays mostly free and an upload never waits behind them.
@@ -19,18 +20,20 @@ async def add_chunk_headers(ctx: dict, paper_id: str) -> None:
     search source is no longer local: a cloud one would bill it."""
     pid = uuid.UUID(paper_id)
     async with SessionLocal() as session:
-        embedder = await search_embedder(ctx, session)
+        embedder = await ingest.search_embedder(ctx, session)
         if embedder is None or not embedder.is_local:
             return
-        deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
+        deadline = asyncio.timeout(ingest.INGEST_JOB_TIMEOUT)
         try:
             async with deadline:
-                await _embed(session, pid, embedder, headers_only=True)
+                await ingest._embed(session, pid, embedder, headers_only=True)
         except TimeoutError:
             if not deadline.expired():
                 raise
             await session.rollback()
-            logger.warning("adding chunk headers to %s ran past %d s; the next start goes on", pid, INGEST_JOB_TIMEOUT)
+            logger.warning(
+                "adding chunk headers to %s ran past %d s; the next start goes on", pid, ingest.INGEST_JOB_TIMEOUT
+            )
 
 
 async def queue_chunk_headers(ctx: dict) -> None:
