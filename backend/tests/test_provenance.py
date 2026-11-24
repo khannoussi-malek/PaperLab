@@ -66,7 +66,9 @@ async def test_crossref_stamps_the_citation_and_its_type(session):
 async def test_biblio_stamps_each_group_with_the_source_that_filled_it(session):
     paper = await add_paper(session, doi=DOI)
     client, _ = fake_crossref(CROSSREF)
-    await enrichment.fill_biblio(session, paper.id, client, openalex_work=openalex_work())
+    await enrichment.fill_biblio(
+        session, paper.id, client, prefetched=enrichment.Prefetched(openalex_work=openalex_work())
+    )
     await session.refresh(paper)
     assert (paper.volume, paper.pmid) == ("12", "12345")  # Crossref wins the citation; OpenAlex gives the ids
     assert paper.field_sources == {"citation": "crossref", "identifiers": "openalex"}
@@ -76,7 +78,7 @@ async def test_a_citation_both_sources_filled_reads_crossref(session):
     paper = await add_paper(session, doi=DOI)
     client, _ = fake_crossref({"type": "journal-article", "page": "45-67"})  # Crossref has the pages only
     only_volume = openalex_work(biblio={"volume": "7"}, ids={})  # OpenAlex has the volume only
-    await enrichment.fill_biblio(session, paper.id, client, openalex_work=only_volume)
+    await enrichment.fill_biblio(session, paper.id, client, prefetched=enrichment.Prefetched(openalex_work=only_volume))
     await session.refresh(paper)
     assert (paper.volume, paper.pages) == ("7", "45-67")
     assert paper.field_sources == {"citation": "crossref"}  # Crossref wins the group it shares with OpenAlex
@@ -85,7 +87,9 @@ async def test_a_citation_both_sources_filled_reads_crossref(session):
 async def test_biblio_claims_only_the_groups_whose_nulls_it_filled(session):
     held = {"volume": "1", "issue": "2", "pages": "3", "editors": ["E"]}
     paper = await add_paper(session, doi=DOI, **held, field_sources={"citation": "zotero"})
-    await enrichment.fill_biblio(session, paper.id, None, openalex_work=openalex_work())
+    await enrichment.fill_biblio(
+        session, paper.id, None, prefetched=enrichment.Prefetched(openalex_work=openalex_work())
+    )
     await session.refresh(paper)
     assert paper.field_sources == {"citation": "zotero", "identifiers": "openalex"}
 
