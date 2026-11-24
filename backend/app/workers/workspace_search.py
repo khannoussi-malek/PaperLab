@@ -4,12 +4,18 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select, text, update
+from sqlalchemy import select, update
 
 from app.config import settings
 from app.core import discovery, paper_sources, queue, screening
 from app.core.redact import redact
-from app.core.workspace_search import PER_SOURCE_PASS_LIMIT, SEARCH_RUN_JOB_TIMEOUT, get_run, search_batch
+from app.core.workspace_search import (
+    PER_SOURCE_PASS_LIMIT,
+    SEARCH_RUN_JOB_TIMEOUT,
+    get_run,
+    search_batch,
+    try_run_lock,
+)
 from app.db import SessionLocal
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchRun
@@ -39,30 +45,12 @@ SEARCH_RUN_SAFETY_MARGIN = 60
 
 _ERROR_MAX_CHARS = 200
 
-_TRY_LOCK = text("SELECT pg_try_advisory_xact_lock(:key)")
-
-
 def _now() -> float:
     """A thin wrapper around time.monotonic(), so a test can monkeypatch just this module's own clock reads
     without touching the real stdlib `time` module — asyncio's own event loop calls `time.monotonic()`
     internally (e.g. for `loop.time()`), so patching it globally would also scramble asyncio's own scheduling
     during a test, not just this function's deadline math."""
     return time.monotonic()
-
-
-def _lock_key(run_id: uuid.UUID) -> int:
-    """Postgres advisory locks take an int8/int4 key; a UUID is 128 bits, so this folds it down to 63 bits (fits
-    a signed bigint). A hash collision only ever makes an unrelated run wait its turn — it can't corrupt data —
-    so this doesn't need to be collision-proof."""
-    return run_id.int & 0x7FFFFFFFFFFFFFFF
-
-
-async def _try_lock(session, run_id: uuid.UUID) -> bool:
-    """Non-blocking and transaction-scoped: released automatically on the next commit/rollback, so it only ever
-    covers one batch iteration, not the whole run. False means another worker's iteration is already in flight
-    for this run right now (e.g. a stop-then-immediate-restart race, since enqueue_job has no dedup job id) — the
-    caller should back off instead of racing it to the same insert (I2)."""
-    return bool(await session.scalar(_TRY_LOCK, {"key": _lock_key(run_id)}))
 
 
 async def _mark_exhausted_unless_stopped(
@@ -142,7 +130,7 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                         return  # stopped, or a Continue started a newer pass that a newer job owns
                     if _now() >= deadline:
                         break  # wall-clock backstop — falls through to the shared terminal-state write below
-                    if not await _try_lock(session, rid):
+                    if not await try_run_lock(session, rid):
                         logger.info("workspace search run %s already being processed elsewhere; backing off", rid)
                         return
 

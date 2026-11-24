@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 import httpx
-from sqlalchemy import delete, func, or_, select, tuple_, update
+from sqlalchemy import delete, func, or_, select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -410,6 +410,24 @@ async def start_run(
 
 # What a new pass starts without: the pass's own counters and its end-of-pass flags. The totals (per_source_*,
 # failed_sources) stay, so PRISMA and the run's history remain cumulative.
+TRY_RUN_LOCK = text("SELECT pg_try_advisory_xact_lock(:key)")
+
+
+def run_lock_key(run_id: uuid.UUID) -> int:
+    """Postgres advisory locks take an int8/int4 key; a UUID is 128 bits, so this folds it down to 63 bits (fits
+    a signed bigint). A hash collision only ever makes an unrelated run wait its turn — it can't corrupt data —
+    so this doesn't need to be collision-proof."""
+    return run_id.int & 0x7FFFFFFFFFFFFFFF
+
+
+async def try_run_lock(session: AsyncSession, run_id: uuid.UUID) -> bool:
+    """Non-blocking and transaction-scoped: released automatically on the next commit/rollback, so it only ever
+    covers one batch iteration, not the whole run. False means another worker's iteration is already in flight
+    for this run right now (e.g. a stop-then-immediate-restart race, since enqueue_job has no dedup job id) — the
+    caller should back off instead of racing it to the same insert (I2)."""
+    return bool(await session.scalar(TRY_RUN_LOCK, {"key": run_lock_key(run_id)}))
+
+
 _PASS_STATS = ("cut_short", "unfinished_sources", "paused_sources")
 _PASS_CURSOR_STATE = ("paused", "retry_after")
 
@@ -422,11 +440,9 @@ async def continue_run(session: AsyncSession, workspace_id, run_id) -> Workspace
     run = await get_run(session, run_id, workspace_id)
     if run.status == "running":
         raise Conflict("search_run_already_running")
-    from app.workers.workspace_search import _try_lock  # late: the worker imports this module
-
     # A stopped job still mid-batch holds this lock until its commit; starting a pass now would race it.
     # Held only until the commit below (or the caller's rollback), so it never outlives this call.
-    if not await _try_lock(session, run.id):
+    if not await try_run_lock(session, run.id):
         raise Conflict("search_run_still_stopping")
     live = (await session.scalars(
         select(WorkspaceSearchCursor).where(

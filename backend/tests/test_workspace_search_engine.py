@@ -1357,14 +1357,13 @@ async def test_continue_refuses_while_the_old_job_still_holds_the_run_lock(sessi
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
-    from app.core.workspace_search import continue_run
+    from app.core.workspace_search import TRY_RUN_LOCK, continue_run, run_lock_key
     from app.domain.errors import Conflict
-    from app.workers.workspace_search import _TRY_LOCK, _lock_key
     workspace, run = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 5}, False)})
 
     engine = create_async_engine(database_url, poolclass=NullPool)
     async with engine.connect() as other:  # the stopping job, mid-batch, in its own transaction
-        assert await other.scalar(_TRY_LOCK, {"key": _lock_key(run.id)})
+        assert await other.scalar(TRY_RUN_LOCK, {"key": run_lock_key(run.id)})
         with pytest.raises(Conflict, match="search_run_still_stopping"):
             await continue_run(session, workspace.id, run.id)
     await engine.dispose()

@@ -416,7 +416,7 @@ async def test_worker_backs_off_when_another_worker_holds_the_lock(session, work
     async def lock_held_elsewhere(*_args, **_kwargs):
         return False
 
-    monkeypatch.setattr(worker_module, "_try_lock", lock_held_elsewhere)
+    monkeypatch.setattr(worker_module, "try_run_lock", lock_held_elsewhere)
     real_search_batch = worker_module.search_batch
     calls = 0
 
