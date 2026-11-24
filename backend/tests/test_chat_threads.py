@@ -86,7 +86,7 @@ async def test_save_answer_records_the_answer_it_follows(session):
     prepared = await chat.prepare(session, paper.id, "Then?")
 
     output_id = await chat_answers.save_answer(
-        session, paper.id, "Then?", prepared, "Yes [C1].", "m", "Ollama", parent_id=first.id
+        session, paper.id, "Then?", prepared, chat_answers.Reply("Yes [C1].", "m", "Ollama"), parent_id=first.id
     )
 
     assert (await session.get(LLMOutput, output_id)).parent_id == first.id
@@ -111,7 +111,7 @@ async def test_a_second_follow_up_carries_the_passages_the_first_follow_up_found
         thread = None if parent_id is None else await chat.load_thread(session, paper.id, parent_id)
         prepared = await chat.prepare(session, paper.id, question, embedder, thread=thread)
         parent_id = await chat_answers.save_answer(
-            session, paper.id, question, prepared, "An answer.", "m", "c", parent_id
+            session, paper.id, question, prepared, chat_answers.Reply("An answer.", "m", "c"), parent_id
         )
 
     ids = {source.id for source in prepared.sources}

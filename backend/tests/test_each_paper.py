@@ -314,7 +314,7 @@ async def test_the_saved_answer_keeps_its_readings_and_lists_them_again(shared, 
     scope = chat.Scope(workspace_id=the_plan.workspace_id)
 
     output_id = await chat_answers.save_answer(
-        shared, scope, QUESTION, prepared, "Both count pills [C1][C2].", "m", "c"
+        shared, scope, QUESTION, prepared, chat_answers.Reply("Both count pills [C1][C2].", "m", "c")
     )
 
     [answer] = await chat_answers.list_answers(shared, scope)

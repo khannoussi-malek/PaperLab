@@ -15,7 +15,9 @@ pytestmark = pytest.mark.anyio
 
 async def answered(session, paper_id, content="Because [C2].") -> uuid.UUID:
     prepared = await chat.prepare(session, paper_id, "why?")
-    return await chat_answers.save_answer(session, paper_id, "why?", prepared, content, "qwen3:8b", "Ollama")
+    return await chat_answers.save_answer(
+        session, paper_id, "why?", prepared, chat_answers.Reply(content, "qwen3:8b", "Ollama")
+    )
 
 
 async def test_an_answers_provenance_names_the_model_and_its_cited_passages(client, session):

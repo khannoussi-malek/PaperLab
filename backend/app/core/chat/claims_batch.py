@@ -51,13 +51,67 @@ async def _match(
     return await citations.match(session, citation, workspace_id, only_doi=doi, strict_coauthors=strict)
 
 
+@dataclass(frozen=True)
+class _Located:
+    paper_id: uuid.UUID  # the one library paper the citation names
+    extra: dict  # a year_mismatch warning, when the years differ
+
+
+async def _not_in_workspace(session: AsyncSession, cited, entry_doi: str | None, several: bool) -> ClaimItem | None:
+    """When the workspace holds no match: the item for a paper the library holds elsewhere, else None."""
+    claim, citation = cited.claim, cited.citation
+    elsewhere = await _match(session, citation, entry_doi, None, several)
+    if elsewhere.paper_ids:
+        return ClaimItem(claim, citation, error="paper_not_in_workspace", doi=entry_doi, candidates=elsewhere.titles)
+    if elsewhere.unnamed:  # held, but its author list may be truncated: not a "not in library" claim
+        return ClaimItem(claim, citation, error="ambiguous_citation", candidates=elsewhere.unnamed)
+    return None
+
+
+async def _locate(session: AsyncSession, cited, entries: dict, workspace_id: uuid.UUID | None) -> ClaimItem | _Located:
+    """The paper a cited claim names, or the item saying why it can't be checked."""
+    claim, citation = cited.claim, cited.citation
+    if cited.error:
+        return ClaimItem(claim, citation, error=cited.error)
+    narrowed, entry, several = _entry_for(entries, citation) if citation.kind == "author_year" else ([], None, False)
+    if len(narrowed) > 1:
+        # entries still share this key: the citation can't say which paper it means
+        candidates = await citations.match(session, citation, workspace_id)
+        return ClaimItem(claim, citation, error="ambiguous_citation", candidates=candidates.titles)
+    entry_doi = entry.doi if entry else None
+    found = await _match(session, citation, entry_doi, workspace_id, several)
+    if found.unnamed:  # the library's author list may be truncated, so the co-author isn't claimed absent
+        return ClaimItem(claim, citation, error="ambiguous_citation", candidates=found.unnamed)
+    extra = {"warning": "year_mismatch", "library_year": found.library_year} if found.library_year else {}
+    if not found.paper_ids and workspace_id is not None:
+        if (item := await _not_in_workspace(session, cited, entry_doi, several)) is not None:
+            return item
+    if not found.paper_ids:
+        if entry:
+            return ClaimItem(claim, citation, error="paper_not_in_library", doi=entry_doi)
+        return ClaimItem(claim, citation, error="citation_not_found")
+    if len(found.paper_ids) > 1:
+        return ClaimItem(claim, citation, error="ambiguous_citation", candidates=found.titles)
+    if len(claim.split()) < 3:
+        return ClaimItem(claim, citation, error="empty_claim", **extra)
+    return _Located(found.paper_ids[0], extra)
+
+
+async def _checked_item(session: AsyncSession, cited, located: _Located, llm, save: bool) -> ClaimItem:
+    """The check's verdict; a check that fails is this item's error, and the batch goes on."""
+    claim, citation = cited.claim, cited.citation
+    target = claims.ClaimTarget(paper_id=located.paper_id)
+    try:
+        check = await claims.verify_claim(session, claim, target, llm=llm, save=save)
+    except DomainError as exc:
+        return ClaimItem(claim, citation, error=str(exc) or "check_failed", **located.extra)
+    except (LLMError, LLMUnavailable):
+        return ClaimItem(claim, citation, error="check_failed", **located.extra)
+    return ClaimItem(claim, citation, check=check, **located.extra)
+
+
 async def verify_claims(
-    session: AsyncSession,
-    text: str,
-    *,
-    workspace_id: uuid.UUID | None = None,
-    llm=None,
-    save: bool = False,
+    session: AsyncSession, text: str, *, workspace_id: uuid.UUID | None = None, llm=None, save: bool = False
 ) -> list[ClaimItem]:
     """Checks every cited claim in `text`, in order: one item per citation, its claim the sentence, list item or
     table row that carries it (markdown is read as markdown). Send the whole note: a reference list at the end is never
@@ -79,52 +133,10 @@ async def verify_claims(
         raise InvalidInput("too_many_claims", detail=f"{len(pending)} cited claims; the limit is {MAX_CLAIMS}.")
     items = []
     for cited in pending:
-        claim, citation = cited.claim, cited.citation
-        if cited.error:
-            items.append(ClaimItem(claim, citation, error=cited.error))
+        located = await _locate(session, cited, entries, workspace_id)
+        if isinstance(located, ClaimItem):
+            items.append(located)
             continue
-        narrowed, entry, several = (
-            _entry_for(entries, citation) if citation.kind == "author_year" else ([], None, False)
-        )
-        if len(narrowed) > 1:
-            # entries still share this key: the citation can't say which paper it means
-            candidates = await citations.match(session, citation, workspace_id)
-            items.append(ClaimItem(claim, citation, error="ambiguous_citation", candidates=candidates.titles))
-            continue
-        found = await _match(session, citation, entry.doi if entry else None, workspace_id, several)
-        if found.unnamed:  # the library's author list may be truncated, so the co-author isn't claimed absent
-            items.append(ClaimItem(claim, citation, error="ambiguous_citation", candidates=found.unnamed))
-            continue
-        extra = {"warning": "year_mismatch", "library_year": found.library_year} if found.library_year else {}
-        entry_doi = entry.doi if entry else None
-        if not found.paper_ids and workspace_id is not None:
-            elsewhere = await _match(session, citation, entry_doi, None, several)
-            if elsewhere.paper_ids:
-                items.append(
-                    ClaimItem(
-                        claim, citation, error="paper_not_in_workspace", doi=entry_doi, candidates=elsewhere.titles
-                    )
-                )
-                continue
-            if elsewhere.unnamed:  # held, but its author list may be truncated: not a "not in library" claim
-                items.append(ClaimItem(claim, citation, error="ambiguous_citation", candidates=elsewhere.unnamed))
-                continue
-        if not found.paper_ids and entry:
-            items.append(ClaimItem(claim, citation, error="paper_not_in_library", doi=entry_doi))
-        elif not found.paper_ids:
-            items.append(ClaimItem(claim, citation, error="citation_not_found"))
-        elif len(found.paper_ids) > 1:
-            items.append(ClaimItem(claim, citation, error="ambiguous_citation", candidates=found.titles))
-        elif len(claim.split()) < 3:
-            items.append(ClaimItem(claim, citation, error="empty_claim", **extra))
-        else:
-            llm = await claims._llm(session, llm)  # no default model fails the whole batch, once, before any check
-            try:
-                check = await claims.verify_claim(session, claim, paper_id=found.paper_ids[0], llm=llm, save=save)
-            except DomainError as exc:
-                items.append(ClaimItem(claim, citation, error=str(exc) or "check_failed", **extra))
-            except (LLMError, LLMUnavailable):
-                items.append(ClaimItem(claim, citation, error="check_failed", **extra))
-            else:
-                items.append(ClaimItem(claim, citation, check=check, **extra))
+        llm = await claims._llm(session, llm)  # no default model fails the whole batch, once, before any check
+        items.append(await _checked_item(session, cited, located, llm, save))
     return items

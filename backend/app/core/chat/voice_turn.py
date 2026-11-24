@@ -266,7 +266,12 @@ async def _save(session: AsyncSession, result: TurnResult, llm: LLM, content: st
     prepared = result.prepared
     assert prepared is not None  # callers check: nothing to save before run_turn prepared the question
     return await chat_answers.save_answer(
-        session, result.scope, result.question, prepared, content, llm.model, llm.connection_name, result.parent_id
+        session,
+        result.scope,
+        result.question,
+        prepared,
+        chat_answers.Reply(content, llm.model, llm.connection_name),
+        result.parent_id,
     )
 
 

@@ -288,11 +288,13 @@ async def test_workspace_answers_are_saved_and_listed_per_workspace(session, emb
     content = "Both [C2][C1], as [N2] and [N1] say. Not [N7]."
 
     output_id = await chat_answers.save_answer(
-        session, chat.Scope(workspace_id=workspace.id), "why?", prepared, content, "m", "Conn"
+        session, chat.Scope(workspace_id=workspace.id), "why?", prepared, chat_answers.Reply(content, "m", "Conn")
     )
-    await chat_answers.save_answer(session, chat.Scope(workspace_id=other.id), "elsewhere", prepared, "x", "m", "Conn")
+    await chat_answers.save_answer(
+        session, chat.Scope(workspace_id=other.id), "elsewhere", prepared, chat_answers.Reply("x", "m", "Conn")
+    )
     single = chat.Prepared(sources=[], system="", prompt="", whole_paper=True)
-    await chat_answers.save_answer(session, dpr.id, "single paper", single, "y", "m", "Conn")
+    await chat_answers.save_answer(session, dpr.id, "single paper", single, chat_answers.Reply("y", "m", "Conn"))
     await session.execute(delete(Note).where(Note.id == deleted.id))
 
     row = await session.get(LLMOutput, output_id)
@@ -319,7 +321,7 @@ async def test_listed_answers_name_a_whole_paper_note_by_its_paper_and_drop_one_
     moved = await paper_only_note(session, dpr, body="Moved away.", created=naive - timedelta(days=1))
     scope = chat.Scope(workspace_id=workspace.id)
     prepared = await chat.prepare(session, scope, "why?", embedder)
-    await chat_answers.save_answer(session, scope, "why?", prepared, "Both [N1][N2].", "m", "Conn")
+    await chat_answers.save_answer(session, scope, "why?", prepared, chat_answers.Reply("Both [N1][N2].", "m", "Conn"))
     await session.execute(delete(note_papers).where(note_papers.c.note_id == moved.id))
 
     [answer] = await chat_answers.list_answers(session, scope)

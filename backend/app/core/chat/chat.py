@@ -271,6 +271,71 @@ def _skill_fields(skill: skills.SkillView | None) -> dict:
     return {} if skill is None else {"skill_label": skill.label, "skill_version": skill.version}
 
 
+@dataclass(frozen=True)
+class _Sized:
+    paper: Paper
+    chars: int  # the paper's text length
+    embedded: int  # chunks with a vector
+
+
+@dataclass(frozen=True)
+class _Picked:
+    sources: list
+    whole_paper: bool  # the whole lens is not the whole paper
+    lens: str
+
+
+async def _ready_paper(session: AsyncSession, paper_id: uuid.UUID) -> _Sized:
+    paper = await get_paper(session, paper_id)
+    if paper.status not in (PaperStatus.READY, PaperStatus.EMBEDDING):  # embedding: retrieve answers from its words
+        raise Conflict("paper_not_ready")
+    chars, embedded = await _size(session, paper_id)
+    if chars == 0 and not paper.has_pdf:  # saved without a PDF or an abstract: nothing to answer from, no LLM call
+        raise Conflict("no_text")
+    return _Sized(paper, chars, embedded)
+
+
+async def _found_sources(
+    session: AsyncSession, paper_id: uuid.UUID, question: str, embedder, thread: Thread | None, lens_chunks: list
+) -> list:
+    """The nearest chunks (of the lens, when it has sections) that fit; a follow-up keeps the earlier passages too."""
+    chunk_ids = [c.id for c in lens_chunks] or None  # no lens sections: the whole paper, as before
+    found = await retrieve(
+        session, question, paper_ids=[paper_id], k=RETRIEVE_POOL, embedder=embedder, chunk_ids=chunk_ids
+    )
+    if thread is not None:  # the fresh ones are kept whole, so more of them would push out the earlier passages
+        return follow_up_sources(await _earlier_sources(session, thread, paper_id), found[:RETRIEVE_K])
+    sources = cut_to_budget(found)
+    if not sources:  # no vectors yet and no matching word: the model would answer from nothing
+        raise Conflict("nothing_found_yet")
+    return sources
+
+
+async def _pick_sources(
+    session: AsyncSession, sized: _Sized, question: str, embedder, thread: Thread | None,
+    skill: skills.SkillView | None,
+) -> _Picked:
+    """A skill's lens (M16) replaces the paper: its chunks whole when they fit, else the nearest of them that fit.
+    Without one, a small paper goes whole and a larger one sends its nearest chunks."""
+    paper_id = sized.paper.id
+    lens = _lens_of(skill)
+    lens_chunks = await lens_sources(session, paper_id, lens) if lens != FULL_LENS else []
+    lens_fits = _fits(lens_chunks)
+    whole_paper = lens_fits or (not lens_chunks and sized.chars <= SMALL_PAPER_CHARS)
+    if not whole_paper:
+        # D156's gate before the index: not set up, then rebuilding, then vectors from another model.
+        embedder = await searchable(session, [paper_id], embedder)
+        if sized.embedded == 0 and sized.paper.status == PaperStatus.READY:  # before M4 or the model: Re-index
+            raise Conflict("paper_not_indexed")
+    if lens_fits:
+        sources = lens_chunks
+    elif whole_paper:
+        sources = await chunk_sources(session, Chunk.paper_id == paper_id)
+    else:
+        sources = await _found_sources(session, paper_id, question, embedder, thread, lens_chunks)
+    return _Picked(sources, whole_paper and not lens_chunks, lens if lens_chunks else FULL_LENS)
+
+
 async def prepare(
     session: AsyncSession,
     paper_id: uuid.UUID | Scope,
@@ -293,53 +358,23 @@ async def prepare(
             # ponytail: follow-ups are measured on paper chat first; workspace chat gets them if they earn their keep.
             raise ValueError("follow-ups are paper chat only for now")
         return await _prepare_workspace(session, scope.workspace_id, question, embedder, skill)
-    paper_id = scope.paper_id
-    paper = await get_paper(session, paper_id)
-    if paper.status not in (PaperStatus.READY, PaperStatus.EMBEDDING):  # embedding: retrieve answers from its words
-        raise Conflict("paper_not_ready")
-    chars, embedded = await _size(session, paper_id)
-    if chars == 0 and not paper.has_pdf:  # saved without a PDF or an abstract: nothing to answer from, no LLM call
-        raise Conflict("no_text")
-    # A skill's lens (M16) replaces the paper: its chunks whole when they fit, else the nearest of them that fit.
-    lens = _lens_of(skill)
-    lens_chunks = await lens_sources(session, paper_id, lens) if lens != FULL_LENS else []
-    lens_fits = _fits(lens_chunks)
-    whole_paper = lens_fits or (not lens_chunks and chars <= SMALL_PAPER_CHARS)
-    if not whole_paper:
-        # D156's gate before the index: not set up, then rebuilding, then vectors from another model.
-        embedder = await searchable(session, [paper_id], embedder)
-        if embedded == 0 and paper.status == PaperStatus.READY:  # before M4 or the model: the UI offers Re-index
-            raise Conflict("paper_not_indexed")
-    if lens_fits:
-        sources = lens_chunks
-    elif whole_paper:
-        sources = await chunk_sources(session, Chunk.paper_id == paper_id)
-    else:
-        chunk_ids = [c.id for c in lens_chunks] or None  # no lens sections: the whole paper, as before
-        found = await retrieve(
-            session, question, paper_ids=[paper_id], k=RETRIEVE_POOL, embedder=embedder, chunk_ids=chunk_ids
-        )
-        if thread is None:
-            sources = cut_to_budget(found)
-            if not sources:  # no vectors yet and no matching word: the model would answer from nothing
-                raise Conflict("nothing_found_yet")
-        else:  # the fresh ones are kept whole, so more of them would push out the conversation's earlier passages
-            sources = follow_up_sources(await _earlier_sources(session, thread, paper_id), found[:RETRIEVE_K])
-    every_note = await list_notes_for_paper(session, paper_id)
-    block, used = format_notes_block(every_note, {paper_id: paper})
-    context = format_context(paper, sources)
-    earlier = _earlier_block(thread)
+    sized = await _ready_paper(session, scope.paper_id)
+    paper = sized.paper
+    picked = await _pick_sources(session, sized, question, embedder, thread, skill)
+    every_note = await list_notes_for_paper(session, paper.id)
+    block, used = format_notes_block(every_note, {paper.id: paper})
     prompt = PROMPT_TEMPLATE.format(
-        context=context, notes=block or NO_NOTES_PLACEHOLDER, earlier=earlier, question=question
+        context=format_context(paper, picked.sources), notes=block or NO_NOTES_PLACEHOLDER,
+        earlier=_earlier_block(thread), question=question,
     )
     return Prepared(
-        sources=sources,
+        sources=picked.sources,
         system=skills.compose(SYSTEM_PROMPT, skill),
         prompt=prompt,
-        whole_paper=whole_paper and not lens_chunks,  # the whole lens is not the whole paper
+        whole_paper=picked.whole_paper,
         notes=used,
         notes_total=len(every_note),
-        lens=lens if lens_chunks else FULL_LENS,
+        lens=picked.lens,
         **_skill_fields(skill),
     )
 

@@ -120,7 +120,9 @@ async def _check(session, case: Case, paper_id, llm) -> dict:
     row = {"paper": case.paper, "claim": case.claim, "kind": case.kind, "accepted": case.accepted,
            "prompt_version": claims.CLAIM_PROMPT_VERSION}
     try:
-        check = await claims.verify_claim(session, case.claim, paper_id=paper_id, llm=llm, save=False)
+        check = await claims.verify_claim(
+            session, case.claim, claims.ClaimTarget(paper_id=paper_id), llm=llm, save=False
+        )
     except (LLMError, LLMUnavailable) as exc:
         return {**row, "verdict": "check_failed", "correct": False, "reason": str(exc), "quote": None,
                 "confidence": None, "evidence_level": None, "output_id": None, "seconds": time.perf_counter() - start}

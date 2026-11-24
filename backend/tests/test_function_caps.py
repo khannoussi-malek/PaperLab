@@ -20,11 +20,6 @@ BLOCKS = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast
 FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 LONG: dict[str, int] = {
-    "app/api/chat_stream.py::stream_output": 53,
-    "app/core/chat/chat.py::prepare": 71,
-    "app/core/chat/claims.py::verify_claim": 63,
-    "app/core/chat/claims_batch.py::verify_claims": 77,
-    "app/core/chat/retrieval.py::retrieve": 79,
     "app/core/citations/citations.py::find": 51,
     "app/core/citations/reference_listing.py::library_listing": 52,
     "app/core/citations/references.py::_upsert": 55,
@@ -47,9 +42,7 @@ LONG: dict[str, int] = {
     "app/workers/workspace_search.py::run_workspace_search": 106,
 }
 WIDE: dict[str, int] = {
-    "app/core/chat/chat_answers.py::save_answer": 8,
-    "app/core/chat/claims.py::_write_output": 7,
-    "app/core/chat/claims.py::verify_claim": 7,
+    # The search core: ten callers and nine test fakes pass these keyword options by name.
     "app/core/chat/retrieval.py::retrieve": 9,
     "app/core/citations/citations_import_apply.py::_isolated": 7,
     "app/core/citations/citations_import_apply.py::_one": 7,
@@ -63,7 +56,6 @@ WIDE: dict[str, int] = {
     "app/core/notes/capture.py::add_number": 8,
     "app/core/notes/checks.py::_retrieved": 7,
     "app/core/notes/datasets.py::create_dataset": 7,
-    "app/core/papers/pipeline.py::verify_claim": 7,
     "app/core/workspaces/briefs.py::save_brief": 7,
     "app/core/workspaces/package_import.py::_papers_into": 7,
     "app/core/workspaces/package_screening_import.py::_place_hit": 7,

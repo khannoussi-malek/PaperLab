@@ -867,7 +867,8 @@ async def verify_claim(
     save=true keeps the check as an AI note on
     the paper. A remote default model is refused unless the owner agreed and you pass allow_remote=true."""
     async with sessions() as session:
-        return await pipeline.verify_claim(session, claim, paper_id, doi, quoted_text, save, allow_remote)
+        target = pipeline.claims.ClaimTarget(paper_id, doi, quoted_text)
+        return await pipeline.verify_claim(session, claim, target, save, allow_remote)
 
 
 @mcp.tool()
