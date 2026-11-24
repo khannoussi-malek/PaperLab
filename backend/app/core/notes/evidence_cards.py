@@ -239,6 +239,52 @@ def _view(card: EvidenceCard) -> CardView:
     )
 
 
+async def _refuse_edited(
+    session: AsyncSession, paper_ids: list[uuid.UUID], regenerate: bool, confirm: bool
+) -> None:
+    """Replacing a card its user edited needs `confirm`; checked for every paper before anything changes."""
+    if regenerate and not confirm and await session.scalar(
+        select(func.count()).select_from(EvidenceCard).where(
+            EvidenceCard.paper_id.in_(paper_ids), EvidenceCard.status == "ready",
+            EvidenceCard.provenance == "llm_edited",
+        )
+    ):
+        raise Conflict("card_edited_needs_confirm")
+
+
+async def _load_cards(session: AsyncSession, paper_ids: list[uuid.UUID]) -> dict[uuid.UUID, EvidenceCard]:
+    """Each paper's card, read after a `failed` one is made for any paper that has none."""
+    # Insert missing rows first (ON CONFLICT: a concurrent request may have just made one), then read them all.
+    await session.execute(
+        pg_insert(EvidenceCard).values([{"paper_id": i, "status": "failed", "fields": {}} for i in paper_ids])
+        .on_conflict_do_nothing(index_elements=["paper_id"])
+    )
+    cards = {
+        c.paper_id: c
+        for c in await session.scalars(
+            select(EvidenceCard).where(EvidenceCard.paper_id.in_(paper_ids)).execution_options(populate_existing=True)
+        )
+    }
+    return cards
+
+
+def _mark_generating(
+    cards: dict[uuid.UUID, EvidenceCard], paper_ids: list[uuid.UUID], regenerate: bool
+) -> list[uuid.UUID]:
+    """Sets each card that needs a job to `generating` and returns those papers; a card a live job holds is kept."""
+    stale_before = datetime.now(UTC) - timedelta(seconds=JOB_TIMEOUT)
+    queued = []
+    for paper_id in paper_ids:
+        card = cards[paper_id]
+        if card.status == "ready" and not regenerate:
+            continue
+        if card.status == "generating" and card.updated_at > stale_before:
+            continue  # a job has it (a stale one is a lost job: queue it again)
+        card.status, card.error, card.updated_at = "generating", None, datetime.now(UTC)
+        queued.append(paper_id)
+    return queued
+
+
 async def request_cards(
     session: AsyncSession, *, paper_ids: list[uuid.UUID], workspace_id: uuid.UUID | None = None,
     regenerate: bool = False, confirm: bool = False,
@@ -265,34 +311,9 @@ async def request_cards(
     paper_ids = [i for i in paper_ids if i not in skipped]
     if not paper_ids:
         return list(skipped.values())
-    if regenerate and not confirm and await session.scalar(
-        select(func.count()).select_from(EvidenceCard).where(
-            EvidenceCard.paper_id.in_(paper_ids), EvidenceCard.status == "ready",
-            EvidenceCard.provenance == "llm_edited",
-        )
-    ):
-        raise Conflict("card_edited_needs_confirm")
-    # Insert missing rows first (ON CONFLICT: a concurrent request may have just made one), then read them all.
-    await session.execute(
-        pg_insert(EvidenceCard).values([{"paper_id": i, "status": "failed", "fields": {}} for i in paper_ids])
-        .on_conflict_do_nothing(index_elements=["paper_id"])
-    )
-    cards = {
-        c.paper_id: c
-        for c in await session.scalars(
-            select(EvidenceCard).where(EvidenceCard.paper_id.in_(paper_ids)).execution_options(populate_existing=True)
-        )
-    }
-    stale_before = datetime.now(UTC) - timedelta(seconds=JOB_TIMEOUT)
-    queued = []
-    for paper_id in paper_ids:
-        card = cards[paper_id]
-        if card.status == "ready" and not regenerate:
-            continue
-        if card.status == "generating" and card.updated_at > stale_before:
-            continue  # a job has it (a stale one is a lost job: queue it again)
-        card.status, card.error, card.updated_at = "generating", None, datetime.now(UTC)
-        queued.append(paper_id)
+    await _refuse_edited(session, paper_ids, regenerate, confirm)
+    cards = await _load_cards(session, paper_ids)
+    queued = _mark_generating(cards, paper_ids, regenerate)
     await session.commit()
     if queued:
         try:

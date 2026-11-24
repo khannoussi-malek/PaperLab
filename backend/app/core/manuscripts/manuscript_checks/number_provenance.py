@@ -256,6 +256,21 @@ def _excused(scan: str, blanked: str, m: re.Match) -> bool:
     return CITE.search(blanked, left, right.start() if right else min(len(blanked), end + SENTENCE_REACH)) is not None
 
 
+def _capped(found: list[Finding], path: str) -> list[Finding]:
+    """The first MAX_PER_FILE findings, then one info line saying the rest match no data (counted, not listed)."""
+    if len(found) <= MAX_PER_FILE:
+        return found
+    more = Finding(
+        NAME,
+        "info",
+        path,
+        found[MAX_PER_FILE].line,
+        f"More numbers in {path} match no data; only the first {MAX_PER_FILE} are listed",
+        None,
+    )
+    return found[:MAX_PER_FILE] + [more]
+
+
 def _file(path: str, blanked: str, truth: Truth) -> list[Finding]:
     scan = prose(blanked)
     found = []
@@ -295,18 +310,7 @@ def _file(path: str, blanked: str, truth: Truth) -> list[Finding]:
                     "comes from; PaperLab never edits your text.",
                 )
             )
-    if len(found) > MAX_PER_FILE:
-        found = found[:MAX_PER_FILE] + [
-            Finding(
-                NAME,
-                "info",
-                path,
-                found[MAX_PER_FILE].line,
-                f"More numbers in {path} match no data; only the first {MAX_PER_FILE} are listed",
-                None,
-            )
-        ]
-    return found
+    return _capped(found, path)
 
 
 def _unbacked(ctx: CheckContext) -> list[Finding]:

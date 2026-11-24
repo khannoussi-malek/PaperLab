@@ -155,6 +155,22 @@ async def fetch(session: AsyncSession, providers: source_clients.Providers, pape
     return notices
 
 
+async def _fold_duplicates(
+    session: AsyncSession, candidate: Candidate, keeper: ExternalRef, duplicates: list[ExternalRef]
+) -> tuple[dict[str, str], str | None]:
+    """Repoints each duplicate to the keeper and deletes it; returns the candidate's external ids and DOI, filled in
+    from the duplicates where the candidate has none."""
+    external_ids = dict(candidate.external_ids)
+    doi = candidate.doi
+    for duplicate in duplicates:
+        external_ids = {**duplicate.external_ids, **external_ids}
+        doi = doi or duplicate.doi
+        await _repoint(session, duplicate.id, keeper.id)
+        await session.delete(duplicate)
+    await session.flush()
+    return external_ids, doi
+
+
 async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
     """The stored reference for `candidate`, created or refreshed. Rows that turn out to be the same paper (one known
     by its Semantic Scholar id, another by its DOI) fold into the oldest, and an imported row always wins."""
@@ -185,14 +201,7 @@ async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
     # Candidate's own value wins; a duplicate fills what's still missing; the keeper's pre-existing value fills
     # what's still missing after that — the same three-tier precedence the old per-field `ids[name] = ids[name]
     # or getattr(duplicate, name)` loop gave, now as dict merges since "key absent" replaces "value is None".
-    external_ids = dict(candidate.external_ids)
-    doi = candidate.doi
-    for duplicate in duplicates:
-        external_ids = {**duplicate.external_ids, **external_ids}
-        doi = doi or duplicate.doi
-        await _repoint(session, duplicate.id, keeper.id)
-        await session.delete(duplicate)
-    await session.flush()
+    external_ids, doi = await _fold_duplicates(session, candidate, keeper, duplicates)
     external_ids = {**keeper.external_ids, **external_ids}
     doi = doi or keeper.doi
     if candidate.title != keeper.title:  # a new title needs a new vector

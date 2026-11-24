@@ -91,6 +91,25 @@ class ResolvedData:
     missing: list[Missing]
 
 
+async def _cells_by_row(
+    session: AsyncSession, columns: list[DatasetColumn], found: dict
+) -> dict[uuid.UUID, dict[uuid.UUID, ResolvedCell]]:
+    """The stored cells of the chosen columns, grouped by row id, then column id."""
+    # Rows are chosen by dataset in SQL, not listed: asyncpg allows 32,767 bind parameters, and datasets can be large.
+    cells = await session.execute(
+        select(cell_table).where(
+            cell_table.c.column_id.in_([c.id for c in columns]),
+            cell_table.c.row_id.in_(select(DatasetRow.id).where(DatasetRow.dataset_id.in_(found))),
+        )
+    )
+    by_row: dict[uuid.UUID, dict[uuid.UUID, ResolvedCell]] = {}
+    for c in cells:
+        by_row.setdefault(c.row_id, {})[c.column_id] = ResolvedCell(
+            c.raw, c.value, c.error, c.origin, c.original_raw, c.page, c.bbox
+        )
+    return by_row
+
+
 async def resolve(session: AsyncSession, spec: ChartSpec) -> ResolvedData:
     refs = references(spec)
     found = {
@@ -114,18 +133,7 @@ async def resolve(session: AsyncSession, spec: ChartSpec) -> ResolvedData:
             select(DatasetRow).where(DatasetRow.dataset_id.in_(found)).order_by(DatasetRow.position)
         )
     )
-    # Rows are chosen by dataset in SQL, not listed: asyncpg allows 32,767 bind parameters, and datasets can be large.
-    cells = await session.execute(
-        select(cell_table).where(
-            cell_table.c.column_id.in_([c.id for c in columns]),
-            cell_table.c.row_id.in_(select(DatasetRow.id).where(DatasetRow.dataset_id.in_(found))),
-        )
-    )
-    by_row: dict[uuid.UUID, dict[uuid.UUID, ResolvedCell]] = {}
-    for c in cells:
-        by_row.setdefault(c.row_id, {})[c.column_id] = ResolvedCell(
-            c.raw, c.value, c.error, c.origin, c.original_raw, c.page, c.bbox
-        )
+    by_row = await _cells_by_row(session, columns, found)
 
     resolved = []
     for dataset_id, (named_columns, named_rows) in refs.items():

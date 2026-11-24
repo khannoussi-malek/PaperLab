@@ -124,6 +124,24 @@ def _dump(value) -> bytes:
     return json.dumps(value, ensure_ascii=False, indent=2).encode()
 
 
+def _manifest(
+    workspace: Workspace, members: list, note_views: list, pdf_files: list, answer_rows: list, answers_skipped: int
+) -> dict:
+    """The manifest.json record: format, versions, creation time, workspace fields and counts."""
+    manifest = {
+        "format": FORMAT,
+        "format_version": FORMAT_VERSION,
+        "paperlab_version": _paperlab_version(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "workspace": {name: getattr(workspace, name) for name in WORKSPACE_FIELDS},
+        "counts": {
+            "papers": len(members), "notes": len(note_views), "pdfs": len(pdf_files),
+            "answers": len(answer_rows), "answers_skipped": answers_skipped,
+        },
+    }  # fmt: skip
+    return manifest
+
+
 async def _parts(
     session: AsyncSession, workspace_id: uuid.UUID, pdfs: bool, answers: bool
 ) -> tuple[dict[str, bytes], list]:
@@ -153,17 +171,7 @@ async def _parts(
     answer_rows, answers_skipped = (
         await workspace_package_answers.export_rows(session, workspace_id, keys) if answers else ([], 0)
     )
-    manifest = {
-        "format": FORMAT,
-        "format_version": FORMAT_VERSION,
-        "paperlab_version": _paperlab_version(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "workspace": {name: getattr(workspace, name) for name in WORKSPACE_FIELDS},
-        "counts": {
-            "papers": len(members), "notes": len(note_views), "pdfs": len(pdf_files),
-            "answers": len(answer_rows), "answers_skipped": answers_skipped,
-        },
-    }  # fmt: skip
+    manifest = _manifest(workspace, members, note_views, pdf_files, answer_rows, answers_skipped)
     parts = {
         "manifest.json": _dump(manifest),
         "papers.json": _dump(papers_json),

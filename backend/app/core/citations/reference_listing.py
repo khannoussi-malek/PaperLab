@@ -151,23 +151,8 @@ _PAGE = text(
 )
 
 
-async def library_listing(session: AsyncSession, workspace_id: uuid.UUID | None = None) -> ReferencePage:
-    """The References page (D121, D166): To read, works several scope papers cite, and recent works that cite
-    several of them (D177), across the library or one workspace. Raises NotFound for an unknown workspace."""
-    if workspace_id is not None:
-        await workspaces.get(session, workspace_id)
-    raw = list(await session.execute(_PAGE, {"workspace": workspace_id, "cocited_min": COCITED_MIN}))
-    rows = [
-        ReferenceRow(**{key: value for key, value in row._mapping.items() if key not in ("note_similarity", "citing")})
-        for row in raw
-    ]
-    citing_by_id = {row.id: row.citing for row in raw}
-    to_read = sorted((r for r in rows if r.queued_at is not None), key=lambda r: (-r.queued_at.timestamp(), r.id))
-    cited_by_several = [r for r in rows if r.cocitation >= COCITED_MIN]
-    citing_several = sorted(
-        (dataclasses.replace(r, cocitation=citing_by_id[r.id]) for r in rows if citing_by_id[r.id] >= COCITED_MIN),
-        key=lambda r: (-(r.year or -1), -r.cocitation, r.id),
-    )
+async def _coverage(session: AsyncSession, workspace_id: uuid.UUID | None) -> Coverage:
+    """The papers in scope whose references are fetched, and the rest with the state they are in."""
     coverage_rows = list(
         await session.execute(
             text(
@@ -190,7 +175,7 @@ async def library_listing(session: AsyncSession, workspace_id: uuid.UUID | None 
         (row for row in coverage_rows if not row.fetched),
         key=lambda row: (row.title, row.id),
     )
-    coverage = Coverage(
+    return Coverage(
         fetched=sum(1 for row in coverage_rows if row.fetched),
         total=len(coverage_rows),
         unfetched=[
@@ -200,6 +185,26 @@ async def library_listing(session: AsyncSession, workspace_id: uuid.UUID | None 
             for row in unfetched
         ],
     )
+
+
+async def library_listing(session: AsyncSession, workspace_id: uuid.UUID | None = None) -> ReferencePage:
+    """The References page (D121, D166): To read, works several scope papers cite, and recent works that cite
+    several of them (D177), across the library or one workspace. Raises NotFound for an unknown workspace."""
+    if workspace_id is not None:
+        await workspaces.get(session, workspace_id)
+    raw = list(await session.execute(_PAGE, {"workspace": workspace_id, "cocited_min": COCITED_MIN}))
+    rows = [
+        ReferenceRow(**{key: value for key, value in row._mapping.items() if key not in ("note_similarity", "citing")})
+        for row in raw
+    ]
+    citing_by_id = {row.id: row.citing for row in raw}
+    to_read = sorted((r for r in rows if r.queued_at is not None), key=lambda r: (-r.queued_at.timestamp(), r.id))
+    cited_by_several = [r for r in rows if r.cocitation >= COCITED_MIN]
+    citing_several = sorted(
+        (dataclasses.replace(r, cocitation=citing_by_id[r.id]) for r in rows if citing_by_id[r.id] >= COCITED_MIN),
+        key=lambda r: (-(r.year or -1), -r.cocitation, r.id),
+    )
+    coverage = await _coverage(session, workspace_id)
     return ReferencePage(
         coverage=coverage, to_read=to_read, cited_by_several=cited_by_several, citing_several=citing_several
     )
