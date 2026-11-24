@@ -66,7 +66,7 @@ async def test_merge_moves_a_pinned_key_to_the_kept_paper(session):
     ms = await manuscript(session)
     session.add(ManuscriptCiteKey(manuscript_id=ms.id, key="sleep2021", paper_id=m.id, bibtex="@article{sleep2021}"))
     await session.commit()
-    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
     key = await session.scalar(
         select(ManuscriptCiteKey).where(ManuscriptCiteKey.key == "sleep2021").execution_options(populate_existing=True)
     )
@@ -167,7 +167,7 @@ async def test_merge_repoints_evidence_and_drops_the_duplicate(session):
         manuscript_id=ms.id, sentence_hash="a", sentence="S.", paper_id=k.id, rank=0, status="queued"
     ))  # fmt: skip
     await session.commit()
-    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
     rows = await session.execute(
         text("SELECT sentence_hash, paper_id, status FROM manuscript_evidence WHERE manuscript_id = :m ORDER BY 1"),
         {"m": ms.id},
@@ -285,7 +285,7 @@ async def test_merge_repoints_checks_and_drops_the_duplicate(session):
         check(ms, None, sentence_hash="a"),
     ])  # fmt: skip
     await session.commit()
-    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
     rows = await session.execute(
         text("SELECT sentence_hash, paper_id, status FROM manuscript_claim_checks WHERE manuscript_id = :m "
              "ORDER BY 1, 2 NULLS LAST"), {"m": ms.id})  # fmt: skip
@@ -297,7 +297,7 @@ async def test_merge_moves_a_cited_row_when_k_holds_only_an_uncited_one(session)
     ms = await manuscript(session)
     session.add_all([check(ms, m, status="done"), check(ms, None), check(ms, None, cite_key="gone", sentence_hash="u")])
     await session.commit()
-    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
     rows = await session.execute(
         text("SELECT paper_id, kind FROM manuscript_claim_checks WHERE manuscript_id = :m ORDER BY 2, 1 NULLS LAST"),
         {"m": ms.id},

@@ -38,7 +38,8 @@ async def fill_paper_biblio(ctx: dict, paper_id: str) -> None:
                     )
                 if cr or oa:
                     works: dict = {}  # one Crossref request between the two
-                    await enrichment.fill_biblio(session, pid, cr, oa, crossref_works=works)
+                    prefetched = enrichment.Prefetched(crossref_works=works)
+                    await enrichment.fill_biblio(session, pid, cr, oa, prefetched=prefetched)
                     await enrichment.fill_source_type(session, pid, None, cr, works)
         except Exception:
             logger.exception("filling the citation fields of %s failed; the paper stays usable", pid)

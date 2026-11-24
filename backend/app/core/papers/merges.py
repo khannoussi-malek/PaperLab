@@ -247,26 +247,29 @@ async def _papers(session: AsyncSession, ids: tuple[uuid.UUID, uuid.UUID], lock:
     return found
 
 
+@dataclass(frozen=True)
+class MergeProof:
+    """Why M is K. `identifier` is the (column, value) M learned that K holds, when a collision led here; the guards
+    check it too. `evidence` is what M's PDF itself says (pdf_evidence): when given, K must be the same work as it,
+    not as M's stored title. A real merge needs `evidence` (R15c)."""
+
+    identifier: tuple[str, str] | None = None
+    evidence: Candidate | None = None
+
+
 async def merge(
-    session: AsyncSession,
-    merged_id: uuid.UUID,
-    kept_id: uuid.UUID,
-    *,
-    identifier: tuple[str, str] | None = None,
-    evidence: Candidate | None = None,
-    how: Literal["manual", "imported"] = "manual",
-    dry_run: bool = False,
+    session: AsyncSession, merged_id: uuid.UUID, kept_id: uuid.UUID, *, proof: MergeProof = MergeProof(),
+    how: Literal["manual", "imported"] = "manual", dry_run: bool = False,
 ) -> MergeResult:
-    """Merges M (`merged_id`) into K (`kept_id`) and commits, or reports why not (R15) with a `reported` audit row.
-    `identifier` is the (column, value) M learned that K holds, when a collision led here; the guards check it too.
-    `evidence` is what M's PDF itself says (pdf_evidence): when given, K must be the same work as it, not as M's
-    stored title. `how` M's PDF arrived (pdf_arrived's word for K's awaiting hits): "manual", an upload, or
-    "imported", a found copy (see arrival).
+    """Merges M (`merged_id`) into K (`kept_id`) and commits, or reports why not (R15) with a `reported` audit row,
+    on `proof` that they are one work. `how` M's PDF arrived (pdf_arrived's word for K's awaiting hits): "manual", an
+    upload, or "imported", a found copy (see arrival).
 
     It commits (or, on a failure, rolls back) the caller's session, so the caller passes one with nothing pending:
     RuntimeError otherwise, before anything is read. A dry run runs the same guards and counts per step, and writes
     nothing, not even the audit row; it can't foresee a UNIQUE collision, after which a real merge rolls back. On any
     failure everything rolls back and the error propagates: both papers stay as they were. Raises NotFound."""
+    identifier, evidence = proof.identifier, proof.evidence
     if merged_id == kept_id:
         raise ValueError("a paper can't merge into itself")
     if evidence is None and not dry_run:  # R15c for every caller: never M's stored title (enrichment's copy)
@@ -340,7 +343,7 @@ async def after_ingest(
     # Ingest isn't told how the PDF came, so M's own hit says; else "manual", a plain upload being the owner's own.
     how = await arrival(session, paper_id, "manual")
     identifier = (first.column, first.value)
-    return await merge(session, paper_id, first.holder_id, identifier=identifier, evidence=evidence, how=how)
+    return await merge(session, paper_id, first.holder_id, proof=MergeProof(identifier, evidence), how=how)
 
 
 async def report_failure(

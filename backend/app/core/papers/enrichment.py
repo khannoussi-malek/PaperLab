@@ -163,66 +163,89 @@ async def fill_source_type(
     return asked
 
 
+@dataclass(frozen=True)
+class Prefetched:
+    """What an enrichment already holds: an OpenAlex work it fetched, and its per-enrichment Crossref cache (shared
+    with `fill_source_type`, filled as it goes)."""
+
+    openalex_work: dict[str, Any] | None = None
+    crossref_works: dict[str, dict | None] | None = None
+
+
+_CROSSREF_FIELDS = ("volume", "issue", "pages", "editors")
+_OPENALEX_FIELDS = ("volume", "issue", "pages", "pmid", "pmcid")
+_LOOKUP_ERRORS = (httpx.HTTPError, KeyError, TypeError, AttributeError)
+
+
+async def _crossref_side(
+    paper: Paper, doi: str, crossref_http: httpx.AsyncClient | None, cache: dict, align: bool
+) -> tuple[dict[str, Any], dict[str, Any], bool]:
+    """(the fields Crossref's record gives, its corrections to year/venue/pages, whether a request went out)."""
+    if (
+        not doi
+        or not crossref_http
+        or doi.startswith(ARXIV_DOI_PREFIX)
+        or not (align or any(getattr(paper, f) is None for f in _CROSSREF_FIELDS))
+    ):
+        return {}, {}, False
+    asked = doi not in cache
+    found: dict[str, Any] = {}
+    try:
+        work = await _crossref_work(crossref_http, doi, cache) or {}
+        found = crossref_biblio(work)
+        return found, align_with_crossref(paper, work) if align and work else {}, asked
+    except _LOOKUP_ERRORS as exc:  # the fields read before a failing alignment stay
+        logger.warning("Crossref biblio lookup failed for paper %s: %r", paper.id, exc)
+        return found, {}, asked
+
+
+async def _openalex_side(
+    paper: Paper, doi: str, openalex_http: httpx.AsyncClient | None, work: dict[str, Any] | None
+) -> tuple[dict[str, Any] | None, bool]:
+    """(the paper's OpenAlex work, the one given or fetched now when a field is missing; whether a request went out)."""
+    key = paper.openalex_id or (doi and f"doi:{doi}")
+    complete = all(getattr(paper, f) is not None for f in _OPENALEX_FIELDS)
+    if work is not None or not openalex_http or not key or complete:
+        return work, False
+    try:
+        return await openalex.get_work(openalex_http, key), True
+    except _LOOKUP_ERRORS as exc:
+        logger.warning("OpenAlex biblio lookup failed for paper %s: %r", paper.id, exc)
+        return None, True
+
+
+async def _write_fills(session: AsyncSession, paper: Paper, fields: dict[str, Any], from_crossref: set[str]) -> None:
+    for source in ("openalex", "crossref"):  # OpenAlex first, so a group both filled reads Crossref, the winner
+        if part := {k: v for k, v in fields.items() if (k in from_crossref) == (source == "crossref")}:
+            await _write(session, paper, part, source)
+
+
 async def fill_biblio(
-    session: AsyncSession,
-    paper_id: uuid.UUID,
-    crossref_http: httpx.AsyncClient | None,
-    openalex_http: httpx.AsyncClient | None = None,
-    *,
-    openalex_work: dict[str, Any] | None = None,
-    crossref_works: dict[str, dict | None] | None = None,
-    align: bool = True,
+    session: AsyncSession, paper_id: uuid.UUID, crossref_http: httpx.AsyncClient | None,
+    openalex_http: httpx.AsyncClient | None = None, *, prefetched: Prefetched = Prefetched(), align: bool = True,
 ) -> bool:
     """Fills volume, issue, pages, editors, pmid and pmcid that are still NULL, never past manual_fields and never over
     a value already held. Crossref wins over OpenAlex. With `align`, Crossref's year, venue and page range also correct
-    the stored ones (`align_with_crossref`, only on a DOI it trusts), each change logged. `openalex_work` is a work
-    already fetched; `crossref_works` is the per-enrichment cache shared with `fill_source_type`. Source errors are
-    logged, never raised. True when a request went out."""
+    the stored ones (`align_with_crossref`, only on a DOI it trusts), each change logged. Source errors are logged,
+    never raised. True when a request went out."""
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)
     doi = normalize_doi(paper.doi or "")
-    cache = {} if crossref_works is None else crossref_works
-    found: dict[str, Any] = {}
-    corrections: dict[str, Any] = {}
-    asked = False
-    crossref_fields = ("volume", "issue", "pages", "editors")
-    align = align and _alignable(paper)
-    if (
-        doi
-        and crossref_http
-        and not doi.startswith(ARXIV_DOI_PREFIX)
-        and (align or any(getattr(paper, f) is None for f in crossref_fields))
-    ):
-        asked = doi not in cache
-        try:
-            work = await _crossref_work(crossref_http, doi, cache) or {}
-            found |= crossref_biblio(work)
-            corrections = align_with_crossref(paper, work) if align and work else {}
-        except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
-            logger.warning("Crossref biblio lookup failed for paper %s: %r", paper_id, exc)
-    wanted = ("volume", "issue", "pages", "pmid", "pmcid")
-    key = paper.openalex_id or (doi and f"doi:{doi}")
-    if openalex_work is None and openalex_http and key and any(getattr(paper, f) is None for f in wanted):
-        asked = True
-        try:
-            openalex_work = await openalex.get_work(openalex_http, key)
-        except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
-            logger.warning("OpenAlex biblio lookup failed for paper %s: %r", paper_id, exc)
+    cache = {} if prefetched.crossref_works is None else prefetched.crossref_works
+    found, corrections, asked = await _crossref_side(paper, doi, crossref_http, cache, align and _alignable(paper))
+    openalex_work, asked_openalex = await _openalex_side(paper, doi, openalex_http, prefetched.openalex_work)
     from_crossref = {k for k, v in found.items() if v}
     if openalex_work:
         found = {k: v for k, v in openalex_biblio(openalex_work).items() if v} | {k: v for k, v in found.items() if v}
     fields = {k: v for k, v in found.items() if v and getattr(paper, k) is None}
-    if fields:
-        for source in ("openalex", "crossref"):  # OpenAlex first, so a group both filled reads Crossref, the winner
-            if part := {k: v for k, v in fields.items() if (k in from_crossref) == (source == "crossref")}:
-                await _write(session, paper, part, source)
+    await _write_fills(session, paper, fields, from_crossref)
     if corrections:  # a lone first page is never NULL, so these never overlap the fills above
         for field, value in corrections.items():
             logger.info("Crossref aligns %s of paper %s: %r -> %r", field, paper_id, getattr(paper, field), value)
         await _write(session, paper, corrections, "crossref", keep_manual_stamps=True)
     if fields or corrections:
         await session.commit()
-    return asked
+    return asked or asked_openalex
 
 
 async def _fill_from_crossref(
@@ -294,7 +317,8 @@ async def enrich_paper(
         await fill_source_type(session, paper_id, None, crossref_http, crossref_works)
         # OpenAlex vouched for nothing here, and _alignable can't tell a DOI ingest saw on page 1 when it bears no
         # "pdf" stamp (an older copy's). Only _fill_from_crossref's checked fill may set year and venue.
-        await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works, align=False)
+        prefetched = Prefetched(crossref_works=crossref_works)
+        await fill_biblio(session, paper_id, crossref_http, prefetched=prefetched, align=False)
         await _fill_from_crossref(session, paper_id, hints, crossref_http, crossref_works)
         return collisions
 
@@ -303,7 +327,7 @@ async def enrich_paper(
     await record_published(session, paper_id, work)
     await session.commit()
     await fill_source_type(session, paper_id, work.get("type"), crossref_http, crossref_works)
-    await fill_biblio(session, paper_id, crossref_http, openalex_work=work, crossref_works=crossref_works)
+    await fill_biblio(session, paper_id, crossref_http, prefetched=Prefetched(work, crossref_works))
     author_ids = await _replace_authorships(session, paper_id, work)
     await session.commit()
     try:

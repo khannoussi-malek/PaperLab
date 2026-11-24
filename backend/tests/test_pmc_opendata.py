@@ -94,7 +94,8 @@ async def test_a_paper_with_a_pmcid_gets_its_pdf_from_the_bucket(session, discov
         doi="10.1038/srep12277", pdf_urls=["https://pdf.example/closed"], external_ids={"pmc": "4512184"}
     )
 
-    paper = await discovery.add(session, discovery_fakes.providers, found, pdf_dir, tried)
+    added = await discovery.add_traced(session, discovery_fakes.providers, found, pdf_dir)
+    paper, tried = added.paper, added.tried
 
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
     assert tried[-1] == {"url": OA_PDF, "outcome": "pdf"}

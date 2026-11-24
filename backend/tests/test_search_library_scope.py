@@ -51,7 +51,7 @@ async def test_a_paper_id_keeps_the_search_on_that_paper_and_lifts_the_per_paper
     calls, answers = retrieve
     paper = await papers_with(session)
     answers["found"] = [chunk(paper.id, text_of(i), page=i + 1) for i in range(5)]
-    out = await library.search(session, "q", paper_id=paper.id, limit=5)
+    out = await library.search(session, "q", within=library.SearchFilter(paper_id=paper.id), limit=5)
     assert [p.page for p in out] == [1, 2, 3, 4, 5]
     assert calls[0]["paper_ids"] == [paper.id] and calls[0]["per_paper"] >= 5 and calls[0]["k"] >= 5
 
@@ -59,18 +59,18 @@ async def test_a_paper_id_keeps_the_search_on_that_paper_and_lifts_the_per_paper
 async def test_a_doi_finds_the_paper(session, retrieve):
     calls, _ = retrieve
     paper = await papers_with(session, doi=f"10.1/{uuid.uuid4().hex[:8]}")
-    await library.search(session, "q", doi=paper.doi.upper())
+    await library.search(session, "q", within=library.SearchFilter(doi=paper.doi.upper()))
     assert calls[0]["paper_ids"] == [paper.id]
 
 
 async def test_a_doi_the_library_does_not_hold_says_so(session, retrieve):
     with pytest.raises(NotFound, match="paper_not_in_library"):
-        await library.search(session, "q", doi="10.1/none")
+        await library.search(session, "q", within=library.SearchFilter(doi="10.1/none"))
 
 
 async def test_a_paper_id_and_a_doi_together_are_refused(session, retrieve):
     with pytest.raises(InvalidInput, match="paper_or_doi"):
-        await library.search(session, "q", paper_id=uuid.uuid4(), doi="10.1/x")
+        await library.search(session, "q", within=library.SearchFilter(paper_id=uuid.uuid4(), doi="10.1/x"))
 
 
 @pytest.mark.parametrize("limit", [0, -1, 51])

@@ -370,9 +370,9 @@ def arxiv_world(fakes, *entries):
 async def test_tacl_like_paper_found_on_arxiv_by_exact_title(session, discovery_fakes, pdf_dir):
     providers = arxiv_world(discovery_fakes, arxiv_entry(title="Another Paper", id="2401.00001"), arxiv_entry())
     discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
-    tried = []
 
-    paper = await discovery.add(session, providers, tacl_like(), pdf_dir, tried)
+    added = await discovery.add_traced(session, providers, tacl_like(), pdf_dir)
+    paper, tried = added.paper, added.tried
 
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
     assert len(discovery_fakes.arxiv.requests) == 1
@@ -410,8 +410,7 @@ async def test_no_authors_on_either_side_needs_the_year_within_one(session, disc
 
     discovery_fakes.arxiv.reply("/api/query", 200, text=atom(arxiv_entry(authors=[], year=2024)))
     discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
-    tried = []
-    await discovery.add(session, providers, tacl_like(authors=[]), pdf_dir, tried)
+    tried = (await discovery.add_traced(session, providers, tacl_like(authors=[]), pdf_dir)).tried
     assert [t["outcome"] for t in no_lookups(tried)] == ["bot_check", "arxiv_title_match", "pdf"]
 
 
@@ -492,9 +491,12 @@ def test_non_diva_url_is_not_rewritten(url):
 async def test_a_diva_copy_is_tried_as_its_fulltext_pdf(session, discovery_fakes, pdf_dir):
     providers = repositories(discovery_fakes, "10.5555/diva", DIVA_RECORD, "https://repo.example/handle/1")
     discovery_fakes.pdf_host.reply("/smash/get/diva2:1234567/FULLTEXT01.pdf", 200, content=PDF)
-    tried = []
 
-    await discovery.add(session, providers, candidate(doi="10.5555/diva", pdf_urls=[f"{HOST}/closed"]), pdf_dir, tried)
+    tried = (
+        await discovery.add_traced(
+            session, providers, candidate(doi="10.5555/diva", pdf_urls=[f"{HOST}/closed"]), pdf_dir
+        )
+    ).tried
 
     assert tried[-1] == {"url": DIVA_PDF, "outcome": "pdf"}
     assert [r.url.path for r in discovery_fakes.pdf_host.requests][-1] == "/smash/get/diva2:1234567/FULLTEXT01.pdf"
@@ -532,9 +534,12 @@ async def test_a_diva_pdf_found_ends_the_search_with_pdf(session, discovery_fake
     providers = repositories(discovery_fakes, "10.5555/many", *records)
     discovery_fakes.pdf_host.reply("/smash/get/diva2:1/FULLTEXT01.pdf", 404)
     discovery_fakes.pdf_host.reply("/smash/get/diva2:2/FULLTEXT01.pdf", 200, content=PDF)
-    tried = []
 
-    await discovery.add(session, providers, candidate(doi="10.5555/many", pdf_urls=[f"{HOST}/closed"]), pdf_dir, tried)
+    tried = (
+        await discovery.add_traced(
+            session, providers, candidate(doi="10.5555/many", pdf_urls=[f"{HOST}/closed"]), pdf_dir
+        )
+    ).tried
 
     assert [t["outcome"] for t in no_lookups(tried)] == ["bot_check", "http_404", "pdf"]
 
@@ -753,9 +758,9 @@ async def test_a_renamed_paper_reuses_the_held_arxiv_copy_as_its_published_versi
 
 async def test_a_renamed_paper_downloads_its_arxiv_copy(session, discovery_fakes, pdf_dir, fake_clock):
     discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
-    tried = []
 
-    paper = await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(), pdf_dir, tried)
+    added = await discovery.add_traced(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(), pdf_dir)
+    paper, tried = added.paper, added.tried
 
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
     assert [t["outcome"] for t in no_lookups(tried)] == ["bot_check", "no_match", "arxiv_title_prefix_match", "pdf"]
@@ -794,9 +799,10 @@ async def test_the_prefix_rule_rejects(session, discovery_fakes, pdf_dir, fake_c
 @pytest.mark.parametrize("year", [2024, 2026])  # published the year of the preprint, or two years on
 async def test_the_prefix_rule_accepts_the_year_bounds(session, discovery_fakes, pdf_dir, fake_clock, year):
     discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
-    tried = []
 
-    await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(year=year), pdf_dir, tried)
+    tried = (
+        await discovery.add_traced(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(year=year), pdf_dir)
+    ).tried
 
     assert tried[-2]["outcome"] == "arxiv_title_prefix_match"
 

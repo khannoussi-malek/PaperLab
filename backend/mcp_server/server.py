@@ -291,7 +291,7 @@ async def search_library(
     has no PDF yet): cite it as the abstract, never by a page."""
     async with sessions() as session:
         return await library.search(
-            session, query, workspace, tags=tags, match=match, paper_id=paper_id, doi=doi, limit=limit
+            session, query, workspace, library.SearchFilter(tags, match, paper_id, doi), limit=limit
         )
 
 
@@ -822,9 +822,10 @@ async def create_saved_search(
     0 = Sunday), or a cron expression. Pass the owner's IANA time zone (e.g. Europe/Berlin); otherwise times are UTC.
     New hits land in the workspace for screening; PaperLab must be running at that time."""
     async with sessions() as session:
-        return await pipeline.create_saved_search(
-            session, workspace, query, schedule, time, weekday, cron, sources, year_from, year_to, timezone
+        request = pipeline.SavedSearchRequest(
+            query, schedule, time, weekday, cron, sources, year_from, year_to, timezone
         )
+        return await pipeline.create_saved_search(session, workspace, request)
 
 
 @mcp.tool(annotations=READ_ONLY)

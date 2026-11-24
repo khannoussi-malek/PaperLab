@@ -281,21 +281,28 @@ def candidate_of(paper: Paper) -> Candidate:
     )
 
 
-async def add(
-    session: AsyncSession,
-    providers: Providers,
-    candidate: Candidate,
-    pdf_dir: Path,
-    tried_out: list | None = None,
-    save_without_pdf: bool = False,
-    copies_out: list | None = None,
-) -> Paper:
-    """Downloads the candidate's first free PDF and creates the paper. The caller enqueues ingest. A caller that
-    wants to know what each URL said passes `tried_out` (a failure carries it on the Conflict anyway), and
-    `copies_out` for the repository pages that may hold a copy.
+@dataclass(frozen=True)
+class Added:
+    paper: Paper
+    tried: list[dict]  # what each URL said (a failure carries it on the Conflict)
+    copies: list[str]  # repository pages that may hold a copy
 
-    With `save_without_pdf`, no free PDF saves a PDF-less paper instead of raising NO_FREE_PDF (`tried_out` and
-    `copies_out` are still filled): the caller enqueues index_abstract when it has an abstract."""
+
+async def add(
+    session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path, save_without_pdf: bool = False
+) -> Paper:
+    """add_traced, for a caller that only wants the paper."""
+    return (await add_traced(session, providers, candidate, pdf_dir, save_without_pdf)).paper
+
+
+async def add_traced(
+    session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path, save_without_pdf: bool = False
+) -> Added:
+    """Downloads the candidate's first free PDF and creates the paper, with what each URL said and the repository
+    pages that may hold a copy. The caller enqueues ingest.
+
+    With `save_without_pdf`, no free PDF saves a PDF-less paper instead of raising NO_FREE_PDF: the caller enqueues
+    index_abstract when it has an abstract."""
     [marked] = await mark_in_library(session, [candidate])
     if marked.paper_id is not None:
         raise Conflict(ALREADY_IN_LIBRARY, paper_id=marked.paper_id)
@@ -306,15 +313,13 @@ async def add(
     candidate, lookups = await _unpaywall_lookup(providers, candidate)
     await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [])  # before any download
     data, tried, copies = await _download_free_copy(session, providers, candidate, lookups)
-    if tried_out is not None:
-        tried_out.extend(tried)
-    if copies_out is not None:
-        copies_out.extend(copies)
     if data is None and save_without_pdf:
         source = details_source(candidate)
-        return await papers.create_metadata_paper(session, prefill(candidate), source, looked_for_pdf=True)
+        paper = await papers.create_metadata_paper(session, prefill(candidate), source, looked_for_pdf=True)
+        return Added(paper, tried, copies)
     if data is None:
         raise Conflict(NO_FREE_PDF, tried=tried, free_copies=copies)
     # ponytail: two adds of one paper racing past the check above hit papers' UNIQUE doi and 500. The buttons disable
     # while adding; catch IntegrityError here if it ever happens.
-    return await papers.create_paper(session, _filename(candidate.title), data, pdf_dir, prefill=prefill(candidate))
+    paper = await papers.create_paper(session, _filename(candidate.title), data, pdf_dir, prefill=prefill(candidate))
+    return Added(paper, tried, copies)

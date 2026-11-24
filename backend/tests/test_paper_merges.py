@@ -283,7 +283,7 @@ async def test_a_merge_preserves_every_paper_id_row(session):
     k, m, seeded = await seed_both(session)
     assert all((await rows_of(session, m.id)).values())  # M has a row in every inventoried table
 
-    result = await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    result = await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
 
     assert (result.status, result.reason, result.moved) == ("merged", None, MOVED)
     assert await rows_of(session, k.id) == AFTER
@@ -340,7 +340,7 @@ async def test_the_kept_papers_abstract_chunk_is_gone_after_a_merge(session):
     k, m = await kept(session), await merged(session)
     assert [c.page for c in await papers.list_chunks(session, k.id)] == [papers.ABSTRACT_PAGE]
 
-    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
 
     chunks = await papers.list_chunks(session, k.id)
     assert [(c.page, c.text) for c in chunks] == [(1, "Sleep matters."), (2, "We slept.")]  # only M's full text
@@ -372,7 +372,7 @@ async def test_a_failed_merge_leaves_both_papers_intact(session, monkeypatch, wh
 
     monkeypatch.setattr(module, name, broken)
     with pytest.raises(error):
-        await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+        await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
 
     assert {pid: (await rows_of(session, pid), await columns_of(session, pid)) for pid in ids} == before
     assert await audits(session, *ids) == []
@@ -383,7 +383,7 @@ async def test_two_papers_with_pdfs_are_reported_not_merged(session):
     k.file_path = "/pdfs/kept.pdf"
     await session.commit()
 
-    result = await merges.merge(session, m.id, k.id, evidence=EVIDENCE)
+    result = await merges.merge(session, m.id, k.id, proof=merges.MergeProof(evidence=EVIDENCE))
 
     assert (result.status, result.reason, result.moved) == ("reported", "kept_has_pdf", {})
     assert await session.get(Paper, m.id, populate_existing=True) is not None
@@ -396,7 +396,7 @@ async def test_a_merged_paper_without_a_pdf_is_reported(session):
     m.file_path = None
     await session.commit()
 
-    result = await merges.merge(session, m.id, k.id, evidence=EVIDENCE)
+    result = await merges.merge(session, m.id, k.id, proof=merges.MergeProof(evidence=EVIDENCE))
 
     assert (result.status, result.reason) == ("reported", "merged_has_no_pdf")
     assert [a.reason for a in await audits(session, k.id, m.id)] == ["merged_has_no_pdf"]
@@ -406,7 +406,7 @@ async def test_conflicting_hand_edits_are_reported(session):
     k = await kept(session, manual_fields=["title", "year"])
     m = await merged(session, year=2022, manual_fields=["year"])
 
-    result = await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    result = await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
 
     assert (result.status, result.reason) == ("reported", "conflicting_hand_edits:year")
     assert len(await papers.list_chunks(session, m.id)) == 2  # nothing moved
@@ -419,7 +419,9 @@ async def test_a_lookalike_with_the_same_doi_typo_is_reported(session):
     m = await merged(session, title="Sleep and memory consolidation in mice", authors=["Grace Hopper"])
 
     evidence = Candidate(m.title, m.authors)  # the lookalike's own PDF
-    result = await merges.merge(session, m.id, k.id, identifier=("doi", DOI.upper()), evidence=evidence)
+    result = await merges.merge(
+        session, m.id, k.id, proof=merges.MergeProof(identifier=("doi", DOI.upper()), evidence=evidence)
+    )
 
     assert (result.status, result.reason) == ("reported", "not_the_same_work")
     assert {p.id for p in await session.scalars(select(Paper).where(Paper.id.in_([k.id, m.id])))} == {k.id, m.id}
@@ -434,7 +436,9 @@ async def test_a_different_identifier_is_reported(session):
     by_column = await merges.merge(session, m.id, k.id, dry_run=True)
     k.openalex_id = "https://openalex.org/w999"  # the same id, written another way
     await session.commit()
-    by_identifier = await merges.merge(session, m.id, k.id, identifier=("doi", "10.9999/another"), evidence=EVIDENCE)
+    by_identifier = await merges.merge(
+        session, m.id, k.id, proof=merges.MergeProof(identifier=("doi", "10.9999/another"), evidence=EVIDENCE)
+    )
 
     assert by_column.reason == by_identifier.reason == "identifier_differs"
 
@@ -443,7 +447,7 @@ async def test_dry_run_counts_and_writes_nothing(session):
     k, m, _ = await seed_both(session)
     before = {pid: await rows_of(session, pid) for pid in (k.id, m.id)}
 
-    result = await merges.merge(session, m.id, k.id, identifier=PROOF, dry_run=True)
+    result = await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF), dry_run=True)
 
     assert (result.status, result.moved, result.dry_run) == ("merged", MOVED, True)
     assert {pid: await rows_of(session, pid) for pid in (k.id, m.id)} == before
@@ -462,7 +466,9 @@ async def test_k_awaiting_hits_become_retrieved_on_merge(session, how):
     ws = await workspace(session)
     hit = await awaiting(session, ws, k)
 
-    result = await merges.merge(session, m.id, k.id, identifier=PROOF, how=how, evidence=EVIDENCE)
+    result = await merges.merge(
+        session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE), how=how
+    )
 
     assert result.moved["awaiting_hits_retrieved"] == 1
     hit = await session.get(WorkspaceSearchHit, hit.id, populate_existing=True)
@@ -473,7 +479,7 @@ async def test_a_title_only_lookalike_is_reported(session):
     """The same title and first author, and 12 years apart, with no identifier in common: never merged (R15b)."""
     k, m = await kept(session), await merged(session, year=2009)
 
-    result = await merges.merge(session, m.id, k.id, evidence=EVIDENCE)
+    result = await merges.merge(session, m.id, k.id, proof=merges.MergeProof(evidence=EVIDENCE))
 
     assert (result.status, result.reason) == ("reported", "no_shared_identifier")
     assert [a.reason for a in await audits(session, k.id, m.id)] == ["no_shared_identifier"]
@@ -482,7 +488,9 @@ async def test_a_title_only_lookalike_is_reported(session):
 async def test_an_identifier_the_kept_paper_does_not_hold_is_no_proof(session):
     k, m = await kept(session), await merged(session)  # K has a DOI and no OpenAlex id; M has W123
 
-    result = await merges.merge(session, m.id, k.id, identifier=("openalex_id", "W123"), evidence=EVIDENCE)
+    result = await merges.merge(
+        session, m.id, k.id, proof=merges.MergeProof(identifier=("openalex_id", "W123"), evidence=EVIDENCE)
+    )
 
     assert (result.status, result.reason) == ("reported", "no_shared_identifier")
 
@@ -490,7 +498,7 @@ async def test_an_identifier_the_kept_paper_does_not_hold_is_no_proof(session):
 async def test_an_identifier_both_papers_hold_is_proof(session):
     k, m = await kept(session, pmcid="PMC456"), await merged(session, pmcid="pmc456")
 
-    result = await merges.merge(session, m.id, k.id, evidence=EVIDENCE)
+    result = await merges.merge(session, m.id, k.id, proof=merges.MergeProof(evidence=EVIDENCE))
 
     assert result.status == "merged"
     [audit] = await audits(session, k.id, m.id)
@@ -502,7 +510,7 @@ async def test_unparseable_identifiers_are_never_equal(session):
     m = await merged(session, openalex_id="https://openalex.org//")
 
     empty = ("openalex_id", "https://openalex.org/")
-    result = await merges.merge(session, m.id, k.id, identifier=empty, evidence=EVIDENCE)
+    result = await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=empty, evidence=EVIDENCE))
 
     assert (result.status, result.reason) == ("reported", "no_shared_identifier")
 
@@ -513,7 +521,7 @@ async def test_a_session_with_pending_changes_is_refused(session):
     session.add(stray)
 
     with pytest.raises(RuntimeError, match="pending"):
-        await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+        await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
 
     assert stray in session.new  # neither committed nor rolled back: the caller's to decide
     session.expunge(stray)
@@ -524,7 +532,7 @@ async def test_the_kept_paper_takes_the_merged_papers_fetched_references(session
     k = await kept(session, references_state="failed", references_error="Semantic Scholar timed out")
     m = await merged(session, references_state="ready")
 
-    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
 
     k = await session.get(Paper, k.id, populate_existing=True)
     assert (k.references_state, k.references_error) == ("ready", None)
@@ -534,7 +542,7 @@ async def test_the_kept_paper_takes_the_sources_of_the_groups_it_gets_from_m(ses
     k = await kept(session)
     m = await merged(session, volume="7", field_sources={"citation": "openalex", "bibliographic": "pdf"})
 
-    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    await merges.merge(session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=EVIDENCE))
 
     k = await session.get(Paper, k.id, populate_existing=True)
     assert k.volume == "7"
@@ -547,7 +555,7 @@ async def test_the_kept_paper_takes_the_sources_of_the_groups_it_gets_from_m(ses
 async def test_an_unknown_paper_is_not_found(session):
     k = await kept(session)
     with pytest.raises(NotFound):
-        await merges.merge(session, uuid.uuid4(), k.id, evidence=EVIDENCE)
+        await merges.merge(session, uuid.uuid4(), k.id, proof=merges.MergeProof(evidence=EVIDENCE))
 
 
 @pytest.mark.parametrize("title", ["", "   "])
@@ -555,7 +563,9 @@ async def test_a_pdf_without_a_title_is_reported(session, title):
     """R15c: the PDF's own title is the evidence; with none, nothing tells a supplement from the paper."""
     k, m = await kept(session), await merged(session)
 
-    result = await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=Candidate(title, AUTHORS))
+    result = await merges.merge(
+        session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=Candidate(title, AUTHORS))
+    )
 
     assert (result.status, result.reason) == ("reported", "no_pdf_title")
     assert (await session.get(Paper, m.id, populate_existing=True)).file_path == FILE
@@ -564,7 +574,9 @@ async def test_a_pdf_without_a_title_is_reported(session, title):
 async def test_the_pdfs_own_title_decides_not_the_merged_papers_stored_one(session):
     k, m = await kept(session), await merged(session)  # M's stored title is K's, as OpenAlex would leave it
 
-    result = await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=Candidate("Correction to: " + TITLE))
+    result = await merges.merge(
+        session, m.id, k.id, proof=merges.MergeProof(identifier=PROOF, evidence=Candidate("Correction to: " + TITLE))
+    )
 
     assert (result.status, result.reason) == ("reported", "not_the_same_work")
 
@@ -593,8 +605,10 @@ async def test_a_real_merge_needs_the_pdfs_own_evidence(session):
     k_id, m_id = k.id, m.id
 
     with pytest.raises(ValueError, match="evidence"):
-        await merges.merge(session, m_id, k_id, identifier=PROOF)
+        await merges.merge(session, m_id, k_id, proof=merges.MergeProof(identifier=PROOF))
 
     assert await session.get(Paper, m_id) is not None
     assert (await session.scalars(select(PaperMerge).where(PaperMerge.merged_id == m_id))).all() == []
-    assert (await merges.merge(session, m_id, k_id, identifier=PROOF, dry_run=True)).status == "merged"  # still fine
+    assert (
+        await merges.merge(session, m_id, k_id, proof=merges.MergeProof(identifier=PROOF), dry_run=True)
+    ).status == "merged"  # still fine
