@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chat import quotes
-from app.core.notes import notes
+from app.core.notes import ai_notes
 from app.core.papers.papers import list_chunks
 from app.core.platform import prompts
 from app.core.platform.llm_json import ask_json
@@ -80,7 +80,7 @@ async def _keep(session: AsyncSession, paper_id: uuid.UUID, number: _Number, sec
         return None
     # ponytail: locate_quote reloads the paper's chunks per suggestion (up to MAX_ASKED); pass them in if it shows.
     try:
-        anchor = await notes.locate_quote(session, paper_id, number.quote)
+        anchor = await ai_notes.locate_quote(session, paper_id, number.quote)
     except DomainError:  # not found as one passage, or found twice: no single place to anchor it
         return None
     unit = number.unit.strip()

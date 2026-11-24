@@ -6,7 +6,7 @@ from conftest import recorded
 from sqlalchemy import func, insert, select, text, update
 
 from app.core.papers import enrichment
-from app.core.papers.enrichment import PdfHints
+from app.core.papers.pdf_hints import PdfHints
 from app.models import Author, Paper, paper_authors
 
 pytestmark = pytest.mark.anyio

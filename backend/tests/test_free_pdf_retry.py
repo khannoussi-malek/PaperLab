@@ -8,9 +8,9 @@ import pytest
 from conftest import FakeArq
 from sqlalchemy import delete
 
-from app.core.papers import papers, pdf_recheck, pipeline
+from app.core.papers import papers, pdf_recheck, pipeline_add, pipeline_search
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import free_copy, source_clients
 from app.models import Paper, PaperSources
 from app.models.workspace import Workspace
 from app.workers import pdf_recheck as worker
@@ -29,12 +29,12 @@ PDF = b"%PDF-1.7 a paper"
     ],
 )
 def test_which_outcomes_may_succeed_later(outcome, temporary):
-    assert discovery.is_temporary(outcome) is temporary
+    assert free_copy.is_temporary(outcome) is temporary
 
 
 def test_temporary_failures_picks_only_those():
     tried = [{"url": "a", "outcome": "no_match"}, {"url": "b", "outcome": "http_429"}]
-    assert discovery.temporary_failures(tried) == [{"url": "b", "outcome": "http_429"}]
+    assert free_copy.temporary_failures(tried) == [{"url": "b", "outcome": "http_429"}]
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ async def test_a_paper_that_failed_only_for_temporary_reasons_gets_its_pdf_on_th
     async def attach_pdf(_session, paper_id, data, how):
         attached.append((paper_id, data, how))
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     monkeypatch.setattr(papers, "attach_pdf", attach_pdf)
 
     assert await pdf_recheck.recheck(session, object(), paper.id) == "temporary"
@@ -82,7 +82,7 @@ async def test_no_copy_is_not_retried_soon(session, arq, monkeypatch):
     async def find_pdf(*_args):
         return None, [{"url": "arxiv.org (title search)", "outcome": "no_match"}], []
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     assert await pdf_recheck.recheck(session, object(), paper.id) == "none"
     assert arq.jobs == []
 
@@ -116,7 +116,7 @@ def job_session(session, monkeypatch):
         yield object()
 
     monkeypatch.setattr(worker, "SessionLocal", shared)
-    monkeypatch.setattr(discovery, "open_providers", no_providers)
+    monkeypatch.setattr(source_clients, "open_providers", no_providers)
 
 
 async def test_the_retry_job_chains_while_sources_stay_busy_and_ends_on_an_answer(
@@ -140,8 +140,8 @@ async def test_saved_without_pdf_after_a_busy_source_says_so_and_schedules_a_ret
     await session.execute(delete(PaperSources))
     paper = await saved_paper(session)
     tried = [{"url": "https://arxiv.org/pdf/2605.13776", "outcome": "http_429"}]
-    result = pipeline.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, title=paper.title, tried=tried)
-    finished = await pipeline._note_temporary_failures(session, result)
+    result = pipeline_add.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, title=paper.title, tried=tried)
+    finished = await pipeline_add._note_temporary_failures(session, result)
     assert finished.temporary_failures == tried and finished.retry_scheduled is True
     assert "tried again" in finished.note
     assert arq.jobs == [("retry_free_pdf", str(paper.id), 0)]
@@ -149,26 +149,26 @@ async def test_saved_without_pdf_after_a_busy_source_says_so_and_schedules_a_ret
 
 async def test_saved_without_pdf_with_no_copy_anywhere_schedules_nothing(session, arq):
     tried = [{"url": "arxiv.org (title search)", "outcome": "no_match"}]
-    result = pipeline.AddPaperResult(status="saved_without_pdf", paper_id=uuid.uuid4(), tried=tried)
-    finished = await pipeline._note_temporary_failures(session, result)
+    result = pipeline_add.AddPaperResult(status="saved_without_pdf", paper_id=uuid.uuid4(), tried=tried)
+    finished = await pipeline_add._note_temporary_failures(session, result)
     assert finished.temporary_failures == [] and finished.retry_scheduled is False and arq.jobs == []
 
 
 async def test_no_free_pdf_after_a_busy_source_tells_the_caller_what_to_do(session, arq):
     tried = [{"url": "https://x.org/a.pdf", "outcome": "error: ConnectError"}]
-    result = pipeline.AddPaperResult(status="no_free_pdf", tried=tried)
-    finished = await pipeline._note_temporary_failures(session, result)
+    result = pipeline_add.AddPaperResult(status="no_free_pdf", tried=tried)
+    finished = await pipeline_add._note_temporary_failures(session, result)
     assert finished.retry_scheduled is False and "save_without_pdf" in finished.note and arq.jobs == []
 
 
 async def test_a_paper_already_held_is_retried_too_when_its_new_look_met_a_busy_source(session, arq):
     await session.execute(delete(PaperSources))
     tried = [{"url": "https://x.org/a.pdf", "outcome": "busy"}]
-    result = pipeline.AddPaperResult(
-        status="already_in_library", paper_id=uuid.uuid4(), tried=tried, note=pipeline.NO_COPY_NOTE,
+    result = pipeline_add.AddPaperResult(
+        status="already_in_library", paper_id=uuid.uuid4(), tried=tried, note=pipeline_add.NO_COPY_NOTE,
     )
-    finished = await pipeline._note_temporary_failures(session, result)
-    assert finished.retry_scheduled is True and finished.note != pipeline.NO_COPY_NOTE
+    finished = await pipeline_add._note_temporary_failures(session, result)
+    assert finished.retry_scheduled is True and finished.note != pipeline_add.NO_COPY_NOTE
 
 
 async def workspace_with(session, papers_):
@@ -189,11 +189,11 @@ async def test_the_batch_tool_queues_a_workspaces_papers_without_a_pdf_once(sess
     await session.flush()
     workspace = await workspace_with(session, [missing, has_pdf])
 
-    first = await pipeline.recheck_free_copies(session, workspace.name)
+    first = await pipeline_search.recheck_free_copies(session, workspace.name)
     assert (first.queued, first.already_running) == (1, False)
     assert arq.jobs == [("recheck_papers", [str(missing.id)])]
 
-    again = await pipeline.recheck_free_copies(session, workspace.name)
+    again = await pipeline_search.recheck_free_copies(session, workspace.name)
     assert again.already_running is True and len(arq.jobs) == 1
 
 
@@ -203,7 +203,7 @@ async def test_the_batch_tool_scopes_to_a_tag(session, arq):
     tagged, other = await saved_paper(session), await saved_paper(session)
     workspace = await workspace_with(session, [tagged, other])
     await tags.tag_papers(session, workspace.id, "read me", [tagged.id], ())
-    out = await pipeline.recheck_free_copies(session, workspace.name, tags_=["read me"])
+    out = await pipeline_search.recheck_free_copies(session, workspace.name, tags_=["read me"])
     assert out.queued == 1 and arq.jobs == [("recheck_papers", [str(tagged.id)])]
 
 
@@ -248,11 +248,11 @@ async def test_tried_lists_the_unpaywall_lookup_whatever_it_said():
 
     async def lookup(handler):
         async with _unpaywall(handler) as http:
-            found, entry = await discovery._unpaywall_lookup(Providers(http), paper)
+            found, entry = await free_copy._unpaywall_lookup(Providers(http), paper)
         return found.pdf_urls, entry
 
     urls, entry = await lookup(lambda r: httpx.Response(200, json={"oa_locations": []}))
-    assert urls == [] and entry == [{"url": discovery.UNPAYWALL_LOOKUP, "outcome": "no_copy"}]
+    assert urls == [] and entry == [{"url": free_copy.UNPAYWALL_LOOKUP, "outcome": "no_copy"}]
 
     urls, entry = await lookup(lambda r: httpx.Response(404))
     assert entry[0]["outcome"] == "no_copy"
@@ -262,7 +262,7 @@ async def test_tried_lists_the_unpaywall_lookup_whatever_it_said():
     assert urls == ["https://x.org/a.pdf"] and entry[0]["outcome"] == "links_found"
 
     urls, entry = await lookup(lambda r: httpx.Response(429))
-    assert entry[0]["outcome"] == "busy" and discovery.is_temporary(entry[0]["outcome"])
+    assert entry[0]["outcome"] == "busy" and free_copy.is_temporary(entry[0]["outcome"])
 
     def down(request):
         raise httpx.ConnectError("no route")
@@ -274,9 +274,9 @@ async def test_tried_lists_the_unpaywall_lookup_whatever_it_said():
 async def test_tried_says_why_unpaywall_was_skipped():
     from app.domain.candidates import Candidate
 
-    _, entry = await discovery._unpaywall_lookup(Providers(None), Candidate(title="t", doi="10.1/x"))
-    assert entry == [{"url": discovery.UNPAYWALL_LOOKUP, "outcome": "skipped: off or no contact email"}]
-    _, entry = await discovery._unpaywall_lookup(Providers(None), Candidate(title="t"))
+    _, entry = await free_copy._unpaywall_lookup(Providers(None), Candidate(title="t", doi="10.1/x"))
+    assert entry == [{"url": free_copy.UNPAYWALL_LOOKUP, "outcome": "skipped: off or no contact email"}]
+    _, entry = await free_copy._unpaywall_lookup(Providers(None), Candidate(title="t"))
     assert entry == []  # no DOI: nothing to look up
 
 
@@ -286,8 +286,8 @@ async def test_a_paper_that_has_its_pdf_is_left_out_of_the_retry_and_the_note(se
     paper.file_path = "held.pdf"
     await session.flush()
     tried = [{"url": "https://x.org/a.pdf", "outcome": "http_429"}]
-    result = pipeline.AddPaperResult(status="already_in_library", paper_id=paper.id, tried=tried)
-    assert await pipeline._note_temporary_failures(session, result) == result
+    result = pipeline_add.AddPaperResult(status="already_in_library", paper_id=paper.id, tried=tried)
+    assert await pipeline_add._note_temporary_failures(session, result) == result
     assert arq.jobs == []
 
 
@@ -308,9 +308,9 @@ async def test_a_queue_outage_does_not_fail_an_add_that_already_saved_the_paper(
 
     monkeypatch.setattr(queue, "enqueue", down)
     tried = [{"url": "https://x.org/a.pdf", "outcome": "busy"}]
-    result = pipeline.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, tried=tried)
-    finished = await pipeline._note_temporary_failures(session, result)
-    assert finished.retry_scheduled is False and finished.note == pipeline.NO_RETRY_NOTE
+    result = pipeline_add.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, tried=tried)
+    finished = await pipeline_add._note_temporary_failures(session, result)
+    assert finished.retry_scheduled is False and finished.note == pipeline_add.NO_RETRY_NOTE
 
 
 async def test_a_retry_look_updates_when_the_paper_was_last_checked(session, arq, monkeypatch):
@@ -324,7 +324,7 @@ async def test_a_retry_look_updates_when_the_paper_was_last_checked(session, arq
     async def find_pdf(*_args):
         return None, [{"url": "a", "outcome": "busy"}], []
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     await pdf_recheck.recheck(session, object(), paper.id)
     await session.refresh(paper)
     assert paper.pdf_checked_at > before

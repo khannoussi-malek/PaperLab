@@ -8,9 +8,9 @@ import httpx
 import pytest
 
 from app.core.papers import pdf_links
-from app.core.search import discovery
-from app.core.search.candidates import from_europe_pmc
+from app.core.search import discovery, free_copy, pdf_download, source_clients
 from app.core.search.discovery import Candidate
+from app.core.search.from_indexes import from_europe_pmc
 from app.domain.errors import Conflict, InvalidInput
 from app.providers import europe_pmc, pmc_opendata
 
@@ -72,7 +72,7 @@ async def test_the_listing_asks_for_one_pmcid_and_names_paperlab():
         return httpx.Response(200, text=listing("PMC4512184"))
 
     async with httpx.AsyncClient(
-        transport=httpx.MockTransport(answer), headers={"User-Agent": discovery.PDF_USER_AGENT}
+        transport=httpx.MockTransport(answer), headers={"User-Agent": pdf_download.PDF_USER_AGENT}
     ) as http:
         assert await pmc_opendata.pdf_url(http, "PMC4512184") == (OA_PDF, pmc_opendata.listing_url("PMC4512184"))
     [request] = seen
@@ -142,11 +142,11 @@ async def test_the_pmcid_can_come_from_a_pmc_link_among_the_free_copies(session,
 
 
 def test_pmc_links_are_read_in_their_usual_forms():
-    assert discovery.pmcid_of({}, ["https://pmc.ncbi.nlm.nih.gov/articles/PMC4512184/"]) == "PMC4512184"
-    assert discovery.pmcid_of({}, ["https://europepmc.org/articles/pmc4512184"]) == "PMC4512184"
-    assert discovery.pmcid_of({}, ["https://europepmc.org/article/PMC/PMC4512184"]) == "PMC4512184"
-    assert discovery.pmcid_of({"pmc": "1"}, ["https://europepmc.org/articles/PMC2"]) == "PMC1"  # its own id first
-    assert discovery.pmcid_of({}, ["https://repo.example/PMC4512184"]) is None
+    assert free_copy.pmcid_of({}, ["https://pmc.ncbi.nlm.nih.gov/articles/PMC4512184/"]) == "PMC4512184"
+    assert free_copy.pmcid_of({}, ["https://europepmc.org/articles/pmc4512184"]) == "PMC4512184"
+    assert free_copy.pmcid_of({}, ["https://europepmc.org/article/PMC/PMC4512184"]) == "PMC4512184"
+    assert free_copy.pmcid_of({"pmc": "1"}, ["https://europepmc.org/articles/PMC2"]) == "PMC1"  # its own id first
+    assert free_copy.pmcid_of({}, ["https://repo.example/PMC4512184"]) is None
 
 
 async def test_the_pmcid_can_come_from_europe_pmc_by_doi_when_it_is_on(session, discovery_fakes, pdf_dir):
@@ -161,7 +161,7 @@ async def test_the_pmcid_can_come_from_europe_pmc_by_doi_when_it_is_on(session, 
     discovery_fakes.pdf_host.reply("/", 200, text=listing("PMC4512184"))
     discovery_fakes.pdf_host.reply("/PMC4512184.1/PMC4512184.1.pdf", 200, content=PDF)
     client = europe_pmc.new_client(transport=httpx.MockTransport(answer))
-    on = discovery.Providers(pdf=discovery_fakes.providers.pdf, clients={**discovery_fakes.providers.clients,
+    on = source_clients.Providers(pdf=discovery_fakes.providers.pdf, clients={**discovery_fakes.providers.clients,
                                                                         "europe_pmc": client})  # fmt: skip
     try:
         await discovery.add(session, on, candidate(doi="10.1038/srep12277"), pdf_dir)

@@ -5,7 +5,7 @@ import pytest
 from conftest import recorded_discovery
 
 from app.core.papers.paper_sources import SourceSettings
-from app.core.search import discovery
+from app.core.search import discovery, source_clients
 from app.core.search.discovery import Candidate
 from app.domain.errors import Conflict
 from app.models import Paper
@@ -28,7 +28,7 @@ async def add_paper(session, **fields) -> Paper:
 
 
 def test_the_pdf_client_never_sends_the_owners_email():
-    providers = discovery.build_providers(SourceSettings(contact_email="me@example.com"))
+    providers = source_clients.build_providers(SourceSettings(contact_email="me@example.com"))
 
     agent = providers.pdf.headers["User-Agent"]
 
@@ -37,18 +37,18 @@ def test_the_pdf_client_never_sends_the_owners_email():
 
 
 def test_providers_client_returns_none_for_an_off_source():
-    providers = discovery.Providers(pdf=httpx.AsyncClient())
+    providers = source_clients.Providers(pdf=httpx.AsyncClient())
     assert providers.client("openalex") is None
 
 
 def test_providers_client_returns_none_for_an_unknown_id_instead_of_raising():
-    providers = discovery.Providers(pdf=httpx.AsyncClient())
+    providers = source_clients.Providers(pdf=httpx.AsyncClient())
     assert providers.client("not-a-real-source") is None
 
 
 async def test_providers_client_returns_the_configured_client():
     http = httpx.AsyncClient()
-    providers = discovery.Providers(pdf=httpx.AsyncClient(), clients={"arxiv": http})
+    providers = source_clients.Providers(pdf=httpx.AsyncClient(), clients={"arxiv": http})
     assert providers.client("arxiv") is http
     await http.aclose()
     await providers.pdf.aclose()

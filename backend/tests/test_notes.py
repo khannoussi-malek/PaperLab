@@ -6,7 +6,7 @@ import pytest
 from pdf_papers import TWICE, TWO_LINE_QUOTE, TWO_PARAGRAPH_QUOTE, chunked_paper
 from sqlalchemy import func, select
 
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.core.papers import papers
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import Conflict, InvalidInput, NotFound
@@ -124,7 +124,7 @@ async def test_a_quote_is_placed_on_its_lines_when_the_pdf_is_here(session, tmp_
     paper, chunks, _ = await chunked_paper(session, tmp_path)
     narrow = chunks[0].bbox[1]  # page 1's second paragraph
 
-    anchor = await notes.locate_quote(session, paper.id, TWO_LINE_QUOTE)
+    anchor = await ai_notes.locate_quote(session, paper.id, TWO_LINE_QUOTE)
 
     assert (anchor.paper_id, anchor.page, anchor.quoted_text) == (paper.id, 1, TWO_LINE_QUOTE)
     assert len(anchor.bbox) == 2 and all(inside(rect, narrow) for rect in anchor.bbox)  # not the caption below
@@ -135,7 +135,7 @@ async def test_without_the_pdf_a_quote_is_placed_on_its_paragraph(session, tmp_p
     paper, chunks, _ = await chunked_paper(session, tmp_path)
     Path(paper.file_path).unlink()
 
-    anchor = await notes.locate_quote(session, paper.id, TWO_LINE_QUOTE)
+    anchor = await ai_notes.locate_quote(session, paper.id, TWO_LINE_QUOTE)
 
     assert anchor.bbox == [tuple(chunks[0].bbox[1])]
 
@@ -144,7 +144,7 @@ async def test_case_and_line_breaks_do_not_matter(session, tmp_path):
     paper, _, _ = await chunked_paper(session, tmp_path)
     shouted = "  THE MODEL cites each passage\nit uses, and the reader CAN check every claim "
 
-    anchor = await notes.locate_quote(session, paper.id, shouted)
+    anchor = await ai_notes.locate_quote(session, paper.id, shouted)
 
     assert (anchor.page, len(anchor.bbox)) == (1, 2)
     assert anchor.quoted_text == "THE MODEL cites each passage it uses, and the reader CAN check every claim"
@@ -153,7 +153,7 @@ async def test_case_and_line_breaks_do_not_matter(session, tmp_path):
 async def test_typographic_dashes_still_find_the_passage(session, tmp_path):
     paper, chunks, _ = await chunked_paper(session, tmp_path)
 
-    anchor = await notes.locate_quote(session, paper.id, "stored in PDF points with a top–left origin")
+    anchor = await ai_notes.locate_quote(session, paper.id, "stored in PDF points with a top–left origin")
 
     assert anchor.page == 2
     # PyMuPDF can't match the en dash against the page's hyphen, so the paragraph stands in for the lines.
@@ -164,9 +164,9 @@ async def test_a_quote_across_two_paragraphs_of_one_chunk_covers_both(session, t
     paper, chunks, _ = await chunked_paper(session, tmp_path)
     wide, narrow = chunks[0].bbox
 
-    with_pdf = await notes.locate_quote(session, paper.id, TWO_PARAGRAPH_QUOTE)
+    with_pdf = await ai_notes.locate_quote(session, paper.id, TWO_PARAGRAPH_QUOTE)
     Path(paper.file_path).unlink()
-    without_pdf = await notes.locate_quote(session, paper.id, TWO_PARAGRAPH_QUOTE)
+    without_pdf = await ai_notes.locate_quote(session, paper.id, TWO_PARAGRAPH_QUOTE)
 
     assert len(with_pdf.bbox) == 2  # not the caption between the paragraphs that repeats the words
     assert inside(with_pdf.bbox[0], wide) and inside(with_pdf.bbox[1], narrow)
@@ -185,7 +185,7 @@ async def test_a_quote_that_cannot_be_placed_is_refused(session, tmp_path, quote
     paper, _, _ = await chunked_paper(session, tmp_path)
 
     with pytest.raises(InvalidInput, match=f"^{code}$") as refused:
-        await notes.locate_quote(session, paper.id, quote)
+        await ai_notes.locate_quote(session, paper.id, quote)
 
     assert refused.value.details == details
 
@@ -204,11 +204,11 @@ async def test_a_quote_from_a_block_two_overlapping_chunks_share_is_one_place(se
         ],
     )
 
-    anchor = await notes.locate_quote(session, paper.id, "Both chunks repeat this closing paragraph.")
+    anchor = await ai_notes.locate_quote(session, paper.id, "Both chunks repeat this closing paragraph.")
 
     assert (anchor.page, anchor.bbox) == (1, [tuple(shared)])
     with pytest.raises(InvalidInput, match="^quote_ambiguous$"):  # twice in that one paragraph is still twice
-        await notes.locate_quote(session, paper.id, "overlap twice")
+        await ai_notes.locate_quote(session, paper.id, "overlap twice")
 
 
 def test_words_the_pdf_draws_with_ligatures_are_found_on_their_line(tmp_path):
@@ -229,18 +229,18 @@ def test_words_the_pdf_draws_with_ligatures_are_found_on_their_line(tmp_path):
 
 async def test_placing_a_quote_needs_a_known_paper_with_chunks(session):
     with pytest.raises(NotFound):
-        await notes.locate_quote(session, uuid.uuid4(), "anything")
+        await ai_notes.locate_quote(session, uuid.uuid4(), "anything")
     unchunked = await make_paper(session)
     with pytest.raises(Conflict, match="^paper_not_ready$"):
-        await notes.locate_quote(session, unchunked.id, "anything")
+        await ai_notes.locate_quote(session, unchunked.id, "anything")
 
 
 async def test_an_mcp_note_is_an_llm_note_whose_output_keeps_the_original_words(session, tmp_path):
     paper, _, _ = await chunked_paper(session, tmp_path)
 
-    note = await notes.create_llm_note(session, paper.id, "  Grounding makes answers checkable. ", TWO_LINE_QUOTE)
+    note = await ai_notes.create_llm_note(session, paper.id, "  Grounding makes answers checkable. ", TWO_LINE_QUOTE)
 
-    located = await notes.locate_quote(session, paper.id, TWO_LINE_QUOTE)
+    located = await ai_notes.locate_quote(session, paper.id, TWO_LINE_QUOTE)
     assert (note.body, note.provenance, note.color) == ("Grounding makes answers checkable.", "llm", "#facc15")
     assert note.anchors == [located]
     output = await session.get(LLMOutput, note.source_id)
@@ -261,7 +261,7 @@ async def test_an_mcp_note_needs_a_body_and_a_placeable_quote(session, tmp_path)
     paper, _, _ = await chunked_paper(session, tmp_path)
 
     with pytest.raises(InvalidInput, match="^empty_body$"):
-        await notes.create_llm_note(session, paper.id, "  ", TWO_LINE_QUOTE)
+        await ai_notes.create_llm_note(session, paper.id, "  ", TWO_LINE_QUOTE)
     with pytest.raises(InvalidInput, match="^quote_not_found$"):
-        await notes.create_llm_note(session, paper.id, "a note", "not in this paper")
+        await ai_notes.create_llm_note(session, paper.id, "a note", "not in this paper")
     assert await session.scalar(select(func.count()).select_from(LLMOutput).where(LLMOutput.paper_id == paper.id)) == 0

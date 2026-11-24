@@ -4,7 +4,7 @@ from sqlalchemy import delete, text
 from app.core.citations import references
 from app.core.papers import pdf_links
 from app.core.papers.paper_sources import SOURCES, SourceSettings
-from app.core.search import discovery
+from app.core.search import discovery, source_clients
 from app.domain.errors import Conflict
 from app.models import Paper
 from app.providers import (
@@ -13,6 +13,8 @@ from app.providers import (
     core_ac,
     crossref,
     discovery_fake,
+    discovery_fake_data,
+    discovery_fake_more,
     doaj,
     europe_pmc,
     hal,
@@ -38,9 +40,9 @@ async def fake_providers(session, monkeypatch):
 
     monkeypatch.setattr(pdf_links, "resolve_host", public)
     # An E2E run killed mid-test can leave the fake's papers in the shared dev database (D15); hide them here.
-    await session.execute(delete(Paper).where(Paper.doi.like(f"{discovery_fake.DOI_PREFIX}%")))
-    every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
-    providers = discovery.build_providers(every_source, discovery_fake.transport())
+    await session.execute(delete(Paper).where(Paper.doi.like(f"{discovery_fake_data.DOI_PREFIX}%")))
+    every_source = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCES, True))
+    providers = source_clients.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
 
@@ -49,7 +51,7 @@ async def test_the_e2e_fake_finds_three_papers_and_suggests_the_same_three(sessi
     found = await discovery.search(session, fake_providers, "anything")
     suggested = await discovery.similar(session, fake_providers, Paper(title="A reader's paper", file_path="/x.pdf"))
 
-    titles = [discovery_fake.FREE_TITLE, discovery_fake.LANDING_TITLE, discovery_fake.CLOSED_TITLE]
+    titles = [discovery_fake_data.FREE_TITLE, discovery_fake_data.LANDING_TITLE, discovery_fake_data.CLOSED_TITLE]
     assert ([c.title for c in found.results], found.notices) == (titles, [])
     assert [c.title for c in suggested] == titles
     assert [c.sources for c in found.results] == [
@@ -70,8 +72,8 @@ async def test_the_e2e_fake_finds_three_papers_and_suggests_the_same_three(sessi
 
 
 async def test_with_openalex_off_as_on_the_e2e_stack_the_badges_are_m19s(session):
-    defaults = SourceSettings(contact_email=discovery_fake.MAILTO)
-    providers = discovery.build_providers(defaults, discovery_fake.transport())
+    defaults = SourceSettings(contact_email=discovery_fake_data.MAILTO)
+    providers = source_clients.build_providers(defaults, discovery_fake.transport())
 
     found = await discovery.search(session, providers, "anything")
     await providers.aclose()
@@ -89,7 +91,7 @@ async def test_the_e2e_fakes_free_paper_downloads_a_pdf_extraction_can_title(ses
 
     paper = await discovery.add(session, fake_providers, free, pdf_dir)
 
-    assert extract(paper.file_path).title == discovery_fake.FREE_TITLE
+    assert extract(paper.file_path).title == discovery_fake_data.FREE_TITLE
     with pytest.raises(Conflict, match="No free PDF was found"):
         await discovery.add(session, fake_providers, landing, pdf_dir)
 
@@ -98,7 +100,7 @@ async def test_the_e2e_fake_answers_identifier_lookups_with_its_free_paper(sessi
     by_doi = await discovery.search(session, fake_providers, "10.5555/anything")
     by_arxiv = await discovery.search(session, fake_providers, "2401.00001")
 
-    assert [c.title for c in by_doi.results] == [c.title for c in by_arxiv.results] == [discovery_fake.FREE_TITLE]
+    assert [c.title for c in by_doi.results] == [c.title for c in by_arxiv.results] == [discovery_fake_data.FREE_TITLE]
 
 
 async def test_the_e2e_fake_gives_any_paper_three_references_and_one_citing_work(session, fake_providers):
@@ -115,10 +117,10 @@ async def test_the_e2e_fake_gives_any_paper_three_references_and_one_citing_work
     cited_by = await references.listing(session, reader.id, "cited_by")
     assert notices == []
     assert sorted(r.title for r in cites.rows) == sorted(
-        [discovery_fake.FREE_TITLE, discovery_fake.LANDING_TITLE, discovery_fake.CLOSED_TITLE]
+        [discovery_fake_data.FREE_TITLE, discovery_fake_data.LANDING_TITLE, discovery_fake_data.CLOSED_TITLE]
     )
-    assert [r.title for r in cited_by.rows] == [discovery_fake.FREE_TITLE]
-    assert {r.title: r.has_pdf for r in cites.rows}[discovery_fake.CLOSED_TITLE] is False
+    assert [r.title for r in cited_by.rows] == [discovery_fake_data.FREE_TITLE]
+    assert {r.title: r.has_pdf for r in cites.rows}[discovery_fake_data.CLOSED_TITLE] is False
 
 
 # search_page() pagination (Task 11): a separate 3-item fixture list, distinct from PAPERS, so these don't disturb
@@ -139,7 +141,7 @@ async def test_the_e2e_fakes_arxiv_search_page_has_two_pages_then_exhausts(fake_
 
 async def test_the_e2e_fakes_arxiv_search_page_id_does_not_collide_with_the_free_papers_id(fake_providers):
     [entry], _ = await arxiv.search_page(fake_providers.client("arxiv"), "anything", page_size=1, cursor=0)
-    assert entry["arxiv_id"] != discovery_fake.FREE_ARXIV_ID
+    assert entry["arxiv_id"] != discovery_fake_data.FREE_ARXIV_ID
 
 
 async def test_the_e2e_fakes_crossref_search_page_has_two_pages_then_exhausts(fake_providers):
@@ -215,7 +217,7 @@ async def test_the_e2e_fakes_pubmed_search_page_has_two_pages_then_exhausts(fake
 
 async def test_the_e2e_fakes_pubmed_search_page_ids_do_not_collide_with_the_free_papers_id(fake_providers):
     [entry], _ = await pubmed.search_page(fake_providers.client("pubmed"), "anything", page_size=1, cursor=0)
-    assert entry["pmid"] != discovery_fake.FREE_PUBMED_ID
+    assert entry["pmid"] != discovery_fake_more.FREE_PUBMED_ID
 
 
 async def test_the_e2e_fakes_pmc_search_page_has_two_pages_then_exhausts(fake_providers):
@@ -231,7 +233,7 @@ async def test_the_e2e_fakes_pmc_search_page_has_two_pages_then_exhausts(fake_pr
 
 async def test_the_e2e_fakes_pmc_search_page_ids_do_not_collide_with_the_free_papers_id(fake_providers):
     [entry], _ = await pmc.search_page(fake_providers.client("pmc"), "anything", page_size=1, cursor=0)
-    assert entry["pmcid"] != discovery_fake.FREE_PMC_ID
+    assert entry["pmcid"] != discovery_fake_more.FREE_PMC_ID
 
 
 async def test_the_e2e_fakes_europe_pmc_search_page_has_two_pages_then_exhausts(fake_providers):
@@ -251,7 +253,7 @@ async def test_the_e2e_fakes_europe_pmc_search_page_has_two_pages_then_exhausts(
 
 async def test_the_e2e_fakes_europe_pmc_search_page_ids_do_not_collide_with_the_free_papers_id(fake_providers):
     [entry], _ = await europe_pmc.search_page(fake_providers.client("europe_pmc"), "anything", page_size=1, cursor="*")
-    assert entry["pmid"] != discovery_fake.FREE_EUROPE_PMC_ID
+    assert entry["pmid"] != discovery_fake_more.FREE_EUROPE_PMC_ID
 
 
 async def test_the_e2e_fakes_zenodo_search_page_has_two_pages_then_exhausts(fake_providers):
@@ -267,7 +269,7 @@ async def test_the_e2e_fakes_zenodo_search_page_has_two_pages_then_exhausts(fake
 
 async def test_the_e2e_fakes_zenodo_search_page_ids_do_not_collide_with_the_free_papers_id(fake_providers):
     [entry], _ = await zenodo.search_page(fake_providers.client("zenodo"), "anything", page_size=1, cursor=1)
-    assert entry["id"] != discovery_fake.FREE_ZENODO_ID
+    assert entry["id"] != discovery_fake_more.FREE_ZENODO_ID
 
 
 async def test_the_e2e_fakes_hal_search_page_has_two_pages_then_exhausts(fake_providers):
@@ -283,7 +285,7 @@ async def test_the_e2e_fakes_hal_search_page_has_two_pages_then_exhausts(fake_pr
 
 async def test_the_e2e_fakes_hal_search_page_ids_do_not_collide_with_the_free_papers_id(fake_providers):
     [entry], _ = await hal.search_page(fake_providers.client("hal"), "anything", page_size=1, cursor=0)
-    assert entry["docid"] != discovery_fake.FREE_HAL_ID
+    assert entry["docid"] != discovery_fake_more.FREE_HAL_ID
 
 
 async def test_the_e2e_fakes_acm_dl_search_page_has_two_pages_then_exhausts(fake_providers):
@@ -319,7 +321,7 @@ async def test_the_e2e_fakes_doaj_search_page_has_two_pages_then_exhausts(fake_p
 async def test_the_e2e_fakes_doaj_search_page_id_does_not_collide_with_the_free_papers_id(fake_providers):
     page_1, _ = await doaj.search_page(fake_providers.client("doaj"), "x", 1, 1)
 
-    assert page_1[0]["id"] != discovery_fake.FREE_DOAJ_ID
+    assert page_1[0]["id"] != discovery_fake_more.FREE_DOAJ_ID
 
 
 async def test_the_e2e_fakes_openaire_search_page_has_two_pages_then_exhausts(fake_providers):
@@ -335,4 +337,4 @@ async def test_the_e2e_fakes_openaire_search_page_has_two_pages_then_exhausts(fa
 async def test_the_e2e_fakes_openaire_search_page_id_does_not_collide_with_the_free_papers_id(fake_providers):
     page_1, _ = await openaire.search_page(fake_providers.client("openaire"), "x", 1, 1)
 
-    assert page_1[0]["id"] != discovery_fake.FREE_OPENAIRE_ID
+    assert page_1[0]["id"] != discovery_fake_more.FREE_OPENAIRE_ID

@@ -5,9 +5,18 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from pydantic import AwareDatetime
 
 from app.api.deps import DiscoveryDep, SessionDep
-from app.core.papers.pipeline import MAX_UPLOAD_PDF_BYTES
+from app.core.papers.pipeline_upload import MAX_UPLOAD_PDF_BYTES
 from app.core.platform.queue import INGEST_QUEUE
-from app.core.search import branches, hit_suggest, screening, snowball_next, workspace_search
+from app.core.search import (
+    branches,
+    hit_import,
+    hit_suggest,
+    screening,
+    search_hits,
+    snowball_next,
+    snowball_run,
+    workspace_search,
+)
 from app.core.search.hit_links import paths_to, provenance
 from app.core.search.prisma_export import prisma_export
 from app.core.search.screening import RANKED_LIMIT_MAX
@@ -103,7 +112,7 @@ async def list_hits(
     min_relevance: Annotated[int | None, Query(ge=1, le=5)] = None,
     saved_search_id: uuid.UUID | None = None, found_after: AwareDatetime | None = None,
 ) -> HitListOut:
-    items, next_cursor = await workspace_search.list_hits(
+    items, next_cursor = await search_hits.list_hits(
         session, workspace_id, limit, after, stage1_status, acquisition_status,
         sort=sort, min_relevance=min_relevance, saved_search_id=saved_search_id, found_after=found_after,
     )
@@ -178,7 +187,7 @@ async def accept_suggestions(
 
 @router.delete("/hits")
 async def clear_hits(workspace_id: uuid.UUID, session: SessionDep) -> ClearHitsOut:
-    deleted = await workspace_search.clear_hits(session, workspace_id)
+    deleted = await search_hits.clear_hits(session, workspace_id)
     return ClearHitsOut(deleted=deleted)
 
 
@@ -187,7 +196,7 @@ async def clear_hits(workspace_id: uuid.UUID, session: SessionDep) -> ClearHitsO
 # trying to parse "bulk" as a UUID).
 @router.patch("/hits/bulk")
 async def patch_hits_bulk(workspace_id: uuid.UUID, payload: BulkHitReviewUpdate, session: SessionDep) -> BulkUpdateOut:
-    count = await workspace_search.bulk_review_hits(
+    count = await search_hits.bulk_review_hits(
         session, workspace_id, payload.hit_ids, payload.stage1_status, payload.stage1_exclude_reason, payload.priority,
     )
     return BulkUpdateOut(updated=count)
@@ -197,12 +206,12 @@ async def patch_hits_bulk(workspace_id: uuid.UUID, payload: BulkHitReviewUpdate,
 async def patch_hit(
     workspace_id: uuid.UUID, hit_id: uuid.UUID, payload: HitReviewUpdate, session: SessionDep
 ) -> HitOut:
-    return await workspace_search.review_hit(session, hit_id, workspace_id, payload)
+    return await search_hits.review_hit(session, hit_id, workspace_id, payload)
 
 
 @router.get("/hits/{hit_id}")
 async def get_hit_route(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep) -> HitOut:
-    return await workspace_search.get_hit(session, hit_id, workspace_id)
+    return await search_hits.get_hit(session, hit_id, workspace_id)
 
 
 @router.post("/hits/{hit_id}/suggest")
@@ -217,7 +226,7 @@ async def suggest_hit(
 async def import_hits(
     workspace_id: uuid.UUID, payload: ImportHitsRequest, session: SessionDep, providers: DiscoveryDep, request: Request
 ) -> ImportHitsOut:
-    result = await workspace_search.import_hits(session, providers, workspace_id, payload.hit_ids)
+    result = await hit_import.import_hits(session, providers, workspace_id, payload.hit_ids)
     for paper_id in result.paper_ids:
         await _enqueue_ingest(request, paper_id)
     return ImportHitsOut(imported=result.imported, failed=result.failed)
@@ -233,7 +242,7 @@ async def upload_hit_pdf(
         raise too_large
     if len(content := await file.read()) > MAX_UPLOAD_PDF_BYTES:
         raise too_large
-    hit, created = await workspace_search.upload_hit_pdf(session, workspace_id, hit_id, file.filename, content)
+    hit, created = await hit_import.upload_hit_pdf(session, workspace_id, hit_id, file.filename, content)
     if created:
         await _enqueue_ingest(request, hit["paper_id"])
     return hit
@@ -243,7 +252,7 @@ async def upload_hit_pdf(
 async def snowball_route(
     workspace_id: uuid.UUID, payload: SnowballRequest, session: SessionDep, providers: DiscoveryDep,
 ) -> SnowballOut:
-    result = await workspace_search.snowball(
+    result = await snowball_run.snowball(
         session, providers, workspace_id, payload.seed_paper_ids, payload.seed_hit_ids,
         payload.backward, payload.forward,
     )

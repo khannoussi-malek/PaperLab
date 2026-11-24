@@ -21,8 +21,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.papers import papers
-from app.core.search import discovery
-from app.core.search.candidates import from_s2, from_work, merge, ordered_pdf_urls
+from app.core.search import discovery, free_copy, source_clients
+from app.core.search.candidates import merge, ordered_pdf_urls
+from app.core.search.from_indexes import from_s2, from_work
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict, NotFound
@@ -86,7 +87,9 @@ class Listing:
 # --- fetch -------------------------------------------------------------------------------------------------------
 
 
-async def _from_semantic_scholar(providers: discovery.Providers, paper: Paper) -> dict[str, list[Candidate]] | None:
+async def _from_semantic_scholar(
+    providers: source_clients.Providers, paper: Paper
+) -> dict[str, list[Candidate]] | None:
     """None when Semantic Scholar doesn't know the paper."""
     key = await discovery.s2_key(providers.client("semantic_scholar"), paper.doi, paper.title)
     if key is None:
@@ -98,14 +101,14 @@ async def _from_semantic_scholar(providers: discovery.Providers, paper: Paper) -
     return {"cites": [from_s2(p) for p in cites], "cited_by": [from_s2(p) for p in cited_by]}
 
 
-async def _from_openalex(providers: discovery.Providers, paper: Paper) -> dict[str, list[Candidate]]:
+async def _from_openalex(providers: source_clients.Providers, paper: Paper) -> dict[str, list[Candidate]]:
     ids = await openalex.referenced_works(providers.client("openalex"), paper.openalex_id)
     cites = await openalex.works_by_ids(providers.client("openalex"), ids[:REFS_CAP])
     cited_by = await openalex.citing_works(providers.client("openalex"), paper.openalex_id, CITING_CAP)
     return {"cites": [from_work(w) for w in cites], "cited_by": [from_work(w) for w in cited_by]}
 
 
-async def fetch(session: AsyncSession, providers: discovery.Providers, paper: Paper) -> list[str]:
+async def fetch(session: AsyncSession, providers: source_clients.Providers, paper: Paper) -> list[str]:
     """Stores both directions for `paper` and returns a notice per source that failed. Raises Conflict when no
     source could answer: none is on, the sources don't know the paper, or every one failed."""
     found: dict[str, dict[str, list[Candidate]]] = {}  # source -> direction -> candidates, most trusted first
@@ -557,7 +560,7 @@ async def library_listing(session: AsyncSession, workspace_id: uuid.UUID | None 
 
 
 async def import_reference(
-    session: AsyncSession, providers: discovery.Providers, ref_id: uuid.UUID, pdf_dir: Path
+    session: AsyncSession, providers: source_clients.Providers, ref_id: uuid.UUID, pdf_dir: Path
 ) -> Paper:
     """Downloads the reference's first free PDF and creates the paper, as Find papers' Add does (D84). The caller
     enqueues ingest. The new paper's own references are not fetched (P5)."""
@@ -565,7 +568,7 @@ async def import_reference(
     if ref is None:
         raise NotFound(f"reference {ref_id} not found")
     if ref.imported_as is not None:
-        raise Conflict(discovery.ALREADY_IN_LIBRARY)
+        raise Conflict(free_copy.ALREADY_IN_LIBRARY)
     candidate = Candidate(
         title=ref.title, authors=ref.authors, year=ref.year, venue=ref.venue, doi=ref.doi,
         external_ids=dict(ref.external_ids), cited_by_count=ref.cited_by_count, pdf_urls=ref.pdf_urls,
@@ -582,7 +585,7 @@ async def import_reference(
     try:
         paper = await discovery.add(session, providers, candidate, pdf_dir)
     except Conflict as exc:
-        if str(exc) == discovery.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # the library holds its arXiv copy
+        if str(exc) == free_copy.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # the library holds its arXiv copy
             await mark_imported(exc.details["paper_id"])
         raise
     await mark_imported(paper.id)

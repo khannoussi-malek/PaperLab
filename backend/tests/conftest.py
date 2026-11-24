@@ -21,7 +21,7 @@ from app.api.deps import get_transport, resolve_check_llm, resolve_llm, resolve_
 from app.config import settings
 from app.core.chat import voice_turn
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import source_clients
 from app.db import get_session
 from app.main import create_app
 from app.models import Author, LLMConnection, LLMModel, Paper, PaperEvent, PaperSources
@@ -401,10 +401,10 @@ class DiscoveryFakes:
     arxiv: FakeProvider
     core: FakeProvider
     unpaywall: FakeProvider
-    providers: discovery.Providers  # OpenAlex, Semantic Scholar and the PDF host; the other sources off
+    providers: source_clients.Providers  # OpenAlex, Semantic Scholar and the PDF host; the other sources off
     off_clients: dict[str, httpx.AsyncClient]  # built but not yet attached to `providers`
 
-    def turned_on(self, *sources: str) -> discovery.Providers:
+    def turned_on(self, *sources: str) -> source_clients.Providers:
         """`providers` with these sources on too: "crossref", "arxiv", "core", "unpaywall"."""
         return replace(self.providers, clients={**self.providers.clients, **{s: self.off_clients[s] for s in sources}})
 
@@ -421,7 +421,7 @@ async def discovery_fakes(fake_openalex):
         "core": core_ac.new_client(api_key=None, transport=core_host.transport),
         "unpaywall": unpaywall.new_client(email=FakeOpenAlex.MAILTO, transport=unpaywall_host.transport),
     }
-    providers = discovery.Providers(
+    providers = source_clients.Providers(
         clients={
             "openalex": fake_openalex.client,
             "semantic_scholar": semantic_scholar.new_client(api_key=None, transport=s2.transport),

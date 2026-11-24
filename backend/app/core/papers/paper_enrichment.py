@@ -11,10 +11,11 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.papers.enrichment import normalize_doi, openalex_published
+from app.core.papers.openalex_fields import openalex_published
 from app.core.papers.provenance import sources_of
 from app.core.search.candidates import s2_triage
 from app.core.search.hit_enrichment import CHUNK, batch_with_backoff
+from app.domain.doi import normalize_doi
 from app.domain.source_types import ARXIV_DOI_PREFIX, is_preprint_copy, peer_reviewed_of
 from app.models.paper import Paper
 from app.models.workspace import workspace_papers

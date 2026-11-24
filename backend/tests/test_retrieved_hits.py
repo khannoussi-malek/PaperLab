@@ -8,10 +8,10 @@ from conftest import pdf_attached
 from sqlalchemy import delete, select
 
 from app.core.papers import papers
-from app.core.search import discovery, retrieved_hits, workspace_search
+from app.core.search import free_copy, hit_import, retrieved_hits
 from app.core.search.candidates import normal_title
+from app.core.search.hit_import import import_hits, upload_hit_pdf
 from app.core.search.prisma_export import prisma_export
-from app.core.search.workspace_search import import_hits, upload_hit_pdf
 from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict
 from app.models import Paper, PaperMerge, paper_tags, workspace_papers
@@ -493,7 +493,7 @@ async def test_import_hits_skips_a_holder_deleted_during_the_search_and_still_in
         await s.commit()
         return b"%PDF-1.4 mine", [], []
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     result = await import_hits(session, discovery_fakes.providers, ws.id, [fresh.id, gone.id])
 
     fresh = await reload(session, fresh)
@@ -510,7 +510,7 @@ async def test_import_hits_skips_a_holder_merged_meanwhile_and_imports_the_rest(
     other = await paper(session, title="Fresh one", doi="10.1/fresh")
     gone = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
     fresh = await failed_hit(session, ws, title="Fresh one", status="not_attempted", doi="10.1/fresh")
-    found = workspace_search._held
+    found = hit_import._held
 
     async def held_then_merged(s, ref):  # an after-ingest merge folds the holder into another paper right after
         existing = await found(s, ref)
@@ -520,7 +520,7 @@ async def test_import_hits_skips_a_holder_merged_meanwhile_and_imports_the_rest(
             await s.commit()
         return existing
 
-    monkeypatch.setattr(workspace_search, "_held", held_then_merged)
+    monkeypatch.setattr(hit_import, "_held", held_then_merged)
     result = await import_hits(session, discovery_fakes.providers, ws.id, [gone.id, fresh.id])
 
     assert (await reload(session, gone)).acquisition_status == "not_attempted"
@@ -539,7 +539,7 @@ async def test_a_pdf_that_arrives_during_the_search_makes_the_hit_imported_not_a
         await papers.attach_pdf(s, held.id, b"%PDF-1.4 theirs", "manual")
         return b"%PDF-1.4 mine", [], []
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
 
     hit = await reload(session, hit)
@@ -555,9 +555,9 @@ async def test_import_hits_links_awaiting_pdf_when_a_held_arxiv_copy_answers(
     hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
 
     async def find_pdf(s, providers, candidate):
-        raise Conflict(discovery.ALREADY_IN_LIBRARY, paper_id=uuid.uuid4(), tried=[])
+        raise Conflict(free_copy.ALREADY_IN_LIBRARY, paper_id=uuid.uuid4(), tried=[])
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
 
     hit = await reload(session, hit)

@@ -7,8 +7,8 @@ import httpx
 import pytest
 
 from app.core.papers.paper_sources import SourceSettings
-from app.core.search import discovery
-from app.core.search.candidates import from_iacr_eprint
+from app.core.search import discovery, source_clients
+from app.core.search.from_repositories import from_iacr_eprint
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict
 from app.models import Paper
@@ -301,7 +301,7 @@ async def test_each_source_that_is_on_gets_a_client_and_keys_travel_in_headers()
         api_keys={"openalex": "oa-key-0123456789", "semantic_scholar": None, "core": "core-key-0123456789"},
     )
 
-    providers = discovery.build_providers(sources)
+    providers = source_clients.build_providers(sources)
 
     assert providers.client("crossref") is None
     assert providers.client("openalex").headers["Authorization"] == "Bearer oa-key-0123456789"
@@ -321,14 +321,14 @@ async def test_ssrn_client_uses_the_saved_openalex_key():
         api_keys={"openalex": "oa-key-0123456789", "semantic_scholar": None, "core": None},
     )
 
-    providers = discovery.build_providers(sources)
+    providers = source_clients.build_providers(sources)
 
     assert providers.client("ssrn").headers["Authorization"] == "Bearer oa-key-0123456789"
     await providers.aclose()
 
 
 async def test_unpaywall_and_openalex_stay_off_by_default_and_without_an_email():
-    providers = discovery.build_providers(SourceSettings())
+    providers = source_clients.build_providers(SourceSettings())
 
     assert (providers.client("openalex"), providers.client("unpaywall")) == (None, None)
     for source in (

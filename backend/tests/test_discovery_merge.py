@@ -1,6 +1,7 @@
 import pytest
 
-from app.core.search.candidates import from_arxiv, from_core, from_crossref, merge, surname
+from app.core.search.candidates import merge, surname
+from app.core.search.from_indexes import from_arxiv, from_core, from_crossref
 from app.domain.candidates import Candidate
 
 ARXIV_ENTRY = {

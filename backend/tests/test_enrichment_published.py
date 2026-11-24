@@ -3,7 +3,8 @@
 import pytest
 
 from app.core.papers import enrichment
-from app.core.papers.enrichment import PdfHints, openalex_published
+from app.core.papers.openalex_fields import openalex_published
+from app.core.papers.pdf_hints import PdfHints
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

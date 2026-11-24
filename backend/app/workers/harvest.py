@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.papers import paper_sources
-from app.core.search.candidates import from_acl_anthology, from_biorxiv_entry, from_iacr_eprint
+from app.core.search.from_repositories import from_acl_anthology, from_biorxiv_entry, from_iacr_eprint
 from app.db import SessionLocal
 from app.domain.candidates import Candidate
 from app.models import ExternalRef

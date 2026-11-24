@@ -8,9 +8,9 @@ from sqlalchemy import delete, select
 from app.api.deps import get_discovery
 from app.config import settings
 from app.core.papers import paper_sources
-from app.core.search import discovery
+from app.core.search import discovery, free_copy
 from app.models import Paper, PaperSources
-from app.providers import discovery_fake
+from app.providers import discovery_fake_data
 
 pytestmark = pytest.mark.anyio
 
@@ -226,8 +226,8 @@ async def test_the_discovery_dependency_serves_the_fake_offline_and_closes_its_c
         providers = await anext(dependency)
         assert providers.client("openalex") is None  # off by default, fake or not
         assert providers.client("semantic_scholar").headers["x-api-key"] == "secret-key"
-        assert providers.client("unpaywall").params["email"] == discovery_fake.MAILTO  # fake stands in for the email
-        assert (await providers.pdf.get(f"{discovery_fake.PDF_HOST}/paper.pdf")).content.startswith(b"%PDF")
+        assert providers.client("unpaywall").params["email"] == discovery_fake_data.MAILTO  # fake stands in
+        assert (await providers.pdf.get(f"{discovery_fake_data.PDF_HOST}/paper.pdf")).content.startswith(b"%PDF")
 
     assert providers.client("semantic_scholar").is_closed and providers.pdf.is_closed
     assert providers.client("unpaywall").is_closed
@@ -253,7 +253,7 @@ async def test_add_of_a_paper_whose_arxiv_copy_is_held_is_409_naming_the_paper(c
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"] == discovery.ALREADY_IN_LIBRARY
+    assert response.json()["detail"] == free_copy.ALREADY_IN_LIBRARY
     assert response.json()["paper_id"] == str(paper.id)
     assert arq.jobs == []
 

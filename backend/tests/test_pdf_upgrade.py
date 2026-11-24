@@ -14,9 +14,9 @@ from test_retrieved_hits import failed_hit, workspace
 from app.api import papers as papers_api
 from app.api import workspace_search as workspace_search_api
 from app.api.deps import get_discovery
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.core.papers import papers
-from app.core.search import discovery, retrieved_hits, workspace_search
+from app.core.search import discovery, free_copy, hit_import, retrieved_hits
 from app.core.search.prisma_export import prisma_export
 from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict
@@ -48,7 +48,7 @@ async def test_an_upgrade_keeps_id_tags_notes_workspaces_and_decisions(worker_se
     ws = await workspace(session)
     await workspaces.add_paper(session, ws.id, held.id)
     await tags.tag_papers(session, ws.id, "sleep", paper_ids=[held.id])
-    note = await notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
+    note = await ai_notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
     hit = await awaiting(session, ws, held)
     session.add(SearchRunEligibility(
         paper_id=held.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
@@ -188,7 +188,7 @@ async def test_find_pdf_route_names_a_held_arxiv_copy_of_the_same_work(
     entry = arxiv_entry(title=ARXIV_TITLE, authors=["Ada Lovelace"], id="2401.00001", year=2024)
     discovery_fakes.arxiv.reply("/api/query", 200, text=atom(entry))
     app.dependency_overrides[get_discovery] = lambda: discovery_fakes.turned_on("arxiv")
-    monkeypatch.setattr(discovery, "_sleep", _no_wait)
+    monkeypatch.setattr(free_copy, "_sleep", _no_wait)
 
     answer = await client.post(f"/api/papers/{held.id}/find-pdf")
 
@@ -283,7 +283,7 @@ async def test_add_still_behaves_the_same_after_find_pdf_extraction(session, dis
     tried_by_add: list = []
 
     paper = await discovery.add(session, discovery_fakes.providers, candidate(pdf_urls=urls), pdf_dir, tried_by_add)
-    data, tried, copies = await discovery.find_pdf(session, discovery_fakes.providers, candidate(pdf_urls=urls))
+    data, tried, copies = await free_copy.find_pdf(session, discovery_fakes.providers, candidate(pdf_urls=urls))
 
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == data == PDF
     assert tried == tried_by_add == [
@@ -356,7 +356,7 @@ async def title_linked(session):
     hit = await failed_hit(session, ws, title=held.title, doi="10.1000/sleep", pdf_urls=[f"{HOST}/ok.pdf"])
     await workspaces.add_paper(session, ws.id, held.id)  # link's title rule
     await tags.tag_papers(session, ws.id, "sleep", paper_ids=[held.id])
-    note = await notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
+    note = await ai_notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
     session.add(SearchRunEligibility(
         paper_id=held.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
     ))  # fmt: skip
@@ -383,7 +383,7 @@ async def assert_upgraded_in_place(session, ws, held, hit, note, status):
 async def test_a_hit_upload_upgrades_the_paper_it_is_linked_to_by_title(session, pdf_dir):
     ws, held, hit, note = await title_linked(session)
 
-    _, created = await workspace_search.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF)
+    _, created = await hit_import.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF)
 
     assert created
     await assert_upgraded_in_place(session, ws, held, hit, note, "manual")
@@ -393,7 +393,7 @@ async def test_import_all_upgrades_the_paper_a_hit_is_linked_to_by_title(session
     ws, held, hit, note = await title_linked(session)
     discovery_fakes.pdf_host.reply("/ok.pdf", 200, content=PDF)
 
-    result = await workspace_search.import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+    result = await hit_import.import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
 
     assert result.paper_ids == [held.id]
     await assert_upgraded_in_place(session, ws, held, hit, note, "imported")
@@ -427,7 +427,7 @@ async def test_the_hit_route_and_the_paper_route_lock_the_paper_before_its_hits(
     await awaiting(session, ws, other)
 
     for upgrade in (
-        lambda: workspace_search.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF),
+        lambda: hit_import.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF),
         lambda: papers.attach_pdf(session, other.id, PDF, how="manual"),
     ):
         with sent(session) as seen:

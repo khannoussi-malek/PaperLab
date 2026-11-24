@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import delete, select
 
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance
 
@@ -41,7 +41,7 @@ async def test_promote_creates_an_llm_note_anchored_on_the_cited_chunks(session)
 
     body = "  relates every\nposition [C1]. Layers stack [C2]. "  # whitespace differs from the answer
 
-    note = await notes.promote_llm_fragment(session, output.id, body, [chunks[1].id, chunks[0].id, chunks[1].id])
+    note = await ai_notes.promote_llm_fragment(session, output.id, body, [chunks[1].id, chunks[0].id, chunks[1].id])
 
     assert (note.provenance, note.source_id) == (Provenance.LLM, output.id)
     assert note.body == "relates every\nposition [C1]. Layers stack [C2]."
@@ -52,7 +52,7 @@ async def test_promote_creates_an_llm_note_anchored_on_the_cited_chunks(session)
 
 async def test_editing_a_promoted_note_flips_it_to_llm_edited(session):
     output, chunks = await make_answer(session)
-    note = await notes.promote_llm_fragment(session, output.id, "Layers stack [C2].", [chunks[1].id])
+    note = await ai_notes.promote_llm_fragment(session, output.id, "Layers stack [C2].", [chunks[1].id])
 
     edited = await notes.update_note(session, note.id, body="Layers stack, per my reading.")
 
@@ -63,22 +63,22 @@ async def test_promote_rejects_what_the_answer_cannot_back(session):
     output, chunks = await make_answer(session)
 
     with pytest.raises(NotFound):
-        await notes.promote_llm_fragment(session, uuid.uuid4(), "Layers stack", [chunks[0].id])
+        await ai_notes.promote_llm_fragment(session, uuid.uuid4(), "Layers stack", [chunks[0].id])
     with pytest.raises(InvalidInput, match="selected text"):
-        await notes.promote_llm_fragment(session, output.id, " \n ", [chunks[0].id])
+        await ai_notes.promote_llm_fragment(session, output.id, " \n ", [chunks[0].id])
     with pytest.raises(InvalidInput, match="^body_not_in_output$"):
-        await notes.promote_llm_fragment(session, output.id, "Layers stack, I think", [chunks[0].id])
+        await ai_notes.promote_llm_fragment(session, output.id, "Layers stack, I think", [chunks[0].id])
     with pytest.raises(InvalidInput, match="not a source of this answer"):
-        await notes.promote_llm_fragment(session, output.id, "Layers stack", [uuid.uuid4()])
+        await ai_notes.promote_llm_fragment(session, output.id, "Layers stack", [uuid.uuid4()])
     with pytest.raises(InvalidInput, match="no longer exists"):
-        await notes.promote_llm_fragment(session, output.id, "Layers stack", [chunks[2].id])
+        await ai_notes.promote_llm_fragment(session, output.id, "Layers stack", [chunks[2].id])
 
 
 async def test_promote_rejects_empty_chunk_ids(session):
     output, chunks = await make_answer(session)
 
     with pytest.raises(InvalidInput, match="at least one cited chunk"):
-        await notes.promote_llm_fragment(session, output.id, "Layers stack", [])
+        await ai_notes.promote_llm_fragment(session, output.id, "Layers stack", [])
 
     assert list(await session.scalars(select(Note).where(Note.source_id == output.id))) == []
 
@@ -104,7 +104,7 @@ async def test_promote_collapses_anchors_sharing_page_and_bbox(session):
     session.add(output)
     await session.commit()
 
-    note = await notes.promote_llm_fragment(
+    note = await ai_notes.promote_llm_fragment(
         session, output.id, "Same spot twice.", [dup_chunks[0].id, dup_chunks[1].id]
     )
 
@@ -149,15 +149,15 @@ async def test_a_check_can_never_be_promoted(session):
     await session.commit()
 
     with pytest.raises(InvalidInput, match="^check_not_promotable$"):
-        await notes.promote_llm_fragment(session, output.id, "relates every", [chunks[0].id])
+        await ai_notes.promote_llm_fragment(session, output.id, "relates every", [chunks[0].id])
 
 
 async def test_promoting_the_same_text_twice_keeps_one_note(session):
     output, chunks = await make_answer(session)
     output_id, chunk_id = output.id, chunks[1].id
 
-    first = await notes.promote_llm_fragment(session, output_id, "Layers stack [C2].", [chunk_id])
-    second = await notes.promote_llm_fragment(session, output_id, " Layers stack [C2]. ", [chunk_id])
+    first = await ai_notes.promote_llm_fragment(session, output_id, "Layers stack [C2].", [chunk_id])
+    second = await ai_notes.promote_llm_fragment(session, output_id, " Layers stack [C2]. ", [chunk_id])
 
     assert second.id == first.id
     assert len(first.anchors) == len(second.anchors)

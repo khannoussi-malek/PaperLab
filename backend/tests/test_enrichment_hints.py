@@ -1,4 +1,5 @@
-from app.core.papers.enrichment import PdfHints, normalize_doi, pdf_hints
+from app.core.papers.pdf_hints import PdfHints, pdf_hints
+from app.domain.doi import normalize_doi
 from app.providers.extraction import extract
 
 ARXIV_PAGE = "BERT: Pre-training of Deep\nJacob Devlin Ming-Wei Chang\narXiv:1810.04805v2 [cs.CL] 24 May 2019\n"

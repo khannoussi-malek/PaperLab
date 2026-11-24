@@ -7,7 +7,7 @@ A paper with no PubMed record (most outside biomedicine) keeps a NULL pmid, so e
 run it once after an upgrade, not on a schedule.
 
 `--align` checks every paper with a DOI, even one with nothing left to fill, and also corrects its year, venue and
-pages from Crossref (`enrichment.align_with_crossref`: the issue year, the journal's name at the time, the full page
+pages from Crossref (`crossref_align.align_with_crossref`: the issue year, the journal's name at the time, the full page
 range; only on a DOI it trusts). `--report PATH` writes every change made as CSV: paper_id, doi, field, old, new.
 """
 
@@ -21,7 +21,7 @@ import httpx
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.papers import enrichment, paper_sources
+from app.core.papers import enrichment, openalex_fields, paper_sources
 from app.db import SessionLocal
 from app.models import Paper
 from app.providers import crossref, openalex
@@ -52,7 +52,7 @@ async def run(
     align: bool = False,
     report: Path | str | None = None,
 ) -> dict[str, int]:
-    names = (*enrichment.BIBLIO_FIELDS, "year", "venue")
+    names = (*openalex_fields.BIBLIO_FIELDS, "year", "venue")
     columns = [getattr(Paper, name) for name in names]
     rows = (await session.execute(_selection([Paper.doi, *columns], only, align))).all()
     summary = {"checked": len(rows), "updated": 0}

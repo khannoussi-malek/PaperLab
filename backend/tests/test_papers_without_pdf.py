@@ -14,7 +14,7 @@ from mcp_fixtures import call, result
 from sqlalchemy import delete, func, select, update
 
 from app.core.chat import chat, claims, retrieval
-from app.core.notes import evidence_cards, notes
+from app.core.notes import ai_notes, evidence_cards
 from app.core.papers import chunk_headers, library, papers
 from app.core.search import screening
 from app.core.workspaces import tags, workspaces
@@ -182,21 +182,21 @@ async def test_upload_by_doi_onto_a_paper_without_a_pdf_attaches_to_it(session, 
 
 async def test_quoting_a_paper_without_a_pdf_saves_an_unanchored_note_led_by_the_quote(session):
     paper = await pdf_less_paper(session, abstract="Sleep helps memory\nconsolidation in adults.")
-    note = await notes.create_llm_note(session, paper.id, "Worth citing.", "sleep helps  memory consolidation")
+    note = await ai_notes.create_llm_note(session, paper.id, "Worth citing.", "sleep helps  memory consolidation")
     assert (note.body, note.anchors, note.paper_ids) == (
         "“sleep helps memory consolidation”\n\nWorth citing.",
         [],
         [paper.id],
     )
     with pytest.raises(InvalidInput, match="quote_not_found"):
-        await notes.create_llm_note(session, paper.id, "Worth citing.", "Naps help too.")
+        await ai_notes.create_llm_note(session, paper.id, "Worth citing.", "Naps help too.")
 
 
 async def test_locating_a_quote_on_a_paper_without_a_pdf_still_refuses_no_pdf(session):
     """create_ai_note keeps the note and drops the anchor on this Conflict; an abstract has no spot to anchor on."""
     paper = await pdf_less_paper(session, abstract="Sleep helps memory consolidation.")
     with pytest.raises(Conflict, match="no_pdf"):
-        await notes.locate_quote(session, paper.id, "Sleep helps memory consolidation.")
+        await ai_notes.locate_quote(session, paper.id, "Sleep helps memory consolidation.")
 
 
 async def test_mcp_create_note_on_a_paper_without_a_pdf_quotes_its_abstract(session):
@@ -242,10 +242,10 @@ async def test_a_quote_on_a_paper_with_a_pdf_is_422_anchor_required(client, sess
 
 
 async def test_a_failed_paper_without_a_pdf_re_added_by_identifier_is_left_alone(session, jobs):
-    from app.core.papers import pipeline
+    from app.core.papers import pipeline_add
 
     paper = await pdf_less_paper(session, status="failed")
-    added = await pipeline._in_library(session, paper.id, None)
+    added = await pipeline_add._in_library(session, paper.id, None)
     await session.refresh(paper)
     assert (paper.status, jobs.jobs, added.paper_id) == ("failed", [], paper.id)
 
@@ -376,8 +376,8 @@ async def test_saving_an_answer_citing_an_abstract_makes_an_unanchored_linked_no
     )  # fmt: skip
     session.add(output)
     await session.commit()
-    saved = await notes.save_suggestion(session, output.id, 0)
-    promoted = await notes.promote_llm_fragment(session, output.id, "Sleep helps memory", [chunk.id])
+    saved = await ai_notes.save_suggestion(session, output.id, 0)
+    promoted = await ai_notes.promote_llm_fragment(session, output.id, "Sleep helps memory", [chunk.id])
     assert [(n.paper_ids, n.anchors) for n in (saved, promoted)] == [([paper.id], [])] * 2
 
 
@@ -538,7 +538,7 @@ async def test_a_failed_index_abstract_enqueue_on_edit_leaves_the_paper_ready(cl
 
 async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, monkeypatch):
     """upload_hit_pdf only needs a holder found by identifier; held_version can write a DOI onto an arXiv copy."""
-    from app.core.search import discovery, workspace_search
+    from app.core.search import free_copy, hit_import
     from app.models import Workspace
     from app.models.references import ExternalRef
     from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
@@ -546,7 +546,7 @@ async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, mo
     async def never(*_a, **_k):
         raise AssertionError("upload_hit_pdf asked for the other version")
 
-    monkeypatch.setattr(discovery, "held_version", never)
+    monkeypatch.setattr(free_copy, "held_version", never)
     workspace = Workspace(name=f"Upload {uuid.uuid4().hex[:8]}")
     ref = ExternalRef(title="Upload Probe Paper", pdf_urls=[])
     session.add_all([workspace, ref])
@@ -564,6 +564,6 @@ async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, mo
     session.add(hit)
     await session.commit()
 
-    _, created = await workspace_search.upload_hit_pdf(session, workspace.id, hit.id, "p.pdf", b"%PDF-1.4 probe")
+    _, created = await hit_import.upload_hit_pdf(session, workspace.id, hit.id, "p.pdf", b"%PDF-1.4 probe")
 
     assert created

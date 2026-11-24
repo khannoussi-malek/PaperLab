@@ -7,7 +7,7 @@ from sqlalchemy import delete, insert, select
 from test_chat import NOTE_RULE_V3
 
 from app.core.chat import chat
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper, Workspace, workspace_papers
 from app.providers import embedding
@@ -201,7 +201,7 @@ async def test_the_workspace_history_lists_its_saved_suggestions(client, session
     await session.commit()
     workspace_id, output_id = workspace.id, output.id
 
-    note = await notes.save_suggestion(session, output_id, 0)
+    note = await ai_notes.save_suggestion(session, output_id, 0)
 
     [answer] = (await client.get(f"/api/workspaces/{workspace_id}/chat")).json()
     assert answer["saved_notes"] == [{"index": 0, "note_id": str(note.id), "paper_ids": []}]

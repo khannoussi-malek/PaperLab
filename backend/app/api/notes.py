@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response, UploadFile
 
 from app.api.deps import LLMByModelIdDep, SessionDep
 from app.core.chat import answer_provenance
-from app.core.notes import note_suggestions, notes, notes_markdown
+from app.core.notes import ai_notes, note_suggestions, notes, notes_markdown
 from app.domain.errors import InvalidInput
 from app.providers.base import LLMError, LLMUnavailable
 from app.schemas.chat import AnswerProvenanceOut, McpNoteOut, PromoteRequest, to_provenance
@@ -104,7 +104,7 @@ async def create_figure_note(payload: FigureNoteCreate, session: SessionDep) -> 
 
 @router.post("/api/notes/promote", status_code=201)
 async def promote_note(payload: PromoteRequest, session: SessionDep) -> NoteOut:
-    return await notes.promote_llm_fragment(session, payload.output_id, payload.body, payload.chunk_ids)
+    return await ai_notes.promote_llm_fragment(session, payload.output_id, payload.body, payload.chunk_ids)
 
 
 @router.patch("/api/notes/{note_id}")

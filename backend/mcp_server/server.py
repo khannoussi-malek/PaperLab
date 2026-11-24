@@ -40,11 +40,11 @@ from app.core.manuscripts import (
     reporting_guidelines,
 )
 from app.core.manuscripts.manuscript_checks import doi_service
-from app.core.notes import notes
-from app.core.papers import library, papers, pipeline
+from app.core.notes import ai_notes, notes
+from app.core.papers import library, papers, pipeline, pipeline_add, pipeline_search, pipeline_upload
 from app.core.platform import mcp_activity, mcp_reads, skill_prompts, skills
 from app.core.platform.mcp_activity import WRITES_DISABLED
-from app.core.search import screening
+from app.core.search import hit_import, screening, snowball_run
 from app.core.workspaces import graph, novelty, workspaces
 from app.db import SessionLocal
 from app.domain.errors import DomainError, error_code
@@ -349,7 +349,7 @@ async def create_note(body: str, paper_id: uuid.UUID, quoted_text: str) -> notes
     returned for this paper, long enough to occur only once. For a passage marked from_abstract, quote from the abstract
     itself, not the title that starts the passage. The note is shown to the owner as written by AI."""
     async with sessions() as session:
-        return await notes.create_llm_note(session, paper_id, body, quoted_text)
+        return await ai_notes.create_llm_note(session, paper_id, body, quoted_text)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -448,7 +448,7 @@ async def remove_paper_from_workspace(workspace: str, paper_id: uuid.UUID) -> pi
 @recoverable
 async def add_paper(
     identifier: str, workspace: str | None = None, save_without_pdf: bool = False
-) -> pipeline.AddPaperResult:
+) -> pipeline_add.AddPaperResult:
     """Use to bring one paper into the library by DOI, arXiv ID or a direct PDF link (free copies only). Returns
     `queued` (ingesting now), `ingested` (already in the library and ready) or `no_free_pdf` with its landing page,
     `tried` (each PDF URL tried and why it failed; a `queued` link that fell back to its DOI carries it too) and
@@ -461,26 +461,26 @@ async def add_paper(
     text is not. Adding a paper that was saved this way again looks for a free copy and attaches it (`queued`);
     with none found it answers `already_in_library` with a note, `tried` and `free_copies`."""
     async with sessions() as session:
-        return await pipeline.add_paper(session, identifier, workspace, save_without_pdf)
+        return await pipeline_add.add_paper(session, identifier, workspace, save_without_pdf)
 
 
 @mcp.tool()
 @recoverable
 async def upload_paper(
     workspace: str, filename: str, pdf_base64: str, doi: str | None = None, tags: list[str] | None = None
-) -> pipeline.AddPaperResult:
+) -> pipeline_add.AddPaperResult:
     """Use to add a PDF you already have (base64 with no line breaks, at most 30 MB) to a workspace; it is ingested
     like an upload in the app. Give doi if you know it, so a paper already in the library is reused instead of
     copied; a paper saved without a PDF gets this PDF attached (`queued`)."""
     async with sessions() as session:
-        return await pipeline.upload_paper(session, workspace, filename, pdf_base64, doi, tags)
+        return await pipeline_upload.upload_paper(session, workspace, filename, pdf_base64, doi, tags)
 
 
 @mcp.tool()
 @recoverable
 async def add_papers(
     identifiers: list[str], workspace: str | None = None, save_without_pdf: bool = False
-) -> list[pipeline.AddPapersItem]:
+) -> list[pipeline_add.AddPapersItem]:
     """Use to bring up to 50 papers into the library at once by DOI, arXiv ID or direct PDF link (free copies only).
     Each item reports its own `status` (as add_paper, with `tried` and `free_copies` when no free PDF was found)
     or `error` (the code add_paper would return), so one bad identifier does not stop the rest. Repeated
@@ -488,19 +488,19 @@ async def add_papers(
     the whole call. Use add_paper for a single identifier. save_without_pdf=True saves an identifier with no
     free copy by its details instead (status `saved_without_pdf`), as add_paper does; the default saves nothing."""
     async with sessions() as session:
-        return await pipeline.add_papers(session, identifiers, workspace, save_without_pdf)
+        return await pipeline_add.add_papers(session, identifiers, workspace, save_without_pdf)
 
 
 @mcp.tool()
 @recoverable
 async def recheck_free_copies(
     workspace: str, tags: list[str] | None = None, match: Literal["any", "all"] = "any"
-) -> pipeline.RecheckQueued:
+) -> pipeline_search.RecheckQueued:
     """Use to look again for free copies of a workspace's papers saved without a PDF, optionally only those with these
     tags. Runs in the background, up to 200 papers a call (`left` says how many wait for the next). A found copy is
     attached and ingested; list_papers then shows has_pdf and pdf_check_result (found, none, temporary, error)."""
     async with sessions() as session:
-        return await pipeline.recheck_free_copies(session, workspace, tags, match)
+        return await pipeline_search.recheck_free_copies(session, workspace, tags, match)
 
 
 @mcp.tool()
@@ -541,54 +541,54 @@ async def start_search_run(
     sources: list[str] | None = None,
     year_from: int | None = None,
     year_to: int | None = None,
-) -> pipeline.SearchRunOut:
+) -> pipeline_search.SearchRunOut:
     """Use to search the paper sources for a topic and collect every result into the workspace's hits for screening.
     Runs in the background; poll get_search_run. `sources` defaults to the ones turned on in Settings. Give
     year_from/year_to to keep only papers published in that range (undated ones stay). `warnings` names sources that
     will return nothing as they are set up (off, or needing an API key), before you wait for the run."""
     async with sessions() as session:
-        return await pipeline.start_search_run(session, workspace, query, sources, year_from, year_to)
+        return await pipeline_search.start_search_run(session, workspace, query, sources, year_from, year_to)
 
 
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
-async def get_search_run(run_id: uuid.UUID) -> pipeline.SearchRunOut:
+async def get_search_run(run_id: uuid.UUID) -> pipeline_search.SearchRunOut:
     """Use to check a search run. `outcome` says whether the search reached its sources: complete (all ran dry) or
     partial; report a run's coverage from this, not from `status`, where exhausted only means the job ended.
     source_results gives each source's state (complete, paused, cooling_down, gave_up, disabled, fetching), raw_count,
     new_hits, last_error and a reason; failed_sources names those that stopped answering, and prescreen counts how many
     hits a model judged. stats_json.per_source_error holds each source's last error, even for one that recovered."""
     async with sessions() as session:
-        return await pipeline.get_search_run(session, run_id)
+        return await pipeline_search.get_search_run(session, run_id)
 
 
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
-async def list_search_runs(workspace: str, limit: int = 20) -> list[pipeline.SearchRunSummary]:
+async def list_search_runs(workspace: str, limit: int = 20) -> list[pipeline_search.SearchRunSummary]:
     """Use to see a workspace's search runs, newest first: status, query, sources, per-source result counts and
     how many hits each run added. Pass a run's id to get_search_run for full stats or to list_hits/run_prescreen
     to scope them. Each run has the same outcome, source_results, failed_sources, hit_count and prescreen as
     get_search_run; status exhausted only means the job ended, so report coverage from outcome."""
     async with sessions() as session:
-        return await pipeline.list_search_runs(session, workspace, limit)
+        return await pipeline_search.list_search_runs(session, workspace, limit)
 
 
 @mcp.tool()
 @recoverable
-async def stop_search_run(run_id: uuid.UUID) -> pipeline.SearchRunOut:
+async def stop_search_run(run_id: uuid.UUID) -> pipeline_search.SearchRunOut:
     """Use to stop a running search early. Hits found so far stay."""
     async with sessions() as session:
-        return await pipeline.stop_search_run(session, run_id)
+        return await pipeline_search.stop_search_run(session, run_id)
 
 
 @mcp.tool()
 @recoverable
-async def continue_search_run(run_id: uuid.UUID) -> pipeline.SearchRunOut:
+async def continue_search_run(run_id: uuid.UUID) -> pipeline_search.SearchRunOut:
     """Use to fetch the next results of a search run that stopped, was cut short or paused at 200 results per source per
     pass; hits it already found are never added twice. Refused with nothing_left_to_fetch (every source is finished),
     search_run_already_running or search_run_still_stopping (the last pass is still winding down; retry shortly)."""
     async with sessions() as session:
-        return await pipeline.continue_search_run(session, run_id)
+        return await pipeline_search.continue_search_run(session, run_id)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -599,13 +599,13 @@ async def list_hits(
     status: str | None = None,
     cursor: str | None = None,
     limit: int = 50,
-) -> pipeline.HitPage:
+) -> pipeline_search.HitPage:
     """Use to read search results waiting for screening. Filter by run and by status (undecided, relevant,
     not_relevant, maybe); pass next_cursor back to page. Each hit shows source_type, peer_review, published_doi and
     published_venue to tell preprints from published work, and may carry an AI suggestion — a suggestion only,
     never a decision."""
     async with sessions() as session:
-        return await pipeline.list_hits(session, workspace, run_id, status, cursor, limit)
+        return await pipeline_search.list_hits(session, workspace, run_id, status, cursor, limit)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -615,21 +615,21 @@ async def get_screening_suggestions(
     run_id: uuid.UUID | None = None,
     min_relevance: int | None = None,
     cursor: str | None = None,
-) -> pipeline.HitPage:
+) -> pipeline_search.HitPage:
     """Use to read the AI's suggestions on undecided hits, best score first. min_relevance (1 to 5) hides weaker
     ones; pass next_cursor back to page. Hits carry source_type, peer_review, published_doi and published_venue.
     These are suggestions only; nothing here is a decision."""
     async with sessions() as session:
-        return await pipeline.get_screening_suggestions(session, workspace, run_id, min_relevance, cursor)
+        return await pipeline_search.get_screening_suggestions(session, workspace, run_id, min_relevance, cursor)
 
 
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
-async def get_screening_criteria(workspace: str) -> pipeline.ScreeningStateOut:
+async def get_screening_criteria(workspace: str) -> pipeline_search.ScreeningStateOut:
     """Use to read a workspace's research question, inclusion criteria and exclusion criteria, which AI
     pre-screening judges every hit against, before drafting or checking them."""
     async with sessions() as session:
-        return await pipeline.get_screening_criteria(session, workspace)
+        return await pipeline_search.get_screening_criteria(session, workspace)
 
 
 @mcp.tool()
@@ -639,13 +639,13 @@ async def set_screening_criteria(
     research_question: Annotated[str | None, Field(max_length=4000)] = None,
     inclusion_criteria: Annotated[str | None, Field(max_length=4000)] = None,
     exclusion_criteria: Annotated[str | None, Field(max_length=4000)] = None,
-) -> pipeline.ScreeningStateOut:
+) -> pipeline_search.ScreeningStateOut:
     """Use to save a workspace's research question, inclusion or exclusion criteria (up to 4000 characters each);
     only the fields given change and an empty or blank string clears one. Any change clears every stored AI
     suggestion, so run_prescreen again afterwards; refused (suggestions_running) while suggestions are being made.
     Ask the owner before calling."""
     async with sessions() as session:
-        return await pipeline.set_screening_criteria(
+        return await pipeline_search.set_screening_criteria(
             session, workspace, research_question, inclusion_criteria, exclusion_criteria
         )
 
@@ -658,7 +658,7 @@ async def run_prescreen(
     confirm: bool = False,
     allow_remote: bool = False,
     run_ids: list[uuid.UUID] | None = None,
-) -> pipeline.ScreeningStateOut:
+) -> pipeline_search.ScreeningStateOut:
     """Use to have the default model suggest include, exclude or unsure for each undecided hit. It runs in the
     background. Without run_id it covers every undecided hit in the workspace; above 500 queued hits it is refused
     with prescreen_needs_confirm and the count, so ask the owner, then call again with confirm=true. A remote model
@@ -667,12 +667,12 @@ async def run_prescreen(
     allow_remote=true. run_ids queues several runs as one job (not together with run_id); above 500 queued
     hits it needs confirm too. Suggestions are never decisions."""
     async with sessions() as session:
-        return await pipeline.run_prescreen(session, workspace, run_id, confirm, allow_remote, run_ids)
+        return await pipeline_search.run_prescreen(session, workspace, run_id, confirm, allow_remote, run_ids)
 
 
 @mcp.tool()
 @recoverable
-async def enrich_hits(workspace: str, run_id: uuid.UUID | None = None) -> pipeline.EnrichQueued:
+async def enrich_hits(workspace: str, run_id: uuid.UUID | None = None) -> pipeline_search.EnrichQueued:
     """Use to fill peer-review and published-version data for hits found before this existed. It runs in the
     background (a few seconds per 500 hits, longer when Semantic Scholar is busy); read the results with
     list_hits. It also fills abstracts that are missing. `queued` is how many hits' papers have not been asked
@@ -682,12 +682,12 @@ async def enrich_hits(workspace: str, run_id: uuid.UUID | None = None) -> pipeli
     run_prescreen picks them up again.
     With Semantic Scholar turned off in Settings nothing is queued (`s2_off`)."""
     async with sessions() as session:
-        return await pipeline.enrich_hits(session, workspace, run_id)
+        return await pipeline_search.enrich_hits(session, workspace, run_id)
 
 
 @mcp.tool()
 @recoverable
-async def enrich_papers(workspace: str) -> pipeline.EnrichPapersQueued:
+async def enrich_papers(workspace: str) -> pipeline_search.EnrichPapersQueued:
     """Use to find out whether papers in a workspace that are the arXiv copy of a published paper (an ICML or EMNLP
     paper, say) were published, and where. It asks Semantic Scholar in the background. For an arXiv copy
     (or a paper whose source type is preprint) it fills published_venue and published_doi, and sets peer_reviewed to
@@ -701,16 +701,16 @@ async def enrich_papers(workspace: str) -> pipeline.EnrichPapersQueued:
     (`already_running` is true and a second call starts nothing) or a rate-limited stop. With Semantic Scholar
     turned off in Settings nothing is queued (`s2_off`)."""
     async with sessions() as session:
-        return await pipeline.enrich_papers(session, workspace)
+        return await pipeline_search.enrich_papers(session, workspace)
 
 
 @mcp.tool()
 @recoverable
-async def stop_prescreen(workspace: str) -> pipeline.ScreeningStateOut:
+async def stop_prescreen(workspace: str) -> pipeline_search.ScreeningStateOut:
     """Use to stop AI pre-screening that is running in a workspace. Suggestions made so far stay; a second call on
     one that is stuck stopping resets it."""
     async with sessions() as session:
-        return await pipeline.stop_prescreen(session, workspace)
+        return await pipeline_search.stop_prescreen(session, workspace)
 
 
 @mcp.tool()
@@ -724,7 +724,7 @@ async def accept_suggestions(
     each paper when it is imported.
     Ask the owner before calling."""
     async with sessions() as session:
-        return await pipeline.accept_suggestions(session, workspace, hit_ids, tags)
+        return await pipeline_search.accept_suggestions(session, workspace, hit_ids, tags)
 
 
 @mcp.tool()
@@ -735,56 +735,56 @@ async def review_hits(
     decision: str,
     reason: str | None = None,
     tags: list[str] | None = None,
-) -> pipeline.ReviewResult:
+) -> pipeline_search.ReviewResult:
     """Use to record the owner's title/abstract screening decision on hits: relevant, not_relevant (needs a reason:
     wrong_topic, wrong_study_type, duplicate, language, inaccessible, other) or maybe. `tags` label the hits
     (created when missing) and move onto each paper when it is imported, e.g. its research question."""
     async with sessions() as session:
-        return await pipeline.review_hits(session, workspace, hit_ids, decision, reason, tags)
+        return await pipeline_search.review_hits(session, workspace, hit_ids, decision, reason, tags)
 
 
 @mcp.tool()
 @recoverable
 async def import_hit(
     workspace: str, hit_id: uuid.UUID, tags: list[str] | None = None
-) -> pipeline.workspace_search.ImportResult:
+) -> hit_import.ImportResult:
     """Use to pull a screened hit into the library: downloads its free PDF and starts ingesting. failed=1 means no
     free copy was found; imported=0, failed=0 means it was already imported. A paper already saved without a PDF
     gets the free copy attached; with none found the hit waits for a PDF. `tags` label the paper (created when
     missing)."""
     async with sessions() as session:
-        return await pipeline.import_hit(session, workspace, hit_id, tags)
+        return await pipeline_search.import_hit(session, workspace, hit_id, tags)
 
 
 @mcp.tool()
 @recoverable
 async def snowball(
     workspace: str, seed_paper_ids: list[uuid.UUID], direction: str
-) -> pipeline.workspace_search.SnowballResult:
+) -> snowball_run.SnowballResult:
     """Use to find papers a workspace's seed papers cite (backward), are cited by (forward) or both, one hop via
     Semantic Scholar. New ones land in the hits for screening."""
     async with sessions() as session:
-        return await pipeline.snowball(session, workspace, seed_paper_ids, direction)
+        return await pipeline_search.snowball(session, workspace, seed_paper_ids, direction)
 
 
 @mcp.tool()
 @recoverable
 async def set_eligibility(
     workspace: str, paper_id: uuid.UUID, run_id: uuid.UUID, verdict: str, reason: str | None = None
-) -> pipeline.EligibilityView:
+) -> pipeline_search.EligibilityView:
     """Use after reading an imported paper's full text to record the owner's stage-2 verdict for a run: include or
     exclude (give the reason)."""
     async with sessions() as session:
-        return await pipeline.set_eligibility(session, workspace, paper_id, run_id, verdict, reason)
+        return await pipeline_search.set_eligibility(session, workspace, paper_id, run_id, verdict, reason)
 
 
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
-async def get_prisma(workspace: str, run_id: uuid.UUID | None = None) -> pipeline.prisma_export.PrismaExport:
+async def get_prisma(workspace: str, run_id: uuid.UUID | None = None) -> pipeline_search.prisma_export.PrismaExport:
     """Use to get the PRISMA flow counts for one run, or for the whole workspace when run_id is left out. Counts
     only the owner's decisions."""
     async with sessions() as session:
-        return await pipeline.get_prisma(session, workspace, run_id)
+        return await pipeline_search.get_prisma(session, workspace, run_id)
 
 
 @mcp.tool(annotations=READ_ONLY)

@@ -10,9 +10,9 @@ from mcp import Client
 from app.core.papers import pdf_links
 from app.core.papers.paper_sources import SourceSettings
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import source_clients
 from app.core.search.source_registry import SOURCE_IDS
-from app.providers import discovery_fake
+from app.providers import discovery_fake, discovery_fake_data
 from mcp_server import server
 
 
@@ -35,17 +35,17 @@ def jobs(monkeypatch) -> FakeArq:
 @pytest.fixture(autouse=True)
 def fake_providers(monkeypatch):
     """Every paper source on, routed to discovery_fake's offline MockTransport."""
-    every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
+    every_source = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
 
     @asynccontextmanager
     async def offline(_session):
-        providers = discovery.build_providers(every_source, discovery_fake.transport())
+        providers = source_clients.build_providers(every_source, discovery_fake.transport())
         try:
             yield providers
         finally:
             await providers.aclose()
 
-    monkeypatch.setattr(discovery, "open_providers", offline)
+    monkeypatch.setattr(source_clients, "open_providers", offline)
 
 
 @pytest.fixture(autouse=True)

@@ -11,13 +11,13 @@ from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
 from sqlalchemy import func, select
 
-from app.core.papers import papers, pdf_links, pipeline
-from app.core.search import discovery
+from app.core.papers import papers, pdf_links, pipeline_add
+from app.core.search import discovery, free_copy, source_clients
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict
 from app.models import Paper, PaperStatus
-from app.providers import discovery_fake, unpaywall
+from app.providers import discovery_fake_data, unpaywall
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 RUN = uuid.uuid4().hex[:8]  # the owner's workspaces share the dev database (D37)
@@ -74,7 +74,7 @@ async def test_add_an_unknown_paper_to_a_workspace_is_not_found(session):
     assert response.is_error and response.structured_content["error"] == "not_found"
 
 
-FREE_DOI = f"{discovery_fake.DOI_PREFIX}free"
+FREE_DOI = f"{discovery_fake_data.DOI_PREFIX}free"
 
 
 @pytest.mark.parametrize("identifier", [FREE_DOI, f"  https://doi.org/{FREE_DOI} ", f"doi:{FREE_DOI}"])
@@ -86,7 +86,7 @@ async def test_add_paper_by_doi_queues_one_ingest(session, jobs, identifier):
 
 
 async def test_add_paper_by_arxiv_id_with_version(jobs):
-    added = result(await call("add_paper", identifier=f"arXiv:{discovery_fake.FREE_ARXIV_ID}v2"))
+    added = result(await call("add_paper", identifier=f"arXiv:{discovery_fake_data.FREE_ARXIV_ID}v2"))
     assert added["status"] == "queued"
     assert len(jobs.jobs) == 1
 
@@ -106,8 +106,8 @@ NO_ARXIV_MATCH = {"url": "arxiv.org (title search)", "outcome": "no_match"}  # t
 @pytest.mark.parametrize("suffix", ["landing", "closed"])
 async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, jobs, monkeypatch, suffix):
     # The offline fake answers every DOI lookup with the free fixture, so serve the landing/closed one directly.
-    doi = f"{discovery_fake.DOI_PREFIX}{suffix}"
-    page = [f"{discovery_fake.PDF_HOST}/page.html"] if suffix == "landing" else []
+    doi = f"{discovery_fake_data.DOI_PREFIX}{suffix}"
+    page = [f"{discovery_fake_data.PDF_HOST}/page.html"] if suffix == "landing" else []
 
     async def search(_session, _providers, _query):
         return discovery.SearchResult([Candidate(title=f"{suffix} fixture", doi=doi, pdf_urls=page)], [])
@@ -119,7 +119,7 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
         "status": "no_free_pdf",
         "paper_id": None,
         "title": added["title"],
-        "landing_url": f"https://doi.org/{discovery_fake.DOI_PREFIX}{suffix}",
+        "landing_url": f"https://doi.org/{discovery_fake_data.DOI_PREFIX}{suffix}",
         "tried": [*({"url": url, "outcome": "not_a_pdf"} for url in page), NO_ARXIV_MATCH],
         "free_copies": [],
         "note": None,
@@ -130,7 +130,7 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
 
 
 def _closed_fixture(monkeypatch, abstract: str | None = "An abstract.") -> str:
-    doi = f"{discovery_fake.DOI_PREFIX}closedsave"
+    doi = f"{discovery_fake_data.DOI_PREFIX}closedsave"
 
     async def search(_session, _providers, _query):
         found = Candidate(title="closed save fixture", doi=doi, abstract=abstract, sources=("openalex",))
@@ -177,7 +177,7 @@ async def test_re_adding_a_paper_saved_without_a_pdf_is_already_in_library(sessi
 
     assert (again["status"], again["paper_id"]) == ("already_in_library", first["paper_id"])
     assert (plain["status"], plain["paper_id"]) == ("already_in_library", first["paper_id"])
-    assert plain["note"] == pipeline.NO_COPY_NOTE
+    assert plain["note"] == pipeline_add.NO_COPY_NOTE
     assert [j[0] for j in jobs.jobs] == ["fill_paper_biblio", "index_abstract"]  # only the first save's jobs
     assert await session.scalar(select(func.count()).select_from(Paper).where(Paper.doi == doi.lower())) == 1
 
@@ -194,7 +194,7 @@ async def test_add_paper_on_a_pdfless_held_paper_finds_a_copy_and_upgrades_it(se
 
 
 async def test_add_papers_on_a_pdfless_held_paper_with_no_copy_says_so(session, jobs, pdf_dir, monkeypatch):
-    doi = f"{discovery_fake.DOI_PREFIX}closed"
+    doi = f"{discovery_fake_data.DOI_PREFIX}closed"
     held = await papers.create_metadata_paper(session, {"title": "Closed", "doi": doi}, "manual")
 
     async def search(_session, _providers, _query):  # the library marks the held paper
@@ -205,12 +205,12 @@ async def test_add_papers_on_a_pdfless_held_paper_with_no_copy_says_so(session, 
     [item] = result(await call("add_papers", identifiers=[doi]))
 
     assert (item["status"], item["paper_id"]) == ("already_in_library", str(held.id))
-    assert item["note"] == pipeline.NO_COPY_NOTE
+    assert item["note"] == pipeline_add.NO_COPY_NOTE
     assert jobs.jobs == [] and not (pdf_dir / f"{held.id}.pdf").exists()
 
 
 async def test_add_paper_on_a_pdfless_paper_with_a_held_arxiv_copy_files_only_the_copy(session, jobs, monkeypatch):
-    doi = f"{discovery_fake.DOI_PREFIX}arxivheld"
+    doi = f"{discovery_fake_data.DOI_PREFIX}arxivheld"
     bare = await papers.create_metadata_paper(session, {"title": "Bare", "doi": doi}, "manual")
     copy = Paper(title="Bare", file_path="/nonexistent.pdf", status=PaperStatus.READY)
     session.add(copy)
@@ -221,10 +221,10 @@ async def test_add_paper_on_a_pdfless_paper_with_a_held_arxiv_copy_files_only_th
         return discovery.SearchResult([Candidate(title="Bare", doi=doi, paper_id=bare.id)], [])
 
     async def find_pdf(_session, _providers, _candidate):
-        raise Conflict(discovery.ALREADY_IN_LIBRARY, paper_id=copy.id, tried=[])
+        raise Conflict(free_copy.ALREADY_IN_LIBRARY, paper_id=copy.id, tried=[])
 
     monkeypatch.setattr(discovery, "search", search)
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     added = result(await call("add_paper", identifier=doi, workspace=f"Arxiv {RUN}"))
 
     assert (added["status"], added["paper_id"]) == ("ingested", str(copy.id))
@@ -234,7 +234,7 @@ async def test_add_paper_on_a_pdfless_paper_with_a_held_arxiv_copy_files_only_th
 
 
 async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatch):
-    doi = f"{discovery_fake.DOI_PREFIX}landing"
+    doi = f"{discovery_fake_data.DOI_PREFIX}landing"
 
     async def search(_session, _providers, _query):
         return discovery.SearchResult([Candidate(title="Closed", doi=doi, pdf_urls=[])], [])
@@ -252,7 +252,7 @@ async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatc
 
 
 async def test_a_paper_saved_without_pdf_keeps_the_repository_copies(jobs, monkeypatch):
-    doi = f"{discovery_fake.DOI_PREFIX}landing"
+    doi = f"{discovery_fake_data.DOI_PREFIX}landing"
 
     async def search(_session, _providers, _query):
         return discovery.SearchResult([Candidate(title="Closed", doi=doi, pdf_urls=[])], [])
@@ -269,7 +269,7 @@ async def test_a_paper_saved_without_pdf_keeps_the_repository_copies(jobs, monke
 
 
 async def test_a_library_paper_search_missed_answers_already_in_library_not_an_error(session, jobs, monkeypatch):
-    doi = f"{discovery_fake.DOI_PREFIX}raced"
+    doi = f"{discovery_fake_data.DOI_PREFIX}raced"
     held = Paper(title="Raced", doi=doi, file_path="/nonexistent.pdf", status=PaperStatus.READY)
     session.add(held)
     await session.flush()
@@ -284,9 +284,9 @@ async def test_a_library_paper_search_missed_answers_already_in_library_not_an_e
 
 
 async def test_a_link_that_is_no_pdf_says_what_it_answered(jobs):
-    link = f"{discovery_fake.PDF_HOST}/page.html?api_key=SECRET"
+    link = f"{discovery_fake_data.PDF_HOST}/page.html?api_key=SECRET"
     added = result(await call("add_paper", identifier=link))
-    assert added["tried"] == [{"url": f"{discovery_fake.PDF_HOST}/page.html?api_key=***", "outcome": "not_a_pdf"}]
+    assert added["tried"] == [{"url": f"{discovery_fake_data.PDF_HOST}/page.html?api_key=***", "outcome": "not_a_pdf"}]
 
 
 async def test_a_title_is_refused_with_a_hint():
@@ -300,12 +300,12 @@ async def test_a_title_with_a_colon_is_not_taken_for_a_link():
 
 
 async def test_a_pdf_link_is_downloaded_and_queued(jobs):
-    added = result(await call("add_paper", identifier=f"{discovery_fake.PDF_HOST}/paper.pdf"))
+    added = result(await call("add_paper", identifier=f"{discovery_fake_data.PDF_HOST}/paper.pdf"))
     assert added["status"] == "queued" and jobs.jobs == [("ingest_paper", added["paper_id"])]
 
 
 async def test_a_link_to_an_html_page_is_no_free_pdf(jobs):
-    link = f"{discovery_fake.PDF_HOST}/page.html"
+    link = f"{discovery_fake_data.PDF_HOST}/page.html"
     added = result(await call("add_paper", identifier=link))
     assert added["status"] == "no_free_pdf" and added["landing_url"] == link and jobs.jobs == []
 
@@ -352,13 +352,13 @@ async def test_a_redirect_to_a_private_address_is_refused_and_never_requested(mo
         client = httpx.AsyncClient(
             transport=httpx.MockTransport(handle), follow_redirects=True, event_hooks={"request": [pdf_links.guard]}
         )
-        providers = discovery.Providers(pdf=client)
+        providers = source_clients.Providers(pdf=client)
         try:
             yield providers
         finally:
             await providers.aclose()
 
-    monkeypatch.setattr(discovery, "open_providers", redirecting)
+    monkeypatch.setattr(source_clients, "open_providers", redirecting)
     response = await call("add_paper", identifier="https://pdfs.example.org/a.pdf")
 
     assert response.is_error and response.structured_content["error"] == "unsafe_url"
@@ -410,7 +410,7 @@ async def test_a_doi_only_another_source_answered_is_still_no_matching_paper(mon
 
 async def test_an_alias_doi_crossref_resolved_saves_the_paper_under_the_canonical_doi(session, jobs, monkeypatch):
     # Crossref redirects an alias (10.5465/amr.2001.4378025) to its canonical DOI (10.2307/259123).
-    alias, canonical = f"{discovery_fake.DOI_PREFIX}alias", f"{discovery_fake.DOI_PREFIX}canonical"
+    alias, canonical = f"{discovery_fake_data.DOI_PREFIX}alias", f"{discovery_fake_data.DOI_PREFIX}canonical"
 
     async def search(_session, _providers, _query):
         found = Candidate(title="Unpacking Creativity", doi=canonical, abstract="A.", sources=("openalex", "crossref"))
@@ -445,11 +445,11 @@ async def test_an_empty_workspace_name_is_refused_not_ignored(jobs):
 
 async def test_add_papers_reports_each_item(session, jobs, monkeypatch):
     opened = []
-    real = discovery.open_providers
-    monkeypatch.setattr(discovery, "open_providers", lambda s: (opened.append(1), real(s))[1])
+    real = source_clients.open_providers
+    monkeypatch.setattr(source_clients, "open_providers", lambda s: (opened.append(1), real(s))[1])
     ws = await workspaces.create(session, f"Bulk {RUN}")
 
-    nope = f"{discovery_fake.DOI_PREFIX}nope"
+    nope = f"{discovery_fake_data.DOI_PREFIX}nope"
     identifiers = [FREE_DOI, "Attention is all you need", f" doi:{FREE_DOI} ", nope]
     items = result(await call("add_papers", identifiers=identifiers, workspace=ws.name))
 
@@ -463,8 +463,8 @@ async def test_add_papers_reports_each_item(session, jobs, monkeypatch):
 
 
 async def test_add_papers_items_carry_tried_and_free_copies(jobs, monkeypatch):
-    doi = f"{discovery_fake.DOI_PREFIX}landing"
-    page = f"{discovery_fake.PDF_HOST}/page.html"
+    doi = f"{discovery_fake_data.DOI_PREFIX}landing"
+    page = f"{discovery_fake_data.PDF_HOST}/page.html"
 
     async def search(_session, _providers, _query):
         return discovery.SearchResult([Candidate(title="Landing", doi=doi, pdf_urls=[page])], [])
@@ -496,15 +496,15 @@ async def test_add_papers_over_the_cap(jobs):
 
 
 async def test_add_papers_carries_on_after_an_unexpected_failure(session, jobs, monkeypatch):
-    real = pipeline._add
+    real = pipeline_add._add
 
     async def flaky(session, providers, kind, value, workspace_uuid, *rest):
         if kind == "arxiv":
             raise RuntimeError("provider blew up")
         return await real(session, providers, kind, value, workspace_uuid, *rest)
 
-    monkeypatch.setattr(pipeline, "_add", flaky)
-    ids = [FREE_DOI, discovery_fake.FREE_ARXIV_ID, f"{discovery_fake.DOI_PREFIX}nope"]
+    monkeypatch.setattr(pipeline_add, "_add", flaky)
+    ids = [FREE_DOI, discovery_fake_data.FREE_ARXIV_ID, f"{discovery_fake_data.DOI_PREFIX}nope"]
 
     items = result(await call("add_papers", identifiers=ids))
 
@@ -522,13 +522,13 @@ def serve(monkeypatch, handle):
         client = httpx.AsyncClient(
             transport=httpx.MockTransport(handle), follow_redirects=True, event_hooks={"request": [pdf_links.guard]}
         )
-        providers = discovery.Providers(pdf=client)
+        providers = source_clients.Providers(pdf=client)
         try:
             yield providers
         finally:
             await providers.aclose()
 
-    monkeypatch.setattr(discovery, "open_providers", served)
+    monkeypatch.setattr(source_clients, "open_providers", served)
 
 
 TACL_LINK = "https://direct.mit.edu/tacl/article-pdf/doi/10.1162/tacl_a_00632/2325685/tacl_a_00632.pdf"
@@ -655,7 +655,7 @@ def real_world(discovery_fakes, monkeypatch):
     async def search(_session, _providers, _query):
         return discovery.SearchResult([tacl_candidate()], [])
 
-    monkeypatch.setattr(discovery, "open_providers", open_providers)
+    monkeypatch.setattr(source_clients, "open_providers", open_providers)
     monkeypatch.setattr(discovery, "search", search)
     return discovery_fakes
 
@@ -676,7 +676,7 @@ async def test_adding_a_publisher_doi_reuses_the_arxiv_copy_in_the_library(sessi
     copy = await library_copy(session, tmp_path, f"10.48550/arxiv.{REAL_ARXIV}", openalex_id="W4399694541")
     ws = await workspaces.create(session, f"Reuse {RUN}")
 
-    added = await pipeline.add_paper(session, REAL_TACL_DOI, workspace=f"Reuse {RUN}")
+    added = await pipeline_add.add_paper(session, REAL_TACL_DOI, workspace=f"Reuse {RUN}")
 
     await session.refresh(copy)
     assert [p.id for p in await with_title(session)] == [copy.id]
@@ -693,7 +693,7 @@ async def test_adding_a_publisher_doi_reuses_the_arxiv_copy_in_the_library(sessi
 async def test_a_failed_arxiv_copy_is_requeued_when_the_publisher_doi_is_added(session, tmp_path, jobs, real_world):
     copy = await library_copy(session, tmp_path, f"10.48550/arxiv.{REAL_ARXIV}", status=PaperStatus.FAILED)
 
-    added = await pipeline.add_paper(session, REAL_TACL_DOI)
+    added = await pipeline_add.add_paper(session, REAL_TACL_DOI)
 
     await session.refresh(copy)
     assert (added.status, added.paper_id) == ("queued", copy.id)
@@ -706,7 +706,7 @@ async def test_a_locked_published_doi_on_the_copy_is_kept(session, tmp_path, job
         manual_fields=["published_doi", "published_venue"], peer_reviewed="false",
     )  # fmt: skip
 
-    added = await pipeline.add_paper(session, REAL_TACL_DOI)
+    added = await pipeline_add.add_paper(session, REAL_TACL_DOI)
 
     await session.refresh(copy)
     assert added.paper_id == copy.id and len(await with_title(session)) == 1
@@ -731,7 +731,7 @@ async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_reuses_it
 
     real_world.pdf_host.reply(f"/pdf/{REAL_ARXIV}", 200, content=b"%PDF-1.7\n%real\n")
     monkeypatch.setattr(discovery, "search", search)
-    added = await pipeline.add_paper(session, REAL_ARXIV)
+    added = await pipeline_add.add_paper(session, REAL_ARXIV)
 
     assert [p.id for p in await with_title(session)] == [held.id] and added.paper_id == held.id
     await session.refresh(held)

@@ -11,7 +11,7 @@ from app.core.citations.citations_export import filename_slug
 from app.core.notes import notes_markdown
 from app.core.papers import pipeline
 from app.core.search import workspace_search
-from app.core.workspaces import tags, workspace_package, workspaces
+from app.core.workspaces import package_import, tags, workspace_package, workspaces
 from app.domain.errors import NotFound
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
@@ -134,7 +134,7 @@ async def check_package(
 @imports.post("/import-package", status_code=201)
 async def import_package(file: UploadFile, session: SessionDep) -> dict:
     """A `.paperlab` file as a new workspace (M35a). 422 with a package_* code when it is refused."""
-    return asdict(await workspace_package.import_package(session, file.file))
+    return asdict(await package_import.import_package(session, file.file))
 
 
 @router.get("/{workspace_id}/package-record")

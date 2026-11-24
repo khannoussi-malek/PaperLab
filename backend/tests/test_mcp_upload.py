@@ -9,7 +9,7 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import func, select
 
-from app.core.papers import papers, pipeline
+from app.core.papers import papers, pipeline_add, pipeline_upload
 from app.core.workspaces import workspaces
 from app.models import Paper, PaperStatus
 
@@ -48,8 +48,8 @@ async def test_upload_paper_queues_ingest_files_and_tags_it(session, jobs, pdf_d
 async def test_oversize_is_refused_before_decoding(session, jobs, pdf_dir, monkeypatch):
     ws = await make_ws(session, "big")
     before = await paper_count(session)
-    monkeypatch.setattr(pipeline.base64, "b64decode", lambda *a, **k: pytest.fail("decoded an oversize upload"))
-    huge = "A" * (4 * -(-pipeline.MAX_UPLOAD_PDF_BYTES // 3) + 8)
+    monkeypatch.setattr(pipeline_upload.base64, "b64decode", lambda *a, **k: pytest.fail("decoded an oversize upload"))
+    huge = "A" * (4 * -(-pipeline_upload.MAX_UPLOAD_PDF_BYTES // 3) + 8)
 
     response = await call("upload_paper", workspace=ws, filename="x.pdf", pdf_base64=huge)
 
@@ -60,7 +60,7 @@ async def test_oversize_is_refused_before_decoding(session, jobs, pdf_dir, monke
 
 async def test_decoded_size_over_the_cap_is_refused(session, jobs, pdf_dir, monkeypatch):
     ws = await make_ws(session, "cap")
-    monkeypatch.setattr(pipeline, "MAX_UPLOAD_PDF_BYTES", 10)
+    monkeypatch.setattr(pipeline_upload, "MAX_UPLOAD_PDF_BYTES", 10)
     response = await call("upload_paper", workspace=ws, filename="x.pdf", pdf_base64=b64(PDF + b"x" * 20))
     assert response.is_error and response.structured_content["error"] == "pdf_too_large"
     assert jobs.jobs == [] and list(pdf_dir.glob('*')) == []
@@ -197,9 +197,9 @@ async def test_a_found_copy_racing_another_pdf_answers_from_the_paper(session, j
     async def find_pdf(*_):
         return PDF, [], []
 
-    monkeypatch.setattr(pipeline.discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(pipeline_add.free_copy, "find_pdf", find_pdf)
     a_pdf_lands_first(monkeypatch, session, PaperStatus.UPLOADED)
 
-    out = await pipeline._attach_found(session, None, held)
+    out = await pipeline_add._attach_found(session, None, held)
 
     assert (out.status, out.paper_id, jobs.jobs) == ("queued", held.id, [])

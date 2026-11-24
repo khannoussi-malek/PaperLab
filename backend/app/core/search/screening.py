@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.platform import llm_connections
 from app.core.search.branches import default_branch_on_decision
 from app.core.search.screening_rank import Doc, Features, features, rank, stop_hint
+from app.core.search.search_hits import _hit_out_dict
 from app.core.search.search_run_results import NOT_JUDGED
-from app.core.search.workspace_search import _hit_out_dict
 from app.core.workspaces import workspaces
 from app.domain.errors import Conflict, NotFound
 from app.models.references import ExternalRef

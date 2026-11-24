@@ -21,7 +21,7 @@ from app.core.citations import citations_import_run as run
 from app.core.citations.citations_bundle_read import read_bundle
 from app.core.citations.citations_import import ImportEntry
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import discovery, source_clients
 from app.models import Paper, Workspace
 from app.schemas.citations_import import ImportResultOut, NeedsPdfOut
 from app.workers import citations_import as worker
@@ -115,7 +115,7 @@ def no_network(monkeypatch):
     async def search(_session, _providers, _query):
         return discovery.SearchResult([], [])
 
-    monkeypatch.setattr(discovery, "open_providers", open_providers)
+    monkeypatch.setattr(source_clients, "open_providers", open_providers)
     monkeypatch.setattr(discovery, "search", search)
 
 

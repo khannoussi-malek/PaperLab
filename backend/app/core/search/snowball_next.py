@@ -5,10 +5,10 @@ import uuid
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.search import workspace_search
+from app.core.search import snowball_run
 from app.core.search.branches import DIRECTIONS
-from app.core.search.discovery import Providers
 from app.core.search.hit_links import _runs, _seeds
+from app.core.search.source_clients import Providers
 from app.core.workspaces import workspaces
 from app.models import Paper, workspace_papers
 from app.models.provenance import WorkspaceBranchState
@@ -71,7 +71,7 @@ async def run_snowball_next(
         groups.setdefault(tuple(item.directions_left), []).append(item)
     new_hits, skipped, errors = 0, [], {}
     for directions, items in groups.items():
-        result = await workspace_search.snowball(
+        result = await snowball_run.snowball(
             session, providers, workspace_id,
             [i.paper_id for i in items if i.paper_id], [i.hit_id for i in items if i.hit_id],
             backward="cites" in directions, forward="cited_by" in directions,

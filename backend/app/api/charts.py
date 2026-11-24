@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
-from app.core.notes import charts, notes
+from app.core.notes import charts, note_charts
 from app.schemas.charts import ChartCreate, ChartOut, ChartSummaryOut, ChartUpdate, ResolvedDataOut, ResolveRequest
 from app.schemas.notes import NoteOut
 
@@ -50,16 +50,16 @@ async def delete_chart(chart_id: uuid.UUID, session: SessionDep) -> Response:
 @router.post("/api/charts/{chart_id}/note", status_code=201)
 async def add_to_note(chart_id: uuid.UUID, session: SessionDep) -> NoteOut:
     """A new note showing the chart, anchored where its data sits in each paper."""
-    return await notes.create_chart_note(session, chart_id, await charts.chart_anchors(session, chart_id))
+    return await note_charts.create_chart_note(session, chart_id, await charts.chart_anchors(session, chart_id))
 
 
 @router.put("/api/notes/{note_id}/charts/{chart_id}", status_code=204)
 async def attach_chart(note_id: uuid.UUID, chart_id: uuid.UUID, session: SessionDep) -> Response:
-    await notes.attach_chart(session, note_id, chart_id)
+    await note_charts.attach_chart(session, note_id, chart_id)
     return Response(status_code=204)
 
 
 @router.delete("/api/notes/{note_id}/charts/{chart_id}", status_code=204)
 async def detach_chart(note_id: uuid.UUID, chart_id: uuid.UUID, session: SessionDep) -> Response:
-    await notes.detach_chart(session, note_id, chart_id)
+    await note_charts.detach_chart(session, note_id, chart_id)
     return Response(status_code=204)

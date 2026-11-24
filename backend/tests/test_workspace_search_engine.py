@@ -7,22 +7,18 @@ import pytest
 from sqlalchemy import func, select
 
 from app.core.papers.paper_sources import SOURCES, SourceSettings
-from app.core.search import discovery
+from app.core.search import batch_fetch, source_clients
+from app.core.search.batch_fetch import _find_or_create_external_ref, _insert_hit, search_batch
 from app.core.search.candidates import normal_title
 from app.core.search.prisma_export import PrismaExport, prisma_export
-from app.core.search.workspace_search import (
-    _find_or_create_external_ref,
-    _insert_hit,
-    search_batch,
-    set_eligibility,
-    snowball,
-)
+from app.core.search.snowball_run import snowball
+from app.core.search.workspace_search import set_eligibility
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
-from app.providers import arxiv, discovery_fake, semantic_scholar
+from app.providers import arxiv, discovery_fake, discovery_fake_data, semantic_scholar
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
@@ -36,8 +32,8 @@ async def fake_providers():
     """Every source on, routed to discovery_fake's real MockTransport — same pattern as test_discovery_fake.py's own
     `fake_providers` fixture. search_batch's merge/dedup then runs against the real fake provider (Task 11's
     PAGE_PAPERS fixture), not a hand-rolled mock of provider responses."""
-    every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
-    providers = discovery.build_providers(every_source, discovery_fake.transport())
+    every_source = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCES, True))
+    providers = source_clients.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
 
@@ -107,7 +103,7 @@ async def test_search_batch_preserves_existing_screening_state(session, fake_pro
     # Pre-seed its ExternalRef + a WorkspaceSearchHit already screened by a user (this run's spec P2's global
     # constraint: a hit already in the pool — this run or an earlier one — keeps its screening state).
     run = await _new_run(session, ["arxiv"])
-    title, doi = discovery_fake.PAGE_PAPERS[0]
+    title, doi = discovery_fake_data.PAGE_PAPERS[0]
     ref = ExternalRef(title=title, doi=doi)
     session.add(ref)
     await session.flush()
@@ -261,7 +257,7 @@ async def test_snowball_does_not_duplicate_or_overwrite_an_existing_hit(session,
     # transaction. Resolving through _find_or_create_external_ref (the same path snowball itself uses) rather
     # than inserting a fresh row guarantees the pre-seeded hit attaches to the exact row snowball will later
     # dedup against, instead of racing an untiebroken DOI match against a leftover duplicate.
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    free_title, free_doi, _ = discovery_fake_data.PAPERS[0]
     ref = await _find_or_create_external_ref(session, Candidate(title=free_title, doi=free_doi))
     await session.flush()
     prior_run = WorkspaceSearchRun(
@@ -300,7 +296,7 @@ async def test_snowball_from_a_hit_seed_with_no_paper_ever_created(session, fake
     workspace = Workspace(name=f"snowball-hit-seed-{uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    free_title, free_doi, _ = discovery_fake_data.PAPERS[0]
     ref = ExternalRef(title=free_title, doi=free_doi)
     session.add(ref)
     await session.flush()
@@ -406,8 +402,8 @@ async def test_snowball_mixes_paper_and_hit_seeds_in_one_call(session, fake_prov
     their own one new hit."""
     from app.models import Paper
 
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
-    landing_title, landing_doi, _ = discovery_fake.PAPERS[1]
+    free_title, free_doi, _ = discovery_fake_data.PAPERS[0]
+    landing_title, landing_doi, _ = discovery_fake_data.PAPERS[1]
     paper_seed_ref_doi = "10.5555/paperlab-mixed-from-paper-seed"
     hit_seed_ref_doi = "10.5555/paperlab-mixed-from-hit-seed"
 
@@ -507,7 +503,6 @@ async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_e
     consecutive-iteration retries land within a couple of pacing intervals of each other (a few seconds), which
     doesn't give a brief/transient error (arXiv's API has answered a plain 406 to an otherwise-valid, identical
     request that then succeeded seconds later) any real chance to clear before the source is abandoned."""
-    from app.core.search import workspace_search as core_module
 
     fails_once = [True]
 
@@ -517,9 +512,9 @@ async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_e
             raise httpx.HTTPError("transient 406")
         return [], None
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
     fake_clock = iter([datetime(2026, 1, 1, tzinfo=timezone.utc), datetime(2026, 1, 1, 0, 0, 1, tzinfo=timezone.utc)])
-    monkeypatch.setattr(core_module, "_now", lambda: next(fake_clock))
+    monkeypatch.setattr(batch_fetch, "_now", lambda: next(fake_clock))
 
     run = await _new_run(session, ["arxiv"])
     await search_batch(session, fake_providers, run)  # first call: errors, starts a 10s cooldown
@@ -545,7 +540,6 @@ async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_e
 async def test_search_batch_retries_a_cooled_down_source_and_a_success_clears_the_error_count(session, fake_providers, monkeypatch):
     """Once the cooldown has genuinely elapsed, the source is tried again — and a page that succeeds this time
     clears the error streak entirely (same as a fresh cursor), not just decrements it."""
-    from app.core.search import workspace_search as core_module
 
     fails_once = [True]
 
@@ -555,9 +549,9 @@ async def test_search_batch_retries_a_cooled_down_source_and_a_success_clears_th
             raise httpx.HTTPError("transient 406")
         return [], None  # succeeds and exhausts cleanly on the retry
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
     far_future = iter([datetime(2026, 1, 1, tzinfo=timezone.utc), datetime(2026, 1, 1, 1, tzinfo=timezone.utc)])
-    monkeypatch.setattr(core_module, "_now", lambda: next(far_future))
+    monkeypatch.setattr(batch_fetch, "_now", lambda: next(far_future))
 
     run = await _new_run(session, ["arxiv"])
     await search_batch(session, fake_providers, run)  # errors, starts a cooldown
@@ -582,7 +576,7 @@ async def test_search_batch_marks_a_disabled_source_cursor_exhausted(session):
     fresh-database default) has nothing to fetch. Its cursor must still flip to exhausted immediately, or the
     worker's `all(c.exhausted for c in cursors)` check can never become true (M30a Task 17 E2E bug: a source
     stuck at exhausted=False forever turns the worker's paging loop into a busy-loop)."""
-    providers = discovery.Providers(pdf=httpx.AsyncClient())  # every source left off (clients defaults to {})
+    providers = source_clients.Providers(pdf=httpx.AsyncClient())  # every source left off (clients defaults to {})
     try:
         run = await _new_run(session, ["unpaywall"])
         result = await search_batch(session, providers, run)
@@ -840,7 +834,6 @@ async def test_stop_run_on_a_non_running_run_is_conflict(session):
 async def test_search_batch_uses_the_per_source_query_override(session, fake_providers, monkeypatch):
     """P11's per-source override (run.query_overrides_json) must actually reach that source's search_page call —
     before this fix it was accepted, stored, and silently ignored (I6 part 1)."""
-    import app.core.search.workspace_search as core_module
 
     seen_queries = []
     real_page = arxiv.search_page
@@ -849,7 +842,7 @@ async def test_search_batch_uses_the_per_source_query_override(session, fake_pro
         seen_queries.append(query)
         return await real_page(http, query, page_size, cursor)
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", recording_page)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", recording_page)
 
     run = await _new_run(session, ["arxiv"])
     run.query_overrides_json = {"arxiv": "transformer architectures"}
@@ -1330,7 +1323,7 @@ async def test_search_batch_drops_known_out_of_range_years_and_keeps_undated(ses
 
 
 async def test_search_batch_skips_a_paused_source(session, fake_providers, monkeypatch):
-    from app.core.search import workspace_search as core_module
+    from app.core.search import batch_fetch
 
     asked = []
 
@@ -1338,7 +1331,7 @@ async def test_search_batch_skips_a_paused_source(session, fake_providers, monke
         asked.append(cursor)
         return [], cursor + page_size
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", arxiv_search)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", arxiv_search)
     run = await _new_run(session, ["arxiv"])
     cursor = (
         await session.execute(select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id))

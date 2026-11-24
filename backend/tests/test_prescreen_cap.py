@@ -4,7 +4,7 @@ import pytest
 from screening_pool import make_pool
 from sqlalchemy import select
 
-from app.core.papers import pipeline
+from app.core.papers import pipeline_search
 from app.core.platform import queue
 from app.core.search import screening
 from app.models.saved_search import SavedSearch
@@ -45,7 +45,7 @@ async def test_manual_prescreen_is_not_capped(session, monkeypatch):
         pass
 
     monkeypatch.setattr(queue, "enqueue", no_enqueue)
-    state = await pipeline.run_prescreen(session, workspace.name, run.id)
+    state = await pipeline_search.run_prescreen(session, workspace.name, run.id)
     assert state.suggest_total == 250 and state.capped is None
 
 

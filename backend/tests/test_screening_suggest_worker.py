@@ -12,13 +12,13 @@ from sqlalchemy.pool import NullPool
 from app.core.papers import pdf_links
 from app.core.papers.paper_sources import SourceSettings
 from app.core.platform import queue
-from app.core.search import discovery, screening, workspace_search
+from app.core.search import screening, snowball_run, source_clients
 from app.core.search.screening_suggest import SYSTEM_PROMPT_V2
 from app.core.search.source_registry import SOURCE_IDS
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
-from app.providers import discovery_fake
+from app.providers import discovery_fake, discovery_fake_data
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm_fake import FakeLLM
 from app.workers import screening_suggest as worker_module
@@ -379,30 +379,30 @@ async def test_a_multi_run_job_only_touches_the_listed_runs_hits(session, worker
 @pytest.fixture
 async def free_and_closed(session, monkeypatch, pdf_dir):
     """A workspace whose pool holds the offline `free` and `closed` papers (a snowball hop lands them), with
-    discovery.open_providers answering from the same fake and a FakeArq behind queue.enqueue."""
+    source_clients.open_providers answering from the same fake and a FakeArq behind queue.enqueue."""
     workspace, hits = await make_pool(session, [("seed", None)])
-    every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
-    providers = discovery.build_providers(every, discovery_fake.transport())
+    every = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
+    providers = source_clients.build_providers(every, discovery_fake.transport())
 
     @asynccontextmanager
     async def open_providers(_session):
         yield providers
 
-    monkeypatch.setattr(discovery, "open_providers", open_providers)
+    monkeypatch.setattr(source_clients, "open_providers", open_providers)
     async def resolve(host):
         return ["93.184.216.34"]  # one public address, as tests/mcp_fixtures.py does
 
     monkeypatch.setattr(pdf_links, "resolve_host", resolve)
     arq = FakeArq()
     monkeypatch.setattr(queue, "_pool", arq)
-    await workspace_search.snowball(session, providers, workspace.id, [], [hits[0].id], backward=True, forward=False)
+    await snowball_run.snowball(session, providers, workspace.id, [], [hits[0].id], backward=True, forward=False)
     rows = (await session.execute(
         select(WorkspaceSearchHit, ExternalRef.doi)
         .join(ExternalRef, WorkspaceSearchHit.external_ref_id == ExternalRef.id)
         .where(WorkspaceSearchHit.workspace_id == workspace.id)
     )).all()
     by_doi = {doi: hit for hit, doi in rows}
-    free, closed = by_doi[f"{discovery_fake.DOI_PREFIX}free"], by_doi[f"{discovery_fake.DOI_PREFIX}closed"]
+    free, closed = by_doi[f"{discovery_fake_data.DOI_PREFIX}free"], by_doi[f"{discovery_fake_data.DOI_PREFIX}closed"]
     hits[0].suggestion = "include"
     for hit in (free, closed):
         hit.suggestion, hit.suggestion_relevance = "include", 5  # already suggested: the queue is empty

@@ -10,11 +10,11 @@ from screening_pool import make_pool
 from sqlalchemy import select
 
 from app.core.papers.paper_sources import SourceSettings
-from app.core.search import discovery, workspace_search
+from app.core.search import snowball_run, source_clients
 from app.core.search.source_registry import SOURCE_IDS
 from app.core.workspaces import tags, workspaces
 from app.models import Paper, hit_tags
-from app.providers import discovery_fake, embedding
+from app.providers import discovery_fake, discovery_fake_data, embedding
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 RUN = uuid.uuid4().hex[:8]
@@ -130,14 +130,14 @@ async def _free_hit(session, label):
     session.add(paper)
     await session.commit()
     await workspaces.add_paper(session, ws.id, paper.id)
-    every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
-    providers = discovery.build_providers(every, discovery_fake.transport())
+    every = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
+    providers = source_clients.build_providers(every, discovery_fake.transport())
     try:
-        await workspace_search.snowball(session, providers, ws.id, [paper.id], [], backward=True, forward=False)
+        await snowball_run.snowball(session, providers, ws.id, [paper.id], [], backward=True, forward=False)
     finally:
         await providers.aclose()
     hits = result(await call("list_hits", workspace=ws.name))["hits"]
-    return ws, next(h for h in hits if h["doi"] == f"{discovery_fake.DOI_PREFIX}free")
+    return ws, next(h for h in hits if h["doi"] == f"{discovery_fake_data.DOI_PREFIX}free")
 
 
 async def test_review_then_import_lands_the_paper_under_its_tag(session):

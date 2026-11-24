@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.core.notes import capture, charts, datasets, notes
+from app.core.notes import capture, charts, datasets, note_charts, notes
 from app.domain.chart_spec import ChartSpecAdapter
 from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.domain.errors import InvalidInput, NotFound
@@ -49,17 +49,17 @@ async def test_a_note_shows_the_charts_attached_to_it_once_each(session):
     chart = await charts.create_chart(session, "F1", bar(mine))
     note = await a_note(session, paper)
 
-    attached = await notes.attach_chart(session, note.id, chart.id)
-    again = await notes.attach_chart(session, note.id, chart.id)
+    attached = await note_charts.attach_chart(session, note.id, chart.id)
+    again = await note_charts.attach_chart(session, note.id, chart.id)
 
     assert attached.charts == again.charts == [notes.ChartRef(chart.id, "F1")]
     assert (attached.provenance, attached.body) == (Provenance.HUMAN, "my reading")
     assert (await notes.list_notes_for_paper(session, paper.id))[0].charts == [notes.ChartRef(chart.id, "F1")]
     assert (await charts.get_chart(session, chart.id)).note_ids == [note.id]
 
-    detached = await notes.detach_chart(session, note.id, chart.id)
+    detached = await note_charts.detach_chart(session, note.id, chart.id)
     assert detached.charts == []
-    assert (await notes.detach_chart(session, note.id, chart.id)).charts == []  # detaching twice is fine
+    assert (await note_charts.detach_chart(session, note.id, chart.id)).charts == []  # detaching twice is fine
 
 
 async def test_attaching_needs_an_existing_note_and_chart(session):
@@ -69,11 +69,11 @@ async def test_attaching_needs_an_existing_note_and_chart(session):
     note = await a_note(session, paper)
 
     with pytest.raises(NotFound):
-        await notes.attach_chart(session, uuid.uuid4(), chart.id)
+        await note_charts.attach_chart(session, uuid.uuid4(), chart.id)
     with pytest.raises(NotFound):
-        await notes.attach_chart(session, note.id, uuid.uuid4())
+        await note_charts.attach_chart(session, note.id, uuid.uuid4())
     with pytest.raises(NotFound):
-        await notes.detach_chart(session, uuid.uuid4(), chart.id)
+        await note_charts.detach_chart(session, uuid.uuid4(), chart.id)
 
 
 async def test_a_chart_note_is_anchored_on_each_table_region_and_each_captured_number(session):
@@ -93,7 +93,7 @@ async def test_a_chart_note_is_anchored_on_each_table_region_and_each_captured_n
     ]})  # fmt: skip
     chart = await charts.create_chart(session, "SQuAD F1", spec)
 
-    note = await notes.create_chart_note(session, chart.id, await charts.chart_anchors(session, chart.id))
+    note = await note_charts.create_chart_note(session, chart.id, await charts.chart_anchors(session, chart.id))
 
     assert (note.body, note.provenance, note.charts) == ("", Provenance.HUMAN, [notes.ChartRef(chart.id, "SQuAD F1")])
     assert sorted((a.paper_id == bert.id, a.page, a.bbox, a.quoted_text) for a in note.anchors) == [
@@ -112,4 +112,4 @@ async def test_a_chart_of_own_data_only_has_nothing_to_anchor_a_note_on(session)
     with pytest.raises(NotFound):
         await charts.chart_anchors(session, uuid.uuid4())
     with pytest.raises(InvalidInput):
-        await notes.create_chart_note(session, chart.id, [])
+        await note_charts.create_chart_note(session, chart.id, [])

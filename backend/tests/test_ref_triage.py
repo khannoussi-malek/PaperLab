@@ -2,8 +2,9 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from app.core.search.candidates import _combined, from_arxiv, from_crossref, from_s2, from_work, s2_triage
-from app.core.search.workspace_search import _find_or_create_external_ref
+from app.core.search.batch_fetch import _find_or_create_external_ref
+from app.core.search.candidates import _combined, s2_triage
+from app.core.search.from_indexes import from_arxiv, from_crossref, from_s2, from_work
 from app.domain.candidates import Candidate
 from app.providers import arxiv
 

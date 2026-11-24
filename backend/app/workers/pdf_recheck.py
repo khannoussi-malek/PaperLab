@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.core.papers import paper_sources, pdf_recheck
-from app.core.search import discovery
+from app.core.search import source_clients
 from app.db import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ async def recheck_free_pdfs(ctx: dict) -> dict[str, int] | str:
     async with SessionLocal() as session:
         if not (await paper_sources.get(session)).pdf_recheck_enabled:
             return "disabled"
-        async with discovery.open_providers(session) as providers:
+        async with source_clients.open_providers(session) as providers:
             counts = await pdf_recheck.run(session, providers, datetime.now(timezone.utc))
     logger.info("recheck_free_pdfs: %s", counts)
     return counts
@@ -32,7 +32,7 @@ async def retry_free_pdf(ctx: dict, paper_id: str, attempt: int) -> str:
     async with SessionLocal() as session:
         if not (await paper_sources.get(session)).pdf_recheck_enabled:
             return "disabled"
-        async with discovery.open_providers(session) as providers:
+        async with source_clients.open_providers(session) as providers:
             outcome = await pdf_recheck.recheck(session, providers, pid)
         if outcome == "temporary":
             await pdf_recheck.schedule_retry(session, pid, attempt + 1)
@@ -42,7 +42,7 @@ async def retry_free_pdf(ctx: dict, paper_id: str, attempt: int) -> str:
 
 async def recheck_papers(ctx: dict, paper_ids: list[str]) -> dict[str, int]:
     async with SessionLocal() as session:
-        async with discovery.open_providers(session) as providers:
+        async with source_clients.open_providers(session) as providers:
             counts = await pdf_recheck.run_for(session, providers, [uuid.UUID(p) for p in paper_ids])
     logger.info("recheck_papers: %s", counts)
     return counts

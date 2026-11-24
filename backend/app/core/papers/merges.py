@@ -11,10 +11,13 @@ from typing import Any, Literal
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.papers.enrichment import Collision, normalize_doi, pdf_hints, short_id
-from app.core.search import discovery, retrieved_hits
+from app.core.papers.enrichment import Collision
+from app.core.papers.openalex_fields import short_id
+from app.core.papers.pdf_hints import pdf_hints
+from app.core.search import retrieved_hits, same_work
 from app.domain.candidates import Candidate
 from app.domain.constants import ABSTRACT_PAGE
+from app.domain.doi import normalize_doi
 from app.domain.errors import NotFound
 from app.models import Paper, PaperEvent, PaperMerge
 from app.models.workspace_search import WorkspaceSearchHit
@@ -202,7 +205,7 @@ def _refusal(kept: Paper, merged: Paper, identifier: tuple[str, str] | None, evi
     # work's, the PDF's title is then the only independent evidence. Page-1 author parsing would add a second.
     title = evidence.title if evidence else merged.title
     theirs = {"title": title, "authors": (evidence and evidence.authors) or merged.authors, "year": merged.year}
-    if not discovery.same_work(Candidate(kept.title, kept.authors, kept.year), theirs):
+    if not same_work.same_work(Candidate(kept.title, kept.authors, kept.year), theirs):
         return "not_the_same_work"
     for name in sorted(set(kept.manual_fields) & set(merged.manual_fields)):
         if getattr(kept, name, None) != getattr(merged, name, None):

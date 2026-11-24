@@ -8,9 +8,9 @@ from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core.notes.note_counts import MAX_PAPERS, note_counts
 from app.core.papers import enrichment, paper_events, papers
-from app.core.papers.pipeline import MAX_UPLOAD_PDF_BYTES
+from app.core.papers.pipeline_upload import MAX_UPLOAD_PDF_BYTES
 from app.core.platform.queue import INGEST_QUEUE
-from app.core.search import discovery
+from app.core.search import discovery, free_copy
 from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict, InvalidInput
 from app.models import PaperStatus
@@ -188,9 +188,9 @@ async def find_paper_pdf(
     if paper.has_pdf:
         raise Conflict("already_has_pdf")
     try:
-        data, tried, copies = await discovery.find_pdf(session, providers, discovery.candidate_of(paper))
+        data, tried, copies = await free_copy.find_pdf(session, providers, discovery.candidate_of(paper))
     except Conflict as exc:
-        if str(exc) != discovery.ALREADY_IN_LIBRARY:
+        if str(exc) != free_copy.ALREADY_IN_LIBRARY:
             raise
         raise Conflict("already_in_library", **exc.details) from exc
     if data is None:  # a check like the weekly re-check's: it waits a week before repeating this lookup

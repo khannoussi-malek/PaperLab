@@ -9,7 +9,7 @@ from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from test_chart_notes import bar, two_columns
 
-from app.core.notes import charts, datasets, notes
+from app.core.notes import ai_notes, charts, datasets, note_charts, notes
 from app.domain.errors import NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance, note_anchors, note_papers
 
@@ -74,7 +74,7 @@ async def test_a_promoted_note_links_the_paper_of_its_chunks(session):
     session.add(output)
     await session.commit()
 
-    note = await notes.promote_llm_fragment(session, output.id, "It says so [C1][C2].", [c.id for c in chunks])
+    note = await ai_notes.promote_llm_fragment(session, output.id, "It says so [C1][C2].", [c.id for c in chunks])
 
     assert await linked(session, note.id) == {paper.id}
 
@@ -85,7 +85,7 @@ async def test_a_chart_note_links_every_paper_it_is_anchored_on(session):
     chart = await charts.create_chart(session, "F1", bar(mine))
     anchors = [notes.Anchor(p.id, 1, [tuple(RECT[0])], "Table 1") for p in (bert, xlnet)]
 
-    note = await notes.create_chart_note(session, chart.id, anchors)
+    note = await note_charts.create_chart_note(session, chart.id, anchors)
 
     assert await linked(session, note.id) == {bert.id, xlnet.id}
 
@@ -93,7 +93,7 @@ async def test_a_chart_note_links_every_paper_it_is_anchored_on(session):
 async def test_an_mcp_note_links_its_paper(session, tmp_path):
     paper, _, _ = await chunked_paper(session, tmp_path)
 
-    note = await notes.create_llm_note(session, paper.id, "Grounding makes answers checkable.", TWO_LINE_QUOTE)
+    note = await ai_notes.create_llm_note(session, paper.id, "Grounding makes answers checkable.", TWO_LINE_QUOTE)
 
     assert await linked(session, note.id) == {paper.id}
 

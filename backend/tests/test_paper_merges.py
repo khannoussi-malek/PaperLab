@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from test_pdf_upgrade import awaiting
 from test_retrieved_hits import failed_hit, paper, workspace
 
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.core.papers import merges, papers
 from app.core.search import retrieved_hits
 from app.core.workspaces import tags, workspaces
@@ -109,7 +109,7 @@ async def seed_both(session):
     # K's own
     await workspaces.add_paper(session, ws.id, k.id)
     await tags.tag_papers(session, ws.id, "sleep", paper_ids=[k.id])
-    note_k = await notes.create_llm_note(session, k.id, "Worth citing.", "Sleep helps memory")
+    note_k = await ai_notes.create_llm_note(session, k.id, "Worth citing.", "Sleep helps memory")
     hit_k = await awaiting(session, ws, k)
     session.add(SearchRunEligibility(
         paper_id=k.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),

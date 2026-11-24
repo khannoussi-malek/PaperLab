@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.papers.enrichment import normalize_doi
+from app.domain.doi import normalize_doi
 from app.models import Paper, workspace_papers
 
 ABBREVIATIONS = {
