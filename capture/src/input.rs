@@ -33,6 +33,7 @@ pub fn classify(raw: &str) -> Input {
         return Input::Doi(doi);
     }
     let bare = strip_prefix_ci(s, &ARXIV_PREFIXES).unwrap_or(s);
+    let bare = bare.trim_start_matches(['(', '"', '\'']).trim_end_matches(['.', ',', ';', ')', '"', '\'']);
     let bare = bare.strip_suffix(".pdf").unwrap_or(bare);
     if arxiv_id(bare) {
         return Input::Arxiv(bare.to_owned());
@@ -47,12 +48,26 @@ fn strip_prefix_ci<'a>(s: &'a str, prefixes: &[&str]) -> Option<&'a str> {
     prefixes.iter().find_map(|p| s.get(..p.len()).filter(|head| head.eq_ignore_ascii_case(p)).map(|_| &s[p.len()..]))
 }
 
-/// `10.<registrant>/<suffix>`, with sentence punctuation a copy picks up dropped from the end.
+/// `10.<registrant>/<suffix>`, without a link's `?query` or `#fragment`, and with sentence punctuation a copy picks up
+/// dropped from the end (a closing parenthesis only when it has no opening one in the DOI).
 fn doi(s: &str) -> Option<String> {
+    let s = s.split(['?', '#']).next().unwrap_or(s);
     let (registrant, suffix) = s.strip_prefix("10.")?.split_once('/')?;
     let ok = registrant.len() >= 4 && registrant.bytes().all(|b| b.is_ascii_digit() || b == b'.')
         && !suffix.is_empty() && !s.contains(char::is_whitespace);
-    ok.then(|| s.trim_end_matches(['.', ',', ';', ')', '"', '\'']).to_owned())
+    ok.then(|| trim_end_punctuation(s).to_owned())
+}
+
+fn trim_end_punctuation(mut s: &str) -> &str {
+    loop {
+        let t = s.trim_end_matches(['.', ',', ';', '"', '\'']);
+        let unbalanced = t.ends_with(')') && t.matches('(').count() < t.matches(')').count();
+        let t = if unbalanced { &t[..t.len() - 1] } else { t };
+        if t == s {
+            return s;
+        }
+        s = t;
+    }
 }
 
 /// New style `2401.12345` (4 or 5 digits after the dot) or old style `hep-th/9901001`, either with `vN`.
@@ -105,6 +120,18 @@ mod tests {
         ] {
             assert_eq!(classify(raw), Input::Arxiv(id.into()), "{raw}");
         }
+    }
+
+    #[test]
+    fn a_link_query_or_fragment_and_stray_punctuation_are_not_part_of_an_id() {
+        let doi = |d: &str| Input::Doi(d.into());
+        assert_eq!(classify("https://doi.org/10.48550/arXiv.1706.03762?utm_source=x"), doi("10.48550/arXiv.1706.03762"));
+        assert_eq!(classify("https://doi.org/10.1234/abcd#section-2"), doi("10.1234/abcd"));
+        assert_eq!(classify("10.1000/abc(x)"), doi("10.1000/abc(x)"));
+        assert_eq!(classify("(see 10.1000/abc)"), Input::Text("(see 10.1000/abc)".into()));
+        assert_eq!(classify("10.1000/abc)."), doi("10.1000/abc"));
+        assert_eq!(classify("arXiv:2401.12345."), Input::Arxiv("2401.12345".into()));
+        assert_eq!(classify("(2401.12345)"), Input::Arxiv("2401.12345".into()));
     }
 
     #[test]
