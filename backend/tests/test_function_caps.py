@@ -24,7 +24,6 @@ LONG: dict[str, int] = {
     "app/core/chat/chat.py::prepare": 71,
     "app/core/chat/claims.py::verify_claim": 63,
     "app/core/chat/claims_batch.py::verify_claims": 77,
-    "app/core/chat/retrieval.py::retrieve": 79,
     "app/core/citations/citations.py::find": 51,
     "app/core/citations/reference_listing.py::library_listing": 52,
     "app/core/citations/references.py::_upsert": 55,
@@ -50,6 +49,7 @@ WIDE: dict[str, int] = {
     "app/core/chat/chat_answers.py::save_answer": 8,
     "app/core/chat/claims.py::_write_output": 7,
     "app/core/chat/claims.py::verify_claim": 7,
+    # The search core: ten callers and nine test fakes pass these keyword options by name.
     "app/core/chat/retrieval.py::retrieve": 9,
     "app/core/citations/citations_import_apply.py::_isolated": 7,
     "app/core/citations/citations_import_apply.py::_one": 7,

@@ -268,17 +268,53 @@ async def _is_long(session: AsyncSession, paper_ids: list[uuid.UUID] | None, que
     return await session.scalar(many) is not None
 
 
+async def _scope_ids(
+    session: AsyncSession, paper_ids: list[uuid.UUID] | None, workspace_id: uuid.UUID | None
+) -> list[uuid.UUID] | None:
+    if paper_ids is not None and workspace_id is not None:
+        raise ValueError("retrieve takes paper_ids or workspace_id, not both")
+    if workspace_id is None:
+        return paper_ids
+    # Ids first, not a subquery in the scan: with literal ids the planner sees a small scope and sorts it
+    # exactly; behind ARRAY(subquery) it guesses, picks HNSW, and bloat can starve the scan (see above).
+    members = select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == workspace_id)
+    return list(await session.scalars(members))
+
+
+async def _embedded_question(session: AsyncSession, query: str, embedder) -> list[float]:
+    model = await query_embedder(session, embedder)
+    try:
+        return await embedding.embed_query(model, query)
+    except (LLMUnavailable, LLMError) as exc:
+        raise Conflict(QUESTION_FAILED.format(reason=str(exc).rstrip("."))) from exc
+
+
+async def _mixes_words(
+    session: AsyncSession, query: str, paper_ids: list[uuid.UUID] | None, alone: bool, words: bool | None
+) -> bool:
+    """Whether the keyword ranking is mixed in (hybrid)."""
+    if words is not None:
+        return words and len(query) <= MAX_HYBRID_CHARS
+    # Hybrid only across papers: inside one paper its own topic words are in most chunks, and the single-paper eval
+    # lost recall (@4 0.95 -> 0.90, @8 1.00 -> 0.95); the workspace eval gained (@8 13/17 -> 16/17), 2026-11-01.
+    # ponytail: a whole-library search in a one-paper library still runs hybrid; a count on every search isn't worth it.
+    across_papers = paper_ids is None or len(paper_ids) > 1
+    if across_papers and len(query) <= MAX_HYBRID_CHARS and await hybrid_on(session):
+        return True
+    return alone or await _is_long(session, paper_ids, query)
+
+
+def _word_params(query: str) -> dict:
+    # Postgres refuses a NUL in text, and the vector path never sends the words to it.
+    # Cut only when a paper still embedding is asked by itself: past the limit nothing else gets here.
+    question_words = query.replace("\x00", "")[:MAX_HYBRID_CHARS]
+    return {"question": question_words, "rrf_k": RRF_K, "max_terms": MAX_TERMS, "bm25_k1": BM25_K1, "bm25_b": BM25_B}
+
+
 async def retrieve(
-    session: AsyncSession,
-    query: str,
-    *,
-    paper_ids: list[uuid.UUID] | None = None,
-    workspace_id: uuid.UUID | None = None,
-    k: int = 8,
-    embedder=None,
-    per_paper: int | None = None,
-    chunk_ids: list[uuid.UUID] | None = None,
-    words: bool | None = None,
+    session: AsyncSession, query: str, *, paper_ids: list[uuid.UUID] | None = None,
+    workspace_id: uuid.UUID | None = None, k: int = 8, embedder=None, per_paper: int | None = None,
+    chunk_ids: list[uuid.UUID] | None = None, words: bool | None = None,
 ) -> list[RetrievedChunk]:
     """The k chunks nearest to the query, closest first (best fused rank first when hybrid runs: a scope wider than
     one paper with the switch on, or one paper of LONG_PAPER_CHUNKS or more). embedder=None embeds the question with
@@ -292,56 +328,27 @@ async def retrieve(
     chunk_ids narrows the scope to those chunks (M16); an empty list returns [] without embedding the query.
     words=True or False mixes the keyword ranking in or leaves it out whatever the rules above and the switch say.
     """
-    if paper_ids is not None and workspace_id is not None:
-        raise ValueError("retrieve takes paper_ids or workspace_id, not both")
-    if workspace_id is not None:
-        # Ids first, not a subquery in the scan: with literal ids the planner sees a small scope and sorts it
-        # exactly; behind ARRAY(subquery) it guesses, picks HNSW, and bloat can starve the scan (see above).
-        members = select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == workspace_id)
-        paper_ids = list(await session.scalars(members))
+    paper_ids = await _scope_ids(session, paper_ids, workspace_id)
     if (paper_ids is not None and not paper_ids) or (chunk_ids is not None and not chunk_ids):
         return []
     # The cap is decided from the resolved paper_ids, not from workspace_id itself: a workspace can resolve to
     # just one paper, which must be as uncapped as passing that paper's id directly.
     default_cap = per_paper is None and paper_ids is not None and len(paper_ids) > 1
-    if default_cap:
-        per_paper = MAX_PER_PAPER
-    model = await query_embedder(session, embedder)
-    try:
-        question = await embedding.embed_query(model, query)
-    except (LLMUnavailable, LLMError) as exc:
-        raise Conflict(QUESTION_FAILED.format(reason=str(exc).rstrip("."))) from exc
-    params = {"q": question, "k": k, "candidates": max(CANDIDATES, k)}
-    params["per_paper"] = k if per_paper is None else per_paper
-    params["uncapped"] = BEST_UNCAPPED if default_cap else 0
-    # Hybrid only across papers: inside one paper its own topic words are in most chunks, and the single-paper eval
-    # lost recall (@4 0.95 -> 0.90, @8 1.00 -> 0.95); the workspace eval gained (@8 13/17 -> 16/17), 2026-11-01.
-    # ponytail: a whole-library search in a one-paper library still runs hybrid; a count on every search isn't worth it.
-    across_papers = paper_ids is None or len(paper_ids) > 1
-    hybrid = across_papers and len(query) <= MAX_HYBRID_CHARS and await hybrid_on(session)
+    per_paper = MAX_PER_PAPER if default_cap else per_paper
+    question = await _embedded_question(session, query, embedder)
     # A long paper embeds across many jobs, so half of it can sit here for hours. Its vectors so far must not answer for
     # the whole in a wider search. Asked by itself, its words can: they're all there minutes after upload, and on the
     # fixed-answer eval keywords alone matched vectors (26 of 33 each at top 8, measured 2026-11-04).
     # ponytail: a wider search waits for the vectors; let it use words too if people ask across a paper mid-embedding.
     busy = list(await session.scalars(select(Paper.id).where(Paper.status == PaperStatus.EMBEDDING)))
     alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy
-    hybrid = hybrid or alone or await _is_long(session, paper_ids, query)
-    if words is not None:
-        hybrid = words and len(query) <= MAX_HYBRID_CHARS
+    hybrid = await _mixes_words(session, query, paper_ids, alone, words)
+    params = {"q": question, "k": k, "candidates": max(CANDIDATES, k)}
+    params |= {"per_paper": k if per_paper is None else per_paper, "uncapped": BEST_UNCAPPED if default_cap else 0}
+    params |= ({"busy": busy} if busy and not alone else {}) | (_word_params(query) if hybrid else {})
+    params |= {"paper_ids": list(paper_ids)} if paper_ids is not None else {}
+    params |= {"chunk_ids": list(chunk_ids)} if chunk_ids is not None else {}
     statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid, bool(busy) and not alone, alone)
-    if busy and not alone:
-        params["busy"] = busy
-    if hybrid:
-        # Postgres refuses a NUL in text, and the vector path never sends the words to it.
-        # Cut only when a paper still embedding is asked by itself: past the limit nothing else gets here.
-        question_words = query.replace("\x00", "")[:MAX_HYBRID_CHARS]
-        params |= {
-            "question": question_words, "rrf_k": RRF_K, "max_terms": MAX_TERMS, "bm25_k1": BM25_K1, "bm25_b": BM25_B,
-        }
-    if paper_ids is not None:
-        params["paper_ids"] = list(paper_ids)
-    if chunk_ids is not None:
-        params["chunk_ids"] = list(chunk_ids)
     await session.execute(ITERATIVE_SCAN)  # SET LOCAL: ends with the caller's transaction
     # SET can't take a bind parameter; the setting is a validated int (1–1000).
     await session.execute(text(f"SET LOCAL hnsw.ef_search = {int(settings.hnsw_ef_search)}"))
