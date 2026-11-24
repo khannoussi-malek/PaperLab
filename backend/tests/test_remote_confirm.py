@@ -12,6 +12,7 @@ from app.core.manuscripts import manuscripts
 from app.core.platform import llm_connections, queue
 from app.domain.errors import Conflict, NotFound
 from app.models import LLMConnection, LLMModel, ManuscriptClaimCheck
+from app.schemas.manuscript_section_review import SectionReviewIn
 from app.workers import manuscript_review as review_worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]  # flips the default model
@@ -86,9 +87,9 @@ async def test_section_review_start_refuses_a_remote_model_without_confirm(sessi
     await _remote(session)
     kw = {"file": "main.tex", "base": FUTURE, "at": 5, "role": None}
     with pytest.raises(Conflict, match="remote_model_needs_confirm"):
-        await msr.start(session, m.id, **kw, confirm_remote=False)
+        await msr.start(session, m.id, SectionReviewIn(**kw, confirm_remote=False))
     assert arq.jobs == []
-    assert (await msr.start(session, m.id, **kw, confirm_remote=True))["status"] == "queued"
+    assert (await msr.start(session, m.id, SectionReviewIn(**kw, confirm_remote=True)))["status"] == "queued"
 
 
 async def test_a_citation_check_whose_default_turns_remote_is_refused_by_the_job(
