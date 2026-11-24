@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { activeNav, activeWorkspaceId, railItem } from './nav'
-import type { Route } from '@/lib/route'
+import type { Route } from '@/router/route'
 
 describe('activeNav', () => {
   it('lights up the rail item for each top-level view', () => {

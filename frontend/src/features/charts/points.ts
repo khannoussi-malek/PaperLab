@@ -1,5 +1,5 @@
 import type { ResolvedCell, ResolvedData, ResolvedDataset } from '@/entities'
-import { datasetHref, regionHref } from '@/lib/route'
+import { datasetHref, regionHref } from '@/router/route'
 import type { PdfRect } from '../reader/coords'
 
 /** Which cell a drawn point shows. Plotly carries it on each point as `customdata`. */

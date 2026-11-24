@@ -8,7 +8,7 @@ import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces
 import { counted } from '@/features/workspaces/workspaceMeta'
 import { Button } from '@/components/ui/button'
 import { useStepCounts } from '@/features/workspaces/useStepCounts'
-import { readerHref, workspaceHref } from '@/lib/route'
+import { readerHref, workspaceHref } from '@/router/route'
 import { asPrismaRunMeta } from './prismaRunMeta'
 
 const ALL_RUNS = 'all'

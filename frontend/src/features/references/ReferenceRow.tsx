@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { citationsLabel, pageLink } from '@/features/discovery/candidateMeta'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { byline } from '@/features/library/paperMeta'
-import { readerHref } from '@/lib/route'
+import { readerHref } from '@/router/route'
 import { cocitationBadge, rowAction } from './referencesMeta'
 
 type Props = { reference: Reference; direction: ReferencesDirection; workspaceId?: string; onUnqueued?: () => void }

@@ -1,6 +1,6 @@
 import { useReadingContext } from '@/services/queries'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 
 /** Full width under the toolbar, why this paper is in the reader's survey — every workspace it was pulled into by
  * a systematic search (Review Focus #1: never just one), its screening priority and note. Empty for the common

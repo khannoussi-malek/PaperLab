@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ScreeningTab } from './ScreeningTab'
 import * as queries from '@/services/queries'
 import { api } from '@/services/api'
-import { readerHref, workspaceHref } from '@/lib/route'
+import { readerHref, workspaceHref } from '@/router/route'
 
 // jsdom lacks these; Radix Select needs them.
 Element.prototype.scrollIntoView ??= () => {}

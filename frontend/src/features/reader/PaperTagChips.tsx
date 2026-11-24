@@ -1,6 +1,6 @@
 import { usePaperTagGroups } from '@/services/queries'
 import { Badge } from '@/components/ui/badge'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 
 /** A paper's tags, grouped by workspace; each chip opens that workspace's papers filtered by the tag. */
 export function PaperTagChips({ paperId }: { paperId: string }) {

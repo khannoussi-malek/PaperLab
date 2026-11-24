@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { keys, useFoundPdfs, useMarkFoundPdfsSeen } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { readerHref } from '@/lib/route'
+import { readerHref } from '@/router/route'
 
 function FoundLink({ found }: { found: { paper_id: string; title: string } }) {
   return <a href={readerHref(found.paper_id)} className="text-primary hover:underline">{found.title}</a>

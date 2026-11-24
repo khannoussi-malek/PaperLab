@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { sileo } from "sileo";
 import type { PackageImportResult, Workspace } from '@/entities'
 import { ApiError, api } from '@/services/api'
-import { workspaceHref } from "@/lib/route";
+import { workspaceHref } from "@/router/route";
 import { PackageExportDialog, PackageRecordLink, ImportPackageButton } from "./PackageDialogs";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 

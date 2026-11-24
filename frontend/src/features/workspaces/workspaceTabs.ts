@@ -1,4 +1,4 @@
-import type { WorkspaceTab } from '@/lib/route'
+import type { WorkspaceTab } from '@/router/route'
 
 export type TabMeta = {
   value: WorkspaceTab

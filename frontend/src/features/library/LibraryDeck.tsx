@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'rea
 import type { Paper } from '@/entities'
 import { useNoteCounts, useNotes } from '@/services/queries'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
-import { noteHref, readerHref } from '@/lib/route'
+import { noteHref, readerHref } from '@/router/route'
 import { bookItems, toDeckPaper, type DeckPaper } from '../manuscripts/deck/deckModel'
 import type { DeckAction } from '../manuscripts/deck/deckGestures'
 import { DeckHands, HANDS_HELP } from '../manuscripts/deck/DeckHands'

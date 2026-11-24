@@ -1,6 +1,6 @@
 import { plural } from '../charts/chartMeta'
 import type { Paper, TagSummary } from '@/entities'
-import type { TagMatch } from '../../lib/route'
+import type { TagMatch } from '@/router/route'
 
 /** `known` is every existing tag name (a tag with no papers is still known). Keeps the papers carrying any/all of the selected tags. Selected tags no paper carries (renamed or deleted) are
  * ignored, so a stale URL never empties the list; with none left, everything shows. */

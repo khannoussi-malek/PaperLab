@@ -4,7 +4,7 @@ import { useAddSection, useDeleteSection, useMoveSection, useRetitleSection, use
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { manuscriptHref } from '@/lib/route'
+import { manuscriptHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 import { manuscriptFailure } from './errors'
 import type { OutlineItem } from './outline'

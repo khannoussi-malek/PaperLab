@@ -4,7 +4,7 @@ import { usePaperDatasets } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
-import { datasetHref, newChartHref } from '@/lib/route'
+import { datasetHref, newChartHref } from '@/router/route'
 import type { PdfRect } from '../reader/coords'
 import { datasetMeta } from './datasetMeta'
 

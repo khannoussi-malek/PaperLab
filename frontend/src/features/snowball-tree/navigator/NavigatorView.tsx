@@ -10,7 +10,7 @@ import { parseNav, primaryPath, viaOf, type NavEntry } from './navPath'
 import { readNav, readNavPaper, writeNav } from './navUrl'
 import { PaperCard } from './PaperCard'
 import { StartFromPaper } from './StartFromPaper'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { useGrab } from './useGrab'
 
 /** The walk to a library paper: its tree node's primary path, else the hand-added root. */

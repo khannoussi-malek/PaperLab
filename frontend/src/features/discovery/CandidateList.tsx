@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { byline } from '@/features/library/paperMeta'
 import { codeInWords } from '@/lib/errorWords'
-import { readerHref } from '@/lib/route'
+import { readerHref } from '@/router/route'
 import { candidateKey, citationsLabel, pageLink, SOURCE_NAMES } from './candidateMeta'
 
 type RowProps = { candidate: Candidate; workspaceId?: string }

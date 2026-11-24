@@ -36,7 +36,7 @@ import {
 import { LEVELS, TRIAGES, UNDECIDED_LABEL, type Triage } from '@/features/reading/passes'
 import { snowballMessage } from '@/features/workspace-search/ScreeningTab'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 
 // Wide enough for "Add to workspace…" and a typical workspace name on one line.

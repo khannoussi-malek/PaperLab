@@ -4,7 +4,7 @@ import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { chartsHref } from '@/lib/route'
+import { chartsHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 
 type Props = {

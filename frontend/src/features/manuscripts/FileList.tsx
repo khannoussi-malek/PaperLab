@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { manuscriptHref } from '@/lib/route'
+import { manuscriptHref } from '@/router/route'
 import { manuscriptErrorMessage, manuscriptFailure } from './errors'
 
 // The server's rules (manuscript_paths.py), checked here first so a typo is caught before a round trip.

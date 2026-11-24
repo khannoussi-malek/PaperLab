@@ -1,5 +1,5 @@
 import type { ChatSource, SavedNote } from '@/entities'
-import { noteHref, notesHref } from '@/lib/route'
+import { noteHref, notesHref } from '@/router/route'
 import { promoteSelection, type PromoteDraft } from './promote'
 
 /**

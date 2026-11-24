@@ -2,7 +2,7 @@ import { useEmbeddingStatus } from '@/services/queries'
 import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'
 import { showSearchNotice } from '@/features/settings/searchModel'
 import { rebuildLine } from '@/features/settings/searchSources'
-import { settingsSectionHref } from '@/lib/route'
+import { settingsSectionHref } from '@/router/route'
 
 /**
  * One quiet line under the library header, only when there is something to say:

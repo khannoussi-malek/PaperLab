@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import type { CellFocus } from '@/lib/route'
+import type { CellFocus } from '@/router/route'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
