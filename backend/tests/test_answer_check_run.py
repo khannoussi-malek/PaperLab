@@ -17,7 +17,7 @@ from app.core.answer_check_run import (
 from app.core.answer_provenance import MAX_SNAPSHOT_CHARS
 from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMConnection, LLMModel, LLMOutput
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 from app.workers import answer_check as worker
 
 pytestmark = pytest.mark.anyio

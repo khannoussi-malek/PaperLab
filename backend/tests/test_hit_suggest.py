@@ -8,7 +8,7 @@ from app.core import hit_suggest
 from app.core.screening_suggest import SCREENING_PROMPT_VERSION
 from app.domain.errors import Conflict, NotFound
 from app.models import LLMConnection, LLMModel
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 from tests.screening_pool import make_pool
 
 pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("local_default_model")]

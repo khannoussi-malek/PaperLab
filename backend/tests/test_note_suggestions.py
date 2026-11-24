@@ -14,7 +14,7 @@ from app.core.notes import Anchor, create_human_note, promote_llm_fragment
 from app.core.retrieval import RetrievedChunk
 from app.domain.errors import Conflict
 from app.models import LLMOutput
-from app.providers.llm import FAKE_NOTE_SUGGESTIONS, FakeLLM
+from app.providers.llm_fake import FAKE_NOTE_SUGGESTIONS, FakeLLM
 
 pytestmark = pytest.mark.anyio
 

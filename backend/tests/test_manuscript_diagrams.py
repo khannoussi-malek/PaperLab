@@ -15,7 +15,7 @@ from app.core import manuscript_diagrams as md
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel
 from app.models import ManuscriptDiagram as Row
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 from app.workers import manuscript_diagrams as worker
 from app.workers import manuscript_section_review as worker_section
 from app.workers import manuscripts as compile_worker

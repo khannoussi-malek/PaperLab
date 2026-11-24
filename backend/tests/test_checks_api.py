@@ -16,7 +16,7 @@ from app.api.deps import resolve_check_llm
 from app.core import checks, embedding_index, llm_connections
 from app.models import Chunk, LLMConnection, LLMModel, LLMOutput, Note, PaperMerge, Provenance
 from app.providers import embedding
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 

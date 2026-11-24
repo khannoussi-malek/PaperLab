@@ -2,7 +2,7 @@ import pytest
 
 from app.core import diagram as dg
 from app.core import diagram_tikz as dt
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 PIC = "\\begin{tikzpicture}\n\\node (a) {Encoder};\n\\node[right=of a] {Decoder};\n\\end{tikzpicture}"

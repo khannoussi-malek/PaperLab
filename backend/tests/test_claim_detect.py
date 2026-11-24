@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.core import claim_detect, prompts
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 

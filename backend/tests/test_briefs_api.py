@@ -15,7 +15,7 @@ from app.core import briefs, chat
 from app.main import create_app
 from app.models import LLMModel, LLMOutput
 from app.providers import llm
-from app.providers.llm import FAKE_ANSWER, FAKE_TOKENS
+from app.providers.llm_fake import FAKE_ANSWER, FAKE_TOKENS
 
 pytestmark = pytest.mark.anyio
 

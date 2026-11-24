@@ -34,6 +34,13 @@ ALLOWED_UPWARD: dict[tuple[str, str], str] = {
     ("app.schemas.workspace_search", "app.core.source_registry"): "source ids",
     ("app.scripts.tectonic_sandbox_check", "app.workers.manuscripts"): "a check script for the worker's own sandbox",
 }
+# The fake model answers each feature by its system prompt, so it reads every prompt (lazily): a test double for
+# the whole app, picked by LLM_PROVIDER=fake.
+FAKE_MODEL_READS = (
+    "answer_check", "chat", "chat_charts", "checks", "claim_detect", "claims", "diagram", "draft_review", "each_paper",
+    "evidence_cards", "note_suggestions", "number_suggest", "screening_suggest", "section_review",
+)
+ALLOWED_UPWARD |= {("app.providers.llm_fake", f"app.core.{name}"): "fake model" for name in FAKE_MODEL_READS}
 
 # Files allowed over MAX_LINES today (paths relative to backend/). Split one, then take it off.
 OVER_MAX: set[str] = {
@@ -58,7 +65,6 @@ OVER_MAX: set[str] = {
     "app/core/workspace_package_screening.py",
     "app/core/workspace_search.py",
     "app/providers/discovery_fake.py",
-    "app/providers/llm.py",
     "app/schemas/workspace_search.py",
     "app/workers/ingest.py",
 }

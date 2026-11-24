@@ -7,7 +7,7 @@ import pytest
 from app.config import settings
 from app.core import notes
 from app.core.chat import SYSTEM_PROMPT, WORKSPACE_SYSTEM_PROMPT
-from app.providers import llm
+from app.providers import llm, llm_fake
 from app.providers.base import LLMError, LLMUnavailable
 
 pytestmark = pytest.mark.anyio
@@ -213,22 +213,22 @@ async def test_anthropic_unknown_model_is_unavailable():
 
 
 async def test_fake_llm_splits_the_citation_marker_and_records_calls():
-    fake = llm.FakeLLM()
+    fake = llm_fake.FakeLLM()
 
     tokens = await collect(fake, [])
 
-    assert "".join(tokens) == llm.FAKE_ANSWER
+    assert "".join(tokens) == llm_fake.FAKE_ANSWER
     assert ["[C", "1]"] == tokens[tokens.index("[C") : tokens.index("[C") + 2]
     assert fake.calls == [("You cite sources.", "Question: why?")]
 
 
 async def test_fake_llm_gives_the_workspace_answer_to_the_workspace_prompt():
-    fake = llm.FakeLLM()
+    fake = llm_fake.FakeLLM()
 
     tokens = [token async for token in fake.stream(WORKSPACE_SYSTEM_PROMPT, "Question: why?")]
 
-    assert "".join(tokens) == llm.FAKE_WORKSPACE_ANSWER
-    assert llm.FAKE_WORKSPACE_ANSWER == (
+    assert "".join(tokens) == llm_fake.FAKE_WORKSPACE_ANSWER
+    assert llm_fake.FAKE_WORKSPACE_ANSWER == (
         "Fake workspace answer: both papers describe the method [C1][C2], as your note says [N1]."
     )
     assert tokens[tokens.index("[C") : tokens.index("[C") + 4] == ["[C", "1]", "[C", "2]"]
@@ -239,7 +239,7 @@ async def test_fake_llm_can_fail_mid_stream():
     tokens = []
 
     with pytest.raises(LLMError, match="fake model failed mid-answer"):
-        await collect(llm.FakeLLM(fail_after=2), tokens)
+        await collect(llm_fake.FakeLLM(fail_after=2), tokens)
     assert len(tokens) == 2
 
 
@@ -397,7 +397,7 @@ def test_build_llm_in_fake_mode_reports_the_fake_and_the_connection(monkeypatch)
 
     adapter = llm.build_llm(Row("anthropic", "Claude", None, KEY), "claude-sonnet-5")
 
-    assert isinstance(adapter, llm.FakeLLM)
+    assert isinstance(adapter, llm_fake.FakeLLM)
     assert (adapter.model, adapter.connection_name) == ("fake:claude-sonnet-5", "Claude")
 
 
@@ -502,21 +502,21 @@ async def test_anthropic_closes_its_client_after_a_stream_and_after_a_model_list
 async def test_list_models_in_fake_mode_is_a_fixed_list_and_rejects_bad_key(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "fake")
 
-    assert (await llm.list_models(Row("ollama", "Ollama", OLLAMA_URL))).names == llm.FAKE_MODELS
+    assert (await llm.list_models(Row("ollama", "Ollama", OLLAMA_URL))).names == llm_fake.FAKE_MODELS
     with pytest.raises(LLMUnavailable, match="^Key rejected by Groq$"):
         await llm.list_models(Row("openai_compatible", "Groq", COMPATIBLE_URL, "bad-key"))
 
 
 async def test_fake_llm_answers_a_question_asking_for_notes_with_two_suggested_notes_in_either_chat():
-    fake = llm.FakeLLM()
+    fake = llm_fake.FakeLLM()
     # The prompt always says "Notes (newest first)": only the question decides.
     asked = "Notes (newest first):\n\n(none)\n\nQuestion: Create notes to help me understand this paper\n"
     plain = "Notes (newest first):\n\n(none)\n\nQuestion: What anchors a note?\n"
 
     for system in (SYSTEM_PROMPT, WORKSPACE_SYSTEM_PROMPT):
-        assert "".join([token async for token in fake.stream(system, asked)]) == llm.FAKE_NOTES_ANSWER
-    assert "".join([token async for token in fake.stream(SYSTEM_PROMPT, plain)]) == llm.FAKE_ANSWER
-    assert notes.note_blocks(llm.FAKE_NOTES_ANSWER) == [
+        assert "".join([token async for token in fake.stream(system, asked)]) == llm_fake.FAKE_NOTES_ANSWER
+    assert "".join([token async for token in fake.stream(SYSTEM_PROMPT, plain)]) == llm_fake.FAKE_ANSWER
+    assert notes.note_blocks(llm_fake.FAKE_NOTES_ANSWER) == [
         "The method anchors every note on a passage [C1].",
         "Keep one idea per note.",
     ]
@@ -526,7 +526,7 @@ async def test_fake_llm_answers_the_v2_screening_prompt_with_json_whose_quote_is
     from app.core import screening_suggest as s
 
     abstract = "A controlled study of pagination in fixture search results."
-    fake = llm.FakeLLM()
+    fake = llm_fake.FakeLLM()
     results = {
         title: await s.suggest(fake, "q", "in", "out", title, abstract)
         for title in ("Fixture 1", "Fixture 2", "Fixture 3", "Fixture 4")
@@ -548,7 +548,7 @@ async def test_fake_llm_answers_the_evidence_card_prompt_by_quoting_the_first_pa
         "Other.",
     ]
     passages = [{"page": 3, "section": None}, {"page": 4, "section": "Methods"}]
-    fake = llm.FakeLLM()
+    fake = llm_fake.FakeLLM()
     reply = "".join([t async for t in fake.stream(e.SYSTEM_PROMPT, e._prompt(passages, texts))])
     card = json.loads(reply)
     quote = "Sleep improved recall by 12 percent in the trained group,"

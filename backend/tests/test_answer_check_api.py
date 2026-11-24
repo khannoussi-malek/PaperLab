@@ -9,7 +9,7 @@ from test_chat_workspace_api import make_workspace
 from app.core import answer_check_run, chat, claims, mcp_reads, queue, workspace_package_answers
 from app.domain.errors import NotFound
 from app.models import LLMConnection, LLMModel, LLMOutput, Workspace
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 

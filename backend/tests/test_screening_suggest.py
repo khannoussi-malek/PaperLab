@@ -1,7 +1,7 @@
 import pytest
 
 from app.core.screening_suggest import SYSTEM_PROMPT, Suggestion, build_prompt, build_prompt_v2, parse_reply, suggest
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 
