@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ErrorAlert } from '@/features/library/ErrorAlert'
+import { ErrorAlert } from '@/components/ErrorAlert'
 
 const WHEN = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' })
 const HELP_ID = 'mcp-writes-help'

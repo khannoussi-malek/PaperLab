@@ -1,5 +1,5 @@
 import type { ChartUse, Dataset, GridIn, TablePreview } from '@/entities'
-import type { PdfRect } from '../reader/coords'
+import type { PdfRect } from '@/lib/coords'
 
 /**
  * The grid the owner fixes before saving a table, or edits later. Pure and immutable: every operation returns a new

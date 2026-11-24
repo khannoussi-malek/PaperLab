@@ -4,11 +4,11 @@ import { AlreadyInLibraryError, NoFreePdfError } from '@/services/api'
 import { useAddCandidate } from '@/services/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ErrorAlert } from '@/features/library/ErrorAlert'
-import { byline } from '@/features/library/paperMeta'
+import { ErrorAlert } from '@/components/ErrorAlert'
+import { byline } from '@/entities/paperMeta'
 import { codeInWords } from '@/lib/errorWords'
 import { readerHref } from '@/router/route'
-import { candidateKey, citationsLabel, pageLink, SOURCE_NAMES } from './candidateMeta'
+import { candidateKey, citationsLabel, pageLink, SOURCE_NAMES } from '@/entities/candidateMeta'
 
 type RowProps = { candidate: Candidate; workspaceId?: string }
 

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChatDoneEvent, ChatErrorEvent, ChatSource, ChatSourcesEvent, ChatTokenEvent, LensId } from '@/entities'
 import { api, errorDetail } from '@/services/api'
 import { useInvalidateBriefs } from '@/services/queries/lenses'
-import { appendSegments, citationSplitter, type Segment } from '@/features/chat/citations'
-import type { ChatProblem } from '@/features/chat/refusals'
-import { readSse } from '@/features/chat/sse'
+import { appendSegments, citationSplitter, type Segment } from '@/components/citations'
+import type { ChatProblem } from '@/entities/refusals'
+import { readSse } from '@/services/sse'
 import { briefProblem } from './lenses'
 
 /** One brief being written: idle → sources → streaming → done | error, for `lens`. */

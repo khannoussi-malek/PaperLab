@@ -1,6 +1,6 @@
 import type { ResolvedCell, ResolvedData, ResolvedDataset } from '@/entities'
 import { datasetHref, regionHref } from '@/router/route'
-import type { PdfRect } from '../reader/coords'
+import type { PdfRect } from '@/lib/coords'
 
 /** Which cell a drawn point shows. Plotly carries it on each point as `customdata`. */
 export type PointRef = { datasetId: string; rowId: string; columnId: string }

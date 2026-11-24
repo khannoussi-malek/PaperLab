@@ -1,6 +1,6 @@
 import type { Chunk, Lens, LensId, Role, Section } from '@/entities'
-import { refusal, type ChatProblem } from '@/features/chat/refusals'
-import type { PdfRect } from '@/features/reader/coords'
+import { refusal, type ChatProblem } from '@/entities/refusals'
+import type { PdfRect } from '@/lib/coords'
 
 /** Each role in words: the Lens tab's chips and its Change role menu. `Record` makes tsc name a role the API adds. */
 export const ROLE_LABEL: Record<Role, string> = {

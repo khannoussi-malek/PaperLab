@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { refusal } from './refusals'
+import { refusal } from '@/entities/refusals'
 
 describe('refusal', () => {
   it('words a follow-up whose answer is gone, ends its thread, and offers no Retry', () => {

@@ -4,7 +4,7 @@ import { glass } from '@/components/glass'
 import { popIn, pressable } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
-import { emptyListText, type ReadingFilter } from '@/features/reading/passes'
+import { emptyListText, type ReadingFilter } from '@/entities/passes'
 import { cn } from '@/lib/utils'
 
 type SearchProps = {

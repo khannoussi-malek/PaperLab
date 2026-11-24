@@ -7,7 +7,7 @@ import { SearchRebuild, SourceError } from '@/features/settings/SearchRebuild'
 import { READY_AGAIN } from '@/features/settings/searchSources'
 import { settingsHref, settingsSectionHref } from '@/router/route'
 import { cn } from '@/lib/utils'
-import type { ChatProblem } from './refusals'
+import type { ChatProblem } from '@/entities/refusals'
 
 export function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: ChatProblem; onRetry: () => void }) {
   // Only a paper's `paper_not_indexed` refusal offers Re-index. A hit carries its paper's id once it has a file; none, no button.

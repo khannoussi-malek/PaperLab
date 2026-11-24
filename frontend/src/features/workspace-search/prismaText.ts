@@ -1,5 +1,5 @@
 import type { PrismaExportOut } from '@/entities'
-import type { GlossaryKey } from '@/features/workspaces/glossary'
+import type { GlossaryKey } from '@/components/glossary'
 import { reasonLabel } from './hitReview'
 
 export type StageKey =

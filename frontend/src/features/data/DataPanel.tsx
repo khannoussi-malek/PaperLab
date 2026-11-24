@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { datasetHref, newChartHref } from '@/router/route'
-import type { PdfRect } from '../reader/coords'
+import type { PdfRect } from '@/lib/coords'
 import { datasetMeta } from './datasetMeta'
 
 type Props = {

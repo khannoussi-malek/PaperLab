@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
-import { PRESET_COLORS } from './highlightColors'
+import { PRESET_COLORS } from '@/components/highlightColors'
 
 type Props = {
   value: string

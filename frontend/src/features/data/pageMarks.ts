@@ -1,5 +1,5 @@
 import type { Dataset, DatasetSummary } from '@/entities'
-import type { PdfRect } from '../reader/coords'
+import type { PdfRect } from '@/lib/coords'
 import { rectContains } from '../reader/hitTest'
 
 /** The ▦ marker's size in PDF points, at the top-right corner inside a captured table's region. */

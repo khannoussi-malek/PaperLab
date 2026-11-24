@@ -3,9 +3,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { api, ApiError } from '@/services/api'
-import { RemoteConfirmDialog } from './RemoteConfirm'
-import { useReview } from './useReview'
-import { useReviewInEditor } from './useReviewInEditor'
+import { RemoteConfirmDialog } from '@/components/RemoteConfirm'
+import { useReview } from '@/features/manuscripts/review/useReview'
+import { useReviewInEditor } from '@/features/manuscripts/review/useReviewInEditor'
 
 afterEach(() => vi.restoreAllMocks())
 const remote = () => new ApiError('remote_model_needs_confirm', 409, { detail: 'remote_model_needs_confirm', model: 'Cloud · big', host: 'api.example.com' })

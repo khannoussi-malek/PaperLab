@@ -1,4 +1,4 @@
-import type { PdfRect } from './coords'
+import type { PdfRect } from '@/lib/coords'
 
 /**
  * Reading one numbered reference-list entry from a page's text (D144). Pure: `citations.ts` turns PDF.js's text items

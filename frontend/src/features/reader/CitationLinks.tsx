@@ -1,5 +1,5 @@
 import type { FocusEvent, KeyboardEvent, ReactNode } from 'react'
-import { pdfRectToCss } from './coords'
+import { pdfRectToCss } from '@/lib/coords'
 import { citationCardId, type Citation } from './citations'
 
 type Props = {

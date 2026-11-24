@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import type { Check, Note } from '@/entities'
-import { PASSES } from '@/features/reading/passes'
+import { PASSES } from '@/entities/passes'
 import { ExitTestRow } from './ExitTestRow'
 
 let notes: Note[] = []

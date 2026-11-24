@@ -1,4 +1,4 @@
-import { plural } from '../charts/chartMeta'
+import { plural } from '@/entities/chartMeta'
 import type { Paper, TagSummary } from '@/entities'
 import type { TagMatch } from '@/router/route'
 

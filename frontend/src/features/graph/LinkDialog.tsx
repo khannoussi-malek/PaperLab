@@ -5,7 +5,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ErrorAlert } from '@/features/library/ErrorAlert'
+import { ErrorAlert } from '@/components/ErrorAlert'
 import { glass } from '@/components/glass'
 import { cn } from '@/lib/utils'
 import { LABEL_MAX_CHARS, labelError } from './graphModel'

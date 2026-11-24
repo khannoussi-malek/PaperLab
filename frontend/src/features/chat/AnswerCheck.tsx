@@ -3,7 +3,7 @@ import type { AnswerCheck as Check, AnswerCheckSentence } from '@/entities'
 import { ApiError, isConflict } from '@/services/api'
 import { useAnswerCheck, useStartAnswerCheck } from '@/services/queries'
 import { Button } from '@/components/ui/button'
-import { RemoteConfirmDialog } from '@/features/manuscripts/review/RemoteConfirm'
+import { RemoteConfirmDialog } from '@/components/RemoteConfirm'
 import { cn } from '@/lib/utils'
 import { chip, type Tone } from './answerCheckMarks'
 

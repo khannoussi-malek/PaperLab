@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ApiError, isConflict } from '@/services/api'
 import { useSuggestHit } from '@/services/queries'
 import { Button } from '@/components/ui/button'
-import { RemoteConfirmDialog } from '@/features/manuscripts/review/RemoteConfirm'
+import { RemoteConfirmDialog } from '@/components/RemoteConfirm'
 
 const MESSAGES: Record<string, string> = {
   needs_criteria: 'Set your review question in Search & screen first.',

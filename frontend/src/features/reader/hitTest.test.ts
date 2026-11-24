@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PdfRect } from './coords'
+import type { PdfRect } from '@/lib/coords'
 import { citationAt, clientPointToPdf, notesAt, rectContains, type NoteRect } from './hitTest'
 
 const highlights: NoteRect[] = [

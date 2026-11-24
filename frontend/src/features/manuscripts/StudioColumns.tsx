@@ -2,7 +2,7 @@ import { ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { loadPanelWidth, panelTrack, savePanelWidth, clampPanelWidth, type PanelLimits } from '@/components/panelWidth'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
-import { browserStorage } from '@/features/notes/highlightColors'
+import { browserStorage } from '@/components/highlightColors'
 
 /** One column of the studio. No `limits` = the flexible one (the editor). A function `content` gets the column's width in px. */
 export type StudioColumn = {

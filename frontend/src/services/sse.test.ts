@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readSse, sseParser } from './sse'
+import { readSse, sseParser } from '@/services/sse'
 
 const bytes = (text: string) => new TextEncoder().encode(text)
 

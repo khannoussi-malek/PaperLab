@@ -1,6 +1,6 @@
 import type { PageViewport, PDFDocumentProxy } from 'pdfjs-dist'
 import { entryAt, pageColumns, type Entry, type EntryAt, type Jump, type PageText, type TextBox } from './citationEntry'
-import type { PdfRect } from './coords'
+import type { PdfRect } from '@/lib/coords'
 
 /**
  * D143: the numbered citations a PDF links, read with PDF.js for the whole document each time a paper opens, kept in

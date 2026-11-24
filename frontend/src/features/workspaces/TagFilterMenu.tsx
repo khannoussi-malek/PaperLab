@@ -6,7 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
-import { plural } from '@/features/charts/chartMeta'
+import { plural } from '@/entities/chartMeta'
 import { cn } from '@/lib/utils'
 import { toggled } from './tagFilter'
 import type { TagFilterProps } from './TagSidebar'

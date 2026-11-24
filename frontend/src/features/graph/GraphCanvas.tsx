@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GraphLink, GraphNode } from '@/entities'
 import { Button } from '@/components/ui/button'
-import { ErrorAlert } from '@/features/library/ErrorAlert'
+import { ErrorAlert } from '@/components/ErrorAlert'
 import { CHART_INK, type ChartTheme } from '@/features/charts/palette'
 import { carryPositions, endId, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
 import { OUTER_RING, type RingPlace } from './ringsModel'
-import { useBoxSize } from './useBoxSize'
+import { useBoxSize } from '@/lib/useBoxSize'
 
 // Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 94.53 kB minified (31.04 kB
 // gzipped) and only this page draws a graph. A failed dynamic import is cached by the browser for the page's

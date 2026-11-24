@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendSegments, citationSplitter, describeSource, sourceReaderHref, splitCitations, type Segment } from './citations'
+import { appendSegments, citationSplitter, describeSource, sourceReaderHref, splitCitations, type Segment } from '@/components/citations'
 import { chunkHref, pageHref, readerHref } from '@/router/route'
 import type { ChatSource } from '@/entities'
 

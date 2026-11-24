@@ -1,4 +1,4 @@
-import { pdfRectToCss } from '../reader/coords'
+import { pdfRectToCss } from '@/lib/coords'
 import type { NumberMark } from './pageMarks'
 
 type Props = { marks: NumberMark[]; scale: number }

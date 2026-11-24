@@ -5,7 +5,7 @@ import { useEvidenceRows, useManuscriptPapers, useManuscriptRequests, useNotes, 
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { chunkHref, noteHref, readerHref } from '@/router/route'
 import { manuscriptFailure } from '../errors'
-import { RemoteConfirmDialog } from '../review/RemoteConfirm'
+import { RemoteConfirmDialog } from '@/components/RemoteConfirm'
 import { remoteHost } from '../review/reviewModel'
 import { sentenceAtCursor } from '../evidence/claimText'
 import { bookItems, citedKeys, deckOrder, evidenceFirst, evidenceItems, insertText, NO_MODEL, verdictView, type BookItem, type DeckPaper, type VerdictView } from './deckModel'

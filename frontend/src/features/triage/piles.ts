@@ -1,5 +1,5 @@
 import type { TriageDecisionIn } from '@/entities'
-import { PASSES } from '@/features/reading/passes'
+import { PASSES } from '@/entities/passes'
 
 export type Pile = 'read_closely' | 'skim' | 'later' | 'not_relevant' | 'skip'
 type Triage = 'keep' | 'later' | 'drop' | null

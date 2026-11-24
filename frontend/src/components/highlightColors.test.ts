@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_COLOR, PRESET_COLORS, highlightFill, isHexColor, loadLastColor, saveLastColor } from './highlightColors'
+import { DEFAULT_COLOR, PRESET_COLORS, highlightFill, isHexColor, loadLastColor, saveLastColor } from '@/components/highlightColors'
 
 const memoryStorage = (initial: Record<string, string> = {}) => {
   const data = new Map(Object.entries(initial))

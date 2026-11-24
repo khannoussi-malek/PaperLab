@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clientRectsToPdfRects, mergeLines, pdfRectToCss, type PdfRect } from './coords'
+import { clientRectsToPdfRects, mergeLines, pdfRectToCss, type PdfRect } from '@/lib/coords'
 
 describe('pdfRectToCss', () => {
   it('scales PDF points to CSS pixels', () => {

@@ -1,4 +1,4 @@
-import { pdfRectToCss, type PdfRect } from '@/features/reader/coords'
+import { pdfRectToCss, type PdfRect } from '@/lib/coords'
 
 /** The lens's fade on one page: the page's own white at 65% over each chunk outside the lens (spec §5). */
 export function LensFade({ rects, scale }: { rects: PdfRect[]; scale: number }) {

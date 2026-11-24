@@ -11,7 +11,7 @@ import { EmbeddingProgress } from './EmbeddingProgress'
 import { NoPdfBadge } from '../reader/SourceBadges'
 import { GetPdfActions } from './GetPdfActions'
 import { FirstPage } from './FirstPage'
-import { pageCountLabel } from './paperMeta'
+import { pageCountLabel } from '@/entities/paperMeta'
 
 const addedDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' })
 

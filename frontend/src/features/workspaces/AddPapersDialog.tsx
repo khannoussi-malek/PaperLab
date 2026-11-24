@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { byline } from '@/features/library/paperMeta'
+import { byline } from '@/entities/paperMeta'
 import { cn } from '@/lib/utils'
 
 type Props = {

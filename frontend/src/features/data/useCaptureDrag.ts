@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type MouseEvent } from 'react'
-import type { PdfRect } from '../reader/coords'
+import type { PdfRect } from '@/lib/coords'
 import { clientPointToPdf } from '../reader/hitTest'
 import { dragRegion } from './pageMarks'
 

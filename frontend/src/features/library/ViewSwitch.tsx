@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { browserStorage } from '@/features/notes/highlightColors'
+import { browserStorage } from '@/components/highlightColors'
 import { closeSession } from '@/features/triage/sessionId'
 
 export type PaperView = 'list' | 'deck' | 'triage'

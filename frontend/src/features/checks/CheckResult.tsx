@@ -5,7 +5,7 @@ import { slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { describeSource, splitCitations } from '@/features/chat/citations'
+import { describeSource, splitCitations } from '@/components/citations'
 import { cn } from '@/lib/utils'
 import type { CheckLine } from './exitTest'
 

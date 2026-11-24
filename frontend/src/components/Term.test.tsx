@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { GLOSSARY } from './glossary'
-import { Term } from './Term'
+import { GLOSSARY } from '@/components/glossary'
+import { Term } from '@/components/Term'
 
 // jsdom has no ResizeObserver, which Radix popper content asks for
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} }

@@ -1,4 +1,4 @@
-import { clientRectsToPdfRects, type PdfRect } from './coords'
+import { clientRectsToPdfRects, type PdfRect } from '@/lib/coords'
 
 export type SelectionAnchor = { page: number; rects: PdfRect[]; quotedText: string }
 

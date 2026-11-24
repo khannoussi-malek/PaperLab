@@ -26,3 +26,21 @@ test('relative imports stay inside their own top-level folder', () => {
   }
   expect(escapes).toEqual([])
 })
+
+// Features may use each other, but every edge couples two areas. The baseline only goes down: shared pieces belong in
+// components, entities, services or lib. Lower it when you remove an edge; never raise it.
+const CROSS_FEATURE_EDGES = 56
+
+test('features depend on each other no more than the baseline', () => {
+  const sources = import.meta.glob(['./features/**/*.{ts,tsx}', '!./features/**/*.test.{ts,tsx}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+  const edges = new Set<string>()
+  for (const [file, text] of Object.entries(sources)) {
+    const own = file.split('/')[2]
+    for (const [, spec] of text.matchAll(/(?:from|import\s*\(?)\s*['"`]([^'"`]+)['"`]/g)) {
+      const path = spec.startsWith('@/') ? `/src/${spec.slice(2)}` : spec.startsWith('.') ? new URL(spec, `file:///src/${file.slice(2)}`).pathname : null
+      const other = path?.startsWith('/src/features/') ? path.split('/')[3] : null
+      if (other && other !== own) edges.add(`${own} -> ${other}`)
+    }
+  }
+  expect(edges.size).toBeLessThanOrEqual(CROSS_FEATURE_EDGES)
+})

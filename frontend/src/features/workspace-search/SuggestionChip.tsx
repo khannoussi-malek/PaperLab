@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Hit } from '@/entities'
 import { Badge } from '@/components/ui/badge'
-import { Term } from '@/features/workspaces/Term'
+import { Term } from '@/components/Term'
 import { reasonLabel } from './hitReview'
 
 const FLAG_WORDS: Record<string, string> = {

@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { refreshTree, useSnowball } from '@/services/queries'
-import { friendlySnowballError, skippedSeedsText } from '@/features/workspace-search/snowballText'
+import { friendlySnowballError, skippedSeedsText } from '@/entities/snowballText'
 import type { BranchTarget } from '../BranchControl'
 
 export type GrabState = { status: 'pending' } | { status: 'done' } | { status: 'error'; text: string }

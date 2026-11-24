@@ -6,7 +6,7 @@ import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { chartHref } from '@/router/route'
 import { cn } from '@/lib/utils'
-import { chartMeta } from './chartMeta'
+import { chartMeta } from '@/entities/chartMeta'
 import { previewChartHeight } from './chartPreviewPanel'
 import { ChartView } from './ChartView'
 

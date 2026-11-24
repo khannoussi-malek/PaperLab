@@ -1,5 +1,5 @@
 import { useTriageEvents } from '@/services/queries'
-import { ErrorAlert } from '@/features/library/ErrorAlert'
+import { ErrorAlert } from '@/components/ErrorAlert'
 import { describeEvent } from './historyText'
 
 /** Every change to a paper's reading state, newest first. A paper decided before the history existed has none. */
