@@ -28,7 +28,7 @@ from app.models import Author, LLMConnection, LLMModel, Paper, PaperEvent, Paper
 from app.providers import arxiv, core_ac, crossref, embedding, openalex, semantic_scholar, unpaywall
 from app.providers.base import LLMUnavailable
 from app.providers.llm_fake import FakeLLM
-from app.workers import ingest
+from app.workers import header_jobs, ingest
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
 # rolled back afterwards, so tests can share the dev database without leaving rows behind.
@@ -216,6 +216,7 @@ async def worker_session(session, monkeypatch):
         yield session
 
     monkeypatch.setattr(ingest, "SessionLocal", shared_session)
+    monkeypatch.setattr(header_jobs, "SessionLocal", shared_session)
     return session
 
 

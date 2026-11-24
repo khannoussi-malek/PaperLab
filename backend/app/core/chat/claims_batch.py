@@ -5,10 +5,10 @@ from dataclasses import dataclass, field, replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat import claim_text
+from app.core.chat import claim_text, claims
 from app.core.chat.claim_extract import cited_claims
 from app.core.chat.claim_text import RefEntry
-from app.core.chat.claims import ClaimCheck, _llm, verify_claim
+from app.core.chat.claims import ClaimCheck
 from app.core.citations import citations
 from app.domain.errors import DomainError, InvalidInput
 from app.providers.base import LLMError, LLMUnavailable
@@ -118,9 +118,9 @@ async def verify_claims(
         elif len(claim.split()) < 3:
             items.append(ClaimItem(claim, citation, error="empty_claim", **extra))
         else:
-            llm = await _llm(session, llm)  # no default model fails the whole batch, once, before any check
+            llm = await claims._llm(session, llm)  # no default model fails the whole batch, once, before any check
             try:
-                check = await verify_claim(session, claim, paper_id=found.paper_ids[0], llm=llm, save=save)
+                check = await claims.verify_claim(session, claim, paper_id=found.paper_ids[0], llm=llm, save=save)
             except DomainError as exc:
                 items.append(ClaimItem(claim, citation, error=str(exc) or "check_failed", **extra))
             except (LLMError, LLMUnavailable):
