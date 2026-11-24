@@ -25,7 +25,6 @@ LONG: dict[str, int] = {
     "app/scripts/tectonic_sandbox_check.py::main": 53,
     "app/workers/ingest.py::ingest_paper": 73,
     "app/workers/screening_suggest.py::suggest_screening": 98,
-    "app/workers/workspace_search.py::run_workspace_search": 106,
 }
 WIDE: dict[str, int] = {
     # The search core: ten callers and nine test fakes pass these keyword options by name.
@@ -39,7 +38,6 @@ DEEP: dict[str, int] = {
     "app/workers/evidence_cards.py::generate_evidence_cards": 5,
     "app/workers/ingest.py::ingest_paper": 5,
     "app/workers/screening_suggest.py::suggest_screening": 5,
-    "app/workers/workspace_search.py::run_workspace_search": 6,
 }
 
 

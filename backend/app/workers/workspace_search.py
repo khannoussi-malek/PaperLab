@@ -91,6 +91,96 @@ async def _mark_exhausted_unless_stopped(
             await session.commit()
 
 
+def _summed(earlier: dict, added: dict) -> dict:
+    """Per-source counts plus this batch's."""
+    out = dict(earlier)
+    for source, count in added.items():
+        out[source] = out.get(source, 0) + count
+    return out
+
+
+def _batch_stats(stats: dict, result, rid: uuid.UUID) -> dict:
+    """The run's stats after one batch: counts summed, errors (redacted, logged) and error-capped sources kept."""
+    per_source_error = dict(stats.get("per_source_error", {}))
+    for source, error in result.errors.items():
+        per_source_error[source] = redact(error)[:_ERROR_MAX_CHARS]
+        logger.warning("workspace search run %s: %s failed: %s", rid, source, per_source_error[source])
+    capped = [s for s in result.sources_exhausted if s in result.errors]  # exhausted by the error cap
+    # includes out-of-range items (unlike per_source_raw_count), so year-filtered sources still pause
+    pass_raw = dict(stats.get("pass_raw_count", {}))
+    for source, count in result.raw_counts.items():
+        pass_raw[source] = pass_raw.get(source, 0) + count + result.out_of_range.get(source, 0)
+    return {
+        **stats,
+        "pass_raw_count": pass_raw,
+        "per_source_error": per_source_error,
+        "failed_sources": sorted({*stats.get("failed_sources", []), *capped}),
+        "last_batch_new_hits": result.new_hits,
+        "per_source_raw_count": _summed(stats.get("per_source_raw_count", {}), result.raw_counts),
+        "per_source_out_of_range": _summed(stats.get("per_source_out_of_range", {}), result.out_of_range),
+        "per_source_new_hits": _summed(stats.get("per_source_new_hits", {}), result.new_by_source),
+    }
+
+
+async def _pause_full_sources(session, run: WorkspaceSearchRun) -> bool:
+    """Pauses (not exhausts) each source that has had its share of this pass. True when no source is left to ask."""
+    pass_raw = run.stats_json["pass_raw_count"]
+    query = select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id)
+    cursors = (await session.execute(query)).scalars().all()
+    for c in cursors:  # the per-pass limit
+        if not c.exhausted and pass_raw.get(c.source, 0) >= PER_SOURCE_PASS_LIMIT:
+            c.cursor_json = {**c.cursor_json, "paused": True}
+    done = bool(cursors) and all(c.exhausted or c.cursor_json.get("paused") for c in cursors)
+    if done:
+        paused = sorted(c.source for c in cursors if not c.exhausted)
+        run.stats_json = {**run.stats_json, "paused_sources": paused}
+    return done
+
+
+async def _providers(session, ctx: dict):
+    sources = await paper_sources.get(session)
+    transport = ctx.get("transport")
+    if transport is None and settings.discovery_provider == "fake":
+        transport = discovery_fake.transport()
+    return source_clients.build_providers(sources, transport)
+
+
+async def _page_until_done(session, run: WorkspaceSearchRun, providers, my_pass: int) -> None:
+    """One search_batch() per iteration until every source is done, the run stops or a newer pass takes over, or a
+    backstop (iterations, wall clock) ends it cut short."""
+    rid = run.id
+    # Computed once, before the first iteration, so a slow first batch still counts against it — an
+    # iteration count alone doesn't bound wall-clock time (Important 1).
+    deadline = _now() + SEARCH_RUN_JOB_TIMEOUT - SEARCH_RUN_SAFETY_MARGIN
+    # Only a pass that asked a source counts: while every source waits out a cooldown a pass fetches
+    # nothing, and counting those ended six runs at 200 passes of 3 s, with arXiv mid-retry (2026-11-02).
+    iterations = 0
+    first_pass = True
+    while iterations < MAX_BATCH_ITERATIONS:
+        if not first_pass:
+            await asyncio.sleep(BATCH_PACING_SECONDS)
+        first_pass = False
+        await session.refresh(run)
+        if run.status != "running" or run.stats_json.get("passes", 1) != my_pass:
+            return  # stopped, or a Continue started a newer pass that a newer job owns
+        if _now() >= deadline:
+            break  # wall-clock backstop — falls through to the shared terminal-state write below
+        if not await try_run_lock(session, rid):
+            logger.info("workspace search run %s already being processed elsewhere; backing off", rid)
+            return
+        result = await search_batch(session, providers, run)
+        iterations += result.asked
+        run.stats_json = _batch_stats(run.stats_json, result, rid)
+        done = await _pause_full_sources(session, run)
+        await session.commit()
+        if done:
+            await _mark_exhausted_unless_stopped(session, run, expected_pass=my_pass)
+            return
+    # Reached by running out of iterations or hitting the wall-clock deadline without every source
+    # naturally exhausting — still a valid terminal state (C2 part 3), not a failure.
+    await _mark_exhausted_unless_stopped(session, run, cut_short=True, expected_pass=my_pass)
+
+
 async def run_workspace_search(ctx: dict, run_id: str) -> None:
     """ARQ job: pages a search run's sources, one search_batch() call per iteration, until every source is
     exhausted, the run's status stops being "running" (checked fresh from the DB each iteration, so a
@@ -104,88 +194,9 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
             if run.status != "running":
                 return  # already stopped before this job ran — nothing to do
             my_pass = run.stats_json.get("passes", 1)
-
-            sources = await paper_sources.get(session)
-            transport = ctx.get("transport")
-            if transport is None and settings.discovery_provider == "fake":
-                transport = discovery_fake.transport()
-            providers = source_clients.build_providers(sources, transport)
+            providers = await _providers(session, ctx)
             try:
-                # Computed once, before the first iteration, so a slow first batch still counts against it — an
-                # iteration count alone doesn't bound wall-clock time (Important 1).
-                deadline = _now() + SEARCH_RUN_JOB_TIMEOUT - SEARCH_RUN_SAFETY_MARGIN
-                # Only a pass that asked a source counts: while every source waits out a cooldown a pass fetches
-                # nothing, and counting those ended six runs at 200 passes of 3 s, with arXiv mid-retry (2026-11-02).
-                iterations = 0
-                first_pass = True
-                while iterations < MAX_BATCH_ITERATIONS:
-                    if not first_pass:
-                        await asyncio.sleep(BATCH_PACING_SECONDS)
-                    first_pass = False
-                    await session.refresh(run)
-                    if run.status != "running" or run.stats_json.get("passes", 1) != my_pass:
-                        return  # stopped, or a Continue started a newer pass that a newer job owns
-                    if _now() >= deadline:
-                        break  # wall-clock backstop — falls through to the shared terminal-state write below
-                    if not await try_run_lock(session, rid):
-                        logger.info("workspace search run %s already being processed elsewhere; backing off", rid)
-                        return
-
-                    result = await search_batch(session, providers, run)
-                    iterations += result.asked
-                    per_source_raw = dict(run.stats_json.get("per_source_raw_count", {}))
-                    for source, count in result.raw_counts.items():
-                        per_source_raw[source] = per_source_raw.get(source, 0) + count
-                    per_source_out = dict(run.stats_json.get("per_source_out_of_range", {}))
-                    for source, count in result.out_of_range.items():
-                        per_source_out[source] = per_source_out.get(source, 0) + count
-                    per_source_new = dict(run.stats_json.get("per_source_new_hits", {}))
-                    for source, count in result.new_by_source.items():
-                        per_source_new[source] = per_source_new.get(source, 0) + count
-                    per_source_error = dict(run.stats_json.get("per_source_error", {}))
-                    for source, error in result.errors.items():
-                        per_source_error[source] = redact(error)[:_ERROR_MAX_CHARS]
-                        logger.warning("workspace search run %s: %s failed: %s", rid, source, per_source_error[source])
-                    capped = [s for s in result.sources_exhausted if s in result.errors]  # exhausted by the error cap
-                    failed_sources = sorted({*run.stats_json.get("failed_sources", []), *capped})
-                    # includes out-of-range items (unlike per_source_raw_count), so year-filtered sources still pause
-                    pass_raw = dict(run.stats_json.get("pass_raw_count", {}))
-                    for source, count in result.raw_counts.items():
-                        pass_raw[source] = pass_raw.get(source, 0) + count + result.out_of_range.get(source, 0)
-                    run.stats_json = {
-                        **run.stats_json,
-                        "pass_raw_count": pass_raw,
-                        "per_source_error": per_source_error,
-                        "failed_sources": failed_sources,
-                        "last_batch_new_hits": result.new_hits,
-                        "per_source_raw_count": per_source_raw,
-                        "per_source_out_of_range": per_source_out,
-                        "per_source_new_hits": per_source_new,
-                    }
-
-                    cursors = (
-                        (
-                            await session.execute(
-                                select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id)
-                            )
-                        )
-                        .scalars()
-                        .all()
-                    )
-                    for c in cursors:  # the per-pass limit: pause (not exhaust) a source that has had its share
-                        if not c.exhausted and pass_raw.get(c.source, 0) >= PER_SOURCE_PASS_LIMIT:
-                            c.cursor_json = {**c.cursor_json, "paused": True}
-                    done = bool(cursors) and all(c.exhausted or c.cursor_json.get("paused") for c in cursors)
-                    if done:
-                        paused = sorted(c.source for c in cursors if not c.exhausted)
-                        run.stats_json = {**run.stats_json, "paused_sources": paused}
-                    await session.commit()
-                    if done:
-                        await _mark_exhausted_unless_stopped(session, run, expected_pass=my_pass)
-                        return
-                # Reached by running out of iterations or hitting the wall-clock deadline without every source
-                # naturally exhausting — still a valid terminal state (C2 part 3), not a failure.
-                await _mark_exhausted_unless_stopped(session, run, cut_short=True, expected_pass=my_pass)
+                await _page_until_done(session, run, providers, my_pass)
             finally:
                 await providers.aclose()
         except Exception:
