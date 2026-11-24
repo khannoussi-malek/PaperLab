@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.search import ai_sort
-from app.core.search.batch_fetch import _now
+from app.core.search import ai_sort, batch_fetch
 from app.core.search.branches import default_branch_on_decision
 from app.core.workspaces import workspaces
 from app.domain.errors import InvalidInput, NotFound
@@ -175,7 +174,7 @@ async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitRe
         setattr(hit, field_name, value)
     if "stage1_status" in fields:
         # The stop hint's streak reads decisions by this time (M31 spec §3.2); an undone decision has none.
-        hit.stage1_decided_at = _now() if hit.stage1_status is not None else None
+        hit.stage1_decided_at = batch_fetch._now() if hit.stage1_status is not None else None
         await default_branch_on_decision(session, workspace_id, [hit.id], hit.stage1_status)
     await session.commit()
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
@@ -196,7 +195,7 @@ async def bulk_review_hits(
         )
     )
     hits = result.scalars().all()
-    decided_at = _now()  # one time for the whole batch
+    decided_at = batch_fetch._now()  # one time for the whole batch
     for hit in hits:
         hit.stage1_status = stage1_status
         hit.stage1_decided_at = decided_at

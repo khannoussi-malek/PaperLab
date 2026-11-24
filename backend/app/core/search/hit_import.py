@@ -10,9 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.citations.references import _same_reference
 from app.core.papers import papers
-from app.core.search import discovery, free_copy, retrieved_hits
+from app.core.search import discovery, free_copy, pdf_download, retrieved_hits
 from app.core.search.discovery import _add_unpaywall_links
-from app.core.search.pdf_download import download_pdf
 from app.core.search.search_hits import _hit_out_dict
 from app.core.search.source_clients import Providers
 from app.core.workspaces import tags, workspaces
@@ -164,7 +163,7 @@ async def import_hits(
             )
             if enriched.pdf_urls:
                 ref.pdf_urls = enriched.pdf_urls
-        data = (await download_pdf(providers.pdf, ref.pdf_urls))[0] if ref and ref.pdf_urls else None
+        data = (await pdf_download.download_pdf(providers.pdf, ref.pdf_urls))[0] if ref and ref.pdf_urls else None
         if data is None and ref is not None:  # M76: the PMC Open Access bucket, for a hit with a PMCID
             data = (await free_copy.pmc_copy(providers, ref.external_ids, ref.doi, [], []))[0]
         if data is None:
