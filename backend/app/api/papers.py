@@ -22,6 +22,7 @@ from app.schemas.papers import (
     FoundPdfsSeen,
     NoteCountsIn,
     NoteCountsOut,
+    PaperBriefOut,
     PaperEventOut,
     PaperOut,
     PaperUpdate,
@@ -56,6 +57,13 @@ async def upload_paper(
 @router.get("")
 async def list_papers(session: SessionDep) -> list[PaperOut]:
     return await papers.list_papers(session)
+
+
+# Before the /{paper_id} routes, or "brief" is parsed as an id.
+@router.get("/brief")
+async def list_paper_briefs(session: SessionDep) -> list[PaperBriefOut]:
+    """Every paper as a picker lists it, newest first (Quick Capture)."""
+    return [PaperBriefOut.model_validate(row, from_attributes=True) for row in await papers.list_paper_briefs(session)]
 
 
 # Before the /{paper_id} routes, or "found-pdfs" is parsed as an id.

@@ -224,6 +224,16 @@ async def list_papers(session: AsyncSession) -> list[Paper]:
     return list(await session.scalars(select(Paper).order_by(Paper.created_at.desc())))
 
 
+BRIEF_COLUMNS = (
+    Paper.id, Paper.title, Paper.authors, Paper.year, Paper.doi, Paper.status, Paper.status_error, Paper.created_at
+)
+
+
+async def list_paper_briefs(session: AsyncSession) -> list:
+    """Every paper's picker fields, newest first: only these columns are read, so a big library stays cheap."""
+    return list((await session.execute(select(*BRIEF_COLUMNS).order_by(Paper.created_at.desc()))).all())
+
+
 async def list_chunks(session: AsyncSession, paper_id: uuid.UUID, page: int | None = None) -> list[Chunk]:
     await get_paper(session, paper_id)
     query = select(Chunk).where(Chunk.paper_id == paper_id).order_by(Chunk.ordinal)

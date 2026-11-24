@@ -13,6 +13,21 @@ Rect = tuple[float, float, float, float]
 Triage = Literal["keep", "later", "drop"]
 
 
+class PaperBriefOut(BaseModel):
+    """A paper as a picker lists it (Quick Capture, M65 N2): no abstract or citation fields."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str
+    authors: list[str]
+    year: int | None
+    doi: str | None
+    status: str
+    status_error: str | None
+    created_at: datetime
+
+
 class PaperOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -52,6 +52,22 @@ async def test_list_returns_newest_first(client, session):
     assert ids.index(second["id"]) < ids.index(first["id"])
 
 
+async def test_brief_list_is_the_slim_shape_newest_first(client, session):
+    """Quick Capture's list (M65 N2): only what a picker shows, so a big library comes back small and fast."""
+    first = (await upload(client, "first.pdf")).json()
+    second = (await upload(client, "second.pdf")).json()
+    await session.execute(
+        update(Paper).where(Paper.id == uuid.UUID(first["id"])).values(created_at=text("now() - interval '1 day'"))
+    )
+
+    rows = (await client.get("/api/papers/brief")).json()
+    ids = [row["id"] for row in rows]
+    assert ids.index(second["id"]) < ids.index(first["id"])
+    mine = next(row for row in rows if row["id"] == second["id"])
+    assert set(mine) == {"id", "title", "authors", "year", "doi", "status", "status_error", "created_at"}
+    assert mine["title"] == second["title"] and mine["status"] == second["status"]
+
+
 async def test_get_paper(client):
     created = (await upload(client)).json()
 
