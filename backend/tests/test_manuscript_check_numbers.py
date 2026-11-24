@@ -4,8 +4,8 @@ from types import MappingProxyType
 
 import pytest
 
-from app.core.manuscript_checks import number_provenance as numbers
-from app.core.manuscript_checks.base import CheckContext, ManuscriptInfo
+from app.core.manuscripts.manuscript_checks import number_provenance as numbers
+from app.core.manuscripts.manuscript_checks.base import CheckContext, ManuscriptInfo
 
 INFO = ManuscriptInfo("m", "main.tex", "never", None, None, None)
 DATA = {"results.csv": "model,acc\nours,91.27\n"}

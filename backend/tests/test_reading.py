@@ -8,7 +8,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from test_enrichment import BERT_DOI, BERT_WORK, hints
 
-from app.core import enrichment, graph, papers, workspaces
+from app.core.papers import enrichment, papers
+from app.core.workspaces import graph, workspaces
 from app.domain.errors import InvalidInput, NotFound
 from app.models import ExternalRef, Paper
 from app.workers import ingest

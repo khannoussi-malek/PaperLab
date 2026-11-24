@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import insert
 
-from app.core.note_counts import note_counts
+from app.core.notes.note_counts import note_counts
 from app.models import Note, Paper, Provenance, note_anchors, note_papers
 
 pytestmark = pytest.mark.anyio

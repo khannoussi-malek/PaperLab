@@ -16,7 +16,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   other: 'Other',
 }
 
-/** Each lens in words, as the backend names it (backend/app/core/lenses.py). Settings' skill editor and the answer chip read it. */
+/** Each lens in words, as the backend names it (backend/app/core/papers/lenses.py). Settings' skill editor and the answer chip read it. */
 export const LENS_LABELS: Record<LensId, string> = {
   full: 'Full paper',
   key_ideas: 'Key ideas',

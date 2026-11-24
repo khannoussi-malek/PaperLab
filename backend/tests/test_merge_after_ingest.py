@@ -10,8 +10,8 @@ from sqlalchemy import func, select
 from test_pdf_upgrade import awaiting
 from test_retrieved_hits import failed_hit, workspace
 
-from app.core import merges, paper_sources, papers
-from app.core.enrichment import Collision
+from app.core.papers import merges, paper_sources, papers
+from app.core.papers.enrichment import Collision
 from app.models import Chunk, Paper, PaperMerge
 from app.models.workspace_search import WorkspaceSearchHit
 from app.workers import ingest

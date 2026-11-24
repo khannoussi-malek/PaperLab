@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.api.deps import SessionDep
 from app.config import settings
-from app.core import mcp_activity, mcp_check
+from app.core.platform import mcp_activity, mcp_check
 from app.schemas.mcp_activity import ActivityOut, WritesSettingIn, WritesSettingOut
 
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])

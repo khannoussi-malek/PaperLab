@@ -40,7 +40,7 @@ export const PREREQUISITE_HINTS: Partial<Record<PaperSourceId, (hasEmail: boolea
   unpaywall: (hasEmail) => (hasEmail ? null : 'Add a contact email to use Unpaywall.'),
 }
 
-// The server's rule for the contact email (core/paper_sources.py), so a typo is caught before it is sent.
+// The server's rule for the contact email (core/papers/paper_sources.py), so a typo is caught before it is sent.
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const MAX_EMAIL_LENGTH = 254
 const EMAIL_PROBLEM = 'Enter an email address like name@example.org.'

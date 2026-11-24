@@ -8,8 +8,8 @@ from app.domain.sections import LensId
 from app.schemas.papers import Rect
 
 if TYPE_CHECKING:  # core must not import api, and schemas needn't import core at runtime
-    from app.core import answer_provenance, chat
-    from app.core.retrieval import RetrievedChunk
+    from app.core.chat import answer_provenance, chat
+    from app.core.chat.retrieval import RetrievedChunk
 
 
 class ChatRequest(BaseModel):

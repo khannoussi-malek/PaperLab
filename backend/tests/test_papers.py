@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from app.core import papers
+from app.core.papers import papers
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Chunk, Paper, PaperStatus

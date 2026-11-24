@@ -6,7 +6,8 @@ import pytest
 from sqlalchemy import insert
 from test_manuscript_papers import setup
 
-from app.core import manuscript_papers, manuscripts, queue
+from app.core.manuscripts import manuscript_papers, manuscripts
+from app.core.platform import queue
 from app.models import Note, note_anchors, note_papers
 from app.workers import manuscript_section_review as worker
 

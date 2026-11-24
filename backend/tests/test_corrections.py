@@ -3,8 +3,8 @@ import uuid
 import pytest
 from conftest import recorded
 
-from app.core import enrichment
-from app.core.enrichment import PdfHints
+from app.core.papers import enrichment
+from app.core.papers.enrichment import PdfHints
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper
 

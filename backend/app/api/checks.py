@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.chat import STREAM_RESPONSES, stream_output, to_sources
 from app.api.deps import CheckLLMDep, SessionDep
-from app.core import checks
+from app.core.notes import checks
 from app.schemas.checks import CheckLineOut, CheckOut
 
 router = APIRouter(tags=["checks"])

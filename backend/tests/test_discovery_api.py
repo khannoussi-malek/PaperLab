@@ -7,7 +7,8 @@ from sqlalchemy import delete, select
 
 from app.api.deps import get_discovery
 from app.config import settings
-from app.core import discovery, paper_sources
+from app.core.papers import paper_sources
+from app.core.search import discovery
 from app.models import Paper, PaperSources
 from app.providers import discovery_fake
 

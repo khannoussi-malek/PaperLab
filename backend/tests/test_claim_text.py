@@ -2,7 +2,15 @@ from pathlib import Path
 
 import pytest
 
-from app.core.claim_text import Block, RefEntry, blocks, inline, reference_dois, reference_entries, split_references
+from app.core.chat.claim_text import (
+    Block,
+    RefEntry,
+    blocks,
+    inline,
+    reference_dois,
+    reference_entries,
+    split_references,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "claims"
 

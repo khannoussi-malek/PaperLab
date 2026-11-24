@@ -5,7 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import func, select, text
 
-from app.core import skills
+from app.core.platform import skills
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Skill
 

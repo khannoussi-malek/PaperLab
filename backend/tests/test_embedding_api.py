@@ -11,7 +11,8 @@ from hub_fakes import ONNX_BYTES, TOKENIZER_BYTES, VARIANT, FakeHub
 from app.api import embedding as embedding_api
 from app.api.deps import get_transport
 from app.config import settings
-from app.core import chat, embedding_index
+from app.core.chat import chat
+from app.core.papers import embedding_index
 from app.main import create_app
 from app.models import Chunk, Paper
 from app.providers import search_model

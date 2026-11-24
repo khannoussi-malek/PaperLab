@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import update
 
-from app.core import enrichment
+from app.core.papers import enrichment
 from app.models import Paper
 from app.scripts import backfill_biblio
 from tests.test_enrichment import add_paper, hints

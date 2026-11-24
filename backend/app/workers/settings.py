@@ -6,9 +6,9 @@ from arq.constants import in_progress_key_prefix
 from arq.cron import cron
 
 from app.config import settings
-from app.core.answer_check_run import ANSWER_CHECK_JOB_TIMEOUT
-from app.core.evidence_cards import JOB_TIMEOUT as EVIDENCE_CARDS_JOB_TIMEOUT
-from app.core.queue import INGEST_QUEUE
+from app.core.chat.answer_check_run import ANSWER_CHECK_JOB_TIMEOUT
+from app.core.notes.evidence_cards import JOB_TIMEOUT as EVIDENCE_CARDS_JOB_TIMEOUT
+from app.core.platform.queue import INGEST_QUEUE
 from app.workers.answer_check import check_answer
 from app.workers.citations_import import IMPORT_JOB_TIMEOUT, import_citations
 from app.workers.evidence_cards import MAX_TRIES as EVIDENCE_CARDS_MAX_TRIES

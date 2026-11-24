@@ -9,8 +9,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import manuscript_agent as agent
-from app.core import manuscript_history, manuscripts
+from app.core.manuscripts import manuscript_agent as agent
+from app.core.manuscripts import manuscript_history, manuscripts
 from app.domain.errors import Conflict
 from app.models import Manuscript, ManuscriptSnapshot
 from tests.conftest import TEST_DATABASE_URL

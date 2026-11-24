@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.core import manuscript_paths as paths
-from app.core import manuscripts
+from app.core.manuscripts import manuscript_paths as paths
+from app.core.manuscripts import manuscripts
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Workspace
 
@@ -168,14 +168,14 @@ async def test_not_found(session):
 
 
 async def snaps(session, mid):
-    from app.core import manuscript_history as history
+    from app.core.manuscripts import manuscript_history as history
     return await history.list_(session, mid)
 
 
 async def test_save_text_with_snapshot_keeps_the_old_files_and_skips_autosave(session):
     m = await new(session)
     f = await manuscripts.save_text(session, m.id, "a.tex", "old", base=None)
-    from app.core import manuscript_history as history
+    from app.core.manuscripts import manuscript_history as history
     await history.take(session, m.id, "compile")
     before = len(await snaps(session, m.id))
     await manuscripts.save_text(session, m.id, "a.tex", "new", base=f.updated_at, snapshot="before_mcp")

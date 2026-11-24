@@ -6,7 +6,8 @@ from conftest import FakeEmbedder, unit_vector
 from sqlalchemy import select, update
 
 from app.config import settings
-from app.core import embedding_index, embedding_sources, llm_connections
+from app.core.papers import embedding_index, embedding_sources
+from app.core.platform import llm_connections
 from app.domain.errors import Conflict
 from app.models import Chunk, Note, Paper
 from app.providers import embedding
@@ -117,7 +118,7 @@ async def test_chat_is_refused_when_the_embedding_model_changed(
     client, session, fake_llm, embedder, monkeypatch, scope
 ):
     monkeypatch.setattr(embedding, "get_model", lambda: embedder)
-    monkeypatch.setattr("app.core.chat.SMALL_PAPER_CHARS", 0)  # retrieve even for this short paper
+    monkeypatch.setattr("app.core.chat.chat.SMALL_PAPER_CHARS", 0)  # retrieve even for this short paper
     paper = await indexed_paper(session, "nomic-ai/nomic-embed-text-v1.5")
     monkeypatch.setattr(settings, "embed_model", "BAAI/bge-base-en-v1.5")
     created = await client.post("/api/workspaces", json={"name": f"Embedding {uuid.uuid4().hex[:6]}"})

@@ -7,7 +7,9 @@ import pytest
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 
-from app.core import claims, screening, workspaces
+from app.core.chat import claims
+from app.core.search import screening
+from app.core.workspaces import workspaces
 from app.models import Paper, PaperStatus
 from mcp_server import server
 

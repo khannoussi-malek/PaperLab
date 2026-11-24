@@ -7,7 +7,7 @@ from contextlib import AsyncExitStack
 from arq.worker import Retry
 from sqlalchemy import select, update
 
-from app.core import (
+from app.core.papers import (
     chunk_headers,
     embedding_index,
     embedding_sources,
@@ -16,8 +16,8 @@ from app.core import (
     paper_sources,
     papers,
     provenance,
-    queue,
 )
+from app.core.platform import queue
 from app.db import SessionLocal
 from app.domain.candidates import Candidate
 from app.domain.chunking import chunk_blocks

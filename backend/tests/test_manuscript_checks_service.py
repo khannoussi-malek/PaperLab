@@ -4,9 +4,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from test_manuscript_papers import setup
 
-from app.core import manuscripts
-from app.core.manuscript_checks import service
-from app.core.manuscript_checks.base import Check
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_checks import service
+from app.core.manuscripts.manuscript_checks.base import Check
 from app.domain.errors import InvalidInput, NotFound
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]

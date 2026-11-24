@@ -9,9 +9,10 @@ import bibtexparser
 import pytest
 import rispy
 
-from app.core import citations_export, tags, workspaces
-from app.core.citations_export import csl_item, render
-from app.core.citations_keywords import decisions
+from app.core.citations import citations_export
+from app.core.citations.citations_export import csl_item, render
+from app.core.citations.citations_keywords import decisions
+from app.core.workspaces import tags, workspaces
 from app.models import Paper
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
 

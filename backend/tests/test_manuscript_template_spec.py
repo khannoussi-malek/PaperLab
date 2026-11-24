@@ -3,8 +3,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.core import manuscript_template_spec as spec
-from app.core import manuscript_templates as mt
+from app.core.manuscripts import manuscript_template_spec as spec
+from app.core.manuscripts import manuscript_templates as mt
 
 GOOD = {
     "name": "t", "label": "T", "order": 9, "official": False, "provenance": "p", "page_limit": 6,

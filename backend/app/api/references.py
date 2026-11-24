@@ -6,8 +6,9 @@ from fastapi import APIRouter, Request
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core import references, workspaces
-from app.core.queue import INGEST_QUEUE
+from app.core.citations import references
+from app.core.platform.queue import INGEST_QUEUE
+from app.core.workspaces import workspaces
 from app.schemas.papers import PaperOut
 from app.schemas.references import Direction, ImportReferenceIn, QueueOut, ReferencePageOut, ReferencesOut, RefreshOut
 

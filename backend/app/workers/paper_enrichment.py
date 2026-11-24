@@ -4,7 +4,7 @@ import logging
 import uuid
 
 from app.config import settings
-from app.core import paper_enrichment, paper_sources
+from app.core.papers import paper_enrichment, paper_sources
 from app.db import SessionLocal
 from app.providers import discovery_fake, openalex, semantic_scholar
 

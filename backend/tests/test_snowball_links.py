@@ -7,11 +7,12 @@ import pytest
 from sqlalchemy import select
 
 from app.api.deps import get_discovery
-from app.core import discovery, workspaces
-from app.core.candidates import normal_title
-from app.core.hit_links import level_of
-from app.core.paper_sources import SOURCES, SourceSettings
-from app.core.workspace_search import search_batch, snowball
+from app.core.papers.paper_sources import SOURCES, SourceSettings
+from app.core.search import discovery
+from app.core.search.candidates import normal_title
+from app.core.search.hit_links import level_of
+from app.core.search.workspace_search import search_batch, snowball
+from app.core.workspaces import workspaces
 from app.models import Paper
 from app.models.provenance import WorkspaceHitLink
 from app.models.references import ExternalRef
@@ -226,7 +227,7 @@ async def test_snowball_links_existing_pool_hit(session, edge_providers):
 
 
 async def test_level_of_terminates_on_a_dense_cyclic_graph(session):
-    from app.core.hit_links import level_of
+    from app.core.search.hit_links import level_of
 
     workspace, run = await _workspace_and_run(session)
     root = await _seed_hit(session, workspace, run)  # has the only search link

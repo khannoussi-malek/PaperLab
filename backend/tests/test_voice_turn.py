@@ -5,8 +5,8 @@ import pytest
 from sqlalchemy import delete, func, select
 from test_chat import make_paper
 
-from app.core import chat, voice_turn
-from app.core.voice_turn import TurnResult, finish_whole, run_turn, save_heard
+from app.core.chat import chat, voice_turn
+from app.core.chat.voice_turn import TurnResult, finish_whole, run_turn, save_heard
 from app.models import LLMOutput, Paper
 from app.models.voice_turn import VoiceTurn
 from app.providers import embedding

@@ -8,7 +8,7 @@ from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
 from sqlalchemy import insert
 
-from app.core import workspaces
+from app.core.workspaces import workspaces
 from app.models import workspace_papers
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

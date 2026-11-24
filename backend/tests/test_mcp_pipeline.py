@@ -11,7 +11,9 @@ from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
 from sqlalchemy import func, select
 
-from app.core import discovery, papers, pdf_links, pipeline, workspaces
+from app.core.papers import papers, pdf_links, pipeline
+from app.core.search import discovery
+from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict
 from app.models import Paper, PaperStatus

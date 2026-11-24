@@ -15,8 +15,9 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import discovery, merges
-from app.core.candidates import normal_title
+from app.core.papers import merges
+from app.core.search import discovery
+from app.core.search.candidates import normal_title
 from app.db import SessionLocal
 from app.domain.candidates import Candidate
 from app.models import Paper, PaperMerge

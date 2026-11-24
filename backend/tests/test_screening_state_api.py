@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import delete
 
-from app.core import screening
+from app.core.search import screening
 from app.domain.errors import Conflict
 from app.models import LLMModel
 from app.models.workspace_search import WorkspaceSearchRun

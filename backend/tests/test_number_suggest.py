@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from app.core import capture, datasets, number_suggest
+from app.core.notes import capture, datasets, number_suggest
 from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.domain.errors import InvalidInput
 from app.models import Chunk, Paper

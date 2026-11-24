@@ -19,7 +19,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.core import claim_detect, llm_connections
+from app.core.chat import claim_detect
+from app.core.platform import llm_connections
 from app.db import SessionLocal
 from app.domain.errors import DomainError
 from app.providers.base import LLMError, LLMUnavailable

@@ -10,7 +10,8 @@ from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 from sqlalchemy import delete, update
 from test_search_rebuild import OLLAMA_NAME, paper_with, switched
 
-from app.core import papers, workspaces
+from app.core.papers import papers
+from app.core.workspaces import workspaces
 from app.models import Chunk, LLMOutput, Note, Paper
 from app.providers import embedding
 from mcp_server import server

@@ -1,4 +1,4 @@
-from app.core.redact import redact
+from app.core.platform.redact import redact
 
 
 def test_tokens_emails_and_signatures_are_hidden():

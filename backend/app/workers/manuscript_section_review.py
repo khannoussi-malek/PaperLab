@@ -8,7 +8,8 @@ import uuid
 
 from sqlalchemy import func, select, update
 
-from app.core import llm_connections, section_review
+from app.core.manuscripts import section_review
+from app.core.platform import llm_connections
 from app.db import SessionLocal
 from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptSectionReview as Row

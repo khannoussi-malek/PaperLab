@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from app.core import draft_review as dr
-from app.core import draft_review_issues as di
+from app.core.manuscripts import draft_review as dr
+from app.core.manuscripts import draft_review_issues as di
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm_fake import FakeLLM
 

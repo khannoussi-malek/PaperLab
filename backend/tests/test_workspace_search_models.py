@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models.workspace import Workspace
-from app.models.workspace_search import WorkspaceSearchRun, WorkspaceSearchCursor, WorkspaceSearchHit
+from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
 
 pytestmark = pytest.mark.anyio
 

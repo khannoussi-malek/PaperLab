@@ -6,7 +6,7 @@ import pytest
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 
-from app.core import manuscripts
+from app.core.manuscripts import manuscripts
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
 

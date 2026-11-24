@@ -14,8 +14,9 @@ from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import SessionDep, TransportDep
 from app.config import settings
-from app.core import chat, embedding_index, embedding_sources, retrieval
-from app.core.queue import INGEST_QUEUE
+from app.core.chat import chat, retrieval
+from app.core.papers import embedding_index, embedding_sources
+from app.core.platform.queue import INGEST_QUEUE
 from app.db import SessionLocal
 from app.domain.errors import Conflict, InvalidInput
 from app.providers import embedding, search_model

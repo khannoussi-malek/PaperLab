@@ -3,7 +3,7 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from app.core.manuscript_checks import pdf_layout as pl
+from app.core.manuscripts.manuscript_checks import pdf_layout as pl
 
 BODY = "word " * 60  # wrapped by insert_textbox into a few lines, 60 words, all on the page
 

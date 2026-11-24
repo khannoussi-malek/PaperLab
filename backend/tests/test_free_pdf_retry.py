@@ -8,7 +8,9 @@ import pytest
 from conftest import FakeArq
 from sqlalchemy import delete
 
-from app.core import discovery, papers, pdf_recheck, pipeline, queue
+from app.core.papers import papers, pdf_recheck, pipeline
+from app.core.platform import queue
+from app.core.search import discovery
 from app.models import Paper, PaperSources
 from app.models.workspace import Workspace
 from app.workers import pdf_recheck as worker
@@ -170,7 +172,7 @@ async def test_a_paper_already_held_is_retried_too_when_its_new_look_met_a_busy_
 
 
 async def workspace_with(session, papers_):
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
 
     workspace = Workspace(name=f"Recheck {uuid.uuid4().hex[:8]}")
     session.add(workspace)
@@ -196,7 +198,7 @@ async def test_the_batch_tool_queues_a_workspaces_papers_without_a_pdf_once(sess
 
 
 async def test_the_batch_tool_scopes_to_a_tag(session, arq):
-    from app.core import tags
+    from app.core.workspaces import tags
 
     tagged, other = await saved_paper(session), await saved_paper(session)
     workspace = await workspace_with(session, [tagged, other])

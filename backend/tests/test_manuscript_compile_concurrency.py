@@ -8,8 +8,9 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import manuscripts, queue
-from app.core.latex_compile import CompileResult
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.latex_compile import CompileResult
+from app.core.platform import queue
 from app.models import Manuscript
 from app.workers import manuscripts as worker
 from tests.conftest import TEST_DATABASE_URL

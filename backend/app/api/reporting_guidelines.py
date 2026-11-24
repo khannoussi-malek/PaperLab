@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.core import reporting_guidelines
+from app.core.manuscripts import reporting_guidelines
 from app.schemas.reporting_guidelines import GuidelineOut
 
 router = APIRouter(tags=["reporting-guidelines"])

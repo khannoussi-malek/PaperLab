@@ -1,0 +1,282 @@
+"""Manuscripts and their files, stored in Postgres. Writes check the size caps and bump `updated_at`."""
+
+import uuid
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import delete as delete_rows
+from sqlalchemy import func, select
+from sqlalchemy import update as update_rows
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
+
+from app.core.manuscripts import manuscript_history, manuscript_templates
+from app.core.manuscripts import manuscript_paths as paths
+from app.core.manuscripts.latex_compile import COMPILE_TIMEOUT
+from app.core.platform import queue
+from app.domain.errors import Conflict, InvalidInput, NotFound
+from app.models import Manuscript, ManuscriptFile, Workspace
+from app.models.manuscript import pdf_path, sync_path
+
+_UNSET = object()  # "leave this field as it is"; workspace_id=None moves the manuscript out of its workspace
+_NOW = func.clock_timestamp()  # not now(): that is the transaction's start, so two saves in one transaction tie
+# A `running` older than this has no live job behind it: the worker died, or ARQ's timeout cancelled the job.
+STALE_AFTER = timedelta(seconds=COMPILE_TIMEOUT + 60)
+NOT_IN_PDF: frozenset[str] = frozenset({"blueprint.json"})  # saving these doesn't make the PDF stale
+_META = load_only(ManuscriptFile.id, ManuscriptFile.manuscript_id, ManuscriptFile.path, ManuscriptFile.size,
+                  ManuscriptFile.updated_at)
+
+
+async def _check_workspace(session: AsyncSession, workspace_id: uuid.UUID | None) -> None:
+    if workspace_id is not None and await session.get(Workspace, workspace_id) is None:
+        raise NotFound("unknown_workspace")
+
+
+async def create(session: AsyncSession, *, title: str, template: str, workspace_id: uuid.UUID | None) -> Manuscript:
+    contents = manuscript_templates.files(template)
+    return await create_from_files(session, title=title, workspace_id=workspace_id, files=contents,
+                                   main_file="main.tex", template=template)
+
+
+async def create_from_files(session: AsyncSession, *, title: str, workspace_id: uuid.UUID | None,
+                            files: dict[str, str | bytes], main_file: str, template: str = "custom") -> Manuscript:
+    """A manuscript holding exactly `files` (text as str, binaries as bytes). The caller commits, or rolls back when a
+    cap or a path refuses a file midway, so an import is all or nothing."""
+    await _check_workspace(session, workspace_id)
+    manuscript = Manuscript(title=title, workspace_id=workspace_id, template=template)
+    session.add(manuscript)
+    await session.flush()
+    for path, content in files.items():
+        if isinstance(content, str):
+            await upsert_text(session, manuscript.id, path, content)
+        else:
+            await put_binary(session, manuscript.id, path, content)
+    if main_file != "main.tex":  # the column's default
+        return await update(session, manuscript.id, main_file=main_file)
+    await session.refresh(manuscript)
+    return manuscript
+
+
+async def get(session: AsyncSession, manuscript_id: uuid.UUID) -> Manuscript:
+    manuscript = await session.get(Manuscript, manuscript_id, populate_existing=True)
+    if manuscript is None:
+        raise NotFound("unknown_manuscript")
+    return manuscript
+
+
+async def list_for(session: AsyncSession, *, workspace_id: uuid.UUID | None) -> list[Manuscript]:
+    where = Manuscript.workspace_id.is_(None) if workspace_id is None else Manuscript.workspace_id == workspace_id
+    return list(await session.scalars(select(Manuscript).where(where).order_by(Manuscript.updated_at.desc())))
+
+
+async def list_all(session: AsyncSession) -> list[Manuscript]:
+    return list(await session.scalars(select(Manuscript).order_by(Manuscript.updated_at.desc())))
+
+
+async def update(session: AsyncSession, manuscript_id: uuid.UUID, *, title=_UNSET, workspace_id=_UNSET,
+                 main_file=_UNSET, checklist=_UNSET) -> Manuscript:
+    manuscript = await get(session, manuscript_id)
+    if workspace_id is not _UNSET:
+        await _check_workspace(session, workspace_id)
+    if main_file is not _UNSET:
+        if not main_file.endswith(".tex"):
+            raise InvalidInput("main_file_not_tex")
+        if await _file(session, manuscript_id, main_file) is None:
+            raise NotFound("unknown_file")
+    changes = {k: v for k, v in (("title", title), ("workspace_id", workspace_id), ("main_file", main_file),
+                                 ("checklist", checklist)) if v is not _UNSET}
+    await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript.id)
+                          .values(**changes, updated_at=_NOW))
+    return await get(session, manuscript_id)
+
+
+async def delete(session: AsyncSession, manuscript_id: uuid.UUID) -> None:
+    await get(session, manuscript_id)
+    await session.execute(delete_rows(Manuscript).where(Manuscript.id == manuscript_id))
+    pdf_path(manuscript_id).unlink(missing_ok=True)
+    sync_path(manuscript_id).unlink(missing_ok=True)
+
+
+async def files(session: AsyncSession, manuscript_id: uuid.UUID) -> list[ManuscriptFile]:
+    await get(session, manuscript_id)
+    rows = await session.scalars(select(ManuscriptFile).options(_META)
+                                 .where(ManuscriptFile.manuscript_id == manuscript_id).order_by(ManuscriptFile.path))
+    return list(rows)
+
+
+async def read(session: AsyncSession, manuscript_id: uuid.UUID, path: str) -> ManuscriptFile:
+    await get(session, manuscript_id)
+    row = await _file(session, manuscript_id, path)
+    if row is None:
+        raise NotFound("unknown_file")
+    return row
+
+
+async def get_text(session: AsyncSession, manuscript_id: uuid.UUID, path: str) -> str | None:
+    """A file's text, or None when it is missing or binary."""
+    return await session.scalar(select(ManuscriptFile.text).where(
+        ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.path == path))
+
+
+async def _file(session, manuscript_id, path, *, lock=False) -> ManuscriptFile | None:
+    query = select(ManuscriptFile).where(ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.path == path)
+    return await session.scalar((query.with_for_update() if lock else query).execution_options(populate_existing=True))
+
+
+async def _check_caps(session, manuscript_id, size: int, limit: int, existing: ManuscriptFile | None) -> None:
+    if size > limit:
+        raise Conflict("file_too_large", limit=limit)
+    total, count = (await session.execute(
+        select(func.coalesce(func.sum(ManuscriptFile.size), 0), func.count())
+        .where(ManuscriptFile.manuscript_id == manuscript_id))).one()
+    if existing is not None:
+        total -= existing.size
+        count -= 1
+    if total + size > paths.MAX_TOTAL:
+        raise Conflict("manuscript_too_large", limit=paths.MAX_TOTAL)
+    if count + 1 > paths.MAX_FILES:
+        raise Conflict("too_many_files", limit=paths.MAX_FILES)
+
+
+async def _store(session, manuscript_id, path, row: ManuscriptFile | None, **content) -> ManuscriptFile:
+    """Insert or overwrite one file row, then bump the manuscript."""
+    size = len(content["text"].encode()) if content["text"] is not None else len(content["data"])
+    if row is None:
+        row = ManuscriptFile(manuscript_id=manuscript_id, path=path, size=size, updated_at=_NOW, **content)
+        session.add(row)
+    else:
+        await session.execute(update_rows(ManuscriptFile).where(ManuscriptFile.id == row.id)
+                              .values(size=size, updated_at=_NOW, **content))
+    if path not in NOT_IN_PDF:
+        await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
+    await session.flush()
+    await session.refresh(row)
+    return row
+
+
+def _require_text(path: str) -> None:
+    if not paths.is_text(paths.validate_path(path)):
+        raise InvalidInput("unsupported_file_type")
+
+
+async def upsert_text(session: AsyncSession, manuscript_id: uuid.UUID, path: str, text: str) -> ManuscriptFile:
+    """Write a text file with no stale check and no autosave (a template, a restore)."""
+    await get(session, manuscript_id)
+    _require_text(path)
+    row = await _file(session, manuscript_id, path, lock=True)
+    await _check_caps(session, manuscript_id, len(text.encode()), paths.MAX_TEXT, row)
+    return await _store(session, manuscript_id, path, row, text=text, data=None)
+
+
+async def save_text(session: AsyncSession, manuscript_id: uuid.UUID, path: str, text: str, *,
+                    base: datetime | None, snapshot: str | None = None) -> ManuscriptFile:
+    await get(session, manuscript_id)
+    _require_text(path)
+    row = await _file(session, manuscript_id, path, lock=True)
+    if base is None and row is not None:
+        raise Conflict("file_exists")
+    if base is not None and row is None:
+        raise NotFound("unknown_file")
+    if base is not None and row.updated_at > base:
+        raise Conflict("file_changed", updated_at=row.updated_at)
+    await _check_caps(session, manuscript_id, len(text.encode()), paths.MAX_TEXT, row)
+    if snapshot is not None:  # the caller asked for its own snapshot, so no autosave on top
+        snap = await manuscript_history.take(session, manuscript_id, snapshot)
+        saved = await _store(session, manuscript_id, path, row, text=text, data=None)
+        await manuscript_history.settle(session, snap)
+        return saved
+    saved = await _store(session, manuscript_id, path, row, text=text, data=None)
+    await manuscript_history.maybe_autosave(session, manuscript_id, now=datetime.now(timezone.utc))
+    return saved
+
+
+async def put_binary(session: AsyncSession, manuscript_id: uuid.UUID, path: str, data: bytes, *,
+                     create_only: bool = False) -> ManuscriptFile:
+    await get(session, manuscript_id)
+    if paths.is_text(paths.validate_path(path)):
+        raise InvalidInput("unsupported_file_type")
+    row = await _file(session, manuscript_id, path, lock=True)
+    if create_only and row is not None:  # decided under the row lock, so a racing add can't slip an overwrite in
+        raise Conflict("file_exists")
+    await _check_caps(session, manuscript_id, len(data), paths.MAX_BINARY, row)
+    return await _store(session, manuscript_id, path, row, text=None, data=data)
+
+
+def _check_base(row: ManuscriptFile, base: datetime | None) -> None:
+    if base is not None and row.updated_at > base:
+        raise Conflict("file_changed", updated_at=row.updated_at)
+
+
+async def rename(session: AsyncSession, manuscript_id: uuid.UUID, path: str, new_path: str, *,
+                 base: datetime | None = None, snapshot: str | None = None) -> ManuscriptFile:
+    manuscript = await get(session, manuscript_id)
+    paths.validate_path(new_path)
+    row = await _file(session, manuscript_id, path, lock=True)
+    if row is None:
+        raise NotFound("unknown_file")
+    _check_base(row, base)
+    if paths.is_text(path) != paths.is_text(new_path):
+        raise InvalidInput("unsupported_file_type")
+    if await _file(session, manuscript_id, new_path) is not None:
+        raise Conflict("file_exists")
+    snap = await manuscript_history.take(session, manuscript_id, snapshot) if snapshot is not None else None
+    await session.execute(update_rows(ManuscriptFile).where(ManuscriptFile.id == row.id)
+                          .values(path=new_path, updated_at=_NOW))
+    changes = {"main_file": new_path} if manuscript.main_file == path else {}
+    await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id)
+                          .values(updated_at=_NOW, **changes))
+    if snap is not None:
+        await manuscript_history.settle(session, snap)
+    await session.refresh(row)
+    return row
+
+
+async def remove(session: AsyncSession, manuscript_id: uuid.UUID, path: str, *,
+                 base: datetime | None = None, snapshot: str | None = None) -> None:
+    manuscript = await get(session, manuscript_id)
+    row = await _file(session, manuscript_id, path, lock=True)
+    if row is None:
+        raise NotFound("unknown_file")
+    _check_base(row, base)
+    if path == manuscript.main_file:
+        raise Conflict("main_file")
+    snap = await manuscript_history.take(session, manuscript_id, snapshot) if snapshot is not None else None
+    await session.execute(delete_rows(ManuscriptFile).where(
+        ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.path == path))
+    if path not in NOT_IN_PDF:
+        await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
+    if snap is not None:
+        await manuscript_history.settle(session, snap)
+
+
+def interrupted(manuscript: Manuscript, now: datetime) -> bool:
+    started = manuscript.compile_started_at
+    return manuscript.compile_status == "running" and (started is None or now - started >= STALE_AFTER)
+
+
+def read_state(manuscript: Manuscript, now: datetime) -> tuple[str, str | None, bool]:
+    """(status, friendly, requested) as a reader sees them: a `running` with no live job behind it reads as failed."""
+    if interrupted(manuscript, now):
+        return "failed", "compile_interrupted", False
+    return manuscript.compile_status, manuscript.compile_friendly, manuscript.compile_requested
+
+
+async def request_compile(session: AsyncSession, manuscript_id: uuid.UUID, *, now: datetime) -> str:
+    """Queue a compile, or ask the running one for another pass. Returns "queued" or "again"."""
+    manuscript = await session.scalar(select(Manuscript).where(Manuscript.id == manuscript_id)
+                                      .with_for_update(key_share=True)
+                                      .execution_options(populate_existing=True))
+    if manuscript is None:
+        raise NotFound("unknown_manuscript")
+    if manuscript.compile_status == "running" and not interrupted(manuscript, now):
+        manuscript.compile_requested = True
+        await session.commit()
+        return "again"
+    manuscript.compile_status, manuscript.compile_started_at = "running", now
+    await session.commit()
+    try:
+        await queue.enqueue("compile_manuscript", str(manuscript_id))
+    except Exception:
+        manuscript.compile_status = "failed"  # no job will run: don't leave it `running`
+        await session.commit()
+        raise
+    return "queued"

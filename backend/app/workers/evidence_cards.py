@@ -11,14 +11,15 @@ from datetime import UTC, datetime, timedelta
 from arq import Retry
 from sqlalchemy import select, text, update
 
-from app.core import evidence_cards, queue
-from app.core.evidence_cards import JOB_TIMEOUT
+from app.core.notes import evidence_cards
+from app.core.notes.evidence_cards import JOB_TIMEOUT
+from app.core.platform import queue
 from app.db import SessionLocal, engine
 from app.models import EvidenceCard, workspace_papers
 
 logger = logging.getLogger(__name__)
 
-# JOB_TIMEOUT (core/evidence_cards.py: ~10 papers at up to 90 s each, plus slack) is the job's registered timeout;
+# JOB_TIMEOUT (core/notes/evidence_cards.py: ~10 papers at up to 90 s each, plus slack) is the job's registered timeout;
 # the loop stops itself SAFETY_MARGIN earlier and requeues what is left.
 SAFETY_MARGIN = 120
 RETRY_DEFER = 30  # seconds before a job that found its lock held tries again

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from app.core.manuscript_section_text import section_slices
-from app.core.manuscript_sentences import claim_hash
+from app.core.manuscripts.manuscript_section_text import section_slices
+from app.core.manuscripts.manuscript_sentences import claim_hash
 
 SAMPLE = (Path(__file__).parent / "fixtures" / "section_sample.tex").read_text()
 

@@ -4,8 +4,8 @@ from conftest import recorded
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import enrichment
-from app.core.enrichment import PdfHints
+from app.core.papers import enrichment
+from app.core.papers.enrichment import PdfHints
 from app.models import Paper, paper_topics
 
 pytestmark = pytest.mark.anyio

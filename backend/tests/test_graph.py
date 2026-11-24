@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import insert
 from test_note_papers import paper_only_note
 
-from app.core import graph, workspaces
+from app.core.workspaces import graph, workspaces
 from app.domain.errors import InvalidInput, NotFound
 from app.models import (
     Author,

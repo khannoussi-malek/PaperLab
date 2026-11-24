@@ -1,8 +1,8 @@
 import pytest
 
-from app.core import manuscripts
-from app.core.manuscript_checks import service
-from app.core.manuscript_checks.registry import REGISTRY
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_checks import service
+from app.core.manuscripts.manuscript_checks.registry import REGISTRY
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
 

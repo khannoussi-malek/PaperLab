@@ -5,8 +5,8 @@ import pytest
 from conftest import recorded
 from sqlalchemy import func, insert, select, text, update
 
-from app.core import enrichment
-from app.core.enrichment import PdfHints
+from app.core.papers import enrichment
+from app.core.papers.enrichment import PdfHints
 from app.models import Author, Paper, paper_authors
 
 pytestmark = pytest.mark.anyio

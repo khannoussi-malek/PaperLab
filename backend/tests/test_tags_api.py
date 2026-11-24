@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.core import workspaces
+from app.core.workspaces import workspaces
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

@@ -2,9 +2,9 @@ import pytest
 from sqlalchemy import delete
 from test_manuscript_papers import setup
 
-from app.core import manuscript_papers as mp
-from app.core import manuscripts
-from app.core.manuscript_missing_keys import missing_keys as all_missing
+from app.core.manuscripts import manuscript_papers as mp
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_missing_keys import missing_keys as all_missing
 from app.domain.errors import NotFound
 from app.models import ManuscriptFile, Paper
 

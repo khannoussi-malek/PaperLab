@@ -254,23 +254,23 @@ def _replies() -> tuple[str, dict[str, Callable[[str], list[str]]]]:
 
     Imported here, not at module level: core.chat → retrieval → embedding → http_embedders → providers.
     """
-    from app.core.answer_check import SYSTEM_PROMPT as ANSWER_CHECK_SYSTEM_PROMPT
-    from app.core.chat import WORKSPACE_SYSTEM_PROMPT
-    from app.core.chat_charts import SYSTEM_PROMPT as CHART_SYSTEM_PROMPT
-    from app.core.checks import SYSTEM_PROMPT as CHECK_SYSTEM_PROMPT
-    from app.core.claim_detect import SYSTEM_PROMPT as CLAIM_DETECT_SYSTEM_PROMPT
-    from app.core.claims import SYSTEM_PROMPT as CLAIM_CHECK_SYSTEM_PROMPT
-    from app.core.diagram import SYSTEM_PROMPT as DIAGRAM_SYSTEM_PROMPT
-    from app.core.draft_review import SYSTEM_PROMPT as DRAFT_REVIEW_SYSTEM_PROMPT
-    from app.core.draft_review import VERIFY_SYSTEM_PROMPT as DRAFT_VERIFY_SYSTEM_PROMPT
-    from app.core.each_paper import EACH_PAPER_SYSTEM
-    from app.core.each_paper import READING_SYSTEM as PAPER_READING_SYSTEM_PROMPT
-    from app.core.evidence_cards import SYSTEM_PROMPT as EVIDENCE_CARD_SYSTEM_PROMPT
-    from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
-    from app.core.number_suggest import SYSTEM_PROMPT as NUMBER_SUGGEST_SYSTEM_PROMPT
-    from app.core.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
-    from app.core.screening_suggest import SYSTEM_PROMPT_V2 as SCREENING_SYSTEM_PROMPT_V2
-    from app.core.section_review import SYSTEM_PROMPT as SECTION_REVIEW_SYSTEM_PROMPT
+    from app.core.chat.answer_check import SYSTEM_PROMPT as ANSWER_CHECK_SYSTEM_PROMPT
+    from app.core.chat.chat import WORKSPACE_SYSTEM_PROMPT
+    from app.core.chat.chat_charts import SYSTEM_PROMPT as CHART_SYSTEM_PROMPT
+    from app.core.chat.claim_detect import SYSTEM_PROMPT as CLAIM_DETECT_SYSTEM_PROMPT
+    from app.core.chat.claims import SYSTEM_PROMPT as CLAIM_CHECK_SYSTEM_PROMPT
+    from app.core.chat.each_paper import EACH_PAPER_SYSTEM
+    from app.core.chat.each_paper import READING_SYSTEM as PAPER_READING_SYSTEM_PROMPT
+    from app.core.manuscripts.diagram import SYSTEM_PROMPT as DIAGRAM_SYSTEM_PROMPT
+    from app.core.manuscripts.draft_review import SYSTEM_PROMPT as DRAFT_REVIEW_SYSTEM_PROMPT
+    from app.core.manuscripts.draft_review import VERIFY_SYSTEM_PROMPT as DRAFT_VERIFY_SYSTEM_PROMPT
+    from app.core.manuscripts.section_review import SYSTEM_PROMPT as SECTION_REVIEW_SYSTEM_PROMPT
+    from app.core.notes.checks import SYSTEM_PROMPT as CHECK_SYSTEM_PROMPT
+    from app.core.notes.evidence_cards import SYSTEM_PROMPT as EVIDENCE_CARD_SYSTEM_PROMPT
+    from app.core.notes.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
+    from app.core.notes.number_suggest import SYSTEM_PROMPT as NUMBER_SUGGEST_SYSTEM_PROMPT
+    from app.core.search.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
+    from app.core.search.screening_suggest import SYSTEM_PROMPT_V2 as SCREENING_SYSTEM_PROMPT_V2
 
     one = lambda reply: lambda prompt: [reply(prompt)]  # noqa: E731
     fixed = lambda tokens: lambda prompt: tokens  # noqa: E731

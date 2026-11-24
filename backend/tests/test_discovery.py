@@ -4,9 +4,9 @@ import httpx
 import pytest
 from conftest import recorded_discovery
 
-from app.core import discovery
-from app.core.discovery import Candidate
-from app.core.paper_sources import SourceSettings
+from app.core.papers.paper_sources import SourceSettings
+from app.core.search import discovery
+from app.core.search.discovery import Candidate
 from app.domain.errors import Conflict
 from app.models import Paper
 

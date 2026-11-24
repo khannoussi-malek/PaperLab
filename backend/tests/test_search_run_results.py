@@ -8,7 +8,9 @@ import httpx
 import pytest
 from sqlalchemy import delete
 
-from app.core import paper_sources, pipeline, prisma_export, queue, search_run_results, workspace_search
+from app.core.papers import paper_sources, pipeline
+from app.core.platform import queue
+from app.core.search import prisma_export, search_run_results, workspace_search
 from app.models import PaperSources
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun

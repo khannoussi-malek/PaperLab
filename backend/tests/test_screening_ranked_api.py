@@ -3,7 +3,7 @@ from datetime import timedelta
 
 import pytest
 
-from app.core import screening
+from app.core.search import screening
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchHit
 from tests.screening_pool import make_pool
@@ -133,7 +133,7 @@ async def test_a_new_decision_reuses_the_cached_features(client, session, monkey
 async def test_the_ranked_order_can_narrow_to_a_saved_searchs_new_finds(client, session):
     from datetime import datetime, timezone
 
-    from app.core import saved_searches
+    from app.core.search import saved_searches
     from app.models.workspace_search import WorkspaceSearchRun
 
     workspace, hits = await make_pool(session, [
@@ -160,7 +160,7 @@ async def test_the_ranked_order_can_narrow_to_a_saved_searchs_new_finds(client, 
 
 
 async def test_another_workspaces_saved_search_narrows_to_nothing(client, session):
-    from app.core import saved_searches
+    from app.core.search import saved_searches
 
     workspace, _ = await make_pool(session, [(POSITIVE, "relevant"), (NEGATIVE, "not_relevant"), ("x", None)])
     other, _ = await make_pool(session, [("y", None)])

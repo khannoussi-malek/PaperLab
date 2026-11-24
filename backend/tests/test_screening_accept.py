@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.core import screening, workspace_search
+from app.core.search import screening, workspace_search
 from app.domain.errors import InvalidInput
 from tests.screening_pool import make_pool
 

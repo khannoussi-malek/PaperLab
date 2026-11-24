@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import delete, select
 
-from app.core import notes
+from app.core.notes import notes
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance, Workspace
 

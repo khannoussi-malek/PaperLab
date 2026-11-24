@@ -11,7 +11,8 @@ from test_chat_models_api import model_on, owner_rows
 from test_sections import paper_with_headings
 
 from app.config import settings
-from app.core import briefs, chat
+from app.core.chat import chat
+from app.core.workspaces import briefs
 from app.main import create_app
 from app.models import LLMModel, LLMOutput
 from app.providers import llm

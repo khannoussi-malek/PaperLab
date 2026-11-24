@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.core import paper_links
+from app.core.papers import paper_links
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

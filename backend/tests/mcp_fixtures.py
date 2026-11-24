@@ -7,9 +7,11 @@ import pytest
 from conftest import FakeArq
 from mcp import Client
 
-from app.core import discovery, pdf_links, queue
-from app.core.paper_sources import SourceSettings
-from app.core.source_registry import SOURCE_IDS
+from app.core.papers import pdf_links
+from app.core.papers.paper_sources import SourceSettings
+from app.core.platform import queue
+from app.core.search import discovery
+from app.core.search.source_registry import SOURCE_IDS
 from app.providers import discovery_fake
 from mcp_server import server
 

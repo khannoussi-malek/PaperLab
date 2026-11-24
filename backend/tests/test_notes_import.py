@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from app.core import notes_markdown as nm
+from app.core.notes import notes_markdown as nm
 from app.domain.errors import InvalidInput
 from app.models import Note, Paper, note_anchors, note_papers
 

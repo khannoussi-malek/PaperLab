@@ -6,7 +6,8 @@ from datetime import datetime
 import pytest
 from sqlalchemy import select
 
-from app.core import paper_links, workspaces
+from app.core.papers import paper_links
+from app.core.workspaces import workspaces
 from app.models import Chunk, Paper
 from tests.conftest import unit_vector
 

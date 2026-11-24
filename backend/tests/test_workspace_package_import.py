@@ -10,18 +10,12 @@ import pytest
 from conftest import FakeArq
 from sqlalchemy import func, select
 
-from app.core import (
-    answer_provenance,
-    chat,
-    citations_bundle_read,
-    discovery,
-    papers,
-    pipeline,
-    queue,
-    tags,
-    workspace_package,
-    workspaces,
-)  # fmt: skip
+from app.core.chat import answer_provenance, chat
+from app.core.citations import citations_bundle_read
+from app.core.papers import papers, pipeline
+from app.core.platform import queue
+from app.core.search import discovery
+from app.core.workspaces import tags, workspace_package, workspaces  # fmt: skip
 from app.domain.errors import InvalidInput
 from app.models import LLMOutput, Paper, PaperStatus, Workspace, note_papers
 from app.models.workspace import workspace_papers
@@ -672,7 +666,7 @@ async def test_the_api_counts_the_answers_it_imported(client, session, pdf_dir):
 
 
 async def test_an_answer_claiming_too_many_slots_is_package_invalid(session, pdf_dir):
-    from app.core.workspace_package_shapes import MAX_SLOTS
+    from app.core.workspaces.workspace_package_shapes import MAX_SLOTS
 
     answer = {"question": "q", "content": "c", "model": "m", "connection_name": None, "prompt_version": 7,
               "skill_label": None, "skill_version": None, "whole_paper": False, "notes_used": None,

@@ -6,12 +6,12 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import delete, select
 
-from app.core import references
+from app.core.citations import references
 from app.domain.errors import Conflict, NotFound
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
 
-# Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these
-# files share one xdist worker, or two of them deadlock on the same stored reference.
+# Fetches and embeds take one advisory lock (core/citations/references.py); in a test it lasts until the rollback, so
+# these files share one xdist worker, or two of them deadlock on the same stored reference.
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
 READER_DOI = "10.5555/m75-reader"

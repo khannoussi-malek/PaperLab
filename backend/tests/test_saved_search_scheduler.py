@@ -7,7 +7,9 @@ import pytest
 from conftest import FakeArq
 from sqlalchemy import select
 
-from app.core import queue, saved_searches, workspace_search, workspaces
+from app.core.platform import queue
+from app.core.search import saved_searches, workspace_search
+from app.core.workspaces import workspaces
 from app.models.workspace_search import WorkspaceSearchRun
 from app.workers.settings import IngestWorkerSettings, WorkerSettings
 

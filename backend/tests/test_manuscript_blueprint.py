@@ -1,6 +1,6 @@
 import pytest
 
-from app.core import manuscript_blueprint as bp
+from app.core.manuscripts import manuscript_blueprint as bp
 
 
 def test_parse_accepts_a_full_file_and_an_empty_object():

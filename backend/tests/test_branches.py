@@ -5,7 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from app.core import branches, screening, workspace_search
+from app.core.search import branches, screening, workspace_search
 from app.domain.errors import InvalidInput, NotFound
 from app.models.provenance import WorkspaceBranchState
 from app.schemas.workspace_search import HitReviewUpdate
@@ -150,7 +150,7 @@ async def test_maybe_clears_a_screening_default(session):
 
 
 async def test_branch_on_a_papers_hit_is_stored_on_the_hit(session):
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
     from app.models import Paper
 
     workspace, (hit,) = await make_pool(session, [("a", None)])
@@ -172,7 +172,7 @@ async def test_branch_on_a_papers_hit_is_stored_on_the_hit(session):
 
 
 # --- Snowball next (Task 8) ---
-from app.core import snowball_next  # noqa: E402
+from app.core.search import snowball_next  # noqa: E402
 from tests.test_snowball_links import (  # noqa: E402,F401  (fixtures)
     _s2_with,
     _seed_hit,
@@ -261,7 +261,7 @@ async def test_remaining_counts_a_batch_item_whose_direction_errored(session, fa
 
 
 async def test_a_branch_on_a_paper_that_left_the_workspace_is_not_offered_and_can_be_cleared(session, edge_providers):
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
     from app.models import Paper
 
     workspace, _ = await _workspace_and_run(session)

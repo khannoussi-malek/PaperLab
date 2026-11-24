@@ -1,7 +1,7 @@
 import pytest
 
-from app.core import draft_review_issues as di
-from app.core.finding_lines import grams
+from app.core.manuscripts import draft_review_issues as di
+from app.core.notes.finding_lines import grams
 
 MAIN = (
     "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\\input{sections/a}\n"

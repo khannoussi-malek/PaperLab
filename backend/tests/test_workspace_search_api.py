@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from app.api.deps import get_discovery
-from app.core import discovery
-from app.core.paper_sources import SOURCES, SourceSettings
+from app.core.papers.paper_sources import SOURCES, SourceSettings
+from app.core.search import discovery
 from app.providers import discovery_fake
 
 pytestmark = pytest.mark.anyio
@@ -64,7 +64,7 @@ async def test_start_run_response_exposes_query_overrides(client):
 
 
 async def test_start_run_rejects_an_unsupported_source(client):
-    """Unpaywall is DOI-only PDF enrichment, never a discovery source (spec §6/app/core/paper_sources.py's own
+    """Unpaywall is DOI-only PDF enrichment, never a discovery source (spec §6/app/core/papers/paper_sources.py's own
     comment: "Unpaywall only adds PDF links") — search_batch's _PAGE_FUNCS has no "unpaywall" entry, so sending it
     used to reach a KeyError inside the worker and crash the whole run instead of a clean 422 (C1)."""
     ws = await client.post("/api/workspaces", json={"name": "Unsupported source test"})
@@ -781,7 +781,7 @@ async def test_import_hits_gets_a_pmc_open_access_pdf_for_a_hit_with_a_pmcid(ses
 async def test_import_hits_skips_a_held_paper_deleted_mid_import_and_imports_the_rest(
     session, client, discovery_api, monkeypatch
 ):
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
     from app.domain.errors import NotFound
     from app.models import Paper
     from app.models.workspace_search import WorkspaceSearchHit
@@ -949,7 +949,7 @@ async def test_import_hits_from_snowball_backward_records_a_cites_edge_in_the_gr
     """Owner's choice (2026-10-04): once a snowball-discovered hit is imported, the existing Graph picks up the
     hop as a citation edge — no separate "snowball graph" view needed. Backward = the seed's own references, so
     the seed cites the newly imported paper."""
-    from app.core import graph, workspaces
+    from app.core.workspaces import graph, workspaces
     from app.models import Paper
     from app.models.workspace_search import WorkspaceSearchHit
 
@@ -1269,7 +1269,7 @@ async def test_clear_hits_for_unknown_workspace_is_404(client):
 
 async def test_snowball_route_stores_hits_and_returns_counts(session, client, fake_providers_all):
     """POST /search/snowball with a seed paper in the workspace returns 200 with new_hits > 0."""
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
     from app.models import Paper
 
     # Create workspace
@@ -1299,7 +1299,7 @@ async def test_snowball_route_stores_hits_and_returns_counts(session, client, fa
 
 async def test_snowball_route_with_unowned_seed_is_404(session, client, fake_providers_all):
     """POST /search/snowball with a seed_paper_ids entry that isn't in the workspace returns 404."""
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
     from app.models import Paper
 
     # Create two workspaces
@@ -1438,7 +1438,7 @@ async def test_list_hits_surfaces_stage2_eligibility(session, client):
 async def _make_eligible_paper(session, client, workspace_id=None):
     """Workspace (if not given) + a paper that's a member of it + an exhausted run in that same workspace —
     the minimum an eligibility PATCH needs to succeed. Returns (workspace_id, paper_id, run_id)."""
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
     from app.models import Paper
     from app.models.workspace_search import WorkspaceSearchRun
 
@@ -1668,7 +1668,7 @@ async def test_list_runs_over_http_newest_first_with_hit_counts(client, session)
 
 
 async def test_import_hits_over_http_applies_the_tags_given_at_screening(session, client, discovery_api):
-    from app.core import tags
+    from app.core.workspaces import tags
     from app.models.workspace_search import WorkspaceSearchHit
 
     discovery_api.pdf_host.reply("/paper.pdf", 200, content=b"%PDF-1.4 fake content")
@@ -1684,7 +1684,7 @@ async def test_import_hits_over_http_applies_the_tags_given_at_screening(session
 
 
 async def test_a_second_import_does_not_give_back_a_tag_that_was_removed(session, client, discovery_api):
-    from app.core import tags
+    from app.core.workspaces import tags
     from app.models.workspace_search import WorkspaceSearchHit
 
     discovery_api.pdf_host.reply("/paper.pdf", 200, content=b"%PDF-1.4 fake content")
@@ -1702,7 +1702,7 @@ async def test_a_second_import_does_not_give_back_a_tag_that_was_removed(session
 
 
 async def test_a_manual_upload_applies_the_tags_given_at_screening(session, client, arq):
-    from app.core import tags
+    from app.core.workspaces import tags
     from app.models.workspace_search import WorkspaceSearchHit
 
     hit_id = await _make_importable_hit(session, pdf_urls=[])

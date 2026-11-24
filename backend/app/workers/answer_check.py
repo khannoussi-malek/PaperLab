@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from app.core import answer_check_run
+from app.core.chat import answer_check_run
 from app.db import SessionLocal
 
 logger = logging.getLogger(__name__)

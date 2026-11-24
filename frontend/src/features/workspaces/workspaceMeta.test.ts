@@ -26,7 +26,7 @@ describe('notesByPaper', () => {
   const bert = paper('p-bert', 'BERT')
 
   it('groups notes under their paper, in the order the API sent them (already sorted by title, then paper)', () => {
-    // A real response from the API is already sorted this way (core/workspaces.py); the client trusts that order
+    // A real response from the API is already sorted this way (core/workspaces/workspaces.py); the client trusts that order
     // instead of re-deriving it, so the input here is BERT's note first, matching "BERT" < "Dense Passage Retrieval".
     const notes = [note('n1', 'p-bert'), note('n2', 'p-dpr'), note('n3', 'p-dpr')]
     expect(notesByPaper(notes, [dpr, bert])).toEqual([

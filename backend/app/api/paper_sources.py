@@ -4,7 +4,7 @@ response has a key."""
 from fastapi import APIRouter
 
 from app.api.deps import SessionDep
-from app.core import paper_sources
+from app.core.papers import paper_sources
 from app.schemas.paper_sources import PaperSourcesOut, PaperSourcesUpdate
 
 router = APIRouter(prefix="/api/paper-sources", tags=["paper-sources"])

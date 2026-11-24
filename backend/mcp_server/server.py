@@ -28,10 +28,8 @@ from mcp.types import (
 )
 from pydantic import Field
 
-from app.core import (
-    citations_import_run,
-    graph,
-    library,
+from app.core.citations import citations_import_run
+from app.core.manuscripts import (
     manuscript_agent,
     manuscript_agent_checks,
     manuscript_agent_compile,
@@ -39,20 +37,15 @@ from app.core import (
     manuscript_draft_review,
     manuscript_templates,
     manuscripts,
-    mcp_activity,
-    mcp_reads,
-    notes,
-    novelty,
-    papers,
-    pipeline,
     reporting_guidelines,
-    screening,
-    skill_prompts,
-    skills,
-    workspaces,
 )
-from app.core.manuscript_checks import doi_service
-from app.core.mcp_activity import WRITES_DISABLED
+from app.core.manuscripts.manuscript_checks import doi_service
+from app.core.notes import notes
+from app.core.papers import library, papers, pipeline
+from app.core.platform import mcp_activity, mcp_reads, skill_prompts, skills
+from app.core.platform.mcp_activity import WRITES_DISABLED
+from app.core.search import screening
+from app.core.workspaces import graph, novelty, workspaces
 from app.db import SessionLocal
 from app.domain.errors import DomainError, error_code
 

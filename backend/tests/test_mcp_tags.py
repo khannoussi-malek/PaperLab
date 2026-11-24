@@ -9,9 +9,10 @@ from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 from screening_pool import make_pool
 from sqlalchemy import select
 
-from app.core import discovery, tags, workspace_search, workspaces
-from app.core.paper_sources import SourceSettings
-from app.core.source_registry import SOURCE_IDS
+from app.core.papers.paper_sources import SourceSettings
+from app.core.search import discovery, workspace_search
+from app.core.search.source_registry import SOURCE_IDS
+from app.core.workspaces import tags, workspaces
 from app.models import Paper, hit_tags
 from app.providers import discovery_fake, embedding
 

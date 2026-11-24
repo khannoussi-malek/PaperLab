@@ -9,10 +9,12 @@ from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
 from sqlalchemy import select
 
-from app.core import discovery, paper_sources, workspace_search, workspaces
-from app.core import notes as notes_core
-from app.core.paper_sources import SourceSettings
-from app.core.source_registry import SOURCE_IDS
+from app.core.notes import notes as notes_core
+from app.core.papers import paper_sources
+from app.core.papers.paper_sources import SourceSettings
+from app.core.search import discovery, workspace_search
+from app.core.search.source_registry import SOURCE_IDS
+from app.core.workspaces import workspaces
 from app.models import Note, Paper
 from app.models.note import Provenance
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchCursor
@@ -417,7 +419,8 @@ async def test_pausing_an_unknown_saved_search_says_so(session):
 
 from screening_pool import make_pool  # noqa: E402
 
-from app.core import pipeline, screening  # noqa: E402
+from app.core.papers import pipeline  # noqa: E402
+from app.core.search import screening  # noqa: E402
 from app.models.workspace_search import WorkspaceSearchRun  # noqa: E402
 
 

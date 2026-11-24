@@ -8,7 +8,7 @@ import uuid
 
 from sqlalchemy import func, select, update
 
-from app.core import draft_review
+from app.core.manuscripts import draft_review
 from app.db import SessionLocal
 from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptDraftReview as Row

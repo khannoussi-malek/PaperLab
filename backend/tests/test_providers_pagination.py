@@ -937,7 +937,7 @@ async def test_biorxiv_search_page_preserves_year_through_from_biorxiv_entry(ses
     through from_biorxiv_entry -- unlike IACR ePrint, this source has no id-prefix fallback for year."""
     from contextlib import asynccontextmanager
 
-    from app.core.candidates import from_biorxiv_entry
+    from app.core.search.candidates import from_biorxiv_entry
     from app.models import ExternalRef
 
     @asynccontextmanager

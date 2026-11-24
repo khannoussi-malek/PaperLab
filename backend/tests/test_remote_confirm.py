@@ -6,9 +6,10 @@ import pytest
 from sqlalchemy import select, update
 from test_manuscript_papers import setup
 
-from app.core import llm_connections, manuscripts, queue
-from app.core import manuscript_review as mr
-from app.core import manuscript_section_review as msr
+from app.core.manuscripts import manuscript_review as mr
+from app.core.manuscripts import manuscript_section_review as msr
+from app.core.manuscripts import manuscripts
+from app.core.platform import llm_connections, queue
 from app.domain.errors import Conflict, NotFound
 from app.models import LLMConnection, LLMModel, ManuscriptClaimCheck
 from app.workers import manuscript_review as review_worker
@@ -117,7 +118,7 @@ async def test_a_citation_check_whose_default_turns_remote_is_refused_by_the_job
 def evidence_wiring(session, embedder, monkeypatch):
     from test_manuscript_evidence import library
 
-    from app.core import retrieval
+    from app.core.chat import retrieval
     from app.workers import manuscript_evidence as evidence_worker
 
     @asynccontextmanager
@@ -148,7 +149,7 @@ async def test_find_evidence_needs_a_yes_for_a_remote_default_before_anything_is
 ):
     from test_manuscript_evidence import SENTENCE
 
-    from app.core import manuscript_evidence as ev
+    from app.core.manuscripts import manuscript_evidence as ev
 
     library, _ = evidence_wiring
     _, m = await library(session, embedder, "Alpha")
@@ -165,7 +166,7 @@ async def test_find_evidence_whose_default_turns_remote_is_refused_by_the_job(
 ):
     from test_manuscript_evidence import SENTENCE
 
-    from app.core import manuscript_evidence as ev
+    from app.core.manuscripts import manuscript_evidence as ev
 
     library, evidence_worker = evidence_wiring
     _, m = await library(session, embedder, "Alpha")
@@ -179,7 +180,7 @@ async def test_find_evidence_whose_default_turns_remote_is_refused_by_the_job(
 async def test_a_newer_ask_without_a_yes_does_not_inherit_an_old_one(session, embedder, arq, evidence_wiring):
     from test_manuscript_evidence import SENTENCE
 
-    from app.core import manuscript_evidence as ev
+    from app.core.manuscripts import manuscript_evidence as ev
 
     library, _ = evidence_wiring
     _, m = await library(session, embedder, "Alpha")

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core import synctex
+from app.core.manuscripts import synctex
 
 FIXTURE = Path(__file__).parent / "fixtures" / "synctex" / "main.synctex.gz"
 ROOT = "/private/var/folders/38/hhp3h54n0cl3jkzlhbb7bn080000gp/T/tmp.UdqPSy8TCu"

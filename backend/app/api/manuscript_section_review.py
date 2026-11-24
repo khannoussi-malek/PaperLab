@@ -4,8 +4,8 @@ import uuid
 from fastapi import APIRouter, Query
 
 from app.api.deps import SessionDep
-from app.core import manuscript_section_review as review
-from app.core import manuscripts
+from app.core.manuscripts import manuscript_section_review as review
+from app.core.manuscripts import manuscripts
 from app.schemas.manuscript_section_review import (
     SectionLocateIn,
     SectionLocateOut,

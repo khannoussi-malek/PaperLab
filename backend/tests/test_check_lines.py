@@ -2,9 +2,19 @@ import uuid
 
 import pytest
 
-from app.core import checks, prompts
-from app.core.checks import CheckGuard, KeptLines, LineFilter, guard_for, parse_check, queries, take_turns, written_text
-from app.core.retrieval import RetrievedChunk
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.notes import checks
+from app.core.notes.checks import (
+    CheckGuard,
+    KeptLines,
+    LineFilter,
+    guard_for,
+    parse_check,
+    queries,
+    take_turns,
+    written_text,
+)
+from app.core.platform import prompts
 
 GUARD = guard_for("the 32.4 BLEU score", ["pushing the GLUE score to new highs"])
 DROPPED = "dropped"

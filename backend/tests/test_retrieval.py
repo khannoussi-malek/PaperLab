@@ -7,8 +7,8 @@ from conftest import unit_vector
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import bindparam, insert, select, text
 
-from app.core import retrieval
-from app.core.retrieval import retrieve
+from app.core.chat import retrieval
+from app.core.chat.retrieval import retrieve
 from app.domain.errors import Conflict
 from app.models import Chunk, Paper, Workspace, workspace_papers
 from app.providers import embedding
@@ -422,7 +422,7 @@ def test_hybrid_search_is_off_by_default_and_can_be_switched_on(monkeypatch):
 
 
 async def test_the_stored_switch_changes_what_a_search_across_papers_finds(session, embedder, monkeypatch):
-    from app.core import embedding_sources  # noqa: PLC0415
+    from app.core.papers import embedding_sources  # noqa: PLC0415
 
     hybrid(monkeypatch, False)  # the env var off: only the stored switch decides
     question = f"Which dose with {RARE}?"
@@ -440,7 +440,7 @@ async def test_the_stored_switch_changes_what_a_search_across_papers_finds(sessi
 
 
 async def test_the_settings_switch_turns_hybrid_search_on_and_the_env_var_still_forces_it(session, monkeypatch):
-    from app.core import embedding_sources  # noqa: PLC0415
+    from app.core.papers import embedding_sources  # noqa: PLC0415
 
     monkeypatch.setattr(retrieval.settings, "hybrid_search", False)
     assert await retrieval.hybrid_on(session) is False

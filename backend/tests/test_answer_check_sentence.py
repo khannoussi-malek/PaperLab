@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from app.core import answer_check, claims
-from app.core.answer_check import CheckPassage, check_sentence
+from app.core.chat import answer_check, claims
+from app.core.chat.answer_check import CheckPassage, check_sentence
 from app.providers.base import LLMError
 from app.providers.llm_fake import FakeLLM
 

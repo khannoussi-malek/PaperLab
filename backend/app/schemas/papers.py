@@ -32,7 +32,7 @@ class PaperOut(BaseModel):
     evidence_access: Literal["full_text", "abstract", "metadata"]
     has_pdf: bool
     details_source: DetailsSource | None
-    field_sources: dict[str, ProvenanceSource]  # {group: source}, app.core.provenance.FIELD_GROUPS (R22)
+    field_sources: dict[str, ProvenanceSource]  # {group: source}, app.core.papers.provenance.FIELD_GROUPS (R22)
     manual_fields: list[str]
     pdf_checked_at: datetime | None
     pdf_check_result: Literal["found", "none", "temporary", "error"] | None

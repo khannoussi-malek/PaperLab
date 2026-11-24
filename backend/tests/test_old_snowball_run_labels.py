@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import event
 
-from app.core import search_run_results, workspace_search
-from app.core.candidates import normal_title
+from app.core.search import search_run_results, workspace_search
+from app.core.search.candidates import normal_title
 from app.models import Paper
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace

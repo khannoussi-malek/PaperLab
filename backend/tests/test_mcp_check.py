@@ -5,7 +5,7 @@ from conftest import TEST_DATABASE_URL
 from sqlalchemy.engine import make_url
 from test_mcp_server import EXPECTED_TOOLS
 
-from app.core import mcp_check
+from app.core.platform import mcp_check
 
 pytestmark = pytest.mark.anyio
 

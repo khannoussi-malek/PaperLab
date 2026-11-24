@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.core import reading_bridge, workspace_search, workspaces
+from app.core.search import workspace_search
+from app.core.workspaces import reading_bridge, workspaces
 from app.models import Paper
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
 

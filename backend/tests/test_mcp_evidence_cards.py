@@ -9,7 +9,10 @@ from pdf_papers import chunked_paper
 from sqlalchemy import insert
 from test_evidence_cards import FULL, INTRO, Scripted, card_reply
 
-from app.core import evidence_cards, retrieval, screening, workspaces
+from app.core.chat import retrieval
+from app.core.notes import evidence_cards
+from app.core.search import screening
+from app.core.workspaces import workspaces
 from app.models import workspace_papers
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

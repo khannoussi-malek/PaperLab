@@ -30,40 +30,41 @@ SAME_RANK_OK = {("models", "db")}  # the ORM models sit on db's Base
 # importer module -> imported module: reason. Kept on purpose; see docs in each importer.
 ALLOWED_UPWARD: dict[tuple[str, str], str] = {
     # Source ids derive from the registry of fetchers; a copied list would drift.
-    ("app.schemas.paper_sources", "app.core.source_registry"): "source ids",
-    ("app.schemas.workspace_search", "app.core.source_registry"): "source ids",
+    ("app.schemas.paper_sources", "app.core.search.source_registry"): "source ids",
+    ("app.schemas.workspace_search", "app.core.search.source_registry"): "source ids",
     ("app.scripts.tectonic_sandbox_check", "app.workers.manuscripts"): "a check script for the worker's own sandbox",
 }
 # The fake model answers each feature by its system prompt, so it reads every prompt (lazily): a test double for
 # the whole app, picked by LLM_PROVIDER=fake.
 FAKE_MODEL_READS = (
-    "answer_check", "chat", "chat_charts", "checks", "claim_detect", "claims", "diagram", "draft_review", "each_paper",
-    "evidence_cards", "note_suggestions", "number_suggest", "screening_suggest", "section_review",
+    "chat.answer_check", "chat.chat", "chat.chat_charts", "chat.claim_detect", "chat.claims", "chat.each_paper",
+    "manuscripts.diagram", "manuscripts.draft_review", "manuscripts.section_review", "notes.checks",
+    "notes.evidence_cards", "notes.note_suggestions", "notes.number_suggest", "search.screening_suggest",
 )
 ALLOWED_UPWARD |= {("app.providers.llm_fake", f"app.core.{name}"): "fake model" for name in FAKE_MODEL_READS}
 
 # Files allowed over MAX_LINES today (paths relative to backend/). Split one, then take it off.
 OVER_MAX: set[str] = {
     "app/api/chat.py",
-    "app/core/candidates.py",
-    "app/core/chat.py",
-    "app/core/citations_export.py",
-    "app/core/citations_import.py",
-    "app/core/citations_import_apply.py",
-    "app/core/claims.py",
-    "app/core/discovery.py",
-    "app/core/enrichment.py",
-    "app/core/evidence_cards.py",
-    "app/core/hit_links.py",
-    "app/core/manuscript_checks/number_provenance.py",
-    "app/core/notes.py",
-    "app/core/pipeline.py",
-    "app/core/references.py",
-    "app/core/screening.py",
-    "app/core/skills.py",
-    "app/core/workspace_package.py",
-    "app/core/workspace_package_screening.py",
-    "app/core/workspace_search.py",
+    "app/core/search/candidates.py",
+    "app/core/chat/chat.py",
+    "app/core/citations/citations_export.py",
+    "app/core/citations/citations_import.py",
+    "app/core/citations/citations_import_apply.py",
+    "app/core/chat/claims.py",
+    "app/core/search/discovery.py",
+    "app/core/papers/enrichment.py",
+    "app/core/notes/evidence_cards.py",
+    "app/core/search/hit_links.py",
+    "app/core/manuscripts/manuscript_checks/number_provenance.py",
+    "app/core/notes/notes.py",
+    "app/core/papers/pipeline.py",
+    "app/core/citations/references.py",
+    "app/core/search/screening.py",
+    "app/core/platform/skills.py",
+    "app/core/workspaces/workspace_package.py",
+    "app/core/workspaces/workspace_package_screening.py",
+    "app/core/search/workspace_search.py",
     "app/providers/discovery_fake.py",
     "app/schemas/workspace_search.py",
     "app/workers/ingest.py",
@@ -151,7 +152,8 @@ def test_relative_imports_resolve_against_the_importer():
     up = ast.parse("from ..workers import x").body[0]
     assert absolute(up, "app.api.chat", is_package=False) == "app.workers"
     here = ast.parse("from .base import Check").body[0]
-    assert absolute(here, "app.core.manuscript_checks", is_package=True) == "app.core.manuscript_checks.base"
+    checks = "app.core.manuscripts.manuscript_checks"
+    assert absolute(here, checks, is_package=True) == f"{checks}.base"
 
 
 def test_imports_point_down():
@@ -167,3 +169,8 @@ def test_no_module_over_max_lines():
     long = {str(p.relative_to(BACKEND)) for p, text in sources() if text.count("\n") > MAX_LINES}
     assert sorted(long - OVER_MAX) == [], f"split these below {MAX_LINES} lines"
     assert sorted(OVER_MAX - long) == [], "drop these from OVER_MAX: they are short enough now (or gone)"
+
+
+def test_core_is_grouped_by_area():
+    loose = sorted(p.name for p in (APP / "core").glob("*.py") if p.name != "__init__.py")
+    assert loose == [], "put these in the area package they serve (app/core/<area>/)"

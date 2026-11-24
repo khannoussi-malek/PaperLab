@@ -3,8 +3,8 @@ import uuid
 from fastapi import APIRouter
 
 from app.api.deps import SessionDep
-from app.core.manuscript_checks import doi_service
-from app.core.manuscript_checks.base import SEVERITIES
+from app.core.manuscripts.manuscript_checks import doi_service
+from app.core.manuscripts.manuscript_checks.base import SEVERITIES
 from app.schemas.manuscript_checks import CheckFindingOut
 from app.schemas.manuscript_doi_check import DoiCheckOut
 

@@ -6,7 +6,9 @@ import pytest
 from pdf_papers import chunked_paper
 from sqlalchemy import select
 
-from app.core import citations_export, pipeline, tags, workspaces
+from app.core.citations import citations_export
+from app.core.papers import pipeline
+from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict, InvalidInput
 from app.models import Paper, workspace_papers
 

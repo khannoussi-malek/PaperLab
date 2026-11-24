@@ -22,7 +22,8 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.config import settings
-from app.core import diagram, diagram_compile, diagram_tikz, llm_connections
+from app.core.manuscripts import diagram, diagram_compile, diagram_tikz
+from app.core.platform import llm_connections
 from app.db import SessionLocal
 from app.domain.errors import DomainError
 from app.providers.base import LLMError, LLMUnavailable

@@ -9,9 +9,10 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select, text
 
-from app.core import discovery, llm_connections, queue, workspace_search
-from app.core.screening import hit_text, load_pool, suggestion_queue
-from app.core.screening_suggest import SCREENING_PROMPT_VERSION, SuggestionV2, suggest
+from app.core.platform import llm_connections, queue
+from app.core.search import discovery, workspace_search
+from app.core.search.screening import hit_text, load_pool, suggestion_queue
+from app.core.search.screening_suggest import SCREENING_PROMPT_VERSION, SuggestionV2, suggest
 from app.db import SessionLocal, engine
 from app.domain.errors import Conflict
 from app.models.references import ExternalRef

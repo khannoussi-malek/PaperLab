@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from app.core import latex_compile
-from app.core.manuscript_agent_compile import undefined_keys
+from app.core.manuscripts import latex_compile
+from app.core.manuscripts.manuscript_agent_compile import undefined_keys
 
 FIX = Path(__file__).parent / "fixtures" / "tectonic"
 

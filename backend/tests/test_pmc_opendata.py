@@ -7,9 +7,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.core import discovery, pdf_links
-from app.core.candidates import from_europe_pmc
-from app.core.discovery import Candidate
+from app.core.papers import pdf_links
+from app.core.search import discovery
+from app.core.search.candidates import from_europe_pmc
+from app.core.search.discovery import Candidate
 from app.domain.errors import Conflict, InvalidInput
 from app.providers import europe_pmc, pmc_opendata
 
@@ -220,7 +221,7 @@ async def test_a_pmc_page_already_tried_still_names_the_pmcid(session, discovery
 
 
 async def test_a_zotero_entrys_own_pmcid_goes_with_its_search_match(session, monkeypatch):
-    from app.core import citations_import_apply as cia
+    from app.core.citations import citations_import_apply as cia
 
     added = []
 

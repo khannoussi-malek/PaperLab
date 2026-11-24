@@ -20,9 +20,9 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.core import llm_connections
-from app.core.answer_check import CheckPassage, check_sentence
-from app.core.answer_check_text import answer_sentences
+from app.core.chat.answer_check import CheckPassage, check_sentence
+from app.core.chat.answer_check_text import answer_sentences
+from app.core.platform import llm_connections
 from app.db import SessionLocal
 from app.providers.llm import build_llm
 

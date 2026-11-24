@@ -6,7 +6,8 @@ import pytest
 from sqlalchemy import select
 from test_manuscript_papers import setup
 
-from app.core import manuscripts, queue
+from app.core.manuscripts import manuscripts
+from app.core.platform import queue
 from app.models import ManuscriptDraftReview as Row
 from app.workers import manuscript_draft_review as worker
 

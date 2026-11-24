@@ -7,8 +7,9 @@ from conftest import unit_vector
 from test_note_papers import paper_only_note
 from test_sections import paper_with_headings
 
-from app.core import checks, embedding_index, lenses, sections
-from app.core.chat import SMALL_PAPER_CHARS
+from app.core.chat.chat import SMALL_PAPER_CHARS
+from app.core.notes import checks
+from app.core.papers import embedding_index, lenses, sections
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, Note, Provenance
 from app.providers import embedding
@@ -284,7 +285,8 @@ from datetime import datetime, timedelta, timezone  # noqa: E402
 
 from sqlalchemy import select, update  # noqa: E402
 
-from app.core import chat, notes  # noqa: E402
+from app.core.chat import chat  # noqa: E402
+from app.core.notes import notes  # noqa: E402
 from app.domain.chunking import ChunkDraft  # noqa: E402
 from app.models import LLMOutput  # noqa: E402
 
@@ -386,7 +388,7 @@ async def test_a_body_edited_during_the_check_is_stale_at_once(session):
 
 
 async def test_a_replaced_chunk_resolves_to_none(session):
-    from app.core import papers
+    from app.core.papers import papers
 
     paper, chunks = await paper_with_headings(session, HEADINGS)
     note = await note_on(session, paper)
@@ -400,7 +402,7 @@ async def test_a_replaced_chunk_resolves_to_none(session):
 
 
 async def test_a_line_dropped_live_stays_dropped_after_the_chunks_are_replaced(session):
-    from app.core import papers
+    from app.core.papers import papers
 
     paper, chunks = await paper_with_headings(session, HEADINGS)
     note = await note_on(session, paper)

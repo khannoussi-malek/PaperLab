@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core.retrieval import RetrievedChunk, retrieve
+from app.core.chat.retrieval import RetrievedChunk, retrieve
 from app.models import Paper
 from app.providers import embedding, search_model
 

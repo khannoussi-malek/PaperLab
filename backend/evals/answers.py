@@ -40,9 +40,11 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core import chat, checks, llm_connections, prompts, retrieval
-from app.core.notes import _CITATION, create_paper_note, normalize_quote, note_blocks
-from app.core.retrieval import RetrievedChunk
+from app.core.chat import chat, retrieval
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.notes import checks
+from app.core.notes.notes import _CITATION, create_paper_note, normalize_quote, note_blocks
+from app.core.platform import llm_connections, prompts
 from app.domain.errors import DomainError
 from app.models import (
     Chunk,

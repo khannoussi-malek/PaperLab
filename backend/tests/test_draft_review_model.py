@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from test_manuscript_papers import setup
 
-from app.core import manuscripts
+from app.core.manuscripts import manuscripts
 from app.models import ManuscriptDraftReview as Row
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]

@@ -1,4 +1,4 @@
-from app.core import source_registry as reg
+from app.core.search import source_registry as reg
 
 
 def test_source_ids_preserve_d73s_trust_order():

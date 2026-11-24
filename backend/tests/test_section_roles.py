@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.sections import ROLES, assign_roles
+from app.core.papers.sections import ROLES, assign_roles
 
 GOLDEN = json.loads((Path(__file__).parent / "fixtures" / "section_roles.json").read_text())
 

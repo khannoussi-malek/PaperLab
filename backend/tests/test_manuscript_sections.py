@@ -1,7 +1,7 @@
 # ruff: noqa: E501
 import pytest
 
-from app.core.manuscript_sections import (
+from app.core.manuscripts.manuscript_sections import (
     check_title,
     drop_input,
     input_lines,

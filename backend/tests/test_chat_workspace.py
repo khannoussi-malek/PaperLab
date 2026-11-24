@@ -8,8 +8,9 @@ from sqlalchemy import delete, insert
 from test_note_papers import paper_only_note
 from test_sections import SECTIONED, sectioned_paper
 
-from app.core import chat, retrieval, skills
-from app.core.notes import Anchor, NoteView
+from app.core.chat import chat, retrieval
+from app.core.notes.notes import Anchor, NoteView
+from app.core.platform import skills
 from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Workspace, note_anchors, note_papers, workspace_papers
 

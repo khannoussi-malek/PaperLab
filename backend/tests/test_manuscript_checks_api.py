@@ -2,8 +2,9 @@ import uuid
 
 import pytest
 
-from app.core import manuscripts, queue
-from app.core.manuscript_checks.registry import REGISTRY
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_checks.registry import REGISTRY
+from app.core.platform import queue
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
 FINDING_KEYS = {"check", "severity", "file", "line", "message", "fix_hint"}

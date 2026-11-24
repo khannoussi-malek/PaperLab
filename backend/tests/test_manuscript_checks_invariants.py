@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from app.core.manuscript_checks.registry import REGISTRY
+from app.core.manuscripts.manuscript_checks.registry import REGISTRY
 
 TESTS = Path(__file__).parent
 NAME = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")

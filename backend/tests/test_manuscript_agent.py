@@ -4,9 +4,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import func, select
 
-from app.core import manuscript_agent as agent
-from app.core import manuscript_history, manuscript_templates, manuscripts
-from app.core import manuscript_paths as paths
+from app.core.manuscripts import manuscript_agent as agent
+from app.core.manuscripts import manuscript_history, manuscript_templates, manuscripts
+from app.core.manuscripts import manuscript_paths as paths
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Manuscript, ManuscriptSnapshot, Workspace
 

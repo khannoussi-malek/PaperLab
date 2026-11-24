@@ -1,10 +1,10 @@
 import time
 from types import MappingProxyType
 
-from app.core.manuscript_checks import references
-from app.core.manuscript_checks.base import CheckContext, ManuscriptInfo
-from app.core.manuscript_checks.bibparse import parse_bib
-from app.core.manuscript_paths import RESERVED
+from app.core.manuscripts.manuscript_checks import references
+from app.core.manuscripts.manuscript_checks.base import CheckContext, ManuscriptInfo
+from app.core.manuscripts.manuscript_checks.bibparse import parse_bib
+from app.core.manuscripts.manuscript_paths import RESERVED
 
 INFO = ManuscriptInfo("m", "main.tex", "never", None, None, None)
 

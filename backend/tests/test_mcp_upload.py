@@ -9,7 +9,8 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import func, select
 
-from app.core import papers, pipeline, workspaces
+from app.core.papers import papers, pipeline
+from app.core.workspaces import workspaces
 from app.models import Paper, PaperStatus
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

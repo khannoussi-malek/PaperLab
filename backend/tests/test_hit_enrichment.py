@@ -11,7 +11,7 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import delete, select
 
-from app.core import hit_enrichment
+from app.core.search import hit_enrichment
 from app.models import PaperSources
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
@@ -246,8 +246,8 @@ async def test_a_short_answer_fails_the_chunk_and_leaves_refs_unchecked(session)
 
 
 async def test_enrich_hits_queues_nothing_when_semantic_scholar_is_off(session, jobs, monkeypatch):
-    from app.core import paper_sources
-    from app.core.source_registry import SOURCE_IDS
+    from app.core.papers import paper_sources
+    from app.core.search.source_registry import SOURCE_IDS
 
     ws, _ = await pool(session, [ref("a", doi="10.1/a")])
     off = paper_sources.SourceSettings(enabled={**dict.fromkeys(SOURCE_IDS, True), "semantic_scholar": False})

@@ -5,8 +5,9 @@ import pytest
 from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 from sqlalchemy import select
 
-from app.core import claims, notes, quotes, retrieval
-from app.core.retrieval import RetrievedChunk
+from app.core.chat import claims, quotes, retrieval
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.notes import notes
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable, ModelNotPulled

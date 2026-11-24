@@ -7,7 +7,8 @@ from pdf_papers import chunked_paper
 from sqlalchemy import insert, select
 from test_evidence_cards import FULL, INTRO, Scripted, card_reply
 
-from app.core import evidence_cards, retrieval
+from app.core.chat import retrieval
+from app.core.notes import evidence_cards
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import EvidenceCard, Workspace, workspace_papers
 

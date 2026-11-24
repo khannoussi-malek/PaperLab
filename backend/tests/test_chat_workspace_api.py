@@ -6,7 +6,8 @@ from conftest import parse_sse, unit_vector
 from sqlalchemy import delete, insert, select
 from test_chat import NOTE_RULE_V3
 
-from app.core import chat, notes
+from app.core.chat import chat
+from app.core.notes import notes
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper, Workspace, workspace_papers
 from app.providers import embedding

@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter
 
 from app.api.deps import SessionDep
-from app.core import manuscript_draft_review as review
+from app.core.manuscripts import manuscript_draft_review as review
 from app.schemas.manuscript_draft_review import (
     DraftReviewEstimate,
     DraftReviewIn,

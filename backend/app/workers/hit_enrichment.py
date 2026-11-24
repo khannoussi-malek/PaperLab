@@ -6,7 +6,8 @@ import uuid
 from dataclasses import replace
 
 from app.config import settings
-from app.core import hit_enrichment, paper_sources
+from app.core.papers import paper_sources
+from app.core.search import hit_enrichment
 from app.db import SessionLocal
 from app.providers import arxiv, discovery_fake, semantic_scholar
 

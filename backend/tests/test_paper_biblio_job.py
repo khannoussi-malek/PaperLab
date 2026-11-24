@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager
 import httpx
 import pytest
 
-from app.core import paper_sources, papers, queue
+from app.core.papers import paper_sources, papers
+from app.core.platform import queue
 from app.models import Paper
 from app.providers import crossref
 from app.workers import paper_biblio as worker

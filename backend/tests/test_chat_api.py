@@ -8,7 +8,7 @@ from test_chat import NOTE_RULE_V3
 from test_chat_workspace import add_note
 from test_note_papers import paper_only_note
 
-from app.core import chat
+from app.core.chat import chat
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper
 from app.providers import embedding

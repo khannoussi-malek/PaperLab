@@ -1,6 +1,6 @@
 import pytest
 
-from app.core import screening
+from app.core.search import screening
 from app.models.workspace_search import WorkspaceSearchRun
 from tests.screening_pool import make_pool
 
@@ -96,7 +96,7 @@ async def test_prisma_combines_paused_runs_into_one_note(client, session):  # M6
 
 
 async def test_prisma_counts_citation_searching_per_level(client, session):  # snowball tree
-    from app.core.hit_links import record_links
+    from app.core.search.hit_links import record_links
 
     workspace, hits = await make_pool(session, [("s", None)] + [("x", None)] * 5)
     seed, l1, l2 = hits[0], hits[1:4], hits[4:]
@@ -119,7 +119,7 @@ async def test_prisma_citation_searching_is_empty_without_snowball_hits(client, 
 
 
 async def test_prisma_database_box_excludes_snowball_hits_listed_under_citation_searching(client, session):
-    from app.core.hit_links import record_links
+    from app.core.search.hit_links import record_links
 
     workspace, hits = await make_pool(session, [("s", None)] + [("x", None)] * 3)
     seed, kids = hits[0], hits[1:]

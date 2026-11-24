@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from app.core import skills
-from app.core.prompts import PROMPTS_DIR
-from app.core.skills import BundledSkill, SkillRow, compose, load_bundled, merge
+from app.core.platform import skills
+from app.core.platform.prompts import PROMPTS_DIR
+from app.core.platform.skills import BundledSkill, SkillRow, compose, load_bundled, merge
 
 BASE = "You are PaperLab. Cite [C1] for every claim."
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -219,7 +219,7 @@ def test_scope_and_description_overrides_apply():
 
 def test_a_row_for_a_removed_bundled_skill_is_ignored_and_logged_once(caplog):
     gone = row("removed-in-a-release-xyz", label="Old", instructions="Old text.")
-    with caplog.at_level(logging.WARNING, logger="app.core.skills"):
+    with caplog.at_level(logging.WARNING, logger="app.core.platform.skills"):
         first = merge([bundled()], [gone])
         merge([bundled()], [gone])
     assert [view.id for view in first] == ["builtin:check-evaluation"]

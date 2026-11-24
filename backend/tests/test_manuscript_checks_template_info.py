@@ -1,8 +1,8 @@
 import pytest
 
-from app.core import manuscripts
-from app.core.manuscript_checks import service
-from app.core.manuscript_checks.base import ManuscriptInfo
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_checks import service
+from app.core.manuscripts.manuscript_checks.base import ManuscriptInfo
 
 pytestmark = pytest.mark.anyio
 

@@ -2,9 +2,9 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, SecretStr, StringConstraints, create_model
 
-from app.core.source_registry import KEYED_IDS, SOURCE_IDS
+from app.core.search.source_registry import KEYED_IDS, SOURCE_IDS
 
-# The same ids, in the same order, as app.core.source_registry.SOURCE_IDS.
+# The same ids, in the same order, as app.core.search.source_registry.SOURCE_IDS.
 SourceId = Literal[*SOURCE_IDS]
 
 

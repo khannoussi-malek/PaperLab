@@ -8,7 +8,7 @@ from conftest import parse_sse
 from sqlalchemy import select
 from test_chat_workspace_api import make_paper, make_workspace, query_model  # noqa: F401 (a fixture)
 
-from app.core import each_paper
+from app.core.chat import each_paper
 from app.models import LLMOutput
 from app.providers.llm_fake import FAKE_WORKSPACE_TOKENS, FakeLLM
 

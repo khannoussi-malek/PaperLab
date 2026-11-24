@@ -8,8 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import chat, prompts
-from app.core.retrieval import RetrievedChunk
+from app.core.chat import chat
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.platform import prompts
 from app.models import Chunk, LLMConnection, LLMModel, Note, Paper, Workspace
 from app.providers import llm as llm_provider
 from evals import answers

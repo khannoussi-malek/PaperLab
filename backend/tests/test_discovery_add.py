@@ -5,9 +5,10 @@ import pytest
 from conftest import no_lookups
 from sqlalchemy import select
 
-from app.core import discovery, enrichment, pdf_links
-from app.core.discovery import Candidate
-from app.core.paper_sources import SourceSettings
+from app.core.papers import enrichment, pdf_links
+from app.core.papers.paper_sources import SourceSettings
+from app.core.search import discovery
+from app.core.search.discovery import Candidate
 from app.domain.errors import Conflict
 from app.models import Paper, PaperStatus
 from app.workers import ingest

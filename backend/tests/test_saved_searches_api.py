@@ -2,7 +2,8 @@ import uuid
 
 import pytest
 
-from app.core import queue, saved_searches
+from app.core.platform import queue
+from app.core.search import saved_searches
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 

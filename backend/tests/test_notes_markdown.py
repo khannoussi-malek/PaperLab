@@ -7,7 +7,7 @@ import pytest
 import yaml
 from sqlalchemy import insert
 
-from app.core import notes_markdown as nm
+from app.core.notes import notes_markdown as nm
 from app.models import Note, Paper, note_anchors, note_papers
 
 pytestmark = pytest.mark.anyio

@@ -3,8 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from app.core import citations, claims, workspaces
-from app.core.claim_text import split_references
+from app.core.chat import claims
+from app.core.chat.claim_text import split_references
+from app.core.citations import citations
+from app.core.workspaces import workspaces
 from app.domain.errors import InvalidInput
 from app.models import Paper, PaperStatus
 

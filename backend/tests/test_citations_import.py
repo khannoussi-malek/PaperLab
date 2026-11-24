@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from app.core.citations_import import MAX_BYTES, MAX_ENTRIES, CitationsImportError, parse
-from app.core.citations_import_html import html_to_markdown
+from app.core.citations.citations_import import MAX_BYTES, MAX_ENTRIES, CitationsImportError, parse
+from app.core.citations.citations_import_html import html_to_markdown
 
 FIX = Path(__file__).parent / "fixtures" / "zotero"
 
@@ -250,7 +250,7 @@ def test_csl_fields_have_the_bibtex_limits(item, field):
 
 
 def test_an_unexpected_parse_error_is_logged_but_the_message_stays_plain(monkeypatch, caplog):
-    from app.core import citations_import
+    from app.core.citations import citations_import
 
     def broken(text):
         raise TypeError("a bug")

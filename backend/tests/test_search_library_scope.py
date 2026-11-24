@@ -5,8 +5,8 @@ import uuid
 
 import pytest
 
-from app.core import library
-from app.core.retrieval import RetrievedChunk
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.papers import library
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Paper
 

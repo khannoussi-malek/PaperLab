@@ -12,7 +12,7 @@ from test_embedding_index import indexed_paper, worker_uses
 from test_search_rebuild import OLLAMA_NAME, paper_with, switched
 
 from app.api.deps import get_transport
-from app.core import embedding_index, embedding_sources
+from app.core.papers import embedding_index, embedding_sources
 from app.main import create_app
 from app.models import Chunk
 from app.providers import embedding
@@ -240,7 +240,7 @@ async def test_a_stored_key_appears_in_no_embedding_answer_and_no_log_record(
 
 
 async def test_the_hybrid_switch_is_off_until_it_is_turned_on_and_stays_after_a_source_change(client, session):
-    from app.core import embedding_sources
+    from app.core.papers import embedding_sources
 
     assert (await client.get("/api/embedding")).json()["hybrid_search"] is False
     on = await client.put("/api/embedding/hybrid", json={"enabled": True})

@@ -9,7 +9,7 @@ from sqlalchemy import update
 from test_manuscript_papers import setup
 from test_remote_confirm import _remote
 
-from app.core import manuscript_draft_review, manuscripts
+from app.core.manuscripts import manuscript_draft_review, manuscripts
 from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptDraftReview as Row
 

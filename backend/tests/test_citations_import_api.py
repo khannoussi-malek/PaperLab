@@ -16,11 +16,12 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import func, select
 
 from app.api import citations as citations_api
-from app.core import citations_import_apply as cia
-from app.core import citations_import_run as run
-from app.core import discovery, queue
-from app.core.citations_bundle_read import read_bundle
-from app.core.citations_import import ImportEntry
+from app.core.citations import citations_import_apply as cia
+from app.core.citations import citations_import_run as run
+from app.core.citations.citations_bundle_read import read_bundle
+from app.core.citations.citations_import import ImportEntry
+from app.core.platform import queue
+from app.core.search import discovery
 from app.models import Paper, Workspace
 from app.schemas.citations_import import ImportResultOut, NeedsPdfOut
 from app.workers import citations_import as worker

@@ -690,12 +690,13 @@ paper is ready without them.
 - **Chat:** a question retrieves the closest chunks for that paper (or sends the whole paper if it's short), streams the
 model's answer over Server-Sent Events as `sources → token → done`, and saves it with its prompt version. Prompts are
 versioned files in `backend/prompts/`.
-- **Code layout:** domain logic lives in `backend/app/core` with no web framework imports. The frontend's API types are generated from the backend's OpenAPI schema.
+- **Code layout:** the backend is layered: `domain` (pure types) ← `models`/`schemas`/`providers` ← `core` (the logic, grouped by area, no web framework imports) ← `api`/`workers`. `backend/tests/test_architecture.py` keeps every import pointing down. The frontend's API types are generated from the backend's OpenAPI schema.
 
 ```text
 backend/
   app/api/         HTTP routes: papers, notes, chat, health, llm, embedding
-  app/core/        domain logic: chunking, retrieval, chat, note provenance rules
+  app/domain/      pure types and rules: chunking, source types, errors
+  app/core/        the logic, one package per area: papers, chat, notes, search, citations, manuscripts, workspaces, platform
   app/providers/   PDF extraction, the search model and its download, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
   app/workers/     the ARQ jobs: ingestion and the references fetch
   mcp_server/      the MCP server Claude Desktop starts: search, papers, notes, search runs, manuscripts

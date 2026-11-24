@@ -8,8 +8,10 @@ from test_chat_workspace import NOW, add_note
 from test_note_papers import paper_only_note
 from test_sections import SECTIONED, critical_skill, sectioned_paper
 
-from app.core import chat, papers, prompts, skills
-from app.core.retrieval import RetrievedChunk
+from app.core.chat import chat
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.papers import papers
+from app.core.platform import prompts, skills
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus

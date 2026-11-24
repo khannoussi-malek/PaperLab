@@ -9,10 +9,12 @@ from sqlalchemy import case, delete, select, text, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import discovery, pdf_links, queue, screening, workspace_search
-from app.core.paper_sources import SourceSettings
-from app.core.screening_suggest import SYSTEM_PROMPT_V2
-from app.core.source_registry import SOURCE_IDS
+from app.core.papers import pdf_links
+from app.core.papers.paper_sources import SourceSettings
+from app.core.platform import queue
+from app.core.search import discovery, screening, workspace_search
+from app.core.search.screening_suggest import SYSTEM_PROMPT_V2
+from app.core.search.source_registry import SOURCE_IDS
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
@@ -547,7 +549,7 @@ CITATION = (
 
 
 async def test_a_paper_whose_abstract_is_its_citation_is_not_judged():
-    from app.core.screening_suggest import suggest
+    from app.core.search.screening_suggest import suggest
 
     llm = FakeLLM([J("exclude", "wrong_topic", relevance=1)])
     verdict = await suggest(llm, "LLM creativity?", "about creativity", None, "Creative code generation", CITATION)

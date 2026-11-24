@@ -6,7 +6,8 @@ import pytest
 from test_answer_provenance import drafts
 from test_chat import make_paper
 
-from app.core import chat, papers
+from app.core.chat import chat
+from app.core.papers import papers
 from app.models import LLMOutput, Note, Provenance
 
 pytestmark = pytest.mark.anyio
