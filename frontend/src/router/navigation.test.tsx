@@ -22,10 +22,11 @@ const go = (hash: string) =>
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
-afterEach(() => {
+afterEach(async () => {
   loadPagesWith(() => undefined)
-  faded.length = 0
   window.location.hash = ''
+  await new Promise((resolve) => setTimeout(resolve, 0)) // its hashchange lands here, not in the next test
+  faded.length = 0
 })
 
 test("a new page fades in only once its code has loaded, so the fade shows the page and not its Loading…", async () => {
@@ -51,4 +52,31 @@ test("a page whose code can't load still opens, so its own Try again shows", asy
   await go('#/graph')
   await act(async () => {})
   expect(screen.getByText('graph')).toBeInTheDocument()
+})
+
+test('a slow page overtaken by a faster navigation never fades in late', async () => {
+  let arriveSettings = () => {}
+  const settings = new Promise<void>((resolve) => (arriveSettings = resolve))
+  loadPagesWith((route) => (route.name === 'settings' ? settings : Promise.resolve()))
+  render(<Where />)
+  await go('#/settings')
+  await go('#/graph')
+  expect(faded).toEqual(['#/graph'])
+  await act(async () => arriveSettings())
+  expect(faded).toEqual(['#/graph']) // no second fade of graph onto graph
+  expect(screen.getByText('graph')).toBeInTheDocument()
+})
+
+test("a page whose code hangs opens after a short wait anyway, to show its own Loading…", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    loadPagesWith(() => new Promise(() => {}))
+    render(<Where />)
+    await go('#/notes')
+    expect(faded).toEqual([])
+    await act(async () => vi.advanceTimersByTime(2100))
+    expect(faded).toEqual(['#/notes'])
+  } finally {
+    vi.useRealTimers()
+  }
 })
