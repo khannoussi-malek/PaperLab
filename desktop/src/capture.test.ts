@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { captureArgs, captureBinary, createCapture, MAX_RESTARTS, type Child } from './capture'
+import { captureArgs, captureBinary, createCapture, MAX_RESTARTS, shortcutLabel, type Child } from './capture'
 
 type FakeChild = Child & { sent: string[]; killed: boolean; exit(code: number | null): void }
 
@@ -37,6 +37,8 @@ describe('Quick Capture helper', () => {
   it('is started with the API port, its shortcut and commands on stdin', () => {
     expect(captureArgs(5190, 'ctrl+alt+p')).toEqual(['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin'])
     expect(captureBinary('/Res')).toBe('/Res/capture/paperlab-capture')
+    expect(shortcutLabel('ctrl+alt+p')).toBe('⌃⌥P')
+    expect(shortcutLabel('cmd+shift+k')).toBe('⌘⇧K')
   })
 
   it('starts once, shows on demand and stops for good on quit', () => {

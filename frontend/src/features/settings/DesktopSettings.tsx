@@ -4,7 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { useDesktop, type PaperlabDesktop } from './desktop'
+import { captureBridge, useDesktop, type PaperlabDesktop } from './desktop'
 
 /** Settings → Desktop app (P5, P8): only inside the desktop app, where window.paperlabDesktop exists. */
 export function DesktopSettings() {
@@ -37,6 +37,16 @@ function DesktopSection({ desktop }: { desktop: PaperlabDesktop }) {
       write: desktop.setUpdatesEnabled,
     },
   ]
+  const capture = captureBridge(globalThis)
+  if (capture !== null) {
+    toggles.push({
+      id: 'quick-capture',
+      label: 'Quick Capture',
+      help: 'Press ⌃⌥P in any app to find a paper in your library, or add one by DOI, arXiv ID or link. Mac only.',
+      read: capture.getCaptureEnabled,
+      write: capture.setCaptureEnabled,
+    })
+  }
   return (
     <section aria-labelledby="desktop-app-heading" className="flex flex-col gap-4">
       <h2 id="desktop-app-heading" className="font-heading text-xl font-semibold">

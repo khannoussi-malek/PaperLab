@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('paperlabDesktop', {
   setKeepRunning: (value: boolean) => ipcRenderer.invoke('paperlab:set', 'keepRunning', value),
   getUpdatesEnabled: () => ipcRenderer.invoke('paperlab:get', 'updatesEnabled'),
   setUpdatesEnabled: (value: boolean) => ipcRenderer.invoke('paperlab:set', 'updatesEnabled', value),
+  getCaptureEnabled: () => ipcRenderer.invoke('paperlab:get', 'captureEnabled'),
+  setCaptureEnabled: (value: boolean) => ipcRenderer.invoke('paperlab:set', 'captureEnabled', value),
   getVoiceEnabled: () => ipcRenderer.invoke('paperlab:voice:get'),
   setVoiceEnabled: (value: boolean) => ipcRenderer.invoke('paperlab:voice:set', value),
   /** Each progress line of turning voice on; the returned function stops listening. */

@@ -22,6 +22,15 @@ export type Capture = { start(): void; show(): void; stop(): void; running(): bo
 
 type Options = { spawn: Spawn; bin: string; port: number; shortcut: string; log: (line: string) => void }
 
+const SYMBOLS: Record<string, string> = { ctrl: '⌃', control: '⌃', alt: '⌥', option: '⌥', shift: '⇧', cmd: '⌘', command: '⌘', super: '⌘', meta: '⌘' }
+
+/** "ctrl+alt+p" as macOS menus show it: ⌃⌥P. */
+export const shortcutLabel = (shortcut: string) =>
+  shortcut
+    .split('+')
+    .map((part) => SYMBOLS[part.trim().toLowerCase()] ?? part.trim().toUpperCase())
+    .join('')
+
 export const captureArgs = (port: number, shortcut: string) => ['--port', String(port), '--shortcut', shortcut, '--stdin']
 
 /** Packaged: electron-builder's extraResources put the binary for the app's arch here. */
