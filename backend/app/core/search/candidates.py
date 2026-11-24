@@ -11,8 +11,9 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
-from app.core.papers.enrichment import ARXIV_DOI_PREFIX, normalize_doi
+from app.core.papers.enrichment import ARXIV_DOI_PREFIX
 from app.domain.candidates import MAX_PDF_URLS, Candidate
+from app.domain.doi import normalize_doi
 from app.domain.source_types import PREPRINT_SERVERS
 
 ARXIV_ID = r"\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?/\d{7}"

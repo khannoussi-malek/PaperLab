@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 
-from app.core.papers import enrichment
+from app.core.papers import crossref_align, enrichment
 from app.models import Paper
 from app.scripts import backfill_biblio
 from tests.test_enrichment import add_paper, hints
@@ -34,40 +34,40 @@ def paper_like(**fields):
 
 
 def test_a_print_year_later_than_openalex_s_is_taken():
-    assert enrichment.align_with_crossref(paper_like(year=2023), crossref_work())["year"] == 2024
+    assert crossref_align.align_with_crossref(paper_like(year=2023), crossref_work())["year"] == 2024
 
 
 def test_issued_is_used_when_there_is_no_print_date():
     work = crossref_work(**{"published-print": None, "issued": {"date-parts": [[2021]]}})
-    assert enrichment.align_with_crossref(paper_like(year=2023), work)["year"] == 2021
+    assert crossref_align.align_with_crossref(paper_like(year=2023), work)["year"] == 2021
 
 
 def test_a_manual_year_or_venue_is_kept():
     paper = paper_like(year=2023, venue="Journal of Advanced Academics", manual_fields=["year", "venue"])
-    fixes = enrichment.align_with_crossref(paper, crossref_work())
+    fixes = crossref_align.align_with_crossref(paper, crossref_work())
     assert "year" not in fixes and "venue" not in fixes
 
 
 @pytest.mark.parametrize("copy", [{"doi": "10.48550/arxiv.2301.00001"}, {"source_type": "preprint"}])
 def test_a_preprint_copy_keeps_its_own_details(copy):
     paper = paper_like(**{"year": 2023, "venue": "arXiv", "pages": "289", **copy})
-    assert enrichment.align_with_crossref(paper, crossref_work()) == {}
+    assert crossref_align.align_with_crossref(paper, crossref_work()) == {}
 
 
 def test_container_title_replaces_the_journal_s_current_name():
     paper = paper_like(year=2024, venue="Journal of Advanced Academics")
-    fixes = enrichment.align_with_crossref(paper, crossref_work())
+    fixes = crossref_align.align_with_crossref(paper, crossref_work())
     assert fixes["venue"] == "Journal of Secondary Gifted Education"
     work = crossref_work(**{"container-title": ["Proceedings of the 16th Conference on Creativity &amp; Cognition"]})
-    assert enrichment.align_with_crossref(paper, work)["venue"] == (
+    assert crossref_align.align_with_crossref(paper, work)["venue"] == (
         "Proceedings of the 16th Conference on Creativity & Cognition"
     )
 
 
 def test_a_lone_first_page_becomes_the_range_but_another_page_does_not():
-    assert enrichment.align_with_crossref(paper_like(pages="289"), crossref_work())["pages"] == "289-297"
-    assert "pages" not in enrichment.align_with_crossref(paper_like(pages="290"), crossref_work())
-    assert "pages" not in enrichment.align_with_crossref(paper_like(pages="289-300"), crossref_work())
+    assert crossref_align.align_with_crossref(paper_like(pages="289"), crossref_work())["pages"] == "289-297"
+    assert "pages" not in crossref_align.align_with_crossref(paper_like(pages="290"), crossref_work())
+    assert "pages" not in crossref_align.align_with_crossref(paper_like(pages="289-300"), crossref_work())
 
 
 async def test_ingest_aligns_from_the_crossref_fetch_it_already_made(session, fake_openalex):
@@ -155,20 +155,20 @@ async def test_a_re_ingest_without_a_match_never_aligns_on_the_leftover_pdf_doi(
 
 def test_a_two_entry_container_title_leaves_the_venue_alone():
     work = crossref_work(type="proceedings-article", **{"container-title": ["Lecture Notes in Computer Science", "X"]})
-    fixes = enrichment.align_with_crossref(paper_like(year=2023, venue="LNCS"), work)
+    fixes = crossref_align.align_with_crossref(paper_like(year=2023, venue="LNCS"), work)
     assert "venue" not in fixes and fixes["year"] == 2024
 
 
 def test_a_chapter_keeps_its_year_and_venue_but_gets_its_page_range():
     work = crossref_work(type="book-chapter", **{"container-title": ["The Book"]})
-    assert enrichment.align_with_crossref(paper_like(year=2023, venue="Series", pages="289"), work) == {
+    assert crossref_align.align_with_crossref(paper_like(year=2023, venue="Series", pages="289"), work) == {
         "pages": "289-297"
     }
 
 
 @pytest.mark.parametrize(("page", "pages"), [("289 – 297", "289-297"), ("289-297a", None), ("e289-e297", None)])
 def test_only_a_plain_numeric_range_upgrades_the_page(page, pages):
-    fixes = enrichment.align_with_crossref(paper_like(pages="289"), crossref_work(page=page))
+    fixes = crossref_align.align_with_crossref(paper_like(pages="289"), crossref_work(page=page))
     assert fixes.get("pages") == pages
 
 

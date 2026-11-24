@@ -13,8 +13,8 @@ import rispy
 from pylatexenc.latex2text import LatexNodes2Text
 
 from app.core.citations.citations_import_html import html_to_markdown
-from app.core.papers.enrichment import normalize_doi
 from app.core.search.candidates import ARXIV_ID, arxiv_from_doi
+from app.domain.doi import normalize_doi
 
 logger = logging.getLogger(__name__)
 

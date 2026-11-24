@@ -4,8 +4,8 @@ from conftest import recorded
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.papers import enrichment
-from app.core.papers.enrichment import PdfHints
+from app.core.papers import enrichment, openalex_fields, pdf_hints
+from app.core.papers.pdf_hints import PdfHints
 from app.models import Paper, paper_topics
 
 pytestmark = pytest.mark.anyio
@@ -125,8 +125,8 @@ async def test_a_hint_doi_whose_first_author_matches_is_accepted(session, fake_o
 
 
 def test_the_abstract_is_rebuilt_from_the_inverted_index():
-    assert enrichment.abstract_text({"world": [1, 3], "hello": [0], "again": [2]}) == "hello world again world"
-    assert enrichment.abstract_text(None) is None
+    assert openalex_fields.abstract_text({"world": [1, 3], "hello": [0], "again": [2]}) == "hello world again world"
+    assert openalex_fields.abstract_text(None) is None
 
 
 async def test_an_arxiv_id_is_tried_as_a_doi_before_title_search(session, fake_openalex):
@@ -185,8 +185,8 @@ async def test_title_search_rejects_a_hit_that_disagrees(session, fake_openalex,
 def test_a_first_author_matches_across_accents_case_and_unicode_hyphens():
     work = {"publication_year": 2020, "authorships": [{"author": {"display_name": "Anne Chabrière‐Smith"}}]}
 
-    assert enrichment.is_confirmed_match(work, hints(years={2020}, text="ANNE CHABRIERE-SMITH, Aix-Marseille"))
-    assert not enrichment.is_confirmed_match(work, hints(years={2020}, text="Anne Chabrière-Smithson"))
+    assert pdf_hints.is_confirmed_match(work, hints(years={2020}, text="ANNE CHABRIERE-SMITH, Aix-Marseille"))
+    assert not pdf_hints.is_confirmed_match(work, hints(years={2020}, text="Anne Chabrière-Smithson"))
 
 
 async def test_without_a_year_to_check_no_title_search_is_spent(session, fake_openalex):

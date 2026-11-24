@@ -10,11 +10,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.papers import enrichment, papers
+from app.core.papers import papers
 from app.core.papers.pipeline import workspace_id
 from app.core.papers.pipeline_add import AddPaperResult, _attach
 from app.core.platform import queue
 from app.core.workspaces import tags, workspaces
+from app.domain.doi import normalize_doi
 from app.domain.errors import InvalidInput
 from app.models import Paper, PaperStatus
 
@@ -51,7 +52,7 @@ async def upload_paper(
     await workspaces.require_writable(session, ws)
     names = [tags.normalize(name) for name in tag_names or []]
     clean_doi = None
-    if doi is not None and (clean_doi := enrichment.normalize_doi(doi)) is None:
+    if doi is not None and (clean_doi := normalize_doi(doi)) is None:
         raise InvalidInput("invalid_doi")
     data = _decode_pdf(pdf_base64)
     existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None

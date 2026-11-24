@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
-from app.core.papers.enrichment import abstract_text, normalize_doi, short_id
+from app.core.papers.openalex_fields import abstract_text, short_id
 from app.core.search.candidates import (
     ARXIV_VERSION,
     arxiv_from_doi,
@@ -16,6 +16,7 @@ from app.core.search.candidates import (
     s2_triage,
 )
 from app.domain.candidates import MAX_AUTHORS, Candidate
+from app.domain.doi import normalize_doi
 from app.domain.source_types import PREPRINT_SERVERS, source_type_of
 
 # Crossref's title search also returns songs, datasets and peer reviews ("All You Need Is LSD" is type "other").

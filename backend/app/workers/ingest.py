@@ -15,6 +15,7 @@ from app.core.papers import (
     merges,
     paper_sources,
     papers,
+    pdf_hints,
     provenance,
 )
 from app.core.platform import queue
@@ -67,7 +68,7 @@ async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) ->
     without a restart (P5). Never fatal (addendum §6d): on any error the paper keeps whatever was saved before the
     error and still reaches ready. Returns the identifiers other papers hold (none after an error)."""
     try:
-        hints = enrichment.pdf_hints(doc.first_page_text, doc.metadata)
+        hints = pdf_hints.pdf_hints(doc.first_page_text, doc.metadata)
         sources = await paper_sources.get(session)
         async with AsyncExitStack() as stack:
             http = cr = None

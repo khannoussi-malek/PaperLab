@@ -17,8 +17,8 @@ from app.core.chat import claim_text, quotes, retrieval
 from app.core.chat.claim_text import RefEntry
 from app.core.citations import citations
 from app.core.notes import ai_notes
-from app.core.papers.enrichment import normalize_doi
 from app.core.platform import llm_connections, llm_json, prompts
+from app.domain.doi import normalize_doi
 from app.domain.errors import DomainError, InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable

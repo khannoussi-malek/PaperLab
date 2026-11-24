@@ -4,7 +4,7 @@ import pytest
 from conftest import recorded
 
 from app.core.papers import enrichment
-from app.core.papers.enrichment import PdfHints
+from app.core.papers.pdf_hints import PdfHints
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper
 

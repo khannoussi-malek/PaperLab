@@ -14,12 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.chat.retrieval import MAX_PER_PAPER, retrieve, searchable
 from app.core.notes.notes import list_notes_for_paper
 from app.core.papers import embedding_index
-from app.core.papers.enrichment import normalize_doi
 from app.core.papers.papers import get_paper
 from app.core.search.candidates import normal_title
 from app.core.workspaces import tags as tag_store
 from app.core.workspaces import workspaces
 from app.domain.constants import ABSTRACT_PAGE
+from app.domain.doi import normalize_doi
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Chunk, Paper, Workspace, workspace_papers
 

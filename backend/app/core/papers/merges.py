@@ -11,10 +11,13 @@ from typing import Any, Literal
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.papers.enrichment import Collision, normalize_doi, pdf_hints, short_id
+from app.core.papers.enrichment import Collision
+from app.core.papers.openalex_fields import short_id
+from app.core.papers.pdf_hints import pdf_hints
 from app.core.search import retrieved_hits, same_work
 from app.domain.candidates import Candidate
 from app.domain.constants import ABSTRACT_PAGE
+from app.domain.doi import normalize_doi
 from app.domain.errors import NotFound
 from app.models import Paper, PaperEvent, PaperMerge
 from app.models.workspace_search import WorkspaceSearchHit

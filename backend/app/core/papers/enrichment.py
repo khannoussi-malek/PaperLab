@@ -7,55 +7,33 @@
 - A field the user corrected (papers.manual_fields) is never overwritten by the PDF or by OpenAlex.
 """
 
-import html
 import logging
-import re
-import unicodedata
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import delete, func, insert, or_, select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.papers.author_refresh import _replace_authorships, refresh_authors
+from app.core.papers.crossref_align import _alignable, _crossref_work, align_with_crossref, crossref_biblio
+from app.core.papers.openalex_fields import openalex_biblio, openalex_published, work_fields, work_topics
 from app.core.papers.papers import abstract_drafts, get_paper, replace_chunks
+from app.core.papers.pdf_hints import YEAR_TOLERANCE, PdfHints, _first_author_matches, _on_page, is_confirmed_match
 from app.core.papers.provenance import stamp, stamp_edited
+from app.domain.doi import normalize_doi
 from app.domain.errors import Conflict, InvalidInput
 from app.domain.source_types import (
     ARXIV_DOI_PREFIX,
-    PREPRINT_SERVERS,
     is_preprint_copy,
     peer_reviewed_of,
     source_type_of,
 )
-from app.models import Author, Paper, PaperStatus, paper_authors, paper_topics
-from app.providers import crossref, openalex
+from app.models import Paper, PaperStatus, paper_topics
+from app.providers import openalex
 
 logger = logging.getLogger(__name__)
-
-AUTHOR_REFRESH_AFTER = timedelta(days=30)
-YEAR_TOLERANCE = 1  # an arXiv preprint and its published version are often dated a year apart
-
-_DOI = re.compile(r"10\.\d{4,9}/\S+")
-# New-style ("1810.04805") or old-style, pre-2007 ("hep-th/9901001", "math.GT/0309136") IDs, an optional "vN" dropped.
-_ARXIV_ID = re.compile(r"arXiv:(\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z-]+)?/\d{7})(?:v\d+)?", re.IGNORECASE)
-_PDF_DATE_YEAR = re.compile(r"D:(\d{4})")
-# ponytail: splits "A; B and C" and "A, B". A "Family, Given" author field becomes two names; the user can correct it.
-_AUTHOR_SEPARATORS = re.compile(r"\s*(?:;|,|\band\b)\s*")
-_KEYWORD_SEPARATORS = re.compile(r"\s*[;,]\s*")
-
-
-@dataclass(frozen=True)
-class PdfHints:
-    doi: str | None
-    arxiv_id: str | None
-    years: frozenset[int]  # years the PDF suggests: its arXiv ID's year and its creation date's year
-    text: str  # the embedded author field and page 1's text, where a match's first author must appear
-    authors: list[str]  # the embedded author field, split into names
-    keywords: list[str]  # the embedded keywords: the author's own topic labels
 
 
 @dataclass(frozen=True)
@@ -67,143 +45,6 @@ class Collision:
     holder_id: uuid.UUID
 
 
-def normalize_doi(value: str) -> str | None:
-    """The first DOI in `value`, lowercased (DOIs are case-insensitive), or None."""
-    match = _DOI.search(value)
-    if match is None:
-        return None
-    doi = re.sub(r"^(10\.\d{4,9})/+", r"\1/", match.group().lower())  # OpenAlex's legacy APA "10.1037//…"
-    while True:
-        trimmed = doi.rstrip(".,;").removesuffix(".pdf")  # a publisher's PDF URL ends in the file's extension
-        # A DOI may contain balanced brackets ("s0140-6736(20)30367-6"); only an unbalanced closing one is prose.
-        for open_ch, close_ch in ("()", "[]"):
-            if trimmed.endswith(close_ch) and trimmed.count(close_ch) > trimmed.count(open_ch):
-                trimmed = trimmed[:-1]
-        if trimmed == doi:
-            return trimmed
-        doi = trimmed
-
-
-def _split(value: str, separators: re.Pattern) -> list[str]:
-    return [part for part in separators.split(value) if part]
-
-
-def pdf_hints(first_page_text: str, metadata: dict[str, str]) -> PdfHints:
-    arxiv = _ARXIV_ID.search(first_page_text)
-    created = _PDF_DATE_YEAR.match(metadata.get("creationDate", ""))
-    years = {int(created.group(1))} if created else set()
-    if arxiv and "/" not in arxiv.group(1):
-        years.add(2000 + int(arxiv.group(1)[:2]))  # new-style arXiv IDs start with yymm
-    # ponytail: old-style IDs (archive/YYMMNNN) span 1991-2007, so a bare "2000 + yy" would misread them; skip.
-    author = metadata.get("author", "")
-    return PdfHints(
-        doi=normalize_doi(" ".join([metadata.get("subject", ""), metadata.get("keywords", ""), first_page_text])),
-        arxiv_id=arxiv.group(1) if arxiv else None,
-        years=frozenset(years),
-        text=f"{author}\n{first_page_text}",
-        authors=_split(author, _AUTHOR_SEPARATORS),
-        keywords=_split(metadata.get("keywords", ""), _KEYWORD_SEPARATORS),
-    )
-
-
-_UNICODE_HYPHENS = str.maketrans("‐‑", "--")  # OpenAlex writes "Ming‐Wei" with U+2010
-
-
-def _fold(text: str) -> str:
-    """Casefolded, without accents, ASCII hyphens: "Chabrière‐Smith" and "CHABRIERE-SMITH" compare equal."""
-    text = unicodedata.normalize("NFKD", text).translate(_UNICODE_HYPHENS)
-    return "".join(c for c in text if not unicodedata.combining(c)).casefold()
-
-
-def _on_page(family: str, hints: PdfHints) -> bool:
-    # ponytail: the family name as a whole word on page 1. A name in a non-Latin script never matches: a miss,
-    # never a wrong match.
-    return bool(family) and re.search(rf"\b{re.escape(_fold(family))}\b", _fold(hints.text)) is not None
-
-
-def _first_author_matches(work: dict[str, Any], hints: PdfHints) -> bool:
-    authorships = work.get("authorships") or []
-    names = authorships[0]["author"]["display_name"].split() if authorships else []
-    return bool(names) and _on_page(names[-1], hints)
-
-
-def is_confirmed_match(work: dict[str, Any], hints: PdfHints) -> bool:
-    """A title-search hit counts only when its year and its first author agree with the PDF."""
-    year = work.get("publication_year")
-    if year is None or not any(abs(year - y) <= YEAR_TOLERANCE for y in hints.years):
-        return False
-    return _first_author_matches(work, hints)
-
-
-def short_id(url: str | None) -> str | None:
-    """ "https://openalex.org/W2963341956" -> "W2963341956"; also strips "https://orcid.org/"."""
-    return url.rsplit("/", 1)[-1] if url else None
-
-
-def abstract_text(inverted_index: dict[str, list[int]] | None) -> str | None:
-    if not inverted_index:
-        return None
-    return " ".join(word for _, word in sorted((i, word) for word, places in inverted_index.items() for i in places))
-
-
-def work_fields(work: dict[str, Any]) -> dict[str, Any]:
-    """The papers columns an OpenAlex work fills."""
-    location = work.get("primary_location") or {}
-    source = location.get("source") or {}
-    best_oa = work.get("best_oa_location") or {}
-    fields = {
-        "openalex_id": short_id(work["id"]),
-        "doi": normalize_doi(work.get("doi") or ""),
-        "title": work.get("title"),
-        "abstract": abstract_text(work.get("abstract_inverted_index")),
-        "authors": [a["author"]["display_name"] for a in work.get("authorships") or []],
-        "year": work.get("publication_year"),
-        "venue": source.get("display_name") or location.get("raw_source_name"),
-        "issn": source.get("issn_l"),
-        "type": work.get("type"),
-        "is_retracted": bool(work.get("is_retracted")),
-        "oa_status": (work.get("open_access") or {}).get("oa_status"),
-        "oa_url": best_oa.get("pdf_url") or best_oa.get("landing_page_url"),
-        "cited_by_count": work.get("cited_by_count"),
-        "referenced_works_count": work.get("referenced_works_count"),
-    }
-    return fields
-
-
-def openalex_biblio(work: dict[str, Any]) -> dict[str, str | None]:
-    """volume, issue, pages, pmid and pmcid (bare ids) of an OpenAlex work. Not in `work_fields`: these six columns are
-    fill-only (see `fill_biblio`)."""
-    biblio = work.get("biblio") or {}
-    ids = work.get("ids") or {}
-    pages = "-".join(dict.fromkeys(p for p in (biblio.get("first_page"), biblio.get("last_page")) if p))
-    return {
-        "volume": biblio.get("volume"),
-        "issue": biblio.get("issue"),
-        "pages": pages or None,
-        "pmid": short_id((ids.get("pmid") or "").rstrip("/")),
-        "pmcid": short_id((ids.get("pmcid") or "").rstrip("/")),
-    }
-
-
-BIBLIO_FIELDS = ("volume", "issue", "pages", "editors", "pmid", "pmcid")
-PUBLISHED_TYPES = frozenset({"article", "conference-paper", "proceedings-article", "book-chapter"})
-
-
-def openalex_published(work: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
-    """(published_doi, published_venue, source_type) when the work is a published version: a non-arXiv DOI, a
-    published type (or a publishedVersion location) and a primary source that is no preprint server."""
-    location = work.get("primary_location") or {}
-    source = location.get("source") or {}
-    venue = source.get("display_name") or location.get("raw_source_name")
-    doi = normalize_doi(work.get("doi") or "")
-    published = location.get("version") == "publishedVersion" or (work.get("type") or "").lower() in PUBLISHED_TYPES
-    if not doi or doi.startswith(ARXIV_DOI_PREFIX) or not published:
-        return None, None, None
-    if source.get("type") == "repository" or (venue and PREPRINT_SERVERS.search(venue)):
-        return None, None, None
-    return doi, venue, source_type_of(work.get("type"), doi)
-
-
 async def record_published(session: AsyncSession, paper_id: uuid.UUID, work: dict[str, Any]) -> None:
     """A preprint copy whose OpenAlex work is its published version gets published_doi, published_venue and
     peer_reviewed "true" (never its own doi/venue; `_write` keeps manual_fields)."""
@@ -213,14 +54,6 @@ async def record_published(session: AsyncSession, paper_id: uuid.UUID, work: dic
     if not is_preprint_copy(paper) or doi in (None, normalize_doi(paper.doi or "")):
         return
     await _write(session, paper, {"published_doi": doi, "published_venue": venue, "peer_reviewed": "true"}, "openalex")
-
-
-def work_topics(work: dict[str, Any]) -> dict[str, float]:
-    """OpenAlex topics, keywords and concepts by label. A label in more than one list keeps its best score."""
-    scores: dict[str, float] = {}
-    for item in [*(work.get("topics") or []), *(work.get("keywords") or []), *(work.get("concepts") or [])]:
-        scores[item["display_name"]] = max(scores.get(item["display_name"], 0.0), item["score"])
-    return scores
 
 
 async def find_work(http: httpx.AsyncClient, paper: Paper, hints: PdfHints) -> dict[str, Any] | None:
@@ -267,69 +100,6 @@ async def _taken(session: AsyncSession, paper_id: uuid.UUID, column: Any, value:
     return await session.scalar(select(Paper.id).where(column == value, Paper.id != paper_id))
 
 
-async def _replace_authorships(session: AsyncSession, paper_id: uuid.UUID, work: dict[str, Any]) -> list[str]:
-    """Upserts the work's authors by OpenAlex ID and links them in author order. Returns their OpenAlex IDs."""
-    first_listing: dict[str, tuple[int, dict]] = {}
-    for position, authorship in enumerate(work.get("authorships") or [], start=1):
-        if openalex_id := short_id(authorship["author"].get("id")):  # never create an author from a name alone
-            first_listing.setdefault(openalex_id, (position, authorship))
-    await session.execute(delete(paper_authors).where(paper_authors.c.paper_id == paper_id))
-    if not first_listing:
-        return []
-
-    new_authors = [
-        {"openalex_id": oid, "display_name": a["author"]["display_name"], "orcid": short_id(a["author"].get("orcid"))}
-        for oid, (_, a) in first_listing.items()
-    ]
-    # ponytail: two OpenAlex IDs sharing one ORCID break authors.orcid UNIQUE, and the paper keeps no authors (still
-    # non-fatal). Drop the ORCID on conflict if OpenAlex's duplicate profiles ever show up.
-    await session.execute(pg_insert(Author).values(new_authors).on_conflict_do_nothing(index_elements=["openalex_id"]))
-    rows = await session.execute(select(Author.openalex_id, Author.id).where(Author.openalex_id.in_(first_listing)))
-    author_ids = dict(rows.all())
-    links = [
-        {
-            "paper_id": paper_id,
-            "author_id": author_ids[oid],
-            "position": position,
-            "is_corresponding": bool(a.get("is_corresponding")),
-            # The affiliation printed on this paper, not the author's current one.
-            "institution": next((i["display_name"] for i in a.get("institutions") or []), None),
-        }
-        for oid, (position, a) in first_listing.items()
-    ]
-    await session.execute(insert(paper_authors), links)
-    return list(first_listing)
-
-
-async def refresh_authors(session: AsyncSession, http: httpx.AsyncClient, openalex_ids: list[str]) -> None:
-    """Fetches details (h-index, works count, ...) for authors not fetched in the last 30 days, 50 per request."""
-    stale = list(
-        await session.scalars(
-            select(Author.openalex_id).where(
-                Author.openalex_id.in_(openalex_ids),
-                or_(Author.fetched_at.is_(None), Author.fetched_at < func.now() - AUTHOR_REFRESH_AFTER),
-            )
-        )
-    )
-    if not stale:
-        return
-    stale.sort(key=openalex_ids.index)  # author order, so requests are predictable
-    for record in await openalex.get_authors(http, stale):
-        values = {
-            "display_name": record["display_name"],
-            "orcid": short_id(record.get("orcid")),
-            "alt_names": record.get("display_name_alternatives") or [],
-            "last_institution": next((i["display_name"] for i in record.get("last_known_institutions") or []), None),
-            "works_count": record.get("works_count"),
-            "cited_by_count": record.get("cited_by_count"),
-            "h_index": (record.get("summary_stats") or {}).get("h_index"),
-            "topics": [{"label": t["display_name"], "count": t.get("count")} for t in record.get("topics") or []],
-            "fetched_at": func.now(),
-        }
-        await session.execute(update(Author).where(Author.openalex_id == short_id(record["id"])).values(**values))
-    await session.commit()
-
-
 async def _write(
     session: AsyncSession, paper: Paper, fields: dict[str, Any], source: str, *, keep_manual_stamps: bool = False
 ) -> list[Collision]:
@@ -353,14 +123,6 @@ async def _write(
         manual = {g for g, s in (paper.field_sources or {}).items() if s == "manual"} if keep_manual_stamps else set()
         await session.execute(update(Paper).where(Paper.id == paper.id).values(**stamp(values, source, skip=manual)))
     return collisions
-
-
-async def _crossref_work(http: httpx.AsyncClient, doi: str, cache: dict[str, dict | None]) -> dict | None:
-    """One Crossref fetch per DOI per `cache`; a failed fetch is remembered too, then re-raised."""
-    if doi not in cache:
-        cache[doi] = None
-        cache[doi] = await crossref.get_work(http, doi)
-    return cache[doi]
 
 
 async def fill_source_type(
@@ -399,59 +161,6 @@ async def fill_source_type(
         await _write(session, paper, fields, source)
         await session.commit()
     return asked
-
-
-def crossref_biblio(work: dict[str, Any]) -> dict[str, Any]:
-    """volume, issue, pages and editors from a Crossref work; editors are "Given Family" names."""
-    editors = [
-        (e.get("name") or f"{e.get('given', '')} {e.get('family', '')}").strip() for e in work.get("editor") or []
-    ]
-    fields = {k: work.get(src) for k, src in (("volume", "volume"), ("issue", "issue"), ("pages", "page"))}
-    return {**fields, "editors": [e for e in editors if e] or None}
-
-
-def _crossref_year(work: dict[str, Any]) -> int | None:
-    for key in ("published-print", "issued"):  # the issue's date, else the earliest
-        [year, *_] = ((work.get(key) or {}).get("date-parts") or [[None]])[0] or [None]
-        if year:
-            return int(year)
-    return None
-
-
-ALIGN_TYPES = frozenset({"journal-article", "proceedings-article"})  # where container-title is the venue
-_PAGE_RANGE = re.compile(r"(\d+)\s*[-\u2013]\s*(\d+)")
-
-
-def _alignable(paper: Paper) -> bool:
-    """Not a preprint copy (it keeps its own year), and a DOI known to be the paper's own: matched by OpenAlex, set
-    by the owner, given with a paper saved without a PDF, or not read off page 1 (which can carry a cited paper's)."""
-    trusted = (
-        paper.openalex_id is not None
-        or "doi" in paper.manual_fields
-        or paper.file_path is None
-        or (paper.field_sources or {}).get("identifiers") != "pdf"
-    )
-    return trusted and not is_preprint_copy(paper)
-
-
-def align_with_crossref(paper: Paper, work: dict[str, Any]) -> dict[str, Any]:
-    """Corrections from the Crossref work for the paper's own DOI (`_alignable`). For a journal or proceedings article,
-    the issue year (published-print, else issued) over an online-first or preprint year, and the journal's name at the
-    time (a single container-title) over its current one. For any type, a plain "a-b" page range over its lone first
-    page. Never title, authors or DOI, and never a manual field."""
-    if not _alignable(paper):
-        return {}
-    titles = work.get("container-title") or []
-    article = work.get("type") in ALIGN_TYPES
-    venue = (html.unescape(titles[0] or "").strip() or None) if article and len(titles) == 1 else None
-    page = _PAGE_RANGE.fullmatch((work.get("page") or "").strip())
-    lone_first = page and (paper.pages or "").strip() == page[1] != page[2]
-    found = {
-        "year": _crossref_year(work) if article else None,
-        "venue": venue,
-        "pages": f"{page[1]}-{page[2]}" if lone_first else None,
-    }
-    return {k: v for k, v in found.items() if v and v != getattr(paper, k) and k not in paper.manual_fields}
 
 
 async def fill_biblio(

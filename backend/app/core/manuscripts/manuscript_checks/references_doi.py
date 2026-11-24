@@ -9,7 +9,7 @@ import httpx
 
 from app.core.manuscripts.manuscript_checks.base import CheckContext, Finding, ManuscriptInfo
 from app.core.manuscripts.manuscript_checks.references import bib_entries
-from app.core.papers.enrichment import normalize_doi
+from app.domain.doi import normalize_doi
 
 NAME = "references.doi_resolves"
 MAX_DOIS = 100  # the deadline is the real cap: the public pool paces about 1 request a second

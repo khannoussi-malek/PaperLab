@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import update
 
-from app.core.papers import enrichment
+from app.core.papers import enrichment, openalex_fields
 from app.models import Paper
 from app.scripts import backfill_biblio
 from tests.test_enrichment import add_paper, hints
@@ -54,12 +54,12 @@ def openalex_work(**extra):
 
 
 def test_openalex_work_gives_biblio_and_bare_ids():
-    fields = enrichment.openalex_biblio(openalex_work())
+    fields = openalex_fields.openalex_biblio(openalex_work())
     assert (fields["volume"], fields["issue"], fields["pages"]) == ("7", None, "10-20")
     assert (fields["pmid"], fields["pmcid"]) == ("12345", "PMC678")
-    bare = enrichment.openalex_biblio({"id": "https://openalex.org/W1"})
+    bare = openalex_fields.openalex_biblio({"id": "https://openalex.org/W1"})
     assert (bare["volume"], bare["pages"], bare["pmid"], bare["pmcid"]) == (None, None, None, None)
-    one_page = enrichment.openalex_biblio(openalex_work(biblio={"first_page": "10", "last_page": "10"}))
+    one_page = openalex_fields.openalex_biblio(openalex_work(biblio={"first_page": "10", "last_page": "10"}))
     assert one_page["pages"] == "10"
 
 

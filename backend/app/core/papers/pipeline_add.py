@@ -10,11 +10,12 @@ from urllib.parse import unquote, urlsplit
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.papers import enrichment, papers, pdf_links, pdf_recheck
+from app.core.papers import papers, pdf_links, pdf_recheck
 from app.core.papers.pipeline import workspace_id
 from app.core.platform import queue
 from app.core.search import discovery, free_copy, pdf_download, source_clients
 from app.core.workspaces import workspaces
+from app.domain.doi import normalize_doi
 from app.domain.errors import Conflict, DomainError, InvalidInput, NotFound, error_code
 from app.models import Paper, PaperStatus
 
@@ -191,7 +192,7 @@ async def _attach_found(session, providers, paper) -> AddPaperResult:
 
 def _link_dois(link: str) -> list[str]:
     """The DOIs a publisher link's path may hold, longest first: a MIT path goes on after the DOI's own suffix."""
-    doi = enrichment.normalize_doi(unquote(urlsplit(link).path))
+    doi = normalize_doi(unquote(urlsplit(link).path))
     if doi is None:
         return []
     return list(dict.fromkeys([doi, "/".join(doi.split("/")[:2])]))

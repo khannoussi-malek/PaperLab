@@ -15,8 +15,8 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.papers.enrichment import normalize_doi
 from app.core.workspaces import workspaces
+from app.domain.doi import normalize_doi
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, Workspace, WorkspaceTag, hit_tags, paper_tags, workspace_papers
 from app.models.workspace_search import WorkspaceSearchHit

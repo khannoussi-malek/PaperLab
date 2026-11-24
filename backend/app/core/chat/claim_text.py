@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 from app.core.citations import citations
-from app.core.papers.enrichment import normalize_doi
+from app.domain.doi import normalize_doi
 
 # A line of its own: "## References", "**References**", "References:", also in French, Spanish and German.
 _REFERENCES = re.compile(
