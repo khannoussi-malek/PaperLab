@@ -286,7 +286,7 @@ from datetime import datetime, timedelta, timezone  # noqa: E402
 from sqlalchemy import select, update  # noqa: E402
 
 from app.core.chat import chat  # noqa: E402
-from app.core.notes import notes  # noqa: E402
+from app.core.notes import ai_notes, notes  # noqa: E402
 from app.domain.chunking import ChunkDraft  # noqa: E402
 from app.models import LLMOutput  # noqa: E402
 
@@ -444,7 +444,7 @@ async def test_saving_a_suggestion_from_a_check_is_not_found(session):
     output_id = await check_on(session, await note_on(session, paper))
 
     with pytest.raises(NotFound):
-        await notes.save_suggestion(session, output_id, 0)
+        await ai_notes.save_suggestion(session, output_id, 0)
 
 
 async def test_retrieval_never_searches_the_chunks_already_kept_as_key_ideas(session, embedder, monkeypatch):

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
 from app.core.chat import answer_check_run, answer_provenance, chat, chat_charts, each_paper
-from app.core.notes import notes
+from app.core.notes import ai_notes
 from app.core.platform import queue, skills
 from app.core.search import hit_chat
 from app.db import SessionLocal
@@ -312,7 +312,7 @@ async def save_suggestion(output_id: uuid.UUID, payload: SaveSuggestion, session
     """Saves the answer's :::note block `index` as an AI note, read from the stored answer (D94). 404 answer_not_found;
     409 already_saved (the history's saved_notes names the note); 422 no_such_block, empty_body, or a cited passage a
     re-ingest replaced."""
-    return await notes.save_suggestion(session, output_id, payload.index)
+    return await ai_notes.save_suggestion(session, output_id, payload.index)
 
 
 def to_check(check) -> AnswerCheckOut:

@@ -14,7 +14,7 @@ from test_retrieved_hits import failed_hit, workspace
 from app.api import papers as papers_api
 from app.api import workspace_search as workspace_search_api
 from app.api.deps import get_discovery
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.core.papers import papers
 from app.core.search import discovery, free_copy, hit_import, retrieved_hits
 from app.core.search.prisma_export import prisma_export
@@ -48,7 +48,7 @@ async def test_an_upgrade_keeps_id_tags_notes_workspaces_and_decisions(worker_se
     ws = await workspace(session)
     await workspaces.add_paper(session, ws.id, held.id)
     await tags.tag_papers(session, ws.id, "sleep", paper_ids=[held.id])
-    note = await notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
+    note = await ai_notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
     hit = await awaiting(session, ws, held)
     session.add(SearchRunEligibility(
         paper_id=held.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
@@ -356,7 +356,7 @@ async def title_linked(session):
     hit = await failed_hit(session, ws, title=held.title, doi="10.1000/sleep", pdf_urls=[f"{HOST}/ok.pdf"])
     await workspaces.add_paper(session, ws.id, held.id)  # link's title rule
     await tags.tag_papers(session, ws.id, "sleep", paper_ids=[held.id])
-    note = await notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
+    note = await ai_notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
     session.add(SearchRunEligibility(
         paper_id=held.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
     ))  # fmt: skip

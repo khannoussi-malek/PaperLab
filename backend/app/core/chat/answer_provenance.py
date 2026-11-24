@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chat.retrieval import RetrievedChunk
-from app.core.notes.notes import MCP_OUTPUT_KIND
+from app.core.notes.ai_notes import MCP_OUTPUT_KIND
 from app.domain.errors import NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance
 

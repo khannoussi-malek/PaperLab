@@ -15,7 +15,7 @@ from app.core.citations import citations_bundle_read
 from app.core.papers import papers, pipeline_upload
 from app.core.platform import queue
 from app.core.search import free_copy
-from app.core.workspaces import tags, workspace_package, workspaces  # fmt: skip
+from app.core.workspaces import package_import, tags, workspace_package, workspaces  # fmt: skip
 from app.domain.errors import InvalidInput
 from app.models import LLMOutput, Paper, PaperStatus, Workspace, note_papers
 from app.models.workspace import workspace_papers
@@ -105,7 +105,7 @@ def _paper(key: str, title: str, **fields) -> dict:
 
 
 async def _import(session, data: bytes):
-    return await workspace_package.import_package(session, data)
+    return await package_import.import_package(session, data)
 
 
 async def _count(session, model) -> int:
@@ -376,7 +376,7 @@ async def test_a_failure_partway_leaves_no_workspace_no_paper_and_no_pdf(session
         papers=[_paper("p1", "First", has_pdf=True, pdf="pdfs/p1.pdf"), _paper("p2", "Second")], pdfs={"p1": PDF}
     )
     calls = {"n": 0}
-    real = workspace_package._new_paper
+    real = package_import._new_paper
 
     async def fail_second(*args, **kwargs):
         calls["n"] += 1
@@ -384,7 +384,7 @@ async def test_a_failure_partway_leaves_no_workspace_no_paper_and_no_pdf(session
             raise RuntimeError("boom")
         return await real(*args, **kwargs)
 
-    monkeypatch.setattr(workspace_package, "_new_paper", fail_second)
+    monkeypatch.setattr(package_import, "_new_paper", fail_second)
     papers_before = await _count(session, Paper)
     with pytest.raises(RuntimeError):
         await _import(session, package)
@@ -403,7 +403,7 @@ async def test_a_failing_write_removes_the_pdfs_it_wrote(session, pdf_dir, monke
     async def refuse(*_):
         raise RuntimeError("record write failed")
 
-    monkeypatch.setattr(workspace_package, "_record_into", refuse)
+    monkeypatch.setattr(package_import, "_record_into", refuse)
     with pytest.raises(RuntimeError):
         await _import(session, package)
     assert not [p for p in _pdf_files(pdf_dir) if p.endswith(".pdf")]
@@ -444,7 +444,7 @@ async def test_a_failure_after_matching_leaves_the_library_as_it_was(session, pd
     async def boom(*_):
         raise RuntimeError("disk full")
 
-    monkeypatch.setattr(workspace_package, "_record_into", boom)
+    monkeypatch.setattr(package_import, "_record_into", boom)
     with pytest.raises(RuntimeError):
         await _import(session, package)
     await session.refresh(lib)
@@ -453,7 +453,7 @@ async def test_a_failure_after_matching_leaves_the_library_as_it_was(session, pd
 
 async def test_a_failed_import_queues_no_ingest(session, pdf_dir, jobs, monkeypatch):
     package = _package(papers=[_paper("p1", "Queued", has_pdf=True, pdf="pdfs/p1.pdf")], pdfs={"p1": PDF})
-    real_record = workspace_package._record_into
+    real_record = package_import._record_into
 
     async def record_then_fail_commit(pkg, workspace_id, written):
         await real_record(pkg, workspace_id, written)  # the ingest is queued by now in the old order
@@ -463,7 +463,7 @@ async def test_a_failed_import_queues_no_ingest(session, pdf_dir, jobs, monkeypa
 
         monkeypatch.setattr(session, "commit", fail_commit)
 
-    monkeypatch.setattr(workspace_package, "_record_into", record_then_fail_commit)
+    monkeypatch.setattr(package_import, "_record_into", record_then_fail_commit)
     with pytest.raises(RuntimeError):
         await _import(session, package)
     assert jobs.jobs == []
@@ -544,7 +544,7 @@ async def test_a_copy_that_fails_partway_leaves_no_partial_pdf(session, pdf_dir,
         target.write(source.read(3))
         raise OSError("disk full")
 
-    monkeypatch.setattr(workspace_package.shutil, "copyfileobj", half_copy)
+    monkeypatch.setattr(package_import.shutil, "copyfileobj", half_copy)
     with pytest.raises(OSError):
         await _import(session, package)
     assert _pdf_files(pdf_dir) == []

@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from app.core.papers import papers
 from app.core.platform import queue
 from app.core.search import prisma_export, workspace_search
-from app.core.workspaces import workspace_package, workspaces
+from app.core.workspaces import package_import, workspace_package, workspaces
 from app.domain.errors import Conflict, InvalidInput
 from app.models import Paper, Workspace
 from app.models.references import ExternalRef
@@ -68,7 +68,7 @@ async def test_an_export_and_import_give_identical_prisma_counts(session, pdf_di
     await workspaces.delete(session, ws.id)
     for paper in rows["alpha"], rows["beta"], rows["gamma"]:
         await papers.delete_paper(session, paper.id)
-    report = await workspace_package.import_package(session, package)
+    report = await package_import.import_package(session, package)
     after = await prisma_export.prisma_export(session, report.workspace_id, None)
     for field in PRISMA_TOTALS:
         assert getattr(after, field) == getattr(before, field), field
@@ -86,7 +86,7 @@ async def test_the_imported_runs_cursors_and_hits_keep_their_state(session, pdf_
     ws, rows = await screened(session, pdf_dir)
     package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
     await workspaces.delete(session, ws.id)
-    report = await workspace_package.import_package(session, package)
+    report = await package_import.import_package(session, package)
     runs = (
         await session.scalars(select(WorkspaceSearchRun).where(WorkspaceSearchRun.workspace_id == report.workspace_id))
     ).all()
@@ -130,7 +130,7 @@ async def test_the_reference_already_in_the_library_is_reused(session, pdf_dir):
         await session.scalars(select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == ws.id))
     ).all()
     original_ref = {hit.normalized_title: hit.external_ref_id for hit in originals}
-    report = await workspace_package.import_package(session, package)
+    report = await package_import.import_package(session, package)
     # Alpha and Beta carry identifiers and are found again. Delta has none, and the find-or-create rule (as in a
     # search) can't match a title alone, so it gets its own reference: the one new row.
     assert await session.scalar(select(func.count()).select_from(ExternalRef)) == refs_before + 1
@@ -148,7 +148,7 @@ async def test_an_imported_screening_is_inert(session, pdf_dir, monkeypatch):  #
     ws, rows = await screened(session, pdf_dir)
     package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
     await workspaces.delete(session, ws.id)
-    report = await workspace_package.import_package(session, package)
+    report = await package_import.import_package(session, package)
     workspace = await session.get(Workspace, report.workspace_id)
     assert workspace.read_only is True and workspace.suggest_status == "idle"
     run = (
@@ -179,7 +179,7 @@ async def test_an_imported_screening_is_inert(session, pdf_dir, monkeypatch):  #
 
 async def test_an_older_package_keeps_its_record_and_gets_no_screening(session, pdf_dir):  # Review Focus 4
     data = _package(name="Old review")
-    report = await workspace_package.import_package(session, data)
+    report = await package_import.import_package(session, data)
     assert report.has_record is True
     assert await session.scalar(select(func.count()).select_from(WorkspaceSearchRun)) == 0
     assert workspace_package.read_record(report.workspace_id) is not None
@@ -194,7 +194,7 @@ async def test_tampered_counts_are_package_invalid_and_nothing_is_written(sessio
     tampered = _rewrite(package, {"screening.json": json.dumps(screening).encode()})
     before, files_before = await _counts(session), sorted(p.name for p in pdf_dir.rglob("*") if p.is_file())
     with pytest.raises(InvalidInput) as refused:
-        await workspace_package.import_package(session, tampered)
+        await package_import.import_package(session, tampered)
     assert str(refused.value) == "package_invalid"
     assert refused.value.details == {"detail": "screening counts don't match"}
     assert await _counts(session) == before
@@ -225,7 +225,7 @@ async def test_a_screening_outside_the_package_shape_is_package_invalid(session,
     edit(screening)
     tampered = _rewrite(package, {"screening.json": json.dumps(screening).encode()})
     with pytest.raises(InvalidInput) as refused:
-        await workspace_package.import_package(session, tampered)
+        await package_import.import_package(session, tampered)
     assert str(refused.value) == "package_invalid"
 
 
@@ -238,7 +238,7 @@ async def test_a_package_without_pdfs_imports_and_its_decisions_still_match(sess
     await workspaces.delete(session, ws.id)
     for paper in rows["alpha"], rows["beta"], rows["gamma"]:
         await papers.delete_paper(session, paper.id)
-    report = await workspace_package.import_package(session, package)
+    report = await package_import.import_package(session, package)
     after = await prisma_export.prisma_export(session, report.workspace_id, None)
     assert (after.identified, after.sought, after.stage1_excluded) == (
         before.identified,
@@ -252,12 +252,12 @@ async def test_the_import_report_counts_the_search_results_rebuilt(session, pdf_
     ws, rows = await screened(session, pdf_dir)
     package = (await workspace_package.export_package(session, ws.id, pdfs=True)).read()
     await workspaces.delete(session, ws.id)
-    report = await workspace_package.import_package(session, package)
+    report = await package_import.import_package(session, package)
     assert report.hits == 4
 
 
 async def test_a_v1_package_reports_no_search_results(session, pdf_dir):
-    report = await workspace_package.import_package(session, _package(name="Old review"))
+    report = await package_import.import_package(session, _package(name="Old review"))
     assert report.hits == 0
 
 
@@ -279,7 +279,7 @@ async def test_an_import_never_edits_a_library_reference(session, pdf_dir):  # M
     alpha_ref.abstract = None  # blank in the library now; the package's hit carries an abstract
     await session.commit()
     await workspaces.delete(session, ws.id)
-    await workspace_package.import_package(session, package)
+    await package_import.import_package(session, package)
     await session.refresh(alpha_ref)
     assert alpha_ref.abstract is None
     assert alpha_ref.external_ids == {"openalex": "W123"}
@@ -320,7 +320,7 @@ async def test_a_screening_value_the_database_cannot_hold_is_package_invalid(ses
     tampered = _rewrite(package, {"screening.json": json.dumps(screening).encode()})
     before = await _counts(session)
     with pytest.raises(InvalidInput) as refused:
-        await workspace_package.import_package(session, tampered)
+        await package_import.import_package(session, tampered)
     assert str(refused.value) == "package_invalid"
     assert await _counts(session) == before
 
@@ -336,7 +336,7 @@ async def test_a_count_check_that_cannot_run_is_package_invalid(session, pdf_dir
     monkeypatch.setattr(prisma_export, "prisma_export", broken)
     before = await _counts(session)
     with pytest.raises(InvalidInput) as refused:
-        await workspace_package.import_package(session, package)
+        await package_import.import_package(session, package)
     assert str(refused.value) == "package_invalid"
     assert refused.value.details == {"detail": "screening counts don't match"}
     assert await _counts(session) == before
@@ -348,7 +348,7 @@ async def test_the_full_text_totals_are_checked_when_the_package_carries_the_pdf
     prisma = _json(zipfile.ZipFile(io.BytesIO(package)), "prisma.json")
     tampered = _rewrite(package, {"prisma.json": json.dumps(prisma | {"included": prisma["included"] + 1}).encode()})
     with pytest.raises(InvalidInput) as refused:
-        await workspace_package.import_package(session, tampered)
+        await package_import.import_package(session, tampered)
     assert refused.value.details == {"detail": "screening counts don't match"}
 
 
@@ -363,7 +363,7 @@ async def test_the_full_text_totals_follow_the_package_not_the_library(session, 
         await papers.delete_paper(session, paper.id)
     alpha.file_path = pdf_path  # the importing library holds alpha with its own PDF
     await session.commit()
-    report = await workspace_package.import_package(session, package)
+    report = await package_import.import_package(session, package)
     assert report.hits == 4
 
 
@@ -389,7 +389,7 @@ async def test_a_hit_on_a_reference_an_earlier_hit_uses_gets_its_own_copy(sessio
     tampered = _rewrite(package, changes)
     alpha_ref = await session.scalar(select(ExternalRef).where(ExternalRef.title == "Alpha study"))
     await workspaces.delete(session, ws.id)
-    report = await workspace_package.import_package(session, tampered)
+    report = await package_import.import_package(session, tampered)
     assert report.hits == 5
     hits = (
         await session.scalars(
@@ -437,7 +437,7 @@ async def test_nul_characters_are_stripped_from_imported_strings(session, pdf_di
     manifest = _json(zipfile.ZipFile(io.BytesIO(package)), "manifest.json")
     manifest["workspace"]["name"] = "Sleep\u0000 review"
     tampered = _rewrite(package, {"manifest.json": json.dumps(manifest).encode()})
-    report = await workspace_package.import_package(session, tampered)
+    report = await package_import.import_package(session, tampered)
     assert (await session.get(Workspace, report.workspace_id)).name == "Sleep review"
 
 
@@ -450,7 +450,7 @@ async def test_a_held_paper_without_its_pdf_skips_the_full_text_compare_and_is_n
         held.file_path = None
     await session.flush()
 
-    report = await workspace_package.import_package(session, package)  # an import never changes a matched paper
+    report = await package_import.import_package(session, package)  # an import never changes a matched paper
 
     assert report.hits > 0
     for paper in rows["alpha"], rows["beta"]:

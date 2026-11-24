@@ -10,7 +10,7 @@ from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 from sqlalchemy import delete
 from test_note_papers import paper_only_note
 
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.core.papers import library, papers
 from app.core.workspaces import workspaces
 from app.domain.chunking import ChunkDraft
@@ -137,7 +137,7 @@ async def test_the_card_has_details_outline_workspaces_and_every_note(session, t
     mine = await notes.create_human_note(
         session, "My own point.", notes.Anchor(paper.id, 2, [(72.0, 110.0, 300.0, 125.0)], "The second page describes")
     )
-    ai = await notes.create_llm_note(session, paper.id, "Claims can be checked.", TWO_LINE_QUOTE)
+    ai = await ai_notes.create_llm_note(session, paper.id, "Claims can be checked.", TWO_LINE_QUOTE)
 
     card = await library.paper_card(session, paper.id)
 

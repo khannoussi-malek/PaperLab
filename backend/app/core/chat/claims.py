@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.chat import claim_text, quotes, retrieval
 from app.core.chat.claim_text import RefEntry
 from app.core.citations import citations
-from app.core.notes import notes
+from app.core.notes import ai_notes
 from app.core.papers.enrichment import normalize_doi
 from app.core.platform import llm_connections, llm_json, prompts
 from app.domain.errors import DomainError, InvalidInput, NotFound
@@ -312,7 +312,7 @@ async def verify_claim(
     note_id = None
     if save:
         body = f"Claim: {claim}\nVerdict: {VERDICT_WORDS[check.verdict]}. {check.reason}"
-        note = await notes.create_ai_note(session, paper.id, body, output_id, quote)
+        note = await ai_notes.create_ai_note(session, paper.id, body, output_id, quote)
         note_id = note.id
     return ClaimCheck(**{**asdict(check), "output_id": output_id, "note_id": note_id})
 

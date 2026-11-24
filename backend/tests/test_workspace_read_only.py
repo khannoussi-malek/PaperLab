@@ -19,7 +19,7 @@ from app.api.deps import get_discovery
 from app.core.papers import papers
 from app.core.platform import queue
 from app.core.search import saved_searches, schedules, search_hits
-from app.core.workspaces import tags, workspace_package, workspaces
+from app.core.workspaces import package_import, tags, workspaces
 from app.domain.errors import Conflict, NotFound
 from app.models import Workspace
 from tests.test_workspace_package_import import _package, _paper
@@ -285,7 +285,7 @@ async def test_the_api_lists_read_only_on_each_workspace(client, session, pdf_di
 async def test_an_import_makes_a_read_only_workspace_that_keeps_its_record(client, session, pdf_dir):
     """A version 1 package (no live screening): its record is kept. A version 2 package keeps none (its screening is
     live, see test_workspace_package_screening)."""
-    report = await workspace_package.import_package(session, _package(name=f"Locked {uuid.uuid4().hex[:6]}"))
+    report = await package_import.import_package(session, _package(name=f"Locked {uuid.uuid4().hex[:6]}"))
     ws = await session.get(Workspace, report.workspace_id)
     assert ws.read_only is True
 

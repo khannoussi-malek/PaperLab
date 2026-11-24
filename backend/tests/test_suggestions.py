@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import delete, select
 
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance, Workspace
 
@@ -62,7 +62,7 @@ async def answer_on(
 async def test_the_body_is_the_block_verbatim_anchored_on_its_own_citations_only(session):
     output_id, a, _, _ = await answer_on(session)
 
-    note = await notes.save_suggestion(session, output_id, 0)
+    note = await ai_notes.save_suggestion(session, output_id, 0)
 
     assert (note.body, note.provenance, note.source_id, note.color) == (
         "Self-attention relates every position [C1].",
@@ -79,7 +79,7 @@ async def test_the_body_is_the_block_verbatim_anchored_on_its_own_citations_only
 async def test_in_paper_chat_a_block_citing_no_passage_still_links_the_paper(session):
     output_id, a, _, _ = await answer_on(session)
 
-    note = await notes.save_suggestion(session, output_id, 1)
+    note = await ai_notes.save_suggestion(session, output_id, 1)
 
     assert (note.body, note.anchors, note.paper_ids) == ("One idea per note, as I noted [N1].", [], [a])
 
@@ -87,8 +87,8 @@ async def test_in_paper_chat_a_block_citing_no_passage_still_links_the_paper(ses
 async def test_in_workspace_chat_a_block_links_every_paper_it_cites_or_none(session):
     output_id, a, b, _ = await answer_on(session, paper_chat=False)
 
-    both = await notes.save_suggestion(session, output_id, 3)
-    loose = await notes.save_suggestion(session, output_id, 1)
+    both = await ai_notes.save_suggestion(session, output_id, 3)
+    loose = await ai_notes.save_suggestion(session, output_id, 1)
 
     assert (both.paper_ids, {x.paper_id for x in both.anchors}) == ([a, b], {a, b})
     assert (loose.paper_ids, loose.anchors) == ([], [])
@@ -96,10 +96,10 @@ async def test_in_workspace_chat_a_block_links_every_paper_it_cites_or_none(sess
 
 async def test_saving_a_block_twice_is_refused_and_keeps_the_first(session):
     output_id, _, _, _ = await answer_on(session)
-    first_id = (await notes.save_suggestion(session, output_id, 0)).id
+    first_id = (await ai_notes.save_suggestion(session, output_id, 0)).id
 
     with pytest.raises(Conflict, match="^already_saved$"):
-        await notes.save_suggestion(session, output_id, 0)
+        await ai_notes.save_suggestion(session, output_id, 0)
 
     saved = await session.execute(select(Note.id, Note.source_block).where(Note.source_id == output_id))
     assert saved.all() == [(first_id, 0)]
@@ -110,13 +110,13 @@ async def test_a_missing_block_an_empty_block_or_an_answer_that_is_not_a_chat_an
     mcp_id, _, _, _ = await answer_on(session, kind="mcp")
 
     with pytest.raises(InvalidInput, match="^no_such_block$"):
-        await notes.save_suggestion(session, output_id, 4)
+        await ai_notes.save_suggestion(session, output_id, 4)
     with pytest.raises(InvalidInput, match="^empty_body$"):
-        await notes.save_suggestion(session, output_id, 2)
+        await ai_notes.save_suggestion(session, output_id, 2)
     with pytest.raises(NotFound, match="^answer_not_found$"):
-        await notes.save_suggestion(session, uuid.uuid4(), 0)
+        await ai_notes.save_suggestion(session, uuid.uuid4(), 0)
     with pytest.raises(NotFound, match="^answer_not_found$"):
-        await notes.save_suggestion(session, mcp_id, 0)
+        await ai_notes.save_suggestion(session, mcp_id, 0)
 
 
 async def test_a_block_citing_a_passage_a_re_ingest_replaced_is_refused_as_promote_refuses_it(session):
@@ -124,4 +124,4 @@ async def test_a_block_citing_a_passage_a_re_ingest_replaced_is_refused_as_promo
     await session.execute(delete(Chunk).where(Chunk.id == chunk_ids[0]))
 
     with pytest.raises(InvalidInput, match="^a cited chunk no longer exists; the paper was re-ingested, so ask again$"):
-        await notes.save_suggestion(session, output_id, 0)
+        await ai_notes.save_suggestion(session, output_id, 0)

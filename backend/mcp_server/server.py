@@ -40,7 +40,7 @@ from app.core.manuscripts import (
     reporting_guidelines,
 )
 from app.core.manuscripts.manuscript_checks import doi_service
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.core.papers import library, papers, pipeline, pipeline_add, pipeline_search, pipeline_upload
 from app.core.platform import mcp_activity, mcp_reads, skill_prompts, skills
 from app.core.platform.mcp_activity import WRITES_DISABLED
@@ -349,7 +349,7 @@ async def create_note(body: str, paper_id: uuid.UUID, quoted_text: str) -> notes
     returned for this paper, long enough to occur only once. For a passage marked from_abstract, quote from the abstract
     itself, not the title that starts the passage. The note is shown to the owner as written by AI."""
     async with sessions() as session:
-        return await notes.create_llm_note(session, paper_id, body, quoted_text)
+        return await ai_notes.create_llm_note(session, paper_id, body, quoted_text)
 
 
 @mcp.tool(annotations=READ_ONLY)

@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.core.chat import claims, quotes, retrieval
 from app.core.chat.retrieval import RetrievedChunk
-from app.core.notes import notes
+from app.core.notes import ai_notes, notes
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable, ModelNotPulled
@@ -200,7 +200,7 @@ async def test_save_on_abstract_only_or_an_unlocatable_quote_is_an_unanchored_no
     note = await saved(session, paper.id, check.note_id)
     assert note.anchors == [] and note.paper_ids == [paper.id] and note.body.startswith("Claim: c\nVerdict: Partly")
     full, _, _ = await chunked_paper(session, tmp_path)
-    note = await notes.create_ai_note(session, full.id, "b", check.output_id, quoted_text="no such words in it")
+    note = await ai_notes.create_ai_note(session, full.id, "b", check.output_id, quoted_text="no such words in it")
     assert note.anchors == []
 
 
