@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from test_chat import chunks_of, make_paper
 from test_sections import paper_with_headings
 
-from app.core.chat import answer_provenance, chat
+from app.core.chat import answer_provenance, chat, chat_answers
 from app.core.chat.retrieval import RetrievedChunk
 from app.core.papers import papers
 from app.core.workspaces import briefs, workspaces
@@ -59,7 +59,9 @@ async def test_save_answer_writes_the_cited_passages_in_the_same_row(session):
     paper = await make_paper(session, ["one", "two", "three"])
     prepared = await chat.prepare(session, paper.id, "why?")
 
-    output_id = await chat.save_answer(session, paper.id, "why?", prepared, "Because [C3] and [C1].", "m", "Ollama")
+    output_id = await chat_answers.save_answer(
+        session, paper.id, "why?", prepared, "Because [C3] and [C1].", "m", "Ollama"
+    )
 
     row = await session.get(LLMOutput, output_id)
     assert [entry["label"] for entry in row.source_snapshot] == ["C1", "C3"]
@@ -77,7 +79,7 @@ async def test_an_answer_that_cites_nothing_stores_an_empty_snapshot(session):
     paper = await make_paper(session, ["one", "two"])
     prepared = await chat.prepare(session, paper.id, "why?")
 
-    output_id = await chat.save_answer(session, paper.id, "why?", prepared, "No source here.", "m", "Ollama")
+    output_id = await chat_answers.save_answer(session, paper.id, "why?", prepared, "No source here.", "m", "Ollama")
 
     assert (await session.get(LLMOutput, output_id)).source_snapshot == []
 
@@ -114,7 +116,7 @@ def drafts(texts: list[str]) -> list[ChunkDraft]:
 
 async def answer_citing(session, paper_id, content: str) -> uuid.UUID:
     prepared = await chat.prepare(session, paper_id, "why?")
-    return await chat.save_answer(session, paper_id, "why?", prepared, content, "m", "Ollama")
+    return await chat_answers.save_answer(session, paper_id, "why?", prepared, content, "m", "Ollama")
 
 
 async def test_a_reingest_keeps_each_citation_on_its_page_and_the_passage_still_in_the_paper(session):
@@ -126,7 +128,7 @@ async def test_a_reingest_keeps_each_citation_on_its_page_and_the_passage_still_
     view = await answer_provenance.provenance(session, output_id)
     assert [(p.label, p.state, p.page, p.text) for p in view.passages] == [("C3", "current", 3, "three")]
     assert view.out_of_date is False
-    [answer] = await chat.list_answers(session, paper.id)
+    [answer] = await chat_answers.list_answers(session, paper.id)
     assert answer.sources == [None, None, None]  # the live chunks are gone...
     assert [(r.paper_id, r.page) for r in answer.replaced if r] == [(paper.id, 3)]  # ...and the snapshot keeps the page
 
@@ -227,7 +229,7 @@ async def test_a_citation_whose_chunk_was_deleted_still_points_at_its_page(sessi
 
     await papers.replace_chunks(session, paper.id, drafts(["x", "y", "z"]))
 
-    [answer] = await chat.list_answers(session, paper.id)
+    [answer] = await chat_answers.list_answers(session, paper.id)
     assert answer.sources == [None, None, None]
     assert (answer.replaced[1].page, answer.replaced[1].paper_id, answer.replaced[1].from_abstract) == (
         2,
@@ -277,7 +279,7 @@ async def test_a_removed_paper_is_said_so_and_does_not_make_the_answer_out_of_da
     scope = chat.Scope(workspace_id=space.id)
     sources = await chat.chunk_sources(session, Chunk.paper_id.in_([kept.id, removed.id]))
     prepared = chat.Prepared(sources=sources, system="", prompt="", whole_paper=False)
-    output_id = await chat.save_answer(session, scope, "why?", prepared, "[C1] [C2]", "m", "Ollama")
+    output_id = await chat_answers.save_answer(session, scope, "why?", prepared, "[C1] [C2]", "m", "Ollama")
     await session.delete(await session.get(Paper, removed.id))
     await session.flush()
 

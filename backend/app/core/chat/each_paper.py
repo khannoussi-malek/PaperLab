@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat import chat, claims
+from app.core.chat import chat, chat_context, claims
 from app.core.chat.answer_provenance import snapshot
 from app.core.chat.retrieval import RetrievedChunk, likely_papers, retrieve, searchable
 from app.core.platform import prompts, skills
@@ -80,7 +80,7 @@ class Plan:
 
 
 def _label(paper: Paper) -> str:
-    return chat.source_label(paper)
+    return chat_context.source_label(paper)
 
 
 async def _cached(

@@ -285,7 +285,7 @@ from datetime import datetime, timedelta, timezone  # noqa: E402
 
 from sqlalchemy import select, update  # noqa: E402
 
-from app.core.chat import chat  # noqa: E402
+from app.core.chat import chat_answers  # noqa: E402
 from app.core.notes import ai_notes, notes  # noqa: E402
 from app.domain.chunking import ChunkDraft  # noqa: E402
 from app.models import LLMOutput  # noqa: E402
@@ -436,7 +436,7 @@ async def test_chat_history_lists_no_checks(session):
     paper, _ = await paper_with_headings(session, HEADINGS)
     await check_on(session, await note_on(session, paper))
 
-    assert await chat.list_answers(session, paper.id) == []
+    assert await chat_answers.list_answers(session, paper.id) == []
 
 
 async def test_saving_a_suggestion_from_a_check_is_not_found(session):

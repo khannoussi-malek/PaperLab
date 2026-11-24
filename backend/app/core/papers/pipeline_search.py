@@ -13,6 +13,7 @@ from app.core.platform import queue
 from app.core.search import (
     hit_enrichment,
     hit_import,
+    hit_ranking,
     prisma_export,
     screening,
     search_hits,
@@ -159,7 +160,7 @@ async def run_prescreen(
     if run_id is None and not confirm:
         # ponytail: loads the pool twice on a workspace-wide call (here and in start_suggestions); pass the count
         # through if it shows up in timings.
-        queued = len(screening.suggestion_queue(await screening.load_pool(session, ws), run_ids=run_ids))
+        queued = len(screening.suggestion_queue(await hit_ranking.load_pool(session, ws), run_ids=run_ids))
         if queued > PRESCREEN_CONFIRM_ABOVE:
             raise Conflict("prescreen_needs_confirm", queued=queued, limit=PRESCREEN_CONFIRM_ABOVE)
     state = await screening.start_suggestions(session, ws, allow_remote, run_id, run_ids=run_ids)

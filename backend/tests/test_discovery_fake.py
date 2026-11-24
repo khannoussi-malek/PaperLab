@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import delete, text
 
-from app.core.citations import references
+from app.core.citations import reference_listing, references
 from app.core.papers import pdf_links
 from app.core.papers.paper_sources import SOURCES, SourceSettings
 from app.core.search import discovery, source_clients
@@ -113,8 +113,8 @@ async def test_the_e2e_fake_gives_any_paper_three_references_and_one_citing_work
 
     notices = await references.fetch(session, fake_providers, reader)
 
-    cites = await references.listing(session, reader.id, "cites")
-    cited_by = await references.listing(session, reader.id, "cited_by")
+    cites = await reference_listing.listing(session, reader.id, "cites")
+    cited_by = await reference_listing.listing(session, reader.id, "cited_by")
     assert notices == []
     assert sorted(r.title for r in cites.rows) == sorted(
         [discovery_fake_data.FREE_TITLE, discovery_fake_data.LANDING_TITLE, discovery_fake_data.CLOSED_TITLE]

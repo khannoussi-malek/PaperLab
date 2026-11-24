@@ -10,7 +10,7 @@ from sqlalchemy import insert
 from test_evidence_cards import FULL, INTRO, Scripted, card_reply
 
 from app.core.chat import retrieval
-from app.core.notes import evidence_cards
+from app.core.notes import evidence_card_views, evidence_cards
 from app.core.search import screening
 from app.core.workspaces import workspaces
 from app.models import workspace_papers
@@ -65,7 +65,7 @@ async def test_regenerating_an_edited_card_needs_confirm_and_an_unknown_paper_is
 ):
     _model(monkeypatch, True)
     paper = await ready_card(session, tmp_path)
-    await evidence_cards.edit_card(session, paper.id, [{"field": "design", "values": {"value": "mine"}}])
+    await evidence_card_views.edit_card(session, paper.id, [{"field": "design", "values": {"value": "mine"}}])
     refused = await call("generate_evidence_card", paper_id=str(paper.id), regenerate=True)
     assert refused.structured_content["error"] == "card_edited_needs_confirm"
     ok = result(await call("generate_evidence_card", paper_id=str(paper.id), regenerate=True, confirm=True))

@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 
 from app.api import citations as citations_api
 from app.core.citations import citations_import_apply as cia
+from app.core.citations import citations_import_route
 from app.core.citations import citations_import_run as run
 from app.core.citations.citations_bundle_read import read_bundle
 from app.core.citations.citations_import import ImportEntry
@@ -273,7 +274,10 @@ async def test_a_fetching_import_is_a_job_polled_until_it_finishes(client, sessi
     assert (await client.get(poll)).json()["state"] == "queued"
 
     redis.start(job_id)
-    await redis.set(cia.progress_key(job_id), json.dumps(cia.progress_payload(cia.ImportResult(), 2, False)))
+    await redis.set(
+        citations_import_route.progress_key(job_id),
+        json.dumps(citations_import_route.progress_payload(cia.ImportResult(), 2, False)),
+    )
     running = (await client.get(poll)).json()
     assert running["state"] == "running" and running["result"] is None
     assert (running["counts"]["total"], running["counts"]["done"]) == (2, 0)
@@ -291,8 +295,8 @@ async def test_a_fetching_import_is_a_job_polled_until_it_finishes(client, sessi
 
 async def test_a_finished_import_is_still_read_once_arq_forgets_the_job(client, redis):
     job_id = f"{cia.JOB}:{uuid.uuid4()}"
-    payload = cia.progress_payload(cia.ImportResult(imported=3), 3, True)
-    await redis.set(cia.progress_key(job_id), json.dumps(payload))
+    payload = citations_import_route.progress_payload(cia.ImportResult(imported=3), 3, True)
+    await redis.set(citations_import_route.progress_key(job_id), json.dumps(payload))
     body = (await client.get(f"/api/citations/import/{job_id}")).json()
     assert body["state"] == "finished" and body["result"]["imported"] == 3
 
@@ -311,7 +315,10 @@ async def test_an_import_cut_short_by_a_restart_says_so(client, redis, lost):
 
 async def test_a_job_gone_with_its_progress_left_is_restarted(client, redis):
     job_id = f"{cia.JOB}:{uuid.uuid4()}"
-    await redis.set(cia.progress_key(job_id), json.dumps(cia.progress_payload(cia.ImportResult(), 9, False)))
+    await redis.set(
+        citations_import_route.progress_key(job_id),
+        json.dumps(citations_import_route.progress_payload(cia.ImportResult(), 9, False)),
+    )
     assert (await client.get(f"/api/citations/import/{job_id}")).json()["state"] == "restarted"
 
 
@@ -417,13 +424,15 @@ async def test_redis_down_is_unavailable_not_500(client, redis, monkeypatch, err
 async def test_a_running_job_with_a_stale_heartbeat_is_restarted(client, redis, monkeypatch):
     job_id = f"{cia.JOB}:{uuid.uuid4()}"
     redis.start(job_id)
-    stale = cia.progress_payload(cia.ImportResult(), 5, False) | {"at": time.time() - run.HEARTBEAT_STALE - 1}
-    await redis.set(cia.progress_key(job_id), json.dumps(stale))
+    stale = citations_import_route.progress_payload(cia.ImportResult(), 5, False) | {
+        "at": time.time() - run.HEARTBEAT_STALE - 1
+    }
+    await redis.set(citations_import_route.progress_key(job_id), json.dumps(stale))
     body = (await client.get(f"/api/citations/import/{job_id}")).json()
     assert body["state"] == "restarted" and body["message"] == run.RESTARTED
 
     fresh = stale | {"at": time.time() - run.HEARTBEAT_STALE + 60}
-    await redis.set(cia.progress_key(job_id), json.dumps(fresh))
+    await redis.set(citations_import_route.progress_key(job_id), json.dumps(fresh))
     assert (await client.get(f"/api/citations/import/{job_id}")).json()["state"] == "running"
 
 
@@ -446,7 +455,7 @@ async def test_a_zip_is_read_from_the_upload_and_copied_for_the_job_once(client,
         reads.append(source)
         return read_bundle(source)
 
-    monkeypatch.setattr(cia, "read_bundle", counted)
+    monkeypatch.setattr(citations_import_route, "read_bundle", counted)
     data = zip_of("s1")
     name = f"Streamed {RUN}"
 

@@ -8,7 +8,7 @@ from test_chat_workspace import NOW, add_note
 from test_note_papers import paper_only_note
 from test_sections import SECTIONED, critical_skill, sectioned_paper
 
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers, chat_context
 from app.core.chat.retrieval import RetrievedChunk
 from app.core.papers import papers
 from app.core.platform import prompts, skills
@@ -111,7 +111,7 @@ async def test_large_paper_sends_the_nearest_chunks_that_fit_the_budget(session,
 def test_context_names_author_year_page_and_section():
     paper = Paper(title="BERT", authors=["Jacob Devlin"], year=2019)
 
-    context = chat.format_context(paper, [source(), source(page=5, section=None, text="Second.")])
+    context = chat_context.format_context(paper, [source(), source(page=5, section=None, text="Second.")])
 
     assert context == (
         "[C1] (Devlin 2019, p.4, Method)\nSelf-attention relates positions.\n\n[C2] (Devlin 2019, p.5)\nSecond."
@@ -119,7 +119,9 @@ def test_context_names_author_year_page_and_section():
 
 
 def test_context_falls_back_to_the_title_without_an_author():
-    assert chat.format_context(Paper(title="BERT", authors=[], year=2019), [source()]).startswith("[C1] (BERT, p.4,")
+    assert chat_context.format_context(Paper(title="BERT", authors=[], year=2019), [source()]).startswith(
+        "[C1] (BERT, p.4,"
+    )
 
 
 @pytest.mark.parametrize(
@@ -131,7 +133,7 @@ def test_context_falls_back_to_the_title_without_an_author():
     ],
 )
 def test_source_label_uses_whatever_is_known(authors, year, label):
-    assert chat.source_label(Paper(title="BERT", authors=authors, year=year)) == label
+    assert chat_context.source_label(Paper(title="BERT", authors=authors, year=year)) == label
 
 
 def test_prompt_loader_reads_by_name_and_version(tmp_path, monkeypatch):
@@ -147,8 +149,8 @@ def test_prompt_loader_reads_by_name_and_version(tmp_path, monkeypatch):
 def test_parse_citations_keeps_known_sources_in_first_seen_order():
     text = "[C2] says so [C1][C3]; again [C2]. Not [C9], [C0] or C1."
 
-    assert chat.parse_citations(text, 3) == [2, 1, 3]
-    assert chat.parse_citations("no markers", 3) == []
+    assert chat_answers.parse_citations(text, 3) == [2, 1, 3]
+    assert chat_answers.parse_citations("no markers", 3) == []
 
 
 async def test_save_answer_fills_every_column_and_inserts_no_note(session):
@@ -158,7 +160,7 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
 
     answer = "Because [C3] and [C1][C3]."
 
-    output_id = await chat.save_answer(session, paper.id, "why?", prepared, answer, "qwen3:8b", "Ollama")
+    output_id = await chat_answers.save_answer(session, paper.id, "why?", prepared, answer, "qwen3:8b", "Ollama")
 
     row = await session.get(LLMOutput, output_id)
     ids = [s.id for s in prepared.sources]
@@ -267,14 +269,14 @@ async def test_list_answers_oldest_first_with_replaced_chunks_as_none(session):
     await session.commit()
     await session.execute(delete(Chunk).where(Chunk.id == chunks[1].id))  # as a re-ingest would
 
-    answers = await chat.list_answers(session, paper.id)
+    answers = await chat_answers.list_answers(session, paper.id)
 
     assert [a.output.question for a in answers] == ["first", "second"]
     first_sources = answers[0].sources
     assert (first_sources[0].id, first_sources[0].page, first_sources[1]) == (chunks[0].id, 1, None)
     assert [s.id for s in answers[1].sources] == [chunks[2].id]
     with pytest.raises(NotFound):
-        await chat.list_answers(session, uuid.uuid4())
+        await chat_answers.list_answers(session, uuid.uuid4())
 
 
 async def test_prepare_rejects_unready_unindexed_and_unknown_papers(session, embedder):
@@ -321,7 +323,7 @@ async def test_paper_chat_sends_a_note_on_the_whole_paper_without_a_page(session
     prepared = await chat.prepare(session, paper.id, "What do I think?")
 
     assert "[N1] (You · Devlin 2019) — The whole paper argues for grounding." in prepared.prompt
-    assert prepared.notes == [chat.NoteSource(id=note.id, paper_id=paper.id, page=None, provenance="human")]
+    assert prepared.notes == [chat_context.NoteSource(id=note.id, paper_id=paper.id, page=None, provenance="human")]
 
 
 def test_the_note_block_rule_is_new_in_chat_v4_and_workspace_v3_and_the_older_prompts_stay():
@@ -473,7 +475,9 @@ async def test_save_answer_records_the_lens_it_was_written_from(session):
     paper, _ = await sectioned_paper(session, SECTIONED)
     prepared = await chat.prepare(session, paper.id, "Is it sound?", skill=await critical_skill(session))
 
-    output_id = await chat.save_answer(session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake")
+    output_id = await chat_answers.save_answer(
+        session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake"
+    )
 
     assert (await session.get(LLMOutput, output_id)).lens == "critical"
 
@@ -482,7 +486,9 @@ async def test_an_answer_without_a_skill_records_the_full_lens(session):
     paper, _ = await sectioned_paper(session, SECTIONED)
     prepared = await chat.prepare(session, paper.id, "Is it sound?")
 
-    output_id = await chat.save_answer(session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake")
+    output_id = await chat_answers.save_answer(
+        session, paper.id, "Is it sound?", prepared, "Fine [C1].", "fake", "Fake"
+    )
 
     assert (await session.get(LLMOutput, output_id)).lens == "full"
 

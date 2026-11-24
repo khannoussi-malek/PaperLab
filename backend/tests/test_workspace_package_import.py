@@ -10,7 +10,7 @@ import pytest
 from conftest import FakeArq
 from sqlalchemy import func, select
 
-from app.core.chat import answer_provenance, chat
+from app.core.chat import answer_provenance, chat, chat_answers
 from app.core.citations import citations_bundle_read
 from app.core.papers import papers, pipeline_upload
 from app.core.platform import queue
@@ -192,7 +192,7 @@ async def test_a_round_trip_brings_the_answer_back_and_its_citations_open_from_t
     assert report.answers == 1
     # Review Focus 5: the imported workspace is read-only (M35b1), and its answers still read
     assert (await session.get(Workspace, report.workspace_id)).read_only is True
-    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
+    [answer] = await chat_answers.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
     assert (answer.output.question, answer.output.model, answer.output.skill_label) == (
         "Does sleep help?", "qwen3:8b", "Plain English",
     )  # fmt: skip
@@ -635,14 +635,14 @@ async def test_a_snapshot_passage_from_a_paper_outside_the_package_is_dropped(se
     snapshot = [{"label": "C1", "paper": "p9", "page": 2, "section": None, "text": "gone", "from_abstract": False}]
     package = _package(papers=[_paper("p1", "Kept")], answers=[_answer(cited=["C1"], slots=1, snapshot=snapshot)])
     report = await _import(session, package)
-    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
+    [answer] = await chat_answers.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
     assert answer.output.source_snapshot == [] and answer.replaced == [None]
 
 
 async def test_a_package_without_answers_json_imports_with_no_answers(session, pdf_dir):
     report = await _import(session, _package(papers=[_paper("p1", "Old package")]))
     assert report.answers == 0
-    assert await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id)) == []
+    assert await chat_answers.list_answers(session, chat.Scope(workspace_id=report.workspace_id)) == []
 
 
 async def test_malformed_answers_are_package_invalid_and_nothing_is_written(session, pdf_dir):
@@ -689,13 +689,13 @@ async def test_a_lens_answer_round_trips_with_its_lens(session, pdf_dir):
 
     report = await _import(session, package)
 
-    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
+    [answer] = await chat_answers.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
     assert answer.output.lens == "method"
 
 
 async def test_an_answer_without_a_lens_imports_as_the_whole_paper(session, pdf_dir):
     report = await _import(session, _package(papers=[_paper("p1", "Old")], answers=[_answer()]))
-    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
+    [answer] = await chat_answers.list_answers(session, chat.Scope(workspace_id=report.workspace_id))
     assert answer.output.lens == "full"
 
 

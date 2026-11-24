@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.platform import llm_connections
-from app.core.search.screening import load_pool
+from app.core.search.hit_ranking import load_pool
 from app.core.search.screening_suggest import suggest
 from app.core.workspaces import workspaces
 from app.db import SessionLocal

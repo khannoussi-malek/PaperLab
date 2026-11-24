@@ -11,7 +11,7 @@ from test_chat_models_api import model_on, owner_rows
 from test_sections import paper_with_headings
 
 from app.config import settings
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers
 from app.core.workspaces import briefs
 from app.main import create_app
 from app.models import LLMModel, LLMOutput
@@ -155,7 +155,7 @@ async def test_a_failed_save_logs_what_it_was_saving(client, session, fake_llm, 
         raise RuntimeError("database went away")
 
     monkeypatch.setattr(briefs, "save_brief", broken_save)
-    monkeypatch.setattr(chat, "save_answer", broken_save)
+    monkeypatch.setattr(chat_answers, "save_answer", broken_save)
 
     await generate(client, paper.id)
     brief_log = save_failure_log(caplog)

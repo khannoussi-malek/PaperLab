@@ -305,14 +305,19 @@ async def test_a_skill_shapes_the_answer_not_the_reading(shared, embedder):
 
 
 async def test_the_saved_answer_keeps_its_readings_and_lists_them_again(shared, embedder):
-    from app.core.chat import chat  # noqa: PLC0415
+    from app.core.chat import (
+        chat,  # noqa: PLC0415
+        chat_answers,
+    )
 
     the_plan, readings, prepared = await reduced(shared, embedder, ["Alpha", "Beta"], {})
     scope = chat.Scope(workspace_id=the_plan.workspace_id)
 
-    output_id = await chat.save_answer(shared, scope, QUESTION, prepared, "Both count pills [C1][C2].", "m", "c")
+    output_id = await chat_answers.save_answer(
+        shared, scope, QUESTION, prepared, "Both count pills [C1][C2].", "m", "c"
+    )
 
-    [answer] = await chat.list_answers(shared, scope)
+    [answer] = await chat_answers.list_answers(shared, scope)
     assert answer.output.id == output_id
     in_paper_order = [r.output_id for t in the_plan.tasks for r in readings if r.paper_id == t.paper.id]
     assert answer.output.readings == prepared.readings == in_paper_order

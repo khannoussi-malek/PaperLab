@@ -7,7 +7,8 @@ import bibtexparser
 import pytest
 from bibtexparser.middlewares import LatexDecodingMiddleware
 
-from app.core.citations.citations_export import _person, bibtex_keys, csl_item, render
+from app.core.citations.citations_export import render
+from app.core.citations.csl_items import _person, bibtex_keys, csl_item
 
 
 def paper(**kw):

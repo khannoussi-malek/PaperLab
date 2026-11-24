@@ -11,9 +11,9 @@ from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat import claims
+from app.core.chat import claims, claims_batch
 from app.core.citations import citations_export
-from app.core.notes import evidence_cards, notes
+from app.core.notes import evidence_card_views, evidence_cards, notes
 from app.core.papers import papers
 from app.core.search import (
     saved_searches,
@@ -186,10 +186,10 @@ async def verify_claim(
 
 async def verify_claims(
     session: AsyncSession, text: str, workspace: str | None = None, save: bool = False, allow_remote: bool = False
-) -> list[claims.ClaimItem]:
+) -> list[claims_batch.ClaimItem]:
     ws = await workspace_id(session, workspace) if workspace is not None else None
     await _refuse_remote(session, allow_remote)
-    return await claims.verify_claims(session, text, workspace_id=ws, save=save)
+    return await claims_batch.verify_claims(session, text, workspace_id=ws, save=save)
 
 
 @dataclass(frozen=True)
@@ -198,21 +198,21 @@ class EvidenceRow:
     title: str
     year: int | None
     first_author: str | None
-    card: evidence_cards.CardSummary | None
+    card: evidence_card_views.CardSummary | None
 
 
 async def generate_evidence_card(
     session: AsyncSession, paper_id: uuid.UUID, regenerate: bool = False, confirm: bool = False,
     allow_remote: bool = False,
-) -> evidence_cards.CardSummary:
+) -> evidence_card_views.CardSummary:
     """Starts the background job and returns the card at once (`generating`); the caller polls get_evidence_card."""
     await _refuse_remote(session, allow_remote)
     [view] = await evidence_cards.request_cards(session, paper_ids=[paper_id], regenerate=regenerate, confirm=confirm)
-    return evidence_cards.summarize(view)
+    return evidence_card_views.summarize(view)
 
 
-async def get_evidence_card(session: AsyncSession, paper_id: uuid.UUID) -> evidence_cards.CardSummary:
-    return evidence_cards.summarize(await evidence_cards.get_card(session, paper_id))
+async def get_evidence_card(session: AsyncSession, paper_id: uuid.UUID) -> evidence_card_views.CardSummary:
+    return evidence_card_views.summarize(await evidence_card_views.get_card(session, paper_id))
 
 
 async def list_evidence_cards(
@@ -220,9 +220,9 @@ async def list_evidence_cards(
 ) -> list[EvidenceRow]:
     ws = await workspace_id(session, workspace)
     wanted = await tags.paper_ids(session, ws, tags_, match)
-    rows = await evidence_cards.workspace_cards(session, ws)
+    rows = await evidence_card_views.workspace_cards(session, ws)
     return [
-        EvidenceRow(r.paper_id, r.title, r.year, r.first_author, r.card and evidence_cards.summarize(r.card))
+        EvidenceRow(r.paper_id, r.title, r.year, r.first_author, r.card and evidence_card_views.summarize(r.card))
         for r in rows
         if wanted is None or r.paper_id in wanted
     ]

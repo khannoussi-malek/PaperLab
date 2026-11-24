@@ -19,6 +19,7 @@ from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.citations import citations_import_apply as cia
+from app.core.citations import citations_import_route
 from app.core.citations.citations_bundle_read import MAX_ZIP_BYTES, Bundle
 from app.core.citations.citations_import import MAX_BYTES, CitationsImportError, ImportEntry
 from app.core.platform import queue
@@ -87,7 +88,7 @@ def _read(name: str, source: bytes | IO[bytes]) -> tuple[list[ImportEntry], Bund
     """The file's entries and its Bundle when it is a zip (the caller closes it); InvalidInput with the parser's plain
     message."""
     try:
-        return cia.read(name, source)
+        return citations_import_route.read(name, source)
     except CitationsImportError as exc:
         raise InvalidInput(str(exc)) from None
 
@@ -113,7 +114,7 @@ async def preview(
         await workspaces.get(session, workspace_id)
     entries, bundle = _read(name, source)
     with bundle or contextlib.nullcontext():
-        counts = await cia.preview(
+        counts = await citations_import_route.preview(
             session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs, save_without_pdf=save_without_pdf
         )
     shown = asdict(counts)
@@ -141,7 +142,7 @@ async def start(
         if new_workspace_name is not None:
             made = workspace_id = (await workspaces.create(session, new_workspace_name)).id
         try:
-            outcome = await cia.route(
+            outcome = await citations_import_route.route(
                 session, name, source, entries, bundle, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
                 save_without_pdf=save_without_pdf,
             )
@@ -208,9 +209,9 @@ def _finished(job_id: str, payload: dict) -> ImportProgressOut:
 
 
 async def status(redis, job_id: str) -> ImportProgressOut:
-    """A job's progress from its progress key (cia.progress_key) and arq's own record of the job. Never raises for an
-    unknown, old or broken job, or for Redis being out of reach: it answers expired, restarted, failed or unavailable
-    in words."""
+    """A job's progress from its progress key (citations_import_route.progress_key) and arq's own record of the job.
+    Never raises for an unknown, old or broken job, or for Redis being out of reach: it answers expired, restarted,
+    failed or unavailable in words."""
     if not JOB_ID.fullmatch(job_id):
         return ImportProgressOut(state="expired", job_id=job_id, message=EXPIRED)
     try:
@@ -220,7 +221,7 @@ async def status(redis, job_id: str) -> ImportProgressOut:
 
 
 async def _status(redis, job_id: str) -> ImportProgressOut:
-    raw = await redis.get(cia.progress_key(job_id))
+    raw = await redis.get(citations_import_route.progress_key(job_id))
     progress = json.loads(raw) if raw else None
     if progress and progress.get("finished"):
         return _finished(job_id, progress)

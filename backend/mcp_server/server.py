@@ -28,6 +28,7 @@ from mcp.types import (
 )
 from pydantic import Field
 
+from app.core.chat import claims_batch
 from app.core.citations import citations_import_run
 from app.core.manuscripts import (
     manuscript_agent,
@@ -40,7 +41,7 @@ from app.core.manuscripts import (
     reporting_guidelines,
 )
 from app.core.manuscripts.manuscript_checks import doi_service
-from app.core.notes import ai_notes, notes
+from app.core.notes import ai_notes, evidence_card_views, notes
 from app.core.papers import library, papers, pipeline, pipeline_add, pipeline_search, pipeline_upload
 from app.core.platform import mcp_activity, mcp_reads, skill_prompts, skills
 from app.core.platform.mcp_activity import WRITES_DISABLED
@@ -872,7 +873,7 @@ async def verify_claim(
 @recoverable
 async def verify_claims(
     text: str, workspace: str | None = None, save: bool = False, allow_remote: bool = False
-) -> list[pipeline.claims.ClaimItem]:
+) -> list[claims_batch.ClaimItem]:
     """Use to check a note or a pasted paragraph: every citation (a DOI or author-year) is checked against the matching
     library paper, its claim being the sentence, list item or table row that carries it; markdown is fine. Send the
     whole note: its reference list is never checked, but its DOIs are used to find the cited papers. A citation it
@@ -898,7 +899,7 @@ async def verify_claims(
 @recoverable
 async def generate_evidence_card(
     paper_id: uuid.UUID, regenerate: bool = False, confirm: bool = False, allow_remote: bool = False
-) -> pipeline.evidence_cards.CardSummary:
+) -> evidence_card_views.CardSummary:
     """Use to build an evidence card for a library paper: research question, design, sample, findings, effect sizes
     and the limitations its authors state. It starts the job and returns at once with status generating; generation
     takes about a minute per paper, so poll get_evidence_card until the status is ready or failed. A paper with no PDF
@@ -911,7 +912,7 @@ async def generate_evidence_card(
 
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
-async def get_evidence_card(paper_id: uuid.UUID) -> pipeline.evidence_cards.CardSummary:
+async def get_evidence_card(paper_id: uuid.UUID) -> evidence_card_views.CardSummary:
     """Use to read a paper's evidence card, or to poll one that is generating (status generating, ready or failed).
     Every value is backed by a quote from the paper with its page, and items the paper's text could not back are left
     out: left_out counts them per field, so never fill them in. provenance llm_edited means the owner changed some

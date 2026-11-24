@@ -13,7 +13,7 @@ from app.domain.errors import InvalidInput, NotFound
 from app.models import workspace_papers
 from app.models.provenance import WorkspaceBranchState
 from app.models.workspace_search import WorkspaceSearchHit
-from app.schemas.workspace_search import BranchOut
+from app.schemas.search_tree import BranchOut
 
 DIRECTIONS = ("cites", "cited_by")
 STATES = ("go_further", "stopped")

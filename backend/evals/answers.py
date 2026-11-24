@@ -40,7 +40,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core.chat import chat, retrieval
+from app.core.chat import chat, chat_answers, retrieval
 from app.core.chat.retrieval import RetrievedChunk
 from app.core.notes import checks
 from app.core.notes.notes import _CITATION, create_paper_note, normalize_quote, note_blocks
@@ -183,7 +183,7 @@ def grounded(content: str, sources: list[RetrievedChunk], evidence: list[Expecte
     """Whether a passage the answer cites holds the evidence. None for a case without evidence."""
     if not evidence:
         return None
-    return is_hit([sources[i - 1] for i in chat.parse_citations(content, len(sources))], evidence)
+    return is_hit([sources[i - 1] for i in chat_answers.parse_citations(content, len(sources))], evidence)
 
 
 def blocks_right(content: str, kind: str, sources: int) -> bool:

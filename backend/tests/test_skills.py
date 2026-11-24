@@ -5,7 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import func, select, text
 
-from app.core.platform import skills
+from app.core.platform import skill_edits, skills
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Skill
 
@@ -15,7 +15,9 @@ LONG_TEXT = "Check it carefully. " * 200  # about 4000 characters: inside the 80
 
 
 async def make_custom(session, label="My check", scope="paper", instructions="Do the check.", description="d"):
-    return await skills.create(session, label=label, description=description, scope=scope, instructions=instructions)
+    return await skill_edits.create(
+        session, label=label, description=description, scope=scope, instructions=instructions
+    )
 
 
 async def view(session, skill_id):
@@ -37,7 +39,7 @@ async def test_the_six_bundled_skills_are_listed_as_builtin(session):
 
 
 async def test_hidden_skills_leave_the_picker_list_but_stay_in_settings(session):
-    await skills.update(session, "builtin:study-type", is_listed=False)
+    await skill_edits.update(session, "builtin:study-type", is_listed=False)
     picker = await skills.list_skills(session, kind="paper")
     settings = await skills.list_skills(session, kind="paper", include_hidden=True)
     assert "builtin:study-type" not in [v.id for v in picker]
@@ -113,7 +115,7 @@ async def test_each_bundled_skill_lists_its_shipped_lens(session):
 
 async def test_a_custom_skill_is_full_unless_it_names_a_lens(session):
     plain = await make_custom(session, label="Plain lens")
-    lensed = await skills.create(
+    lensed = await skill_edits.create(
         session, label="Lensed", description="", scope="paper", instructions="Do.", lens="method"
     )
     assert (plain.lens, lensed.lens) == ("full", "method")
@@ -121,27 +123,29 @@ async def test_a_custom_skill_is_full_unless_it_names_a_lens(session):
 
 async def test_an_unknown_lens_is_invalid_input(session):
     with pytest.raises(InvalidInput, match="skill_lens_invalid"):
-        await skills.create(session, label="Bad", description="", scope="paper", instructions="Do.", lens="everything")
+        await skill_edits.create(
+            session, label="Bad", description="", scope="paper", instructions="Do.", lens="everything"
+        )
     with pytest.raises(InvalidInput, match="skill_lens_invalid"):
-        await skills.update(session, "builtin:check-evaluation", lens="everything")
+        await skill_edits.update(session, "builtin:check-evaluation", lens="everything")
 
 
 async def test_a_bundled_skill_takes_a_lens_and_reset_gives_the_shipped_one_back(session):
-    changed = await skills.update(session, "builtin:check-evaluation", lens="related")
+    changed = await skill_edits.update(session, "builtin:check-evaluation", lens="related")
     assert (changed.lens, changed.state) == ("related", "edited")
-    reset = await skills.reset(session, "builtin:check-evaluation")
+    reset = await skill_edits.reset(session, "builtin:check-evaluation")
     assert (reset.lens, reset.state) == ("critical", "builtin")
 
 
 async def test_a_lens_change_keeps_the_version(session):
     before = await view(session, "builtin:check-evaluation")
-    after = await skills.update(session, "builtin:check-evaluation", lens="related")
+    after = await skill_edits.update(session, "builtin:check-evaluation", lens="related")
     assert after.version == before.version
 
 
 async def test_a_custom_skill_lens_can_be_changed(session):
     made = await make_custom(session)
-    changed = await skills.update(session, made.id, lens="key_ideas")
+    changed = await skill_edits.update(session, made.id, lens="key_ideas")
     assert changed.lens == "key_ideas"
 
 
@@ -150,25 +154,25 @@ async def test_a_custom_skill_lens_can_be_changed(session):
 
 async def test_the_first_edit_of_a_bundled_skill_inserts_its_row_and_bumps_version(session):
     assert await row_for(session, "check-evaluation") is None
-    edited = await skills.update(session, "builtin:check-evaluation", instructions="Mine.")
+    edited = await skill_edits.update(session, "builtin:check-evaluation", instructions="Mine.")
     assert await row_for(session, "check-evaluation") is not None
     assert (edited.instructions, edited.state, edited.version) == ("Mine.", "edited", skills.BUNDLED[1].version + 1)
 
 
 async def test_a_second_instructions_change_bumps_version_again(session):
-    await skills.update(session, "builtin:check-evaluation", instructions="One.")
-    edited = await skills.update(session, "builtin:check-evaluation", instructions="Two.")
+    await skill_edits.update(session, "builtin:check-evaluation", instructions="One.")
+    edited = await skill_edits.update(session, "builtin:check-evaluation", instructions="Two.")
     assert edited.version == skills.BUNDLED[1].version + 2
 
 
 async def test_saving_the_same_instructions_does_not_bump_version(session):
     shipped = (await view(session, "builtin:check-evaluation")).instructions
-    unchanged = await skills.update(session, "builtin:check-evaluation", instructions=shipped)
+    unchanged = await skill_edits.update(session, "builtin:check-evaluation", instructions=shipped)
     assert unchanged.version == skills.BUNDLED[1].version
 
 
 async def test_a_label_only_edit_keeps_the_shipped_text_and_version(session):
-    renamed = await skills.update(session, "builtin:check-evaluation", label="Test the numbers")
+    renamed = await skill_edits.update(session, "builtin:check-evaluation", label="Test the numbers")
     shipped = skills.BUNDLED[1]
     assert (renamed.label, renamed.state, renamed.version) == ("Test the numbers", "builtin", shipped.version)
     assert renamed.instructions == shipped.instructions
@@ -176,15 +180,15 @@ async def test_a_label_only_edit_keeps_the_shipped_text_and_version(session):
 
 async def test_only_the_sent_fields_change(session):
     custom = await make_custom(session, label="Keep", description="old words", instructions="Kept.")
-    updated = await skills.update(session, custom.id, description="new words")
+    updated = await skill_edits.update(session, custom.id, description="new words")
     assert (updated.label, updated.description, updated.instructions) == ("Keep", "new words", "Kept.")
 
 
 async def test_updating_a_custom_skill_bumps_version_on_instructions_only(session):
     custom = await make_custom(session, instructions="One.")
-    relabelled = await skills.update(session, custom.id, label="Relabelled")
+    relabelled = await skill_edits.update(session, custom.id, label="Relabelled")
     assert relabelled.version == 1
-    reworded = await skills.update(session, custom.id, instructions="Two.")
+    reworded = await skill_edits.update(session, custom.id, instructions="Two.")
     assert reworded.version == 2
 
 
@@ -192,32 +196,32 @@ async def test_renaming_into_a_taken_label_is_refused_but_keeping_your_own_is_fi
     await make_custom(session, label="Taken")
     mine = await make_custom(session, label="Mine")
     with pytest.raises(Conflict, match="skill_label_taken"):
-        await skills.update(session, mine.id, label="taken")
+        await skill_edits.update(session, mine.id, label="taken")
     assert (await view(session, mine.id)).label == "Mine"
-    assert (await skills.update(session, mine.id, label="Mine")).label == "Mine"
+    assert (await skill_edits.update(session, mine.id, label="Mine")).label == "Mine"
 
 
 async def test_renaming_a_bundled_skill_into_a_custom_label_is_refused(session):
     await make_custom(session, label="Taken")
     with pytest.raises(Conflict, match="skill_label_taken"):
-        await skills.update(session, "builtin:study-type", label="TAKEN")
+        await skill_edits.update(session, "builtin:study-type", label="TAKEN")
 
 
 async def test_hiding_a_skill_clears_both_of_its_defaults(session):
-    await skills.set_default(session, "builtin:study-type", "paper", True)
-    hidden = await skills.update(session, "builtin:study-type", is_listed=False)
+    await skill_edits.set_default(session, "builtin:study-type", "paper", True)
+    hidden = await skill_edits.update(session, "builtin:study-type", is_listed=False)
     assert (hidden.is_listed, hidden.is_paper_default, hidden.is_workspace_default) == (False, False, False)
 
 
 async def test_narrowing_scope_clears_a_default_the_new_scope_no_longer_covers(session):
-    await skills.set_default(session, "builtin:check-evaluation", "workspace", True)
-    narrowed = await skills.update(session, "builtin:check-evaluation", scope="paper")
+    await skill_edits.set_default(session, "builtin:check-evaluation", "workspace", True)
+    narrowed = await skill_edits.update(session, "builtin:check-evaluation", scope="paper")
     assert narrowed.scope == "paper" and narrowed.is_workspace_default is False
 
 
 async def test_an_update_of_an_unknown_skill_is_not_found(session):
     with pytest.raises(NotFound, match="skill_not_found"):
-        await skills.update(session, "builtin:nope", label="x")
+        await skill_edits.update(session, "builtin:nope", label="x")
 
 
 async def test_a_malformed_custom_id_is_not_found_not_a_crash(session):
@@ -230,8 +234,8 @@ async def test_a_malformed_custom_id_is_not_found_not_a_crash(session):
 
 async def test_a_custom_skill_can_be_deleted_and_its_default_goes_with_it(session):
     custom = await make_custom(session)
-    await skills.set_default(session, custom.id, "paper", True)
-    await skills.delete(session, custom.id)
+    await skill_edits.set_default(session, custom.id, "paper", True)
+    await skill_edits.delete(session, custom.id)
     assert custom.id not in [v.id for v in await skills.list_skills(session, include_hidden=True)]
     with pytest.raises(NotFound):
         await skills.get_view(session, custom.id)
@@ -239,23 +243,23 @@ async def test_a_custom_skill_can_be_deleted_and_its_default_goes_with_it(sessio
 
 async def test_a_bundled_skill_cannot_be_deleted(session):
     with pytest.raises(Conflict, match="builtin_skill"):
-        await skills.delete(session, "builtin:study-type")
+        await skill_edits.delete(session, "builtin:study-type")
 
 
 async def test_deleting_an_unknown_skill_is_not_found(session):
     with pytest.raises(NotFound, match="skill_not_found"):
-        await skills.delete(session, f"custom:{uuid.uuid4()}")
+        await skill_edits.delete(session, f"custom:{uuid.uuid4()}")
 
 
 # reset
 
 
 async def test_reset_returns_the_shipped_text_and_keeps_hidden_state(session):
-    await skills.update(session, "builtin:check-evaluation", label="Mine", instructions="Mine.")
-    await skills.update(session, "builtin:check-evaluation", is_listed=False)
+    await skill_edits.update(session, "builtin:check-evaluation", label="Mine", instructions="Mine.")
+    await skill_edits.update(session, "builtin:check-evaluation", is_listed=False)
     version_before = (await row_for(session, "check-evaluation")).version
 
-    reset = await skills.reset(session, "builtin:check-evaluation")
+    reset = await skill_edits.reset(session, "builtin:check-evaluation")
 
     shipped = skills.BUNDLED[1]
     assert (reset.label, reset.instructions, reset.state) == (shipped.label, shipped.instructions, "builtin")
@@ -265,20 +269,20 @@ async def test_reset_returns_the_shipped_text_and_keeps_hidden_state(session):
 
 
 async def test_reset_keeps_the_default(session):
-    await skills.update(session, "builtin:check-evaluation", instructions="Mine.")
-    await skills.set_default(session, "builtin:check-evaluation", "paper", True)
-    reset = await skills.reset(session, "builtin:check-evaluation")
+    await skill_edits.update(session, "builtin:check-evaluation", instructions="Mine.")
+    await skill_edits.set_default(session, "builtin:check-evaluation", "paper", True)
+    reset = await skill_edits.reset(session, "builtin:check-evaluation")
     assert (reset.state, reset.is_paper_default) == ("builtin", True)
 
 
 async def test_reset_refuses_a_custom_skill(session):
     custom = await make_custom(session)
     with pytest.raises(Conflict, match="custom_skill"):
-        await skills.reset(session, custom.id)
+        await skill_edits.reset(session, custom.id)
 
 
 async def test_reset_of_an_untouched_bundled_skill_changes_nothing(session):
-    untouched = await skills.reset(session, "builtin:study-type")
+    untouched = await skill_edits.reset(session, "builtin:study-type")
     assert untouched.state == "builtin"
     assert await row_for(session, "study-type") is None
 
@@ -287,16 +291,16 @@ async def test_reset_of_an_untouched_bundled_skill_changes_nothing(session):
 
 
 async def test_setting_a_paper_default_moves_it_from_the_old_holder(session):
-    await skills.set_default(session, "builtin:study-type", "paper", True)
-    await skills.set_default(session, "builtin:check-evaluation", "paper", True)
+    await skill_edits.set_default(session, "builtin:study-type", "paper", True)
+    await skill_edits.set_default(session, "builtin:check-evaluation", "paper", True)
     listed = {v.id: v for v in await skills.list_skills(session, kind="paper", include_hidden=True)}
     assert listed["builtin:check-evaluation"].is_paper_default
     assert not listed["builtin:study-type"].is_paper_default
 
 
 async def test_two_sequential_default_moves_leave_one_holder_and_no_error(session):
-    await skills.set_default(session, "builtin:study-type", "paper", True)
-    await skills.set_default(session, "builtin:plain-explanation", "paper", True)
+    await skill_edits.set_default(session, "builtin:study-type", "paper", True)
+    await skill_edits.set_default(session, "builtin:plain-explanation", "paper", True)
     holders = (
         await session.execute(select(func.count()).select_from(Skill).where(Skill.is_paper_default))
     ).scalar_one()
@@ -304,18 +308,18 @@ async def test_two_sequential_default_moves_leave_one_holder_and_no_error(sessio
 
 
 async def test_two_sequential_default_moves_per_kind_leave_one_holder_each(session):
-    await skills.set_default(session, "builtin:study-type", "paper", True)
-    await skills.set_default(session, "builtin:plain-explanation", "paper", True)
-    await skills.set_default(session, "builtin:check-evaluation", "workspace", True)
-    await skills.set_default(session, "builtin:unstated-limits", "workspace", True)
+    await skill_edits.set_default(session, "builtin:study-type", "paper", True)
+    await skill_edits.set_default(session, "builtin:plain-explanation", "paper", True)
+    await skill_edits.set_default(session, "builtin:check-evaluation", "workspace", True)
+    await skill_edits.set_default(session, "builtin:unstated-limits", "workspace", True)
     paper_holders = await session.scalar(select(func.count()).select_from(Skill).where(Skill.is_paper_default))
     workspace_holders = await session.scalar(select(func.count()).select_from(Skill).where(Skill.is_workspace_default))
     assert (paper_holders, workspace_holders) == (1, 1)
 
 
 async def test_each_chat_kind_has_its_own_default(session):
-    await skills.set_default(session, "builtin:study-type", "paper", True)
-    await skills.set_default(session, "builtin:check-evaluation", "workspace", True)
+    await skill_edits.set_default(session, "builtin:study-type", "paper", True)
+    await skill_edits.set_default(session, "builtin:check-evaluation", "workspace", True)
     shown = {v.id: v for v in await skills.list_skills(session, include_hidden=True)}
     assert shown["builtin:study-type"].is_paper_default and not shown["builtin:study-type"].is_workspace_default
     assert shown["builtin:check-evaluation"].is_workspace_default
@@ -324,19 +328,19 @@ async def test_each_chat_kind_has_its_own_default(session):
 
 async def test_a_workspace_default_on_a_paper_only_skill_is_a_scope_conflict(session):
     with pytest.raises(Conflict, match="skill_scope"):
-        await skills.set_default(session, "builtin:study-type", "workspace", True)
+        await skill_edits.set_default(session, "builtin:study-type", "workspace", True)
 
 
 async def test_switching_a_default_off_clears_it(session):
-    await skills.set_default(session, "builtin:study-type", "paper", True)
-    off = await skills.set_default(session, "builtin:study-type", "paper", False)
+    await skill_edits.set_default(session, "builtin:study-type", "paper", True)
+    off = await skill_edits.set_default(session, "builtin:study-type", "paper", False)
     assert off.is_paper_default is False
 
 
 async def test_deleting_the_default_skill_leaves_no_default_behind(session):
     custom = await make_custom(session, scope="workspace")
-    await skills.set_default(session, custom.id, "workspace", True)
-    await skills.delete(session, custom.id)
+    await skill_edits.set_default(session, custom.id, "workspace", True)
+    await skill_edits.delete(session, custom.id)
     assert not [v for v in await skills.list_skills(session, kind="workspace") if v.is_workspace_default]
 
 
@@ -364,7 +368,7 @@ async def test_resolve_of_an_unknown_id_is_not_found(session):
 
 
 async def test_a_hidden_skill_still_resolves_for_an_explicit_request(session):
-    await skills.update(session, "builtin:study-type", is_listed=False)
+    await skill_edits.update(session, "builtin:study-type", is_listed=False)
     resolved = await skills.resolve(session, "builtin:study-type", "paper")
     assert resolved.id == "builtin:study-type"
 
@@ -392,15 +396,15 @@ async def test_a_row_for_a_removed_bundled_skill_is_ignored_and_its_id_is_not_fo
 
 
 async def test_reset_refuses_to_bring_back_a_shipped_label_another_skill_now_has(session):
-    await skills.update(session, "builtin:check-evaluation", label="Baselines")
+    await skill_edits.update(session, "builtin:check-evaluation", label="Baselines")
     await make_custom(session, label="Check the evaluation")
     with pytest.raises(Conflict, match="skill_label_taken"):
-        await skills.reset(session, "builtin:check-evaluation")
+        await skill_edits.reset(session, "builtin:check-evaluation")
     assert (await view(session, "builtin:check-evaluation")).label == "Baselines"
 
 
 async def test_making_a_hidden_skill_the_default_shows_it_again(session):
-    await skills.update(session, "builtin:plain-explanation", is_listed=False)
-    shown = await skills.set_default(session, "builtin:plain-explanation", "paper", True)
+    await skill_edits.update(session, "builtin:plain-explanation", is_listed=False)
+    shown = await skill_edits.set_default(session, "builtin:plain-explanation", "paper", True)
     assert (shown.is_listed, shown.is_paper_default) == (True, True)
     assert "builtin:plain-explanation" in [v.id for v in await skills.list_skills(session, "paper")]

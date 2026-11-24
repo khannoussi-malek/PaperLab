@@ -11,7 +11,8 @@ from sqlalchemy import select, text
 
 from app.core.platform import llm_connections, queue
 from app.core.search import hit_import, source_clients
-from app.core.search.screening import hit_text, load_pool, suggestion_queue
+from app.core.search.hit_ranking import hit_text, load_pool
+from app.core.search.screening import suggestion_queue
 from app.core.search.screening_suggest import SCREENING_PROMPT_VERSION, SuggestionV2, suggest
 from app.db import SessionLocal, engine
 from app.domain.errors import Conflict

@@ -13,7 +13,7 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import delete, func, select, update
 
-from app.core.chat import chat, claims, retrieval
+from app.core.chat import chat, chat_context, claims, retrieval
 from app.core.notes import ai_notes, evidence_cards
 from app.core.papers import chunk_headers, library, papers
 from app.core.search import screening
@@ -359,7 +359,7 @@ async def test_library_search_and_chat_retrieval_find_a_paper_by_its_abstract(wo
 async def test_chat_context_names_the_abstract_not_page_0(session):
     paper = await papers.create_metadata_paper(session, PREFILL, "crossref")
     sources = await chat.chunk_sources(session, Chunk.paper_id == paper.id)
-    context = chat.format_context(paper, sources)
+    context = chat_context.format_context(paper, sources)
     assert context == f"[C1] (Quillfeather 2020, abstract only)\nSleep and memory. {ABSTRACT}"
     assert not PAGE_0.search(context)
 

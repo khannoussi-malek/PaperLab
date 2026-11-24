@@ -16,7 +16,7 @@ from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.api import chat as chat_api
+from app.api import chat_stream
 from app.api.deps import get_transport, resolve_check_llm, resolve_llm, resolve_llm_by_model_id
 from app.config import settings
 from app.core.chat import voice_turn
@@ -342,7 +342,7 @@ def answers_in_test_transaction(session, monkeypatch):
     async def test_session():
         yield session
 
-    monkeypatch.setattr(chat_api, "SessionLocal", test_session)
+    monkeypatch.setattr(chat_stream, "SessionLocal", test_session)
     monkeypatch.setattr(voice_turn, "SessionLocal", test_session)
 
 

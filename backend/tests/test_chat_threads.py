@@ -6,7 +6,7 @@ from conftest import unit_vector
 from sqlalchemy import delete, select
 from test_chat import chunks_of, make_paper
 
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers
 from app.core.papers import papers
 from app.domain.errors import Conflict, NotFound
 from app.models import LLMOutput, Workspace
@@ -85,7 +85,7 @@ async def test_save_answer_records_the_answer_it_follows(session):
     first = await answer(session, paper.id, "First?")
     prepared = await chat.prepare(session, paper.id, "Then?")
 
-    output_id = await chat.save_answer(
+    output_id = await chat_answers.save_answer(
         session, paper.id, "Then?", prepared, "Yes [C1].", "m", "Ollama", parent_id=first.id
     )
 
@@ -110,7 +110,9 @@ async def test_a_second_follow_up_carries_the_passages_the_first_follow_up_found
     for question in questions:
         thread = None if parent_id is None else await chat.load_thread(session, paper.id, parent_id)
         prepared = await chat.prepare(session, paper.id, question, embedder, thread=thread)
-        parent_id = await chat.save_answer(session, paper.id, question, prepared, "An answer.", "m", "c", parent_id)
+        parent_id = await chat_answers.save_answer(
+            session, paper.id, question, prepared, "An answer.", "m", "c", parent_id
+        )
 
     ids = {source.id for source in prepared.sources}
     assert groups[2] <= ids  # every fresh passage

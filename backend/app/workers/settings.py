@@ -22,17 +22,9 @@ from app.workers.harvest import (
     harvest_iacr_eprint,
     harvest_medrxiv,
 )
+from app.workers.header_jobs import add_chunk_headers, queue_chunk_headers
 from app.workers.hit_enrichment import ENRICH_JOB_TIMEOUT, enrich_hits
-from app.workers.ingest import (
-    INGEST_JOB_TIMEOUT,
-    MAX_TRIES,
-    add_chunk_headers,
-    embed_rest,
-    index_abstract,
-    ingest_paper,
-    queue_chunk_headers,
-    reembed_paper,
-)
+from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, embed_rest, index_abstract, ingest_paper, reembed_paper
 from app.workers.manuscript_diagrams import (
     DIAGRAM_JOB_TIMEOUT,
     compile_manuscript_diagram,

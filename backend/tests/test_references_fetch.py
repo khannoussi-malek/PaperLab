@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import func, select, text
 from test_references_providers import PagedS2, recorded_references
 
-from app.core.citations import references
+from app.core.citations import reference_embed, references
 from app.domain.errors import Conflict
 from app.models import ExternalRef, Paper, paper_references
 from app.providers import embedding, semantic_scholar
@@ -362,7 +362,7 @@ async def test_vectors_are_written_under_the_references_lock(library, embedder, 
         return await embed(model, texts)
 
     monkeypatch.setattr(embedding, "embed_documents", embed_noting_the_lock)
-    await references.embed_new(library, embedder)
+    await reference_embed.embed_new(library, embedder)
 
     assert locked == [True]
 
