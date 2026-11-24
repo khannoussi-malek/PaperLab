@@ -250,8 +250,8 @@ function openLink(url: string | undefined) {
   openPendingLink()
 }
 
-type Switch = 'keepRunning' | 'updatesEnabled' | 'captureEnabled'
-const SWITCHES: readonly unknown[] = ['keepRunning', 'updatesEnabled', 'captureEnabled']
+type Switch = 'keepRunning' | 'updatesEnabled' | 'captureEnabled' | 'captureAnimation'
+const SWITCHES: readonly unknown[] = ['keepRunning', 'updatesEnabled', 'captureEnabled', 'captureAnimation']
 const isSwitch = (name: unknown): name is Switch => SWITCHES.includes(name)
 
 /** The tray item: starts the helper again if it stopped (its stdin keeps the line until it reads it), then opens it. */
@@ -266,7 +266,14 @@ function startCaptureIfOn() {
   if (process.platform !== 'darwin' || !settings.captureEnabled || !stackReady || quitting) return
   const bin = captureBinary(resourcesDir())
   if (!existsSync(bin)) return log(`Quick Capture is not in this build (${bin})`)
-  capture ??= createCapture({ spawn: spawnChild(log), bin, port: settings.port, shortcut: settings.captureShortcut, log })
+  capture ??= createCapture({
+    spawn: spawnChild(log),
+    bin,
+    port: settings.port,
+    shortcut: settings.captureShortcut,
+    animation: settings.captureAnimation,
+    log,
+  })
   capture.start()
 }
 
@@ -314,6 +321,14 @@ function handleSwitches() {
     if (name === 'captureEnabled') {
       if (value) startCaptureIfOn()
       else capture?.stop()
+    }
+    if (name === 'captureAnimation' && capture !== null) {
+      // The helper reads it once, at start: a new one starts with the new setting once the old one has let go of
+      // the global shortcut.
+      capture.stop(() => {
+        capture = null
+        startCaptureIfOn()
+      })
     }
     syncTray()
   })

@@ -4,7 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { captureBridge, useDesktop, type PaperlabDesktop } from './desktop'
+import { captureAnimationBridge, captureBridge, useDesktop, type PaperlabDesktop } from './desktop'
 
 /** Settings → Desktop app (P5, P8): only inside the desktop app, where window.paperlabDesktop exists. */
 export function DesktopSettings() {
@@ -46,6 +46,16 @@ function DesktopSection({ desktop }: { desktop: PaperlabDesktop }) {
         'Press ⌃⌥P (or the shortcut set in settings.json) in any app to find a paper in your library, or add one by DOI, arXiv ID or link. Mac only.',
       read: capture.getCaptureEnabled,
       write: capture.setCaptureEnabled,
+    })
+  }
+  const animation = captureAnimationBridge(globalThis)
+  if (animation !== null) {
+    toggles.push({
+      id: 'quick-capture-animation',
+      label: 'Quick Capture animation',
+      help: "Stars and floating papers behind the panel when it opens. macOS's Reduce motion keeps them still.",
+      read: animation.getCaptureAnimation,
+      write: animation.setCaptureAnimation,
     })
   }
   return (

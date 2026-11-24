@@ -36,6 +36,7 @@ const quiet = () => {}
 describe('Quick Capture helper', () => {
   it('is started with the API port, its shortcut and commands on stdin', () => {
     expect(captureArgs(5190, 'ctrl+alt+p')).toEqual(['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin'])
+    expect(captureArgs(5190, 'ctrl+alt+p', false)).toEqual(['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin', '--no-galaxy'])
     expect(captureBinary('/Res')).toBe('/Res/capture/paperlab-capture')
     expect(shortcutLabel('ctrl+alt+p')).toBe('⌃⌥P')
     expect(shortcutLabel('cmd+shift+k')).toBe('⌘⇧K')
@@ -65,6 +66,19 @@ describe('Quick Capture helper', () => {
     expect(fake.calls).toHaveLength(1 + MAX_RESTARTS)
     expect(capture.running()).toBe(false)
     expect(logged.at(-1)).toMatch(/not restarted/)
+  })
+
+  it('waits for the stopped helper to exit before going on, so two never hold the shortcut', () => {
+    const fake = fakeSpawn()
+    const capture = createCapture({ spawn: fake.spawn, bin: '/b', port: 5190, shortcut: 's', log: quiet })
+    capture.start()
+    let next = 0
+    capture.stop(() => (next += 1))
+    expect(next).toBe(0)
+    fake.children[0].exit(null)
+    expect(next).toBe(1)
+    capture.stop(() => (next += 1)) // none running: at once
+    expect(next).toBe(2)
   })
 
   it('can be started again after a stop (the switch turned back on)', () => {

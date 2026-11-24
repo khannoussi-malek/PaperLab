@@ -60,3 +60,17 @@ export function captureBridge(scope: object): CaptureBridge | null {
     typeof candidate?.getCaptureEnabled === 'function' && typeof candidate?.setCaptureEnabled === 'function'
   return isComplete ? (candidate as CaptureBridge) : null
 }
+
+/** Quick Capture's Animation switch: the stars and floating papers behind the panel. */
+export type CaptureAnimationBridge = {
+  getCaptureAnimation(): Promise<boolean>
+  setCaptureAnimation(value: boolean): Promise<void>
+}
+
+/** The Animation switch on `scope`, or null when either method is missing (an older desktop app, or a browser). */
+export function captureAnimationBridge(scope: object): CaptureAnimationBridge | null {
+  const candidate = (scope as { paperlabDesktop?: Partial<CaptureAnimationBridge> }).paperlabDesktop
+  const isComplete =
+    typeof candidate?.getCaptureAnimation === 'function' && typeof candidate?.setCaptureAnimation === 'function'
+  return isComplete ? (candidate as CaptureAnimationBridge) : null
+}

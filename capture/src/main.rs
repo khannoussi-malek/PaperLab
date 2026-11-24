@@ -10,6 +10,8 @@
 #![forbid(unsafe_code)]
 
 mod api;
+mod galaxy;
+mod icon;
 mod input;
 mod library;
 mod panel;
@@ -35,6 +37,8 @@ pub struct App {
     /// None in tests: effects are kept in `sent` instead of performed.
     ctx: Option<Ctx>,
     sent: Vec<Effect>,
+    /// PaperLab's icon in the header, decoded once.
+    pub icon: rune::Pixels,
     /// When the shown list arrived; None after a failed fetch or an add, so the next show asks again.
     papers_at: Option<Instant>,
 }
@@ -44,11 +48,13 @@ struct Ctx {
     api: Api,
     /// `--browser`: open papers in this port's web app instead of the installed desktop app.
     browser: Option<u16>,
+    /// The galaxy behind the panel (galaxy.rs); None where there's no screen.
+    galaxy: Option<rune::OverlayHandle<galaxy::Galaxy>>,
 }
 
 impl App {
     fn new(ctx: Option<Ctx>) -> Self {
-        App { panel: Panel::default(), query: focused(""), ctx, sent: vec![], papers_at: None }
+        App { panel: Panel::default(), query: focused(""), ctx, sent: vec![], icon: icon::pixels(), papers_at: None }
     }
 
     pub fn dispatch(&mut self, event: Event) {
@@ -63,11 +69,19 @@ impl App {
     }
 
     pub fn close(&mut self) {
+        if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()) {
+            galaxy.update(|g, _| g.close());
+            galaxy.fade_out(Duration::from_millis(250));
+        }
         if let Some(ctx) = &self.ctx { ctx.me.close(); }
         self.dispatch(Event::Closed);
     }
 
     fn shown(&mut self) {
+        if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()) {
+            galaxy.update(|g, _| g.open());
+            galaxy.show(); // before the panel, which then orders in above it
+        }
         self.query = focused("");
         self.dispatch(Event::Shown);
     }
@@ -134,11 +148,13 @@ struct Args {
     shortcut: String,
     stdin: bool,
     browser: bool,
+    /// `--no-galaxy`: the panel alone, no stars or papers behind it (Settings → Desktop app → Animation).
+    galaxy: bool,
 }
 
 /// Our own flags; Rune's headless flags (`--snap`, `--scene`, …) pass through to Rune.
 fn args() -> Result<Args, String> {
-    let mut out = Args { port: DEFAULT_PORT, shortcut: DEFAULT_SHORTCUT.into(), stdin: false, browser: false };
+    let mut out = Args { port: DEFAULT_PORT, shortcut: DEFAULT_SHORTCUT.into(), stdin: false, browser: false, galaxy: true };
     let mut argv = std::env::args().skip(1);
     while let Some(arg) = argv.next() {
         match arg.as_str() {
@@ -146,6 +162,7 @@ fn args() -> Result<Args, String> {
             "--shortcut" => out.shortcut = argv.next().ok_or("--shortcut needs a chord like ctrl+alt+p")?,
             "--stdin" => out.stdin = true,
             "--browser" => out.browser = true,
+            "--no-galaxy" => out.galaxy = false,
             _ => {}
         }
     }
@@ -157,8 +174,11 @@ fn main() {
         eprintln!("paperlab-capture: {e}");
         std::process::exit(2);
     });
-    rune::run_windows(move |_| {
-        let app = rune::App::new(AppSpec {
+    rune::run_windows(move |displays| {
+        // The galaxy covers the main display, in points.
+        let screen = displays.iter().find(|d| d.primary).or(displays.first()).filter(|d| d.scale > 0.0)
+            .map_or((1440.0, 900.0), |d| ((d.size.0 as f64 / d.scale) as f32, (d.size.1 as f64 / d.scale) as f32));
+        let mut app = rune::App::new(AppSpec {
             scenes: scenes::ALL,
             ..AppSpec::new("Quick Capture", (view::WIDTH, 56.0), || unreachable!(), view::view)
         })
@@ -183,14 +203,16 @@ fn main() {
             // Warm the library before the first show: listing a big library takes seconds.
             background(me.clone(), { let api = api.clone(); move || Event::Papers(api.papers()) });
         }
-        let ctx = Ctx { me, api, browser: args.browser.then_some(args.port) };
+        let galaxy = (args.galaxy && !rune::is_headless())
+            .then(|| app.overlay(galaxy::spec(screen), galaxy::Galaxy::new(screen)));
+        let ctx = Ctx { me, api, browser: args.browser.then_some(args.port), galaxy };
         let app = app
             .init(move || App::new(Some(ctx)))
             .global_shortcut_named(&args.shortcut, "quick-capture", "Open PaperLab Quick Capture", |s, _| {
                 if let Some(ctx) = &s.ctx { show(&ctx.me); }
             })
             .on_focus(|s, focused, _| if !focused { s.close() });
-        [WindowSpec::from_app("capture", app).configured_options(WindowOptions::launcher_panel())]
+        [WindowSpec::from_app("capture", app).configured_options(WindowOptions::launcher_panel().macos(|native| native.shadow(true).corner_radius(14.0)))]
     });
 }
 

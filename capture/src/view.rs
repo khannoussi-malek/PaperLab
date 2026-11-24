@@ -1,7 +1,7 @@
 //! What the panel draws for a `Panel` state: the field, one line saying what's happening, and the rows Enter acts on.
 
 use rune::tok::{self, type_};
-use rune::{Color, Cx, El, Key, KeyEvent, Tx, col, el, row, text, text_input};
+use rune::{Color, Cx, El, Key, KeyEvent, SystemMaterial, Tx, col, el, row, text, text_input};
 
 use crate::App;
 use crate::library::{Paper, byline};
@@ -9,12 +9,22 @@ use crate::panel::{Event, Phase, Row, UNREACHABLE};
 
 pub const WIDTH: f32 = 600.0;
 
+/// The blue of PaperLab's icon, for the light behind it in the header.
+fn logo_blue() -> Color {
+    rune::color::hex("#2664ee").expect("a valid colour")
+}
+
 pub fn view(app: &App, cx: &mut Cx<App>) -> El {
     let dark = cx.system_dark();
     let t = tok::theme(dark);
+    // Text follows the system's appearance but the glass takes its lightness from what's behind the panel, so the
+    // panel carries a veil of its own card colour: light text always sits on dark, dark text on light. Secondary
+    // lines derive from the text colour, so they keep their contrast in both modes.
+    let veil = t.card.alpha(if dark { 0.62 } else { 0.58 });
+    let muted = t.text.alpha(0.72);
     let p = &app.panel;
     let field = text_input(&app.query, type_::BODY.lh(26.0)).key("query").single_line().grow(1.0)
-        .color(t.text).placeholder("Find a paper, or paste a DOI, arXiv ID or link", t.text_secondary)
+        .color(t.text).placeholder("Find a paper, or paste a DOI, arXiv ID or link", muted)
         .on_edit(|s: &mut App| &mut s.query)
         .on_input_change(|s: &mut App, _| { let q = s.query.text.clone(); s.dispatch(Event::Query(q)); })
         .on_input_key(|s: &mut App, ev: &KeyEvent, _: &mut Tx| {
@@ -27,10 +37,16 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
             true
         })
         .on_submit(|s: &mut App, _| s.dispatch(Event::Submit));
+    // Liquid Glass over whatever is behind the window (the card colour where glass can't show: older macOS, headless).
+    let glow = logo_blue().alpha(if dark { 0.34 } else { 0.2 });
     let mut panel = col().key("panel").w(WIDTH).radius(14.0).clip_rounded(14.0).fill(t.card)
+        .system_material(SystemMaterial::Glass)
         .border(1.0, if dark { Color::WHITE.alpha(0.1) } else { t.separator })
+        .child(el().key("veil").absolute(0.0, 0.0).w_full().h_full().fill(veil))
         .child(row().h(56.0).px(18.0).gap(12.0).center_y()
-            .child(text("⌕").font(type_::TITLE.lh(26.0)).color(t.text_secondary))
+            // A soft light in the logo's blue, centred on the icon and fading out across the field.
+            .radial_gradient([31.0, 28.0], [220.0, 72.0], [(0.0, glow), (1.0, glow.alpha(0.0))])
+            .child(el().size(26.0, 26.0).radius(6.0).pixels(&app.icon))
             .child(field));
     let status = status_line(p);
     let rows = p.rows();
@@ -39,7 +55,7 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
     }
     if let Some(line) = status {
         panel = panel.child(row().key("status").px(18.0).py(10.0)
-            .child(text(line).font(type_::LABEL).color(t.text_secondary).w_full()));
+            .child(text(line).font(type_::LABEL).color(muted).w_full()));
     }
     if !rows.is_empty() {
         let mut list = col().key("rows").padding(6.0).gap(2.0);
@@ -51,9 +67,9 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
                 .fill(if on { tok::accent(0, dark).alpha(0.9) } else { Color::TRANSPARENT })
                 .child(col().grow(1.0).shrink().gap(2.0)
                     .child(text(title).font(type_::BODY).color(ink).truncate())
-                    .child(text(detail).font(type_::LABEL).color(if on { ink.alpha(0.8) } else { t.text_secondary }).truncate()));
+                    .child(text(detail).font(type_::LABEL).color(if on { ink.alpha(0.8) } else { muted }).truncate()));
             if let Some(badge) = badge(p, r) {
-                line = line.child(text(badge).font(type_::LABEL).color(if on { ink } else { t.text_secondary }));
+                line = line.child(text(badge).font(type_::LABEL).color(if on { ink } else { muted }));
             }
             list = list.child(line);
         }

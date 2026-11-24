@@ -20,6 +20,8 @@ export type Settings = {
   captureEnabled: boolean
   /** Its global shortcut, in the helper's own form ("ctrl+alt+p"); changed here, not in the app, for now. */
   captureShortcut: string
+  /** The stars and floating papers behind the Quick Capture panel. On by default; Reduce motion stills them anyway. */
+  captureAnimation: boolean
 }
 
 export const DEFAULTS: Settings = {
@@ -32,6 +34,7 @@ export const DEFAULTS: Settings = {
   voiceEnabled: false,
   captureEnabled: true,
   captureShortcut: 'ctrl+alt+p',
+  captureAnimation: true,
 }
 
 const isPort = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 65535
@@ -61,6 +64,7 @@ export function parseSettings(text: string): Settings {
     voiceEnabled: typeof raw.voiceEnabled === 'boolean' ? raw.voiceEnabled : DEFAULTS.voiceEnabled,
     captureEnabled: typeof raw.captureEnabled === 'boolean' ? raw.captureEnabled : DEFAULTS.captureEnabled,
     captureShortcut: isShortcut(raw.captureShortcut) ? raw.captureShortcut : DEFAULTS.captureShortcut,
+    captureAnimation: typeof raw.captureAnimation === 'boolean' ? raw.captureAnimation : DEFAULTS.captureAnimation,
   }
 }
 
