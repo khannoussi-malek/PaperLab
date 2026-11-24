@@ -168,6 +168,20 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
       - run: npm run build
+      # Quick Capture (M65): the Rust helper for both Apple architectures, copied into each DMG by package.json.
+      - name: Quick Capture build cache
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            capture/target
+          key: capture-${{ hashFiles('capture/Cargo.lock', 'capture/rust-toolchain.toml') }}
+      - name: Quick Capture (both Apple architectures)
+        if: runner.os == 'macOS'
+        working-directory: capture
+        run: ./build-dist.sh
       # Targets, architectures and ad-hoc signing are in package.json's build key. The release job publishes.
       - run: npx electron-builder ${{ matrix.args }} --publish never
       - uses: actions/upload-artifact@v7

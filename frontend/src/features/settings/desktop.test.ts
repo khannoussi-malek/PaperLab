@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { desktopBridge, voiceBridge, type PaperlabDesktop, type VoiceBridge } from './desktop'
+import { captureBridge, desktopBridge, voiceBridge, type PaperlabDesktop, type VoiceBridge } from './desktop'
 
 const bridge: PaperlabDesktop = {
   getKeepRunning: async () => false,
@@ -52,5 +52,14 @@ describe('voiceBridge', () => {
   it('is null when any one of the five voice methods is missing', () => {
     const { voiceOutOfMemory: _missing, ...partial } = voice
     expect(voiceBridge({ paperlabDesktop: { ...bridge, ...partial } })).toBeNull()
+  })
+})
+
+describe('captureBridge', () => {
+  it('is the Quick Capture switch when the desktop app has both methods, else null', () => {
+    const both = { getCaptureEnabled: async () => true, setCaptureEnabled: async () => undefined }
+    expect(captureBridge({ paperlabDesktop: both })).toBe(both)
+    expect(captureBridge({ paperlabDesktop: { getCaptureEnabled: both.getCaptureEnabled } })).toBeNull()
+    expect(captureBridge({})).toBeNull()
   })
 })

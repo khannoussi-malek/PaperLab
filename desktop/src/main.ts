@@ -3,12 +3,14 @@
  * window safety, closing and the tray, the Settings switches (preload.ts), old images and the update check.
  */
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import { backUp } from './backup'
+import { captureBinary, createCapture, shortcutLabel, spawnChild, type Capture } from './capture'
 import { findDocker, makeDocker, spawnRunner, staleTags, usable, type Docker } from './docker'
 import { linkIn, readerHash } from './deepLink'
 import { fileLog } from './log'
@@ -46,6 +48,8 @@ let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let launching: AbortController | null = null
 let quitting = false
+let capture: Capture | null = null
+let stackReady = false
 
 function setSettings(patch: Partial<Settings>) {
   settings = updateSettings(DATA, settings, patch)
@@ -121,6 +125,8 @@ async function start() {
   if (screen.kind !== 'ready' || win === null) return
   await win.loadURL(screen.url).catch((error: unknown) => log(`loading PaperLab: ${String(error)}`))
   openPendingLink()
+  stackReady = true
+  startCaptureIfOn()
   if (docker !== null) {
     void startVoiceIfOn(settings, docker, log)
     void afterReady(docker)
@@ -244,8 +250,25 @@ function openLink(url: string | undefined) {
   openPendingLink()
 }
 
-type Switch = 'keepRunning' | 'updatesEnabled'
-const isSwitch = (name: unknown): name is Switch => name === 'keepRunning' || name === 'updatesEnabled'
+type Switch = 'keepRunning' | 'updatesEnabled' | 'captureEnabled'
+const SWITCHES: readonly unknown[] = ['keepRunning', 'updatesEnabled', 'captureEnabled']
+const isSwitch = (name: unknown): name is Switch => SWITCHES.includes(name)
+
+/** The tray item: starts the helper again if it stopped (its stdin keeps the line until it reads it), then opens it. */
+function showQuickCapture() {
+  startCaptureIfOn()
+  capture?.show()
+}
+
+/** Quick Capture (capture.ts) runs while its switch is on and the stack answers: macOS, and a build that has it (dev
+ * runs it with cargo instead). */
+function startCaptureIfOn() {
+  if (process.platform !== 'darwin' || !settings.captureEnabled || !stackReady || quitting) return
+  const bin = captureBinary(resourcesDir())
+  if (!existsSync(bin)) return log(`Quick Capture is not in this build (${bin})`)
+  capture ??= createCapture({ spawn: spawnChild(log), bin, port: settings.port, shortcut: settings.captureShortcut, log })
+  capture.start()
+}
 
 /** Only PaperLab's own page may read or flip the switches, and only with a boolean. */
 function fromPaperLab(event: IpcMainInvokeEvent): boolean {
@@ -287,7 +310,11 @@ function handleSwitches() {
   })
   ipcMain.handle('paperlab:set', (event, name: unknown, value: unknown) => {
     if (!fromPaperLab(event) || !isSwitch(name) || typeof value !== 'boolean') throw new Error('refused')
-    setSettings(name === 'keepRunning' ? { keepRunning: value } : { updatesEnabled: value })
+    setSettings({ [name]: value })
+    if (name === 'captureEnabled') {
+      if (value) startCaptureIfOn()
+      else capture?.stop()
+    }
     syncTray()
   })
 }
@@ -311,12 +338,18 @@ function syncTray() {
     tray = null
     return
   }
-  if (tray !== null) return
-  tray = new Tray(trayImage())
-  tray.setToolTip('PaperLab')
+  if (tray === null) {
+    tray = new Tray(trayImage())
+    tray.setToolTip('PaperLab')
+  }
+  const quickCapture =
+    process.platform === 'darwin' && settings.captureEnabled && existsSync(captureBinary(resourcesDir()))
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open PaperLab', click: showWindow },
+      ...(quickCapture
+        ? [{ label: `Quick Capture (${shortcutLabel(settings.captureShortcut)})`, click: showQuickCapture }]
+        : []),
       { label: 'Quit PaperLab', click: () => app.quit() },
     ]),
   )
@@ -326,6 +359,7 @@ function syncTray() {
  * shutdown are never held up. */
 async function stopAndExit() {
   quitting = true
+  capture?.stop()
   launching?.abort()
   tray?.destroy()
   if (win !== null && DEV_URL === null) {

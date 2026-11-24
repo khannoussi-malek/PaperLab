@@ -46,3 +46,17 @@ export function voiceBridge(scope: object): VoiceBridge | null {
 export function useVoiceBridge(): VoiceBridge | null {
   return voiceBridge(globalThis)
 }
+
+/** Quick Capture's switch (M65), on the same bridge in a desktop app that has the helper. */
+export type CaptureBridge = {
+  getCaptureEnabled(): Promise<boolean>
+  setCaptureEnabled(value: boolean): Promise<void>
+}
+
+/** The Quick Capture switch on `scope`, or null when either method is missing (an older desktop app, or a browser). */
+export function captureBridge(scope: object): CaptureBridge | null {
+  const candidate = (scope as { paperlabDesktop?: Partial<CaptureBridge> }).paperlabDesktop
+  const isComplete =
+    typeof candidate?.getCaptureEnabled === 'function' && typeof candidate?.setCaptureEnabled === 'function'
+  return isComplete ? (candidate as CaptureBridge) : null
+}

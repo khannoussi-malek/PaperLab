@@ -310,6 +310,8 @@ it needs, so there is no repo to clone and no server to run. Docker is the one t
 highlighting and notes work without either, and you can set them up later in **Settings**.
 - Closing the window stops PaperLab. Turn on **Keep running** and it stays in the menu bar instead, so Claude
 Desktop can reach your library and uploads keep processing while the window is closed.
+- On a Mac, **Quick Capture** opens over any app with ⌃⌥P: type to find a paper in your library and open it, or paste
+a DOI, arXiv ID or link to add it and watch it get ready. Turn it off in **Settings → Desktop app**.
 
 ## Principles
 
