@@ -3,6 +3,7 @@ codebase's 800-line file cap) — a pure move, no behavior change. Reuses worksp
 run-ownership check every other workspace-search mutation uses, rather than duplicating it here."""
 
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -85,6 +86,119 @@ async def citation_searching(session: AsyncSession, workspace_id: uuid.UUID, hit
     ]
 
 
+@dataclass(frozen=True)
+class _Scope:
+    """The runs one export counts: one run, or every run in the workspace."""
+
+    runs: list[WorkspaceSearchRun]
+    stats_identified: int  # raw, pre-dedup database-search counts from the runs' stats_json
+    hit_filter: object  # the WHERE clause selecting the counted hits
+    per_run: bool
+
+
+def _raw_count(run: WorkspaceSearchRun) -> int:
+    return sum(run.stats_json.get("per_source_raw_count", {}).values())
+
+
+async def _scope(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID | None) -> _Scope:
+    if run_id is not None:
+        run = await get_run(session, run_id, workspace_id)
+        return _Scope([run], _raw_count(run), WorkspaceSearchHit.run_id == run_id, per_run=True)
+    query = select(WorkspaceSearchRun).where(WorkspaceSearchRun.workspace_id == workspace_id)
+    runs = list((await session.execute(query)).scalars().all())
+    return _Scope(runs, sum(_raw_count(r) for r in runs), WorkspaceSearchHit.workspace_id == workspace_id, False)
+
+
+async def _retrieved(session: AsyncSession, relevant: list) -> list:
+    """R9: retrieved means the full text is here. A hit whose paper has no PDF is not retrieved, whatever its status
+    says, and only a retrieved hit's paper can have been assessed: an eligibility row for any other (written before
+    set_eligibility refused it, or while a PDF has arrived but its hit hasn't moved yet) is left out."""
+    paper_ids = {h.paper_id for h in relevant if h.paper_id is not None}
+    pdfless = set(
+        (await session.scalars(select(Paper.id).where(Paper.id.in_(paper_ids), Paper.file_path.is_(None)))).all()
+    )
+    return [h for h in relevant if h.acquisition_status in RETRIEVED and h.paper_id not in pdfless]
+
+
+_EPOCH = datetime.min.replace(tzinfo=timezone.utc)
+
+
+async def _latest_eligibility(
+    session: AsyncSession, paper_ids: list[uuid.UUID], run_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, SearchRunEligibility]:
+    """The most recently assessed eligibility row per paper, among the counted runs' rows only.
+
+    Combined view: the same paper can carry eligibility rows from more than one run in this workspace, so the latest
+    wins. Never another workspace's runs: papers are shared, so a paper screened in two workspaces would otherwise
+    leak an unrelated verdict into this export. Per-run view: run_ids is just that run, so only its own verdict."""
+    query = select(SearchRunEligibility).where(
+        SearchRunEligibility.paper_id.in_(paper_ids), SearchRunEligibility.search_run_id.in_(run_ids)
+    )
+    latest: dict[uuid.UUID, SearchRunEligibility] = {}
+    for row in (await session.execute(query)).scalars().all():
+        current = latest.get(row.paper_id)
+        if current is None or (row.assessed_at or _EPOCH) > (current.assessed_at or _EPOCH):
+            latest[row.paper_id] = row
+    return latest
+
+
+def _automation(workspace: Workspace, hits: list) -> list[str]:
+    """PRISMA 2020 item 8: the automation tools used in screening."""
+    ranked = [RANKED_NOTE] if workspace.screening_ranked_used else []
+    models = sorted({h.suggestion_model for h in hits if h.suggestion_model})
+    return ranked + ([SUGGESTION_NOTE.format(models=", ".join(models))] if models else [])
+
+
+@dataclass(frozen=True)
+class _Coverage:
+    notes: list[str]
+    sources_searched: list[str]
+    sources_not_searched: list[str]
+    per_run: dict[uuid.UUID, tuple[list[str], list[str]]]  # run id -> (reached, missed)
+
+
+def _stop_notes(runs: list[WorkspaceSearchRun]) -> list[str]:
+    """D266 caveats for runs cut short at their time limit, then for runs paused at the per-pass limit."""
+    cut = [r for r in runs if r.stats_json.get("cut_short")]
+    unfinished = sorted({src for r in cut for src in r.stats_json.get("unfinished_sources", [])})
+    notes = [PARTIAL_NOTE.format(count=len(cut), sources=", ".join(unfinished) or "unknown")] if cut else []
+    paused_runs = [r for r in runs if r.stats_json.get("paused_sources")]
+    if not paused_runs:
+        return notes
+    paused = sorted({src for r in paused_runs for src in r.stats_json["paused_sources"]})
+    return notes + [PAUSED_NOTE.format(count=len(paused_runs), limit=PER_SOURCE_PASS_LIMIT, sources=", ".join(paused))]
+
+
+async def _coverage(session: AsyncSession, runs: list[WorkspaceSearchRun]) -> _Coverage:
+    """Which sources the runs reached or missed, with the notes on stopped runs and sources that did not answer."""
+    cursors = await search_run_results.cursors_by_run(session, [r.id for r in runs])
+    results = {r.id: search_run_results.source_results(r, cursors.get(r.id, [])) for r in runs}
+    per_run = {run_id: search_run_results.searched(found) for run_id, found in results.items()}
+    searched = sorted({s for reached, _ in per_run.values() for s in reached})
+    not_searched = sorted({s for _, missed in per_run.values() for s in missed} - set(searched))
+    failed = sorted({src for r in runs for src in search_run_results.failed_sources(r, results[r.id])})
+    notes = _stop_notes(runs)
+    if failed:
+        names = ", ".join(NAMES.get(s, s) for s in failed)
+        notes = notes + [FAILED_NOTE.format(sources=names, them="them" if len(failed) > 1 else "it")]
+    return _Coverage(notes, searched, not_searched, per_run)
+
+
+async def _runs_meta(session: AsyncSession, scope: _Scope, coverage: _Coverage) -> list[dict]:
+    """Per-run metadata for the methods section: [] for a per-run export (the caller already knows the run)."""
+    if scope.per_run:
+        return []
+    labels = await search_run_results.run_labels(session, scope.runs)
+    return [
+        {
+            "id": str(r.id), "query_text": labels[r.id], "filters_json": r.filters_json,
+            "started_at": r.started_at.isoformat(),
+            "sources_searched": coverage.per_run[r.id][0], "sources_not_searched": coverage.per_run[r.id][1],
+        }
+        for r in scope.runs
+    ]
+
+
 async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID | None) -> PrismaExport:
     """Combined (run_id=None, every run in the workspace deduped together) or per-run PRISMA funnel, per spec
     §4/§13.
@@ -97,124 +211,36 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
     real number — this also matches PRISMA convention, where citation-chasing is its own "identified via other
     methods" line. Applied identically in both branches: a snowball hop's own lightweight run (snowball()
     creates one per call, WorkspaceSearchHit.run_id is NOT NULL) reports its own hit as identified in its own
-    per-run breakdown too, since the per-run hit_query below is already scoped to that run_id."""
-    if run_id is not None:
-        run = await get_run(session, run_id, workspace_id)
-        stats_identified = sum(run.stats_json.get("per_source_raw_count", {}).values())
-        hit_query = select(*_HIT_COLUMNS).where(WorkspaceSearchHit.run_id == run_id)
-        runs_meta = []
-        workspace_run_ids = [run_id]
-        counted_runs = [run]
-    else:
-        runs = (
-            await session.execute(select(WorkspaceSearchRun).where(WorkspaceSearchRun.workspace_id == workspace_id))
-        ).scalars().all()
-        stats_identified = sum(sum(r.stats_json.get("per_source_raw_count", {}).values()) for r in runs)
-        hit_query = select(*_HIT_COLUMNS).where(WorkspaceSearchHit.workspace_id == workspace_id)
-        labels = await search_run_results.run_labels(session, runs)
-        runs_meta = [
-            {
-                "id": str(r.id), "query_text": labels[r.id], "filters_json": r.filters_json,
-                "started_at": r.started_at.isoformat(),
-            }
-            for r in runs
-        ]
-        workspace_run_ids = [r.id for r in runs]
-        counted_runs = list(runs)
+    per-run breakdown too, since the per-run hit query (_scope) is already scoped to that run_id."""
+    scope = await _scope(session, workspace_id, run_id)
+    hits = (await session.execute(select(*_HIT_COLUMNS).where(scope.hit_filter))).all()
+    identified = scope.stats_identified + sum(1 for h in hits if h.source_method != "database_search")
 
-    hits = (await session.execute(hit_query)).all()
-    identified = stats_identified + sum(1 for h in hits if h.source_method != "database_search")
-    duplicates_removed = max(identified - len(hits), 0)
-
-    stage1_screened = sum(1 for h in hits if h.stage1_status is not None)
     excluded = [h for h in hits if h.stage1_status == "not_relevant"]
-    stage1_excluded_by_reason: dict[str, int] = {}
-    for h in excluded:
-        reason = h.stage1_exclude_reason
-        stage1_excluded_by_reason[reason] = stage1_excluded_by_reason.get(reason, 0) + 1
-
     relevant = [h for h in hits if h.stage1_status == "relevant"]
-    sought = len(relevant)
-    # R9: retrieved means the full text is here. A hit whose paper has no PDF is not retrieved, whatever its status
-    # says, and only a retrieved hit's paper can have been assessed: an eligibility row for any other (written before
-    # set_eligibility refused it, or while a PDF has arrived but its hit hasn't moved yet) is left out.
-    paper_ids = {h.paper_id for h in relevant if h.paper_id is not None}
-    pdfless = set(
-        (await session.scalars(select(Paper.id).where(Paper.id.in_(paper_ids), Paper.file_path.is_(None)))).all()
-    )
-    retrieved = [h for h in relevant if h.acquisition_status in RETRIEVED and h.paper_id not in pdfless]
-    not_retrieved = sought - len(retrieved)
-
-    in_corpus_paper_ids = [h.paper_id for h in retrieved if h.paper_id is not None]
-    # Combined view: the same paper can carry eligibility rows from more than one run — take the most recently
-    # assessed_at per paper_id, across ALL of that paper's eligibility rows from a run IN THIS WORKSPACE (not
-    # just this run's, but never another workspace's — papers are shared/reusable entities, not 1:1 with a
-    # workspace, so a paper independently screened in two different workspaces would otherwise leak an unrelated
-    # workspace's verdict into this export whenever it happened to be the more recently assessed one). Per-run
-    # view: scoped to just this run's own verdict (workspace_run_ids == [run_id] there).
-    elig_query = select(SearchRunEligibility).where(
-        SearchRunEligibility.paper_id.in_(in_corpus_paper_ids),
-        SearchRunEligibility.search_run_id.in_(workspace_run_ids),
-    )
-    elig_rows = (await session.execute(elig_query)).scalars().all()
-    latest_by_paper: dict[uuid.UUID, SearchRunEligibility] = {}
-    for row in elig_rows:
-        current = latest_by_paper.get(row.paper_id)
-        if current is None or (row.assessed_at or datetime.min.replace(tzinfo=timezone.utc)) > (
-            current.assessed_at or datetime.min.replace(tzinfo=timezone.utc)
-        ):
-            latest_by_paper[row.paper_id] = row
-
-    stage2_assessed = len(latest_by_paper)
-    stage2_excluded_rows = [r for r in latest_by_paper.values() if r.stage2_status == "exclude"]
-    stage2_excluded = len(stage2_excluded_rows)
-    stage2_excluded_by_reason: dict[str, int] = {}
-    for r in stage2_excluded_rows:
-        reason = r.stage2_exclude_reason or "unspecified"
-        stage2_excluded_by_reason[reason] = stage2_excluded_by_reason.get(reason, 0) + 1
-    included = sum(1 for r in latest_by_paper.values() if r.stage2_status == "include")
+    retrieved = await _retrieved(session, relevant)
+    in_corpus = [h.paper_id for h in retrieved if h.paper_id is not None]
+    latest = await _latest_eligibility(session, in_corpus, [r.id for r in scope.runs])
+    stage2_excluded = [r for r in latest.values() if r.stage2_status == "exclude"]
 
     workspace = await session.get(Workspace, workspace_id)
     if workspace is None:
         raise NotFound(f"workspace {workspace_id} not found")
-    automation = [RANKED_NOTE] if workspace.screening_ranked_used else []
-    models = sorted({h.suggestion_model for h in hits if h.suggestion_model})
-    if models:
-        automation.append(SUGGESTION_NOTE.format(models=", ".join(models)))
-
-    cut = [r for r in counted_runs if r.stats_json.get("cut_short")]
-    unfinished = sorted({src for r in cut for src in r.stats_json.get("unfinished_sources", [])})
-    notes = [PARTIAL_NOTE.format(count=len(cut), sources=", ".join(unfinished) or "unknown")] if cut else []
-    paused_runs = [r for r in counted_runs if r.stats_json.get("paused_sources")]
-    if paused_runs:
-        paused = sorted({src for r in paused_runs for src in r.stats_json["paused_sources"]})
-        notes.append(PAUSED_NOTE.format(
-            count=len(paused_runs), limit=PER_SOURCE_PASS_LIMIT, sources=", ".join(paused)))
-    cursors = await search_run_results.cursors_by_run(session, [r.id for r in counted_runs])
-    results = {r.id: search_run_results.source_results(r, cursors.get(r.id, [])) for r in counted_runs}
-    run_searched = {run_id: search_run_results.searched(found) for run_id, found in results.items()}
-    sources_searched = sorted({s for reached, _ in run_searched.values() for s in reached})
-    sources_not_searched = sorted({s for _, missed in run_searched.values() for s in missed} - set(sources_searched))
-    for meta in runs_meta:
-        reached, missed = run_searched[uuid.UUID(meta["id"])]
-        meta.update(sources_searched=reached, sources_not_searched=missed)
-    failed = sorted({
-        src for r in counted_runs for src in search_run_results.failed_sources(r, results[r.id])
-    })
-    if failed:
-        notes.append(FAILED_NOTE.format(
-            sources=", ".join(NAMES.get(s, s) for s in failed), them="them" if len(failed) > 1 else "it"))
-
+    coverage = await _coverage(session, scope.runs)
     # Per-run export of a database search: its hits are all level 0, so no provenance walk is needed.
-    cited = [] if run_id is not None and all(h.source_method == "database_search" for h in hits) else (
+    cited = [] if scope.per_run and all(h.source_method == "database_search" for h in hits) else (
         await citation_searching(session, workspace_id, hits))
     return PrismaExport(
-        identified=identified, identified_databases=max(identified - sum(c["identified"] for c in cited), 0), duplicates_removed=duplicates_removed, stage1_screened=stage1_screened,
-        stage1_excluded=len(excluded), stage1_excluded_by_reason=stage1_excluded_by_reason,
-        sought=sought, not_retrieved=not_retrieved, stage2_assessed=stage2_assessed,
-        stage2_excluded=stage2_excluded, stage2_excluded_by_reason=stage2_excluded_by_reason,
-        included=included, runs=runs_meta,
-        automation=automation, notes=notes, screening_criteria=workspace.screening_criteria,
-        sources_searched=sources_searched, sources_not_searched=sources_not_searched,
+        identified=identified, identified_databases=max(identified - sum(c["identified"] for c in cited), 0),
+        duplicates_removed=max(identified - len(hits), 0),
+        stage1_screened=sum(1 for h in hits if h.stage1_status is not None), stage1_excluded=len(excluded),
+        stage1_excluded_by_reason=dict(Counter(h.stage1_exclude_reason for h in excluded)),
+        sought=len(relevant), not_retrieved=len(relevant) - len(retrieved), stage2_assessed=len(latest),
+        stage2_excluded=len(stage2_excluded),
+        stage2_excluded_by_reason=dict(Counter(r.stage2_exclude_reason or "unspecified" for r in stage2_excluded)),
+        included=sum(1 for r in latest.values() if r.stage2_status == "include"), runs=await _runs_meta(
+            session, scope, coverage),
+        automation=_automation(workspace, hits), notes=coverage.notes, screening_criteria=workspace.screening_criteria,
+        sources_searched=coverage.sources_searched, sources_not_searched=coverage.sources_not_searched,
         citation_searching=cited,
     )

@@ -44,7 +44,6 @@ LONG: dict[str, int] = {
     "app/core/search/hit_import.py::import_hits": 97,
     "app/core/search/hit_import.py::upload_hit_pdf": 67,
     "app/core/search/hit_provenance.py::provenance": 71,
-    "app/core/search/prisma_export.py::prisma_export": 133,
     "app/core/search/search_hits.py::list_hits": 71,
     "app/core/search/snowball_run.py::snowball": 116,
     "app/core/workspaces/package_screening_import.py::rebuild": 71,
