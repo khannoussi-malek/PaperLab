@@ -52,4 +52,13 @@ describe('packaging', () => {
       'trayTemplate@2x.png',
     ])
   })
+
+  it('puts Quick Capture for the build\'s own arch where the app starts it (macOS only)', () => {
+    const { build } = config()
+
+    expect(build.mac.extraResources).toEqual([
+      { from: '../capture/dist/${arch}/paperlab-capture', to: 'capture/paperlab-capture' },
+    ])
+    expect(build.extraResources.some((resource: { to: string }) => resource.to.startsWith('capture/'))).toBe(false)
+  })
 })
