@@ -65,11 +65,13 @@ pub struct Panel {
     pub reachable: bool,
     seq: u64,
     polling: Option<String>,
+    /// Closed since it was last shown: an add finishing now is kept but not followed.
+    hidden: bool,
 }
 
 impl Default for Panel {
     fn default() -> Self {
-        Panel { query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true, seq: 0, polling: None }
+        Panel { query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true, seq: 0, polling: None, hidden: false }
     }
 }
 
@@ -103,6 +105,11 @@ impl Panel {
             }
             Event::Closed => {
                 self.polling = None;
+                self.hidden = true;
+                vec![]
+            }
+            Event::Query(q) if matches!(self.phase, Phase::Adding(_)) => {
+                self.query = q; // the add in flight keeps the panel: its answer must not be dropped
                 vec![]
             }
             Event::Query(q) => {
@@ -154,9 +161,11 @@ impl Panel {
             }
             Event::AddDone(result) => {
                 let Phase::Adding(candidate) = &self.phase else { return vec![] };
+                self.picked = 0; // the rows change: Enter acts on the first one
                 match result {
                     Ok(Added::Queued(paper)) => {
-                        let fx = if done(&paper) { vec![] } else { vec![Effect::Poll(paper.id.clone())] };
+                        let follow = !done(&paper) && !self.hidden;
+                        let fx = if follow { vec![Effect::Poll(paper.id.clone())] } else { vec![] };
                         self.polling = (!fx.is_empty()).then(|| paper.id.clone());
                         self.phase = Phase::Added(paper);
                         fx
@@ -310,6 +319,36 @@ mod tests {
         let found = Found { results: vec![candidate("First", None)], notices: vec![] };
         p.step(Event::Looked { seq: 1, result: Ok(found) });
         assert_eq!(p.phase, Phase::LookingUp("10.1234/second-one".into()));
+    }
+
+    #[test]
+    fn typing_while_adding_keeps_the_add_and_its_answer() {
+        let mut p = shown_with_library();
+        p.step(Event::Query("2401.12345".into()));
+        p.step(Event::Looked { seq: 1, result: Ok(Found { results: vec![candidate("New paper", None)], notices: vec![] }) });
+        p.step(Event::Submit);
+        assert_eq!(p.step(Event::Query("2401.12345x".into())), vec![]);
+        let mut queued = paper("n", "New paper", &[], 2017, "2026");
+        queued.status = "uploaded".into();
+        assert_eq!(p.step(Event::AddDone(Ok(Added::Queued(queued)))), vec![Effect::Poll("n".into())]);
+    }
+
+    #[test]
+    fn after_an_add_enter_acts_on_the_first_row_and_a_closed_panel_stops_following() {
+        let mut p = shown_with_library();
+        p.step(Event::Query("2401.12345".into()));
+        let three = vec![candidate("A", None), candidate("B", None), candidate("C", None)];
+        p.step(Event::Looked { seq: 1, result: Ok(Found { results: three, notices: vec![] }) });
+        p.step(Event::Down);
+        p.step(Event::Down);
+        p.step(Event::Submit);
+        p.step(Event::AddDone(Ok(Added::NoFreePdf("No free PDF.".into()))));
+        assert_eq!(p.step(Event::Submit), vec![Effect::Add { candidate: candidate("C", None), save_without_pdf: true }]);
+
+        p.step(Event::Closed);
+        let mut queued = paper("c", "C", &[], 2017, "2026");
+        queued.status = "uploaded".into();
+        assert_eq!(p.step(Event::AddDone(Ok(Added::Queued(queued)))), vec![]); // kept, not polled while hidden
     }
 
     #[test]

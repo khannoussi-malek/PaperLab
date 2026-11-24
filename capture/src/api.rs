@@ -92,7 +92,11 @@ impl Api {
     }
 
     fn send(&self, sent: Result<ureq::http::Response<ureq::Body>, ureq::Error>) -> Result<(u16, Vec<u8>), ApiError> {
-        let mut response = sent.map_err(|_| ApiError::Unreachable)?;
+        let mut response = sent.map_err(|e| match e {
+            // Listening but slow (a busy source on a lookup or an add): not "PaperLab isn't running".
+            ureq::Error::Timeout(_) => ApiError::Said("PaperLab didn't answer in time. Try again.".into()),
+            _ => ApiError::Unreachable,
+        })?;
         let status = response.status().as_u16();
         let body = response.body_mut().with_config().limit(64 << 20).read_to_vec().unwrap_or_default();
         Ok((status, body))
