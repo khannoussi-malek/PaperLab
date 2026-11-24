@@ -10,7 +10,7 @@ import { loadPanelWidth, panelTrack, savePanelWidth } from '@/components/panelWi
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { chartHref, datasetHref, newChartHref } from '@/lib/route'
+import { chartHref, datasetHref, newChartHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 import { datasetMeta } from '../data/datasetMeta'
 import { NewDatasetDialog } from '../data/NewDatasetDialog'

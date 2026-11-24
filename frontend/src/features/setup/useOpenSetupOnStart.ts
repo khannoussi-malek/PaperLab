@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useSetup } from '@/services/queries'
-import { setupHref } from '@/lib/route'
+import { setupHref } from '@/router/route'
 import { openSetupOnStart } from './setup'
 
 /** Opens #/setup once, on start, while the server says setup isn't done (spec §5). Leaving it for another page is

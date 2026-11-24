@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 import { READ_ONLY_TEXT } from '@/lib/errorWords'
 import { ImportPackageButton, PackageExportDialog } from './PackageDialogs'

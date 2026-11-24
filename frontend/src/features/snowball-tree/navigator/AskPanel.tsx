@@ -4,7 +4,7 @@ import type { ChatScope, ProvNode } from '@/entities'
 import { useSearchHit, useWorkspacePapers } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { ChatPanel } from '@/features/chat/ChatPanel'
-import { noteHref } from '@/lib/route'
+import { noteHref } from '@/router/route'
 import { sourceReaderHref } from '@/features/chat/citations'
 
 const NARROW = '(max-width: 900px)'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { appendSegments, citationSplitter, describeSource, sourceReaderHref, splitCitations, type Segment } from './citations'
-import { chunkHref, pageHref, readerHref } from '@/lib/route'
+import { chunkHref, pageHref, readerHref } from '@/router/route'
 import type { ChatSource } from '@/entities'
 
 const KNOWN = new Set(['C1', 'C2', 'C3', 'C12'])

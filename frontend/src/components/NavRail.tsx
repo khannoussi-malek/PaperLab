@@ -3,7 +3,7 @@ import { glass } from '@/components/glass'
 import { activeNav, activeWorkspaceId, railItem, type NavKey } from '@/components/nav'
 import { useRailPill } from '@/components/useRailPill'
 import { WorkspaceSidebar } from '@/features/workspaces/WorkspaceSidebar'
-import { chartsHref, connectClaudeHref, graphHref, notesHref, referencesHref, settingsHref, useRoute } from '@/lib/route'
+import { chartsHref, connectClaudeHref, graphHref, notesHref, referencesHref, settingsHref, useRoute } from '@/router/route'
 import { cn } from '@/lib/utils'
 
 function RailLink({ href, icon: Icon, label, active }: { href: string; icon: LucideIcon; label: string; active: boolean }) {

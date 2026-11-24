@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
-import { noteHref } from '@/lib/route'
+import { noteHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 import { AttachChartDialog } from './AttachChartDialog'
 import { EditPapersDialog } from './EditPapersDialog'

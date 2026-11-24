@@ -1,4 +1,4 @@
-import type { Route } from '@/lib/route'
+import type { Route } from '@/router/route'
 import { cn } from '@/lib/utils'
 
 /**

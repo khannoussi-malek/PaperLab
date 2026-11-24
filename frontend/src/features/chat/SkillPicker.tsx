@@ -1,6 +1,6 @@
 import type { Skill } from '@/entities'
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { settingsHref } from '@/lib/route'
+import { settingsHref } from '@/router/route'
 
 const NO_SKILL = 'none'
 const MANAGE = 'manage'

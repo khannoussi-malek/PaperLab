@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { NoveltyResult } from '@/entities'
 import { api } from '@/services/api'
-import { readerHref } from '@/lib/route'
+import { readerHref } from '@/router/route'
 import { LibraryPage } from './LibraryPage'
 import { NoveltyPanel } from './NoveltyPanel'
 

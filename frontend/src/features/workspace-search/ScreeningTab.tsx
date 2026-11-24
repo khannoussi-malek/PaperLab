@@ -4,7 +4,7 @@ import { useSearchHits, useSetEligibility, useSnowball } from '@/services/querie
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { codeInWords } from '@/lib/errorWords'
-import { readerHref } from '@/lib/route'
+import { readerHref } from '@/router/route'
 import { GetPdfActions } from '@/features/library/GetPdfActions'
 import { NoPdfBadge } from '@/features/reader/SourceBadges'
 import { Term } from '@/features/workspaces/Term'

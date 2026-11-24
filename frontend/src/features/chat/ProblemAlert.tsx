@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'
 import { SearchRebuild, SourceError } from '@/features/settings/SearchRebuild'
 import { READY_AGAIN } from '@/features/settings/searchSources'
-import { settingsHref, settingsSectionHref } from '@/lib/route'
+import { settingsHref, settingsSectionHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 import type { ChatProblem } from './refusals'
 

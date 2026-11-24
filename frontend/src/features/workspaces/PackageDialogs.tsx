@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { workspaceHref } from "@/lib/route";
+import { workspaceHref } from "@/router/route";
 import { importResultLine, packageErrorMessage, PDFS_TOO_LARGE, PACKAGE_TOO_LARGE } from "./packageCopy";
 
 /** "Export package…" from a workspace's row menu: one `.paperlab` file, with its PDFs only when ticked. */

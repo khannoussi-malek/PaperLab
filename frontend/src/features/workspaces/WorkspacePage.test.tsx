@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { WorkspacePage } from './WorkspacePage'
 
 const counts = vi.hoisted(() => ({ paper_count: 1, note_count: 0 }))

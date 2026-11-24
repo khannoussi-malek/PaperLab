@@ -2,7 +2,7 @@ import { useChartMutations } from '@/services/queries'
 import type { ChartSpec } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { ChartView } from '@/features/charts/ChartView'
-import { chartHref } from '@/lib/route'
+import { chartHref } from '@/router/route'
 
 /** A chart answer's chart (M14): drawn from the captured cells the spec names, never from numbers in the answer. */
 export function ChatChart({ spec, title }: { spec: ChartSpec; title: string }) {

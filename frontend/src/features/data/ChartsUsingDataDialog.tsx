@@ -2,7 +2,7 @@ import type { ChartUse } from '@/entities'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { chartHref } from '@/lib/route'
+import { chartHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 
 type Props = {

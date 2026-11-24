@@ -5,7 +5,7 @@ import { useChartMutations } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { chartHref, chartsHref, editChartHref, useRoute } from '@/lib/route'
+import { chartHref, chartsHref, editChartHref, useRoute } from '@/router/route'
 import { cn } from '@/lib/utils'
 
 type Props = {

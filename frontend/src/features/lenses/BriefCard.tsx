@@ -7,7 +7,7 @@ import { describeSource, splitCitations } from '@/features/chat/citations'
 import { markdownPieces } from '@/features/chat/markdown'
 import { renderPieces } from '@/features/chat/renderPieces'
 import { ProvenanceBadge } from '@/features/notes/ProvenanceBadge'
-import { settingsSectionHref } from '@/lib/route'
+import { settingsSectionHref } from '@/router/route'
 import type { BriefStream } from './useBriefStream'
 
 type Props = {

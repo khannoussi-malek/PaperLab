@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { manuscriptHref } from '@/lib/route'
+import { manuscriptHref } from '@/router/route'
 import { manuscriptFailure } from './errors'
 
 type Props = { workspaceId: string | null; open: boolean; onOpenChange: (open: boolean) => void }

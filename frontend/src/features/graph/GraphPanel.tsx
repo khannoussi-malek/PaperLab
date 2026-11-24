@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react'
 import { ChevronLeft, ChevronRight, Link2, Pencil, Trash2 } from 'lucide-react'
 import type { GraphLink, GraphNode } from '@/entities'
 import { Button } from '@/components/ui/button'
-import { readerHref } from '@/lib/route'
+import { readerHref } from '@/router/route'
 import { connectionKey, connectionNote, degrees, hopSections, KIND_LABELS, KINDS } from './graphModel'
 
 type Props = {

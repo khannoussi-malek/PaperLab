@@ -6,7 +6,7 @@ import { ManualAcquisitionTab } from './ManualAcquisitionTab'
 import * as queries from '@/services/queries'
 import { api } from '@/services/api'
 import { copyText } from '@/lib/clipboard'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { sileo } from 'sileo'
 
 vi.mock('@/lib/clipboard', () => ({ copyText: vi.fn() }))
