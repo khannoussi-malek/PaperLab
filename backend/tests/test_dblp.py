@@ -1,7 +1,8 @@
 import httpx
 import pytest
 
-from app.core.search.candidates import from_dblp, merge
+from app.core.search.candidates import merge
+from app.core.search.from_indexes import from_dblp
 from app.providers import dblp
 
 pytestmark = pytest.mark.anyio

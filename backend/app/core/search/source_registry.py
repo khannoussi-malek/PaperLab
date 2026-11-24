@@ -15,26 +15,28 @@ from typing import Any
 
 import httpx
 
-from app.core.search.candidates import (
-    from_acl_anthology,
-    from_acm_dl,
+from app.core.search.from_indexes import (
     from_arxiv,
-    from_biorxiv,
     from_core,
     from_crossref,
     from_dblp,
-    from_doaj,
     from_europe_pmc,
+    from_pmc,
+    from_pubmed,
+    from_s2,
+    from_work,
+)
+from app.core.search.from_repositories import (
+    from_acl_anthology,
+    from_acm_dl,
+    from_biorxiv,
+    from_doaj,
     from_hal,
     from_iacr_eprint,
     from_medrxiv,
     from_openaire,
     from_openreview,
-    from_pmc,
-    from_pubmed,
-    from_s2,
     from_ssrn,
-    from_work,
     from_zenodo,
 )
 from app.domain.candidates import Candidate

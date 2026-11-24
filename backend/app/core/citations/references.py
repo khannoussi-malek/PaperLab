@@ -22,7 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.papers import papers
 from app.core.search import discovery, free_copy, source_clients
-from app.core.search.candidates import from_s2, from_work, merge, ordered_pdf_urls
+from app.core.search.candidates import merge, ordered_pdf_urls
+from app.core.search.from_indexes import from_s2, from_work
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict, NotFound

@@ -3,7 +3,7 @@ from collections import deque
 import httpx
 import pytest
 
-from app.core.search.candidates import from_openreview
+from app.core.search.from_repositories import from_openreview
 from app.providers import openreview
 
 pytestmark = pytest.mark.anyio

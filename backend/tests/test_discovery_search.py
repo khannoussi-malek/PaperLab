@@ -8,7 +8,7 @@ import pytest
 
 from app.core.papers.paper_sources import SourceSettings
 from app.core.search import discovery, source_clients
-from app.core.search.candidates import from_iacr_eprint
+from app.core.search.from_repositories import from_iacr_eprint
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict
 from app.models import Paper

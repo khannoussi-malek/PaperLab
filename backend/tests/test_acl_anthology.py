@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.papers import paper_sources
-from app.core.search.candidates import from_acl_anthology
+from app.core.search.from_repositories import from_acl_anthology
 from app.core.search.source_registry import BY_ID
 from app.models import ExternalRef
 from app.models.harvest import HarvestCursor

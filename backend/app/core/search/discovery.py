@@ -23,16 +23,7 @@ from app.core.papers import papers
 from app.core.papers.enrichment import ARXIV_DOI_PREFIX
 from app.core.papers.paper_sources import KEYED, NAMES
 from app.core.papers.provenance import sources_of
-from app.core.search.candidates import (
-    ARXIV_ID,
-    arxiv_from_doi,
-    arxiv_from_url,
-    from_s2,
-    merge,
-    normal_title,
-    ordered_pdf_urls,
-    with_s2,
-)
+from app.core.search.candidates import ARXIV_ID, arxiv_from_doi, arxiv_from_url, merge, normal_title, ordered_pdf_urls
 from app.core.search.free_copy import (
     ALREADY_IN_LIBRARY,
     _arxiv_ids,
@@ -42,6 +33,7 @@ from app.core.search.free_copy import (
     _unpaywall_lookup,
     details_source,
 )
+from app.core.search.from_indexes import from_s2, with_s2
 from app.core.search.source_clients import Providers
 from app.core.search.source_registry import ASKS
 from app.domain.candidates import Candidate

@@ -9,8 +9,8 @@ import pytest
 
 from app.core.papers import pdf_links
 from app.core.search import discovery, free_copy, pdf_download, source_clients
-from app.core.search.candidates import from_europe_pmc
 from app.core.search.discovery import Candidate
+from app.core.search.from_indexes import from_europe_pmc
 from app.domain.errors import Conflict, InvalidInput
 from app.providers import europe_pmc, pmc_opendata
 

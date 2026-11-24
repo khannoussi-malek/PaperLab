@@ -2,30 +2,30 @@ import pytest
 from conftest import recorded_discovery
 from pydantic import ValidationError
 
-from app.core.search.candidates import (
-    _ids,
+from app.core.search.candidates import _ids, merge, ordered_pdf_urls
+from app.core.search.discovery import classify_query
+from app.core.search.from_indexes import (
+    from_core,
+    from_crossref,
+    from_europe_pmc,
+    from_pmc,
+    from_pubmed,
+    from_s2,
+    from_work,
+    with_s2,
+)
+from app.core.search.from_repositories import (
     from_acm_dl,
     from_biorxiv,
     from_biorxiv_entry,
-    from_core,
-    from_crossref,
     from_doaj,
-    from_europe_pmc,
     from_hal,
     from_iacr_eprint,
     from_medrxiv,
     from_openaire,
-    from_pmc,
-    from_pubmed,
-    from_s2,
     from_ssrn,
-    from_work,
     from_zenodo,
-    merge,
-    ordered_pdf_urls,
-    with_s2,
 )
-from app.core.search.discovery import classify_query
 from app.domain.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
 from app.schemas.discovery import SOURCE_ID_PATTERNS, CandidateIn, CandidateOut
 

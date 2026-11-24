@@ -526,7 +526,8 @@ async def _fill_from_crossref(
     """Blank authors, year and venue from Crossref's record for the paper's DOI, when OpenAlex matched nothing. A DOI
     found on page 1 can be a cited paper's, so only when Crossref's first author's family name is on page 1 and its
     year is within a year of the PDF's (as `is_confirmed_match`) or its title is the paper's."""
-    from app.core.search.candidates import from_crossref, normal_title  # noqa: PLC0415 (candidates imports this module)
+    from app.core.search.candidates import normal_title
+    from app.core.search.from_indexes import from_crossref  # noqa: PLC0415 (candidates imports this module)
 
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)
