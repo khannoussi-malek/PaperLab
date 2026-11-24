@@ -12,7 +12,8 @@
       "rules": { "react/rules-of-hooks": "off" }
     },
     // Layers: entities <- services <- components/lib <- features <- layout <- pages <- router. Each folder may import
-    // only from the layers before it, so a dependency always points inward.
+    // only from the layers before it, so a dependency always points inward. One exception: router/route.ts (parsing
+    // the hash and building links) is a leaf helper every layer may import; RouterView and lazyPage are not.
     {
       "files": ["src/entities/**"],
       "rules": {
@@ -46,6 +47,15 @@
         "no-restricted-imports": ["error", { "patterns": [{
           "group": ["@/layout/**", "@/pages/**", "@/router/RouterView", "@/router/lazyPage"],
           "message": "features sit under layout and pages; only pages put them on screen."
+        }] }]
+      }
+    },
+    {
+      "files": ["src/layout/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["@/pages/**", "@/router/RouterView", "@/router/lazyPage"],
+          "message": "layout sits under pages: a page puts the shell around itself."
         }] }]
       }
     }
