@@ -68,6 +68,19 @@ describe('Quick Capture helper', () => {
     expect(logged.at(-1)).toMatch(/not restarted/)
   })
 
+  it('waits for the stopped helper to exit before going on, so two never hold the shortcut', () => {
+    const fake = fakeSpawn()
+    const capture = createCapture({ spawn: fake.spawn, bin: '/b', port: 5190, shortcut: 's', log: quiet })
+    capture.start()
+    let next = 0
+    capture.stop(() => (next += 1))
+    expect(next).toBe(0)
+    fake.children[0].exit(null)
+    expect(next).toBe(1)
+    capture.stop(() => (next += 1)) // none running: at once
+    expect(next).toBe(2)
+  })
+
   it('can be started again after a stop (the switch turned back on)', () => {
     const fake = fakeSpawn()
     const capture = createCapture({ spawn: fake.spawn, bin: '/b', port: 5190, shortcut: 's', log: quiet })

@@ -323,10 +323,12 @@ function handleSwitches() {
       else capture?.stop()
     }
     if (name === 'captureAnimation' && capture !== null) {
-      // The helper reads it once, at start: start a new one with the new setting.
-      capture.stop()
-      capture = null
-      startCaptureIfOn()
+      // The helper reads it once, at start: a new one starts with the new setting once the old one has let go of
+      // the global shortcut.
+      capture.stop(() => {
+        capture = null
+        startCaptureIfOn()
+      })
     }
     syncTray()
   })

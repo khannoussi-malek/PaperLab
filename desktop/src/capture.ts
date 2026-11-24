@@ -18,7 +18,13 @@ export type Child = {
 }
 export type Spawn = (bin: string, args: string[]) => Child
 
-export type Capture = { start(): void; show(): void; stop(): void; running(): boolean }
+export type Capture = {
+  start(): void
+  show(): void
+  /** Stops it for good; `then` runs once it has exited (at once when none is running). */
+  stop(then?: () => void): void
+  running(): boolean
+}
 
 type Options = {
   spawn: Spawn
@@ -55,12 +61,18 @@ export function createCapture({ spawn, bin, port, shortcut, animation = true, lo
   let child: Child | null = null
   let restarts = 0
   let stopped = false
+  let afterExit: (() => void) | null = null
 
   function run() {
     const started = spawn(bin, captureArgs(port, shortcut, animation))
     child = started
     started.onExit((code) => {
-      if (child !== started) return // an older helper, already replaced or stopped
+      if (child !== started) {
+        // An older helper, already stopped: whoever waited for it to let go of the shortcut goes on now.
+        const then = afterExit
+        afterExit = null
+        return then?.()
+      }
       child = null
       if (stopped) return
       if (restarts >= MAX_RESTARTS) return log(`Quick Capture exited (${code}) ${restarts + 1} times; not restarted`)
@@ -79,11 +91,13 @@ export function createCapture({ spawn, bin, port, shortcut, animation = true, lo
     show() {
       child?.send('show\n')
     },
-    stop() {
+    stop(then) {
       stopped = true
       const running = child
       child = null
-      running?.kill()
+      if (running === null) return then?.()
+      afterExit = then ?? null
+      running.kill()
     },
     running: () => child !== null,
   }

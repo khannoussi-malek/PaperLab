@@ -176,7 +176,7 @@ fn main() {
     });
     rune::run_windows(move |displays| {
         // The galaxy covers the main display, in points.
-        let screen = displays.iter().find(|d| d.primary).or(displays.first())
+        let screen = displays.iter().find(|d| d.primary).or(displays.first()).filter(|d| d.scale > 0.0)
             .map_or((1440.0, 900.0), |d| ((d.size.0 as f64 / d.scale) as f32, (d.size.1 as f64 / d.scale) as f32));
         let mut app = rune::App::new(AppSpec {
             scenes: scenes::ALL,

@@ -119,6 +119,9 @@ impl Galaxy {
 
     /// The panel opened: start the intro on the next frame.
     pub fn open(&mut self) {
+        if self.visible {
+            return; // already open (the shortcut again): the sky goes on, no second intro
+        }
         (self.visible, self.opened, self.t) = (true, None, 0.0);
     }
 
@@ -158,7 +161,7 @@ impl Galaxy {
         let k = (age / p.life) as f32;
         let a = age as f32;
         let start_y = PANEL_TOP + PANEL_HEIGHT;
-        let fall = self.size.1 - start_y + PAPER.1;
+        let fall = (self.size.1 - start_y + PAPER.1).max(0.0);
         let wave = (a / p.sway_period * std::f32::consts::TAU + p.phase).sin();
         let fade_in = (age / 0.4).min(1.0) as f32;
         let fade_out = (1.0 - ((k - 0.66) / 0.34).max(0.0)).max(0.0);
@@ -193,23 +196,52 @@ pub fn spec(size: (f32, f32)) -> rune::ConfiguredOverlay<Galaxy> {
     OverlaySpec::new("PaperLab Quick Capture galaxy", size, view).options(options).macos_level(3).poll(poll)
 }
 
+/// The galaxy's colours for the system's appearance: over dark windows white stars and pale pages; over light ones,
+/// where white would vanish, stars in the brand's slate, blue and violet and pages with an edge and a firmer shadow.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Palette {
+    stars: [Color; 3],
+    /// Nebula strength, blue then violet.
+    nebula: (f32, f32),
+    paper_edge: Color,
+    paper_shadow: Color,
+}
+
+fn palette(dark: bool) -> Palette {
+    let blue = rune::color::hex("#2664ee").expect("a valid colour");
+    let violet = rune::color::hex("#8b5cf6").expect("a valid colour");
+    let slate = rune::color::hex("#475569").expect("a valid colour");
+    if dark {
+        Palette {
+            stars: [Color::WHITE, blue.mix(Color::WHITE, 0.45), violet.mix(Color::WHITE, 0.45)],
+            nebula: (0.16, 0.13),
+            paper_edge: Color::TRANSPARENT,
+            paper_shadow: Color::BLACK.alpha(0.25),
+        }
+    } else {
+        Palette { stars: [slate, blue, violet], nebula: (0.12, 0.11), paper_edge: slate.alpha(0.25), paper_shadow: Color::BLACK.alpha(0.18) }
+    }
+}
+
 fn view(g: &Galaxy, cx: &mut Cx<Galaxy>) -> El {
     let still = cx.is_reduced_motion();
+    let colors = palette(cx.system_dark());
     let (w, h) = g.size;
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
     let violet = rune::color::hex("#8b5cf6").expect("a valid colour");
     let light = g.nebula(still);
+    let (nb, nv) = colors.nebula;
     let mut root = el().key("galaxy").w_full().h_full()
         .child(el().key("nebula").absolute(0.0, 0.0).size(w, h)
-            .radial_gradient([w * 0.22, h * 0.25], [w * 0.55, h * 0.6], [(0.0, blue.alpha(0.16 * light)), (1.0, blue.alpha(0.0))]))
+            .radial_gradient([w * 0.22, h * 0.25], [w * 0.55, h * 0.6], [(0.0, blue.alpha(nb * light)), (1.0, blue.alpha(0.0))]))
         .child(el().key("nebula-violet").absolute(0.0, 0.0).size(w, h)
-            .radial_gradient([w * 0.8, h * 0.78], [w * 0.5, h * 0.55], [(0.0, violet.alpha(0.13 * light)), (1.0, violet.alpha(0.0))]));
+            .radial_gradient([w * 0.8, h * 0.78], [w * 0.5, h * 0.55], [(0.0, violet.alpha(nv * light)), (1.0, violet.alpha(0.0))]));
     for (i, s) in g.stars.iter().enumerate() {
         let at = g.star(s, still);
         let color = match s.tint {
-            Tint::White => Color::WHITE,
-            Tint::Blue => blue.mix(Color::WHITE, 0.45),
-            Tint::Violet => violet.mix(Color::WHITE, 0.45),
+            Tint::White => colors.stars[0],
+            Tint::Blue => colors.stars[1],
+            Tint::Violet => colors.stars[2],
         };
         let d = s.radius * 2.0;
         root = root.child(el().key(format!("star-{i}")).absolute(at.x - s.radius, at.y - s.radius).size(d, d)
@@ -217,20 +249,21 @@ fn view(g: &Galaxy, cx: &mut Cx<Galaxy>) -> El {
     }
     for (i, p) in g.papers.iter().enumerate() {
         if let Some(at) = g.paper(p, still) {
-            root = root.child(paper_el(i, at));
+            root = root.child(paper_el(i, at, &colors));
         }
     }
     root
 }
 
 /// A page like the icon's: white, a few grey lines and one yellow highlight, with a soft shadow.
-fn paper_el(i: usize, at: Sprite) -> El {
+fn paper_el(i: usize, at: Sprite, colors: &Palette) -> El {
     let (w, h) = PAPER;
     let line = |top: f32, width: f32, color: Color| el().absolute(6.0, top).size(width, 2.5).radius(1.25).fill(color);
     let ink = Color::BLACK.alpha(0.28);
     let yellow = rune::color::hex("#facc15").expect("a valid colour");
     el().key(format!("paper-{i}")).absolute(at.x - w / 2.0, at.y - h / 2.0).size(w, h).radius(4.0)
-        .fill(Color::WHITE.alpha(0.94)).shadow(4.0, 10.0, Color::BLACK.alpha(0.25)).rotate(at.rotation).opacity(at.alpha)
+        .fill(Color::WHITE.alpha(0.94)).border(1.0, colors.paper_edge).shadow(4.0, 10.0, colors.paper_shadow)
+        .rotate(at.rotation).opacity(at.alpha)
         .child(line(9.0, 22.0, ink))
         .child(line(16.0, 22.0, yellow))
         .child(line(23.0, 22.0, ink))
@@ -303,6 +336,22 @@ mod tests {
     fn reduce_motion_holds_the_sky_still_without_papers() {
         let g = at(1.0);
         assert!(g.papers.iter().all(|p| g.paper(p, true).is_none()));
+    }
+
+    #[test]
+    fn opening_an_open_galaxy_doesnt_replay_its_intro() {
+        let mut g = at(3.0);
+        g.opened = Some(10.0);
+        g.open();
+        assert_eq!((g.opened, g.t), (Some(10.0), 3.0));
+    }
+
+    #[test]
+    fn light_mode_never_draws_white_stars_and_gives_pages_an_edge() {
+        let (dark, light) = (palette(true), palette(false));
+        assert_eq!(dark.stars[0], Color::WHITE);
+        assert!(light.stars.iter().all(|c| c.luminance() < 0.5), "visible over white windows");
+        assert!(light.paper_edge.a > 0.0 && dark.paper_edge.a == 0.0);
     }
 
     #[test]
