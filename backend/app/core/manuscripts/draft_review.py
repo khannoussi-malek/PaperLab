@@ -199,24 +199,37 @@ def _home(quote: str, parts: list[str]) -> int:
     return next((i for i, text in enumerate(flat) if quote in text), 0)
 
 
-async def _lenses(llm, progress: Progress, tag: str, parts: list[str], files, copied, calls: int):
+@dataclass(frozen=True)
+class _Ctx:
+    """What every step of one review reads: the model, where it reports progress, the draft's parts, its files, and the
+    draft's word grams (a quote of the draft is not the model's own words)."""
+
+    llm: object
+    progress: Progress
+    parts: list[str]
+    files: Mapping[str, str]
+    copied: object
+
+
+async def _lenses(ctx: _Ctx, tag: str, calls: int):
     """Each lens reads each part once: (the issues that passed the checks, the drops by reason, failed calls, calls)."""
     found: list[Issue] = []
     dropped: Counter[str] = Counter()
     failed = 0
+    parts = ctx.parts
     for n, lens in enumerate(LENSES, 1):
         for p, part in enumerate(parts, 1):
-            await _step(progress, _stage(tag, n, lens, p, len(parts)), calls)
+            await _step(ctx.progress, _stage(tag, n, lens, p, len(parts)), calls)
             prompt = PROMPT_TEMPLATE.format(
                 lens_name=lens.name, lens_focus=lens.focus, paper=_shown(part, p, len(parts))
             )
-            reply = await _ask(llm, SYSTEM_PROMPT, prompt, Reply)
+            reply = await _ask(ctx.llm, SYSTEM_PROMPT, prompt, Reply)
             calls += 1
             if reply is None:
                 failed += 1
                 continue
             for raw in reply.issues[:MAX_PER_REVIEWER]:
-                issue, why = check_issue(raw, lens.id, files, copied, part)
+                issue, why = check_issue(raw, lens.id, ctx.files, ctx.copied, part)
                 if issue is None:
                     dropped[f"dropped_{why}"] += 1
                 else:
@@ -224,18 +237,47 @@ async def _lenses(llm, progress: Progress, tag: str, parts: list[str], files, co
     return found, dropped, failed, calls
 
 
+async def _judge(ctx: _Ctx, angles, label: str, issue: Issue, calls: int) -> tuple[list, int]:
+    """The skeptics' verdicts on one issue, one per angle, each reading the part the issue quotes."""
+    home = _home(issue.quote, ctx.parts)
+    verdicts = []
+    for a, angle in enumerate(angles, 1):
+        where = label + (f", angle {a} of {len(angles)}" if len(angles) > 1 else "")
+        await _step(ctx.progress, where, calls)  # before every call: a cancel stops within one call
+        prompt = VERIFY_TEMPLATE.format(
+            section=issue.section,
+            summary=issue.summary,
+            angle=angle,
+            quote=issue.quote,
+            paper=_shown(ctx.parts[home], home + 1, len(ctx.parts)),
+        )
+        verdict = await _ask(ctx.llm, VERIFY_SYSTEM_PROMPT, prompt, Verdict)
+        calls += 1
+        verdicts.append(verdict)
+    return verdicts, calls
+
+
+def _refuted_reason(reason: str, copied) -> tuple[str, bool]:
+    """The reason shown for a refuted issue, and whether it was masked: model text is shown, so it passes the same
+    D118 guard as an issue."""
+    reason = reason.strip()
+    if not reason or len(reason.split()) > MAX_WORDS or reads_as_wording(reason, NO_REF, copied):
+        return MASKED_REASON, True
+    return reason, False
+
+
 async def review(paper: str, files: Mapping[str, str], *, llm, progress: Progress, mode: Mode = "light") -> Result:
     spec = MODES[mode]
     parts = split_parts(paper)
+    ctx = _Ctx(llm, progress, parts, files, grams([paper]))
     counts: Counter[str] = Counter()
-    copied = grams([paper])
     seen: list[Place] = []  # every candidate span of an earlier round, refuted ones too
     survivors: list[Issue] = []
     refuted: list[dict] = []
     calls = 0
     for rnd in range(1, spec.rounds + 1):
         tag = f"Round {rnd} of {spec.rounds}: " if spec.rounds > 1 else ""
-        found, dropped, failed, calls = await _lenses(llm, progress, tag, parts, files, copied, calls)
+        found, dropped, failed, calls = await _lenses(ctx, tag, calls)
         counts.update(dropped)
         counts["reviewers_failed"] += failed
         if failed == len(LENSES) * len(parts) and rnd == 1:
@@ -248,29 +290,12 @@ async def review(paper: str, files: Mapping[str, str], *, llm, progress: Progres
         seen += [i.place for i in kept]
         won = 0
         for n, issue in enumerate(kept, 1):
-            home = _home(issue.quote, parts)
-            verdicts = []
-            for a, angle in enumerate(spec.angles, 1):
-                where = f"Skeptic {n} of {len(kept)}" + (
-                    f", angle {a} of {len(spec.angles)}" if len(spec.angles) > 1 else ""
-                )
-                await _step(progress, f"{tag}{where}", calls)  # before every call: a cancel stops within one call
-                prompt = VERIFY_TEMPLATE.format(
-                    section=issue.section,
-                    summary=issue.summary,
-                    angle=angle,
-                    quote=issue.quote,
-                    paper=_shown(parts[home], home + 1, len(parts)),
-                )
-                verdict = await _ask(llm, VERIFY_SYSTEM_PROMPT, prompt, Verdict)
-                calls += 1
-                verdicts.append(verdict)
+            verdicts, calls = await _judge(ctx, spec.angles, f"{tag}Skeptic {n} of {len(kept)}", issue, calls)
             counts["skeptics_failed"] += sum(v is None for v in verdicts)
             votes = [v for v in verdicts if v is not None and v.refuted]
             if len(votes) * 2 > len(spec.angles):  # a majority of the skeptics refuted it: 1 of 1, 2 of 3
-                reason = votes[0].reason.strip()
-                if not reason or len(reason.split()) > MAX_WORDS or reads_as_wording(reason, NO_REF, copied):
-                    reason = MASKED_REASON  # model text is shown, so it passes the same D118 guard as an issue
+                reason, masked = _refuted_reason(votes[0].reason, ctx.copied)
+                if masked:
                     counts["reasons_masked"] += 1
                 refuted.append({"summary": issue.summary, "reason": reason})
             else:

@@ -64,13 +64,8 @@ async def estimate(session: AsyncSession, mid: uuid.UUID) -> dict:
     }
 
 
-async def start(
-    session: AsyncSession, mid: uuid.UUID, *, mode: str = "light", confirm_remote: bool, confirm_full: bool = False
-) -> dict:
-    await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:mid))"), {"mid": str(mid)})
-    await manuscripts.get(session, mid)
-    await llm_connections.refuse_unconfirmed_remote(session, confirm_remote)
-    paper, used = await _paper(session, mid)
+def _parts_for(paper: str, mode: str, confirm_full: bool) -> int:
+    """How many parts the draft splits into, refused when it is too short or long, or the mode doesn't fit it."""
     if len(paper) < MIN_PAPER_CHARS:
         raise InvalidInput("paper_too_short", detail="There is not enough text to review yet.")
     if len(paper) > MAX_TOTAL_CHARS:
@@ -90,6 +85,30 @@ async def start(
             likely_calls=draft_review.likely_calls("full", parts),
             max_calls=draft_review.max_calls("full", parts),
         )
+    return parts
+
+
+async def _queued(session: AsyncSession, row: Row) -> dict:
+    session.add(row)
+    await session.commit()  # the job reads this row on its own connection
+    await session.refresh(row)
+    try:
+        await queue.enqueue(JOB, str(row.id))
+    except Exception:
+        logger.exception("could not queue the draft review %s", row.id)
+        row.status, row.reason = "failed", "queue_unavailable"
+        await session.commit()
+    return review_out(row)
+
+
+async def start(
+    session: AsyncSession, mid: uuid.UUID, *, mode: str = "light", confirm_remote: bool, confirm_full: bool = False
+) -> dict:
+    await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:mid))"), {"mid": str(mid)})
+    await manuscripts.get(session, mid)
+    await llm_connections.refuse_unconfirmed_remote(session, confirm_remote)
+    paper, used = await _paper(session, mid)
+    parts = _parts_for(paper, mode, confirm_full)
     old = await session.scalars(select(Row).where(Row.manuscript_id == mid).execution_options(populate_existing=True))
     if any(_live(r) for r in old):
         raise Conflict("review_running")
@@ -105,16 +124,7 @@ async def start(
         confirm_remote=confirm_remote,
         updated_at=func.clock_timestamp(),
     )
-    session.add(row)
-    await session.commit()  # the job reads this row on its own connection
-    await session.refresh(row)
-    try:
-        await queue.enqueue(JOB, str(row.id))
-    except Exception:
-        logger.exception("could not queue the draft review %s", row.id)
-        row.status, row.reason = "failed", "queue_unavailable"
-        await session.commit()
-    return review_out(row)
+    return await _queued(session, row)
 
 
 async def cancel(session: AsyncSession, mid: uuid.UUID, review_id: uuid.UUID) -> dict:
