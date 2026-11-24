@@ -67,7 +67,11 @@ async def test_a_captured_table_keeps_what_extraction_read_when_the_owner_change
     captured.rows[1].cells[1] = CellIn(raw="90.9 ± 0.2", extracted=edited.extracted, page=2, bbox=edited.bbox)
 
     view = await datasets.create_dataset(
-        session, "Table 2: SQuAD 1.1 results.", "table", captured, paper_id=paper.id, page=2, region=(70, 60, 290, 240)
+        session,
+        "Table 2: SQuAD 1.1 results.",
+        "table",
+        captured,
+        datasets.TableSource(paper_id=paper.id, page=2, region=(70, 60, 290, 240)),
     )
 
     assert (view.paper_id, view.paper_title, view.page, view.region) == (paper.id, paper.title, 2, [70, 60, 290, 240])
@@ -82,19 +86,27 @@ async def test_a_table_needs_its_paper_page_and_region_and_own_data_has_none(ses
     paper = await make_paper(session, page_count=3)
     table = grid(("a", "1"))
     with pytest.raises(InvalidInput):
-        await datasets.create_dataset(session, "T", "table", table, paper_id=paper.id, page=2)  # no region
+        await datasets.create_dataset(
+            session, "T", "table", table, datasets.TableSource(paper_id=paper.id, page=2)
+        )  # no region
     with pytest.raises(InvalidInput):
-        await datasets.create_dataset(session, "T", "table", table, paper_id=paper.id, page=4, region=(1, 2, 3, 4))
+        await datasets.create_dataset(
+            session, "T", "table", table, datasets.TableSource(paper_id=paper.id, page=4, region=(1, 2, 3, 4))
+        )
     with pytest.raises(InvalidInput):
-        await datasets.create_dataset(session, "T", "table", table, paper_id=paper.id, page=1, region=(3, 2, 1, 4))
+        await datasets.create_dataset(
+            session, "T", "table", table, datasets.TableSource(paper_id=paper.id, page=1, region=(3, 2, 1, 4))
+        )
     with pytest.raises(NotFound):
-        await datasets.create_dataset(session, "T", "table", table, paper_id=uuid.uuid4(), page=1, region=(1, 2, 3, 4))
+        await datasets.create_dataset(
+            session, "T", "table", table, datasets.TableSource(paper_id=uuid.uuid4(), page=1, region=(1, 2, 3, 4))
+        )
     with pytest.raises(InvalidInput):
-        await datasets.create_dataset(session, "T", "user", table, paper_id=paper.id)
+        await datasets.create_dataset(session, "T", "user", table, datasets.TableSource(paper_id=paper.id))
     with pytest.raises(InvalidInput):
         await datasets.create_dataset(session, "T", "user", grid(("a", "1"), extracted=True, page=1))
     with pytest.raises(InvalidInput):
-        await datasets.create_dataset(session, "T", "numbers", table, paper_id=paper.id)
+        await datasets.create_dataset(session, "T", "numbers", table, datasets.TableSource(paper_id=paper.id))
 
 
 async def test_a_grid_must_be_rectangular_named_and_within_limits(session, monkeypatch):
@@ -152,9 +164,12 @@ async def test_saving_a_grid_keeps_the_ids_of_rows_and_columns_it_still_has(sess
 async def test_saving_marks_a_changed_extracted_cell_and_unmarks_it_when_changed_back(session):
     paper = await make_paper(session)
     view = await datasets.create_dataset(
-        session, "T", "table", grid(("BERT-B", "88.5"), extracted=True, page=1), paper_id=paper.id, page=1,
-        region=(1, 2, 300, 400),
-    )  # fmt: skip
+        session,
+        "T",
+        "table",
+        grid(("BERT-B", "88.5"), extracted=True, page=1),
+        datasets.TableSource(paper_id=paper.id, page=1, region=(1, 2, 300, 400)),
+    )
 
     def with_value(raw: str) -> GridIn:
         cells = [CellIn(raw=c.original_raw or c.raw, extracted=c.original_raw or c.raw, page=c.page, bbox=c.bbox)
@@ -226,12 +241,15 @@ async def test_deleting_a_dataset_a_chart_uses_needs_force(session):
 async def test_lists_a_papers_datasets_or_all_of_them_with_paper_titles(session):
     paper, other = await make_paper(session), await make_paper(session)
     region = (1, 2, 300, 400)
-    later_page = await datasets.create_dataset(session, "p3", "table", grid(("a", "1")), paper_id=paper.id, page=3,
-                                               region=region)  # fmt: skip
-    first_page = await datasets.create_dataset(session, "p1", "table", grid(("a", "1")), paper_id=paper.id, page=1,
-                                               region=region)  # fmt: skip
-    elsewhere = await datasets.create_dataset(session, "o", "table", grid(("a", "1")), paper_id=other.id, page=1,
-                                              region=region)  # fmt: skip
+    later_page = await datasets.create_dataset(
+        session, "p3", "table", grid(("a", "1")), datasets.TableSource(paper_id=paper.id, page=3, region=region)
+    )
+    first_page = await datasets.create_dataset(
+        session, "p1", "table", grid(("a", "1")), datasets.TableSource(paper_id=paper.id, page=1, region=region)
+    )
+    elsewhere = await datasets.create_dataset(
+        session, "o", "table", grid(("a", "1")), datasets.TableSource(paper_id=other.id, page=1, region=region)
+    )
     mine = await datasets.create_dataset(session, "mine", "user", grid(("a", "1")))
 
     assert [d.id for d in await datasets.list_datasets(session, paper.id)] == [first_page.id, later_page.id]
@@ -254,8 +272,13 @@ async def test_rename_strips_and_checks_the_name(session):
 
 async def test_a_deleted_papers_table_stays_with_no_paper(session):
     paper = await make_paper(session)
-    view = await datasets.create_dataset(session, "T", "table", grid(("a", "1"), extracted=True, page=1),
-                                         paper_id=paper.id, page=1, region=(1, 2, 300, 400))  # fmt: skip
+    view = await datasets.create_dataset(
+        session,
+        "T",
+        "table",
+        grid(("a", "1"), extracted=True, page=1),
+        datasets.TableSource(paper_id=paper.id, page=1, region=(1, 2, 300, 400)),
+    )
     await session.execute(delete(Paper).where(Paper.id == paper.id))
     await session.commit()
 

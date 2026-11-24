@@ -413,8 +413,14 @@ async def test_ai_log_fields_on_snapshots(client, session):
     base = f"/api/manuscripts/{m['id']}"
     await client.put(f"{base}/files/main.tex", json={"text": TEX + "\\n",
                      "base_updated_at": (await client.get(f"{base}/files/main.tex")).json()["updated_at"]})
-    await agent.edit_file(session, mid, "main.tex", "Hi", "Hello",
-                          (await manuscripts.read(session, mid, "main.tex")).updated_at, reason="r")
+    await agent.edit_file(
+        session,
+        mid,
+        "main.tex",
+        agent.TextEdit("Hi", "Hello"),
+        (await manuscripts.read(session, mid, "main.tex")).updated_at,
+        reason="r",
+    )
     await manuscript_history.take(session, mid, "autosave")
     rows = {s["reason"]: s for s in (await client.get(f"{base}/snapshots")).json()}
     mcp = rows["before_mcp"]

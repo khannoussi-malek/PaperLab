@@ -91,7 +91,11 @@ async def test_save_brief_writes_the_cited_passages(session):
     prepared = await briefs.prepare_brief(session, paper.id, "key_ideas")
 
     output_id = await briefs.save_brief(
-        session, paper.id, "key_ideas", prepared, "It claims X [C1] and Y [C3][C9].", "qwen3:8b", "Ollama"
+        session,
+        paper.id,
+        "key_ideas",
+        prepared,
+        chat_answers.Reply("It claims X [C1] and Y [C3][C9].", "qwen3:8b", "Ollama"),
     )
 
     row = await session.get(LLMOutput, output_id)
@@ -265,7 +269,9 @@ async def test_a_note_from_an_answer_gives_that_answers_provenance_and_an_mcp_no
 async def test_a_brief_citation_whose_chunk_was_replaced_keeps_its_page(session):
     paper, _ = await paper_with_headings(session, HEADINGS)
     prepared = await briefs.prepare_brief(session, paper.id, "key_ideas")
-    await briefs.save_brief(session, paper.id, "key_ideas", prepared, "It claims X [C1].", "m", "Ollama")
+    await briefs.save_brief(
+        session, paper.id, "key_ideas", prepared, chat_answers.Reply("It claims X [C1].", "m", "Ollama")
+    )
     await papers.replace_chunks(session, paper.id, drafts(["a", "b", "c", "d", "e", "f"]))
 
     [brief] = await briefs.list_briefs(session, paper.id)

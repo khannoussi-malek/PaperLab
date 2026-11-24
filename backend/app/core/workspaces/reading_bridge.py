@@ -78,6 +78,16 @@ class ReadingQueueRow:
     note_count: int
 
 
+def _note_count():
+    """How many distinct notes cite the paper of the outer query (a correlated scalar subquery)."""
+    return (
+        select(func.count(func.distinct(note_papers.c.note_id)))
+        .where(note_papers.c.paper_id == Paper.id)
+        .correlate(Paper)
+        .scalar_subquery()
+    )
+
+
 async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID | None = None
 ) -> list[ReadingQueueRow]:
     """Every stage-2-included, already-imported paper for this run (Review Focus #2: excludes an included hit with
@@ -90,12 +100,7 @@ async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
     its hits — matching this app's "1 = highest priority" convention and the .asc().nulls_last() ordering below."""
     if run_id is not None:  # None = every run in the workspace, one row per paper
         await get_run(session, run_id, workspace_id)
-    note_count = (
-        select(func.count(func.distinct(note_papers.c.note_id)))
-        .where(note_papers.c.paper_id == Paper.id)
-        .correlate(Paper)
-        .scalar_subquery()
-    )
+    note_count = _note_count()
     best_priority = func.min(WorkspaceSearchHit.priority)
     rows = (
         await session.execute(

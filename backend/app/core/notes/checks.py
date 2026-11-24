@@ -231,14 +231,15 @@ def _lens_ids(kind: str, found: list[sections.Section]) -> tuple[list[uuid.UUID]
     return anchor, evidence, ""
 
 
-async def _retrieved(session, paper_id, kind, body, anchor, evidence, embedder) -> list[RetrievedChunk]:
+async def _retrieved(session, paper_id, note, anchor, evidence, embedder) -> list[RetrievedChunk]:
+    """The anchor's chunks, then the evidence chunks nearest to the note's own text, up to the budget."""
     embedder = await searchable(session, [paper_id], embedder)
     if (await _size(session, paper_id))[1] == 0:
         raise Conflict("paper_not_indexed")
     kept = cut_to_budget(await chunk_sources(session, Chunk.id.in_(anchor))) if anchor else []
     hits = []
     if evidence:  # retrieve() returns [] for an empty chunk_ids: skip the pointless queries
-        for query in queries(kind, body):
+        for query in queries(note.kind, note.body):
             hits.append(
                 await retrieve(session, query, paper_ids=[paper_id], chunk_ids=evidence, k=CHECK_K, embedder=embedder)
             )
@@ -278,7 +279,7 @@ async def prepare_check(session: AsyncSession, note_id: uuid.UUID, embedder=None
         raise Conflict("lens_empty")
     every = await chunk_sources(session, Chunk.id.in_([*anchor, *evidence]))
     whole = sum(len(c.text) for c in every) <= SMALL_PAPER_CHARS
-    sources = every if whole else await _retrieved(session, paper.id, kind, note.body, anchor, evidence, embedder)
+    sources = every if whole else await _retrieved(session, paper.id, note, anchor, evidence, embedder)
     if not sources:
         raise Conflict("lens_empty")
     prompt = PROMPT_TEMPLATE.format(

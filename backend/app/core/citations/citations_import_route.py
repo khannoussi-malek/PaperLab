@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.citations.citations_bundle_read import Bundle, read_bundle
 from app.core.citations.citations_import import ImportEntry
-from app.core.citations.citations_import_apply import INLINE_MAX, JOB, ImportResult, _held, apply
+from app.core.citations.citations_import_apply import INLINE_MAX, JOB, ImportOptions, ImportResult, _held, apply
 from app.core.citations.citations_parse import parse
 from app.core.platform import queue
 from app.core.workspaces import workspaces
@@ -112,10 +112,8 @@ async def start(
         await workspaces.require_writable(session, workspace_id)
     entries, bundle = read(name, source)
     with bundle or contextlib.nullcontext():
-        return await route(
-            session, name, source, entries, bundle, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
-            save_without_pdf=save_without_pdf,
-        )  # fmt: skip
+        options = ImportOptions(workspace_id, fetch_free_pdfs, save_without_pdf)
+        return await route(session, name, source, entries, bundle, options)
 
 
 def _copy(source: bytes | IO[bytes], path: Path) -> None:
@@ -133,29 +131,26 @@ async def route(
     source: bytes | IO[bytes],
     entries: list[ImportEntry],
     bundle: Bundle | None,
-    *,
-    workspace_id: uuid.UUID | None = None,
-    fetch_free_pdfs: bool = True,
-    save_without_pdf: bool = False,
+    options: ImportOptions = ImportOptions(),
 ) -> ImportResult | str:
     """start() for entries already read from `source` (its bundle still open). The job reads a copy of the file in
     uploads_dir(), deleted when it ends; its progress is a Redis value at progress_key(job id)."""
     small = len(entries) <= INLINE_MAX
     # ponytail: a damaged zip PDF's fallback lookup (fallback_fetch) still runs inline; queueing on it would send
     # nearly every Zotero zip to the background. Queue on it if those lookups ever stall a request.
-    if small and not (await preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)).would_fetch:
-        return await apply(
-            session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
-            save_without_pdf=save_without_pdf, bundle=bundle,
-        )  # fmt: skip
+    fetch = options.fetch_free_pdfs
+    if small and not (await preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch)).would_fetch:
+        return await apply(session, entries, options, bundle=bundle)
     job_id = f"{JOB}:{uuid.uuid4()}"
     folder = uploads_dir()
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{job_id.split(':')[1]}.upload"
     await asyncio.to_thread(_copy, source, path)
     try:
-        await queue.enqueue(JOB, str(path), name, str(workspace_id) if workspace_id else None, fetch_free_pdfs,
-                            save_without_pdf, job_id=job_id)  # fmt: skip
+        workspace = str(options.workspace_id) if options.workspace_id else None
+        await queue.enqueue(
+            JOB, str(path), name, workspace, options.fetch_free_pdfs, options.save_without_pdf, job_id=job_id
+        )
     except BaseException:
         path.unlink(missing_ok=True)
         raise

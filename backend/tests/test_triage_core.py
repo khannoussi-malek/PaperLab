@@ -63,7 +63,9 @@ async def test_decide_writes_event_and_paper(session, pile):
     paper = await make(session, triage="later", reading_pass=0)
     reason = {"not_relevant": "off_topic"}.get(pile)
     sid = uuid.uuid4()
-    got, event, replayed = await triage.decide(session, paper.id, pile=pile, session_id=sid, reason=reason, fivecs=5)
+    got, event, replayed = await triage.decide(
+        session, paper.id, triage.Decision(pile=pile, session_id=sid, reason=reason, fivecs=5)
+    )
     want = triage.apply_pile(pile, "later", 0)
     assert replayed is False
     assert (event.before_triage, event.before_pass) == ("later", 0)
@@ -76,14 +78,14 @@ async def test_decide_writes_event_and_paper(session, pile):
 
 async def test_skip_changes_nothing_but_logs(session):
     paper = await make(session, triage="keep", reading_pass=2)
-    _, event, _ = await triage.decide(session, paper.id, pile="skip", session_id=uuid.uuid4())
+    _, event, _ = await triage.decide(session, paper.id, triage.Decision(pile="skip", session_id=uuid.uuid4()))
     assert (event.before_triage, event.before_pass) == (event.after_triage, event.after_pass) == ("keep", 2)
 
 
 async def test_drop_needs_a_reason_and_writes_nothing(session):
     paper = await make(session)
     with pytest.raises(InvalidInput) as e:
-        await triage.decide(session, paper.id, pile="not_relevant", session_id=uuid.uuid4())
+        await triage.decide(session, paper.id, triage.Decision(pile="not_relevant", session_id=uuid.uuid4()))
     assert str(e.value) == "reason_required"
     assert await count(session, paper.id) == 0
 
@@ -91,29 +93,33 @@ async def test_drop_needs_a_reason_and_writes_nothing(session):
 async def test_reason_from_another_pile(session):
     paper = await make(session)
     with pytest.raises(InvalidInput) as e:
-        await triage.decide(session, paper.id, pile="skim", session_id=uuid.uuid4(), reason="off_topic")
+        await triage.decide(
+            session, paper.id, triage.Decision(pile="skim", session_id=uuid.uuid4(), reason="off_topic")
+        )
     assert str(e.value) == "unknown_reason"
     assert e.value.details["allowed"] == list(triage.REASONS["skim"])
 
 
 async def test_other_without_note_is_fine(session):
     paper = await make(session)
-    _, event, _ = await triage.decide(session, paper.id, pile="not_relevant", session_id=uuid.uuid4(), reason="other")
+    _, event, _ = await triage.decide(
+        session, paper.id, triage.Decision(pile="not_relevant", session_id=uuid.uuid4(), reason="other")
+    )
     assert event.note is None
 
 
 async def test_note_length(session):
     paper = await make(session)
-    ok = await triage.decide(session, paper.id, pile="skip", session_id=uuid.uuid4(), note="x" * 500)
+    ok = await triage.decide(session, paper.id, triage.Decision(pile="skip", session_id=uuid.uuid4(), note="x" * 500))
     assert len(ok[1].note) == 500
     with pytest.raises(InvalidInput) as e:
-        await triage.decide(session, paper.id, pile="skip", session_id=uuid.uuid4(), note="x" * 501)
+        await triage.decide(session, paper.id, triage.Decision(pile="skip", session_id=uuid.uuid4(), note="x" * 501))
     assert str(e.value) == "note_too_long"
 
 
 async def test_unknown_paper(session):
     with pytest.raises(NotFound):
-        await triage.decide(session, uuid.uuid4(), pile="skip", session_id=uuid.uuid4())
+        await triage.decide(session, uuid.uuid4(), triage.Decision(pile="skip", session_id=uuid.uuid4()))
 
 
 async def test_merged_paper_is_gone(session):
@@ -121,17 +127,19 @@ async def test_merged_paper_is_gone(session):
     session.add(PaperMerge(kept_id=kept, merged_id=gone, status="merged"))
     await session.commit()
     with pytest.raises(Gone) as e:
-        await triage.decide(session, gone, pile="skip", session_id=uuid.uuid4())
+        await triage.decide(session, gone, triage.Decision(pile="skip", session_id=uuid.uuid4()))
     assert e.value.details["kept_id"] == str(kept)
 
 
 async def test_replay_returns_first_event_and_changes_nothing(session):
     paper = await make(session)
     sid, cid = uuid.uuid4(), uuid.uuid4()
-    _, first, _ = await triage.decide(session, paper.id, pile="skim", session_id=sid, client_id=cid)
+    _, first, _ = await triage.decide(session, paper.id, triage.Decision(pile="skim", session_id=sid, client_id=cid))
     await session.execute(Paper.__table__.update().where(Paper.id == paper.id).values(triage="drop", reading_pass=0))
     await session.commit()
-    got, again, replayed = await triage.decide(session, paper.id, pile="later", session_id=sid, client_id=cid)
+    got, again, replayed = await triage.decide(
+        session, paper.id, triage.Decision(pile="later", session_id=sid, client_id=cid)
+    )
     assert replayed is True
     assert again.id == first.id
     assert (got.triage, got.reading_pass) == ("drop", 0)
@@ -147,7 +155,7 @@ async def test_two_concurrent_identical_posts_make_one_event():
 
         async def post():
             async with AsyncSession(engine, expire_on_commit=False) as s:
-                return await triage.decide(s, paper.id, pile="skim", session_id=sid, client_id=cid)
+                return await triage.decide(s, paper.id, triage.Decision(pile="skim", session_id=sid, client_id=cid))
 
         results = await asyncio.gather(post(), post())
         assert sorted(r[2] for r in results) == [False, True]
@@ -164,5 +172,7 @@ async def test_two_concurrent_identical_posts_make_one_event():
 
 async def test_a_drop_leaves_the_paper_listed(session):
     paper = await make(session)
-    await triage.decide(session, paper.id, pile="not_relevant", session_id=uuid.uuid4(), reason="duplicate")
+    await triage.decide(
+        session, paper.id, triage.Decision(pile="not_relevant", session_id=uuid.uuid4(), reason="duplicate")
+    )
     assert paper.id in {p.id for p in await papers.list_papers(session)}

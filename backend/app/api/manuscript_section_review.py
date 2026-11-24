@@ -22,7 +22,7 @@ BASE = "/api/manuscripts/{manuscript_id}/section-review"
 async def start_section_review(
     manuscript_id: uuid.UUID, body: SectionReviewIn, session: SessionDep
 ) -> SectionReviewOut:
-    return SectionReviewOut(**await review.start(session, manuscript_id, **body.model_dump()))
+    return SectionReviewOut(**await review.start(session, manuscript_id, body))
 
 
 @router.get(BASE)

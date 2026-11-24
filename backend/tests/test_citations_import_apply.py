@@ -117,7 +117,9 @@ async def test_a_doi_in_the_library_is_attached_not_written(session, pdf_dir):
     ws = await workspaces.create(session, f"Import {RUN} doi")
 
     result = await cia.apply(
-        session, [entry("doi", doi=doi("a").upper(), venue="Other venue")], workspace_id=ws.id, fetch_free_pdfs=False
+        session,
+        [entry("doi", doi=doi("a").upper(), venue="Other venue")],
+        options=cia.ImportOptions(workspace_id=ws.id, fetch_free_pdfs=False),
     )
 
     assert (result.already_in_library, result.imported) == (1, 0)
@@ -131,7 +133,7 @@ async def test_a_preprints_published_doi_is_a_match(session, pdf_dir):
     preprint = await held(
         session, pdf_dir, "pub", doi=f"10.48550/arxiv.2601.{RUN[:5]}", source_type="preprint", published_doi=doi("p")
     )
-    result = await cia.apply(session, [entry("pub", doi=doi("p"))], fetch_free_pdfs=False)
+    result = await cia.apply(session, [entry("pub", doi=doi("p"))], options=cia.ImportOptions(fetch_free_pdfs=False))
     assert result.already_in_library == 1
     assert [p.id for p in await titled(session, "pub")] == [preprint.id]
 
@@ -139,7 +141,9 @@ async def test_a_preprints_published_doi_is_a_match(session, pdf_dir):
 async def test_an_arxiv_copy_in_the_library_is_a_match(session, pdf_dir):
     arxiv_id = f"2602.{RUN[:5]}"
     copy = await held(session, pdf_dir, "arx", doi=f"10.48550/arxiv.{arxiv_id}", source_type="preprint")
-    result = await cia.apply(session, [entry("arx", doi=doi("x"), arxiv_id=arxiv_id)], fetch_free_pdfs=False)
+    result = await cia.apply(
+        session, [entry("arx", doi=doi("x"), arxiv_id=arxiv_id)], options=cia.ImportOptions(fetch_free_pdfs=False)
+    )
     assert result.already_in_library == 1
     assert [p.id for p in await titled(session, "arx")] == [copy.id]
 
@@ -150,7 +154,7 @@ async def test_an_arxiv_entry_matches_its_published_version_by_title(session, pd
         source_type="journal_article",
     )  # fmt: skip
     arxiv_entry = entry("ver", arxiv_id=f"2603.{RUN[:5]}", source_type="preprint")
-    result = await cia.apply(session, [arxiv_entry], fetch_free_pdfs=False)
+    result = await cia.apply(session, [arxiv_entry], options=cia.ImportOptions(fetch_free_pdfs=False))
     assert result.already_in_library == 1
     assert [p.id for p in await titled(session, "ver")] == [published.id]
 
@@ -159,7 +163,7 @@ async def test_the_exact_title_and_authors_are_a_match(session, pdf_dir):
     same = await held(session, pdf_dir, "ttl", authors=["Smith, Jane"], year=2020)
     stranger = entry("ttl", authors=["Someone Else"])
 
-    result = await cia.apply(session, [entry("ttl"), stranger], fetch_free_pdfs=False)
+    result = await cia.apply(session, [entry("ttl"), stranger], options=cia.ImportOptions(fetch_free_pdfs=False))
 
     assert result.already_in_library == 1 and len(result.needs_pdf) == 1
     assert [p.id for p in await titled(session, "ttl")] == [same.id]
@@ -176,7 +180,9 @@ async def test_a_bundled_pdf_upgrades_a_held_paper_saved_without_one(session, pd
         f" keywords={{coffee}}, file={{files/1/a.pdf}}}}\n"
     )
     with read_bundle(zipped(bib, {"files/1/a.pdf": PDF})) as bundle:
-        result = await cia.apply(session, bundle.entries, workspace_id=ws.id, bundle=bundle, fetch_free_pdfs=False)
+        result = await cia.apply(
+            session, bundle.entries, options=cia.ImportOptions(workspace_id=ws.id, fetch_free_pdfs=False), bundle=bundle
+        )
 
     assert (result.imported, result.pdfs_attached, result.already_in_library) == (0, 1, 1)
     assert [p.id for p in await titled(session, "up")] == [kept.id]
@@ -194,7 +200,9 @@ async def test_an_unreadable_bundled_pdf_leaves_a_held_paper_as_held(session, pd
         f" file={{files/1/a.pdf}}}}\n"
     )
     with read_bundle(zipped(bib, {"files/1/a.pdf": b"not a pdf at all"})) as bundle:
-        result = await cia.apply(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
+        result = await cia.apply(
+            session, bundle.entries, options=cia.ImportOptions(fetch_free_pdfs=False), bundle=bundle
+        )
 
     assert (result.already_in_library, result.pdfs_attached, result.failed) == (1, 0, [])
     await session.refresh(kept)
@@ -212,7 +220,7 @@ async def test_a_bundled_pdf_becomes_a_locked_paper_with_ingest_queued(session, 
         f" keywords={{coffee, genetics}}, annote={{A <b>key</b> idea.}}, file={{files/1/a.pdf}}}}\n"
     )
     with read_bundle(zipped(bib, {"files/1/a.pdf": PDF})) as bundle:
-        result = await cia.apply(session, bundle.entries, workspace_id=ws.id, bundle=bundle)
+        result = await cia.apply(session, bundle.entries, options=cia.ImportOptions(workspace_id=ws.id), bundle=bundle)
 
     assert (result.imported, result.pdfs_attached, result.already_in_library) == (1, 1, 0)
     [paper] = await titled(session, "zip")
@@ -260,7 +268,9 @@ async def test_fetch_on_without_a_free_copy_lists_the_entry(session, pdf_dir, jo
 
 
 async def test_fetch_off_lists_every_pdf_less_entry_without_asking_anyone(session, pdf_dir):
-    result = await cia.apply(session, [entry("off", doi=doi("o")), entry("bare")], fetch_free_pdfs=False)
+    result = await cia.apply(
+        session, [entry("off", doi=doi("o")), entry("bare")], options=cia.ImportOptions(fetch_free_pdfs=False)
+    )
     assert [(n["title"], n["doi"], n["tried"]) for n in result.needs_pdf] == [
         (title("off"), doi("o"), []),
         (title("bare"), None, []),
@@ -279,7 +289,9 @@ async def test_zotero_import_saves_needs_pdf_entries_without_pdf_when_asked(sess
     bare = entry("bare")
 
     result = await cia.apply(
-        session, [with_abstract, bare], workspace_id=ws.id, fetch_free_pdfs=False, save_without_pdf=True
+        session,
+        [with_abstract, bare],
+        options=cia.ImportOptions(workspace_id=ws.id, fetch_free_pdfs=False, save_without_pdf=True),
     )
 
     assert (result.saved_without_pdf, result.imported, result.needs_pdf, result.failed) == (2, 0, [], [])
@@ -299,7 +311,9 @@ async def test_a_paper_saved_without_pdf_after_a_failed_lookup_counts_as_checked
     found[doi("look")] = Candidate(title=title("look"), doi=doi("look"), pdf_urls=["https://pdf.example/gone.pdf"])
     pdf_host.reply("/gone.pdf", 404)
 
-    result = await cia.apply(session, [entry("look", doi=doi("look"))], save_without_pdf=True)
+    result = await cia.apply(
+        session, [entry("look", doi=doi("look"))], options=cia.ImportOptions(save_without_pdf=True)
+    )
 
     [saved] = await titled(session, "look")
     assert result.saved_without_pdf == 1 and not saved.has_pdf
@@ -307,7 +321,7 @@ async def test_a_paper_saved_without_pdf_after_a_failed_lookup_counts_as_checked
 
 
 async def test_zotero_import_without_the_flag_is_unchanged(session, pdf_dir, jobs):
-    result = await cia.apply(session, [entry("nosave")], fetch_free_pdfs=False)
+    result = await cia.apply(session, [entry("nosave")], options=cia.ImportOptions(fetch_free_pdfs=False))
 
     assert (result.saved_without_pdf, len(result.needs_pdf)) == (0, 1)
     assert await titled(session, "nosave") == [] and jobs.jobs == []
@@ -329,7 +343,7 @@ async def test_a_library_import_keeps_tags_and_collection_in_one_note(session, p
     paper = await held(session, pdf_dir, "lib", doi=doi("l"))
     zotero = entry("lib", doi=doi("l"), tags=["coffee", "tea"], collection="Reading", notes=["First.", "Second."])
 
-    result = await cia.apply(session, [zotero], fetch_free_pdfs=False)
+    result = await cia.apply(session, [zotero], options=cia.ImportOptions(fetch_free_pdfs=False))
 
     assert result.notes == 3
     zotero_note = "From Zotero — tags: coffee, tea; collection: Reading"
@@ -347,7 +361,7 @@ async def test_a_workspace_import_tags_the_paper_and_notes_only_the_collection(s
         entry("wsb", doi=doi("wb"), tags=["coffee"]),
     ]
 
-    await cia.apply(session, entries, workspace_id=ws.id, fetch_free_pdfs=False)
+    await cia.apply(session, entries, options=cia.ImportOptions(workspace_id=ws.id, fetch_free_pdfs=False))
 
     tag_map = await tags.paper_tag_map(session, ws.id)
     assert tag_map[with_collection.id] == ["Coffee"] and tag_map[without.id] == ["Coffee"]
@@ -367,12 +381,12 @@ async def test_importing_the_same_file_twice_adds_nothing(session, pdf_dir, jobs
     ws = await workspaces.create(session, f"Import {RUN} twice")
 
     with read_bundle(data) as bundle:
-        first = await cia.apply(session, bundle.entries, workspace_id=ws.id, bundle=bundle)
+        first = await cia.apply(session, bundle.entries, options=cia.ImportOptions(workspace_id=ws.id), bundle=bundle)
     ours = select(Paper.id).where(Paper.title.in_([title("twice-a"), title("twice-b")]))
     count_ours = select(func.count()).select_from(note_papers).where(note_papers.c.paper_id.in_(ours))
     count = await session.scalar(count_ours)
     with read_bundle(data) as bundle:
-        second = await cia.apply(session, bundle.entries, workspace_id=ws.id, bundle=bundle)
+        second = await cia.apply(session, bundle.entries, options=cia.ImportOptions(workspace_id=ws.id), bundle=bundle)
 
     assert (first.imported, first.pdfs_attached, first.notes) == (2, 2, 3)
     assert (second.imported, second.already_in_library, second.pdfs_attached, second.notes) == (0, 2, 0, 0)
@@ -529,7 +543,7 @@ async def test_apply_stops_at_its_deadline(session, pdf_dir, monkeypatch):
     monkeypatch.setattr(cia, "_now", itertools.count().__next__)  # 0, 1, 2, ...
     entries = [entry(f"dl{i}") for i in range(4)]
 
-    result = await cia.apply(session, entries, fetch_free_pdfs=False, deadline=2)
+    result = await cia.apply(session, entries, options=cia.ImportOptions(fetch_free_pdfs=False), deadline=2)
 
     assert len(result.needs_pdf) == 2 and result.not_reached == [title("dl2"), title("dl3")]
     assert result.stopped == cia.STOPPED.format(done=2, total=4)
@@ -608,7 +622,9 @@ async def test_a_damaged_bundled_pdf_fails_with_fetch_off(session, pdf_dir, monk
     bib = f"@article{{a, title={{{title('dmg2')}}}, year={{2020}}, doi={{{doi('dmg2')}}}, file={{files/1/a.pdf}}}}\n"
 
     with read_bundle(zipped(bib, {"files/1/a.pdf": PDF})) as bundle:
-        result = await cia.apply(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
+        result = await cia.apply(
+            session, bundle.entries, options=cia.ImportOptions(fetch_free_pdfs=False), bundle=bundle
+        )
 
     assert result.failed == [{"title": title("dmg2"), "reason": "This zip is damaged, so nothing was imported."}]
 
@@ -636,8 +652,8 @@ async def test_a_long_note_is_cut_to_the_notes_limit_once(session, pdf_dir):
     paper = await held(session, pdf_dir, "long", doi=doi("long"))
     long_entry = entry("long", doi=doi("long"), notes=["w" * 60_000])
 
-    await cia.apply(session, [long_entry], fetch_free_pdfs=False)
-    again = await cia.apply(session, [long_entry], fetch_free_pdfs=False)
+    await cia.apply(session, [long_entry], options=cia.ImportOptions(fetch_free_pdfs=False))
+    again = await cia.apply(session, [long_entry], options=cia.ImportOptions(fetch_free_pdfs=False))
 
     [body] = await bodies(session, paper.id)
     assert len(body) == cia.NOTE_MAX_CHARS and body.endswith(cia.NOTE_CUT)

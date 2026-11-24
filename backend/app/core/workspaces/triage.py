@@ -1,6 +1,7 @@
 """The triage desk's decisions (D119): a pile moves a paper's `triage` / `reading_pass` and appends one event."""
 
 import uuid
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select, update
@@ -86,25 +87,29 @@ async def _replay(session: AsyncSession, event: TriageEvent) -> tuple[Paper, Tri
     return paper, event, True
 
 
-async def decide(
-    session: AsyncSession,
-    paper_id: uuid.UUID,
-    *,
-    pile: str,
-    session_id: uuid.UUID,
-    client_id: uuid.UUID | None = None,
-    reason: str | None = None,
-    note: str | None = None,
-    fivecs: int | None = None,
-    pdf_opened: bool = False,
-    pdf_ms: int | None = None,
-    card_ms: int | None = None,
-) -> tuple[Paper, TriageEvent, bool]:
+@dataclass(frozen=True)
+class Decision:
+    """A desk decision: the pile, the desk session it was made in (and the client's id for a retry), why, and how long
+    the card and PDF were looked at."""
+
+    pile: str
+    session_id: uuid.UUID
+    client_id: uuid.UUID | None = None
+    reason: str | None = None
+    note: str | None = None
+    fivecs: int | None = None
+    pdf_opened: bool = False
+    pdf_ms: int | None = None
+    card_ms: int | None = None
+
+
+async def decide(session: AsyncSession, paper_id: uuid.UUID, decision: Decision) -> tuple[Paper, TriageEvent, bool]:
     """Move a paper to a pile and record it. Returns (paper, event, replayed): a retry with the same client_id gets
     the first event back and changes nothing. Raises InvalidInput (see check_reason, apply_pile), NotFound, Gone."""
+    pile, session_id, client_id = decision.pile, decision.session_id, decision.client_id
     if pile not in PILES:
         raise InvalidInput("unknown_pile", allowed=list(PILES))
-    check_reason(pile, reason, note)
+    check_reason(pile, decision.reason, decision.note)
     if client_id is not None and (event := await _stored(session, session_id, client_id)):
         return await _replay(session, event)
     paper = await papers.get_paper(session, paper_id, lock=True)  # lock order: the papers row first
@@ -112,11 +117,7 @@ async def decide(
     after = apply_pile(pile, *before)
     if after != before:
         await session.execute(update(Paper).where(Paper.id == paper_id).values(triage=after[0], reading_pass=after[1]))
-    event = log_change(
-        session, paper, source="desk", before=before, after=after, pile=pile, session_id=session_id,
-        client_id=client_id, reason=reason, note=note, fivecs=fivecs, pdf_opened=pdf_opened, pdf_ms=pdf_ms,
-        card_ms=card_ms,
-    )  # fmt: skip
+    event = log_change(session, paper, source="desk", before=before, after=after, **asdict(decision))
     try:
         await session.commit()
     except IntegrityError:

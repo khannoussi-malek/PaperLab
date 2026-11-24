@@ -179,9 +179,12 @@ async def test_an_unknown_direction_is_refused_by_argument_validation(library):
 async def test_list_datasets_by_paper_or_all_with_titles_and_counts(session):
     paper = await reader(session)
     table = await datasets.create_dataset(
-        session, f"Table {RUN}", "table", grid(("a", "1"), ("b", "2")), paper_id=paper.id, page=2,
-        region=(1.0, 2.0, 300.0, 400.0),
-    )  # fmt: skip
+        session,
+        f"Table {RUN}",
+        "table",
+        grid(("a", "1"), ("b", "2")),
+        datasets.TableSource(paper_id=paper.id, page=2, region=(1.0, 2.0, 300.0, 400.0)),
+    )
     own = await datasets.create_dataset(session, f"Mine {RUN}", "user", grid(("c", "3")))
     await session.commit()
 
@@ -199,9 +202,12 @@ async def test_list_datasets_by_paper_or_all_with_titles_and_counts(session):
 async def test_get_dataset_returns_columns_cells_and_charts(session):
     paper = await reader(session)
     table = await datasets.create_dataset(
-        session, f"Scores {RUN}", "table", grid(("Alpha", "91.2")), paper_id=paper.id, page=3,
-        region=(1.0, 2.0, 300.0, 400.0),
-    )  # fmt: skip
+        session,
+        f"Scores {RUN}",
+        "table",
+        grid(("Alpha", "91.2")),
+        datasets.TableSource(paper_id=paper.id, page=3, region=(1.0, 2.0, 300.0, 400.0)),
+    )
     await session.commit()
 
     view = result(await call("get_dataset", dataset_id=str(table.id)))

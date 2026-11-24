@@ -5,6 +5,7 @@ The reviewer only judges: no response carries wording for the researcher's text 
 import asyncio
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, or_, select, text
@@ -126,58 +127,70 @@ async def _latest(session: AsyncSession, mid: uuid.UUID) -> ManuscriptReviewRun 
     )
 
 
-async def start(
-    session: AsyncSession,
-    mid: uuid.UUID,
-    *,
-    file: str,
-    base: datetime,
-    selection: tuple[int, int] | None,
-    include_uncited: bool = True,
-    confirm_remote: bool = False,
-) -> dict:
+@dataclass(frozen=True)
+class ReviewAsk:
+    """A citation check of `file` as the editor saw it at `base`, over the whole file or a `selection` (UTF-16
+    offsets, as the editor counts them)."""
+
+    file: str
+    base: datetime
+    selection: tuple[int, int] | None = None
+    include_uncited: bool = True
+    confirm_remote: bool = False
+
+
+async def _checked_source(session: AsyncSession, mid: uuid.UUID, ask: ReviewAsk) -> str:
+    """The file's text, refused when it isn't .tex, changed since the editor saw it, or a review is running."""
     # Starts on one manuscript take turns to the commit: the later one sees the earlier run and refuses.
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:mid))"), {"mid": str(mid)})
     await manuscripts.get(session, mid)
-    await llm_connections.refuse_unconfirmed_remote(session, confirm_remote)  # no_model / needs confirm, before any row
-    source = await manuscripts.read(session, mid, file)
-    if source.text is None or not file.endswith(".tex"):
+    await llm_connections.refuse_unconfirmed_remote(session, ask.confirm_remote)  # no_model / needs confirm, first
+    source = await manuscripts.read(session, mid, ask.file)
+    if source.text is None or not ask.file.endswith(".tex"):
         raise InvalidInput("not_tex", detail="The reviewer reads .tex files.")
-    if source.updated_at > base:
+    if source.updated_at > ask.base:
         raise Conflict("file_changed", updated_at=source.updated_at)
     if _live(await _latest(session, mid)):
         raise Conflict("review_running")
-    source_text = normalize_newlines(source.text)  # the editor's buffer is always \n
-    sentences = await asyncio.to_thread(split_sentences, source_text)
-    if selection is not None:  # UTF-16 offsets in, as the editor counts them; the splitter counts code points
-        selection = (from_utf16(source_text, selection[0]), from_utf16(source_text, selection[1]))
-    targets = sentences if selection is None else in_range(sentences, *selection)
-    papers = {p["key"]: p["paper_id"] for p in await manuscript_papers.list_papers(session, mid)}
-    rows, skipped = plan(targets, papers, include_uncited)
-    pairs = sum(r["status"] == "queued" and r["kind"] == "cited" for r in rows)
-    if pairs > MAX_PAIRS:
-        raise InvalidInput("too_many_claims", detail=f"{pairs} checks", count=pairs)
-    await _replace_rows(session, mid, file, {s.hash for s in sentences}, {r["sentence_hash"] for r in rows})
+    return normalize_newlines(source.text)  # the editor's buffer is always \n
+
+
+async def _saved_run(session: AsyncSession, mid: uuid.UUID, ask: ReviewAsk, rows: list[dict], skipped: int):
     waiting = sum(r["status"] == "queued" for r in rows)
     run = ManuscriptReviewRun(
         manuscript_id=mid,
-        file_path=file,
+        file_path=ask.file,
         status="queued" if waiting else "done",
-        confirm_remote=confirm_remote,
+        confirm_remote=ask.confirm_remote,
         total=len(rows),
         done=len(rows) - waiting,
-        include_uncited=include_uncited,
+        include_uncited=ask.include_uncited,
         uncited_skipped=skipped,
         updated_at=func.clock_timestamp(),
     )
     session.add(run)
     await session.flush()
-    session.add_all(ManuscriptClaimCheck(manuscript_id=mid, run_id=run.id, file_path=file, **r) for r in rows)
+    session.add_all(ManuscriptClaimCheck(manuscript_id=mid, run_id=run.id, file_path=ask.file, **r) for r in rows)
     await session.commit()  # the job reads these rows on its own connection
     await session.refresh(run)
     if waiting:
         await _enqueue(session, run)
-    return run_out(run)
+    return run
+
+
+async def start(session: AsyncSession, mid: uuid.UUID, ask: ReviewAsk) -> dict:
+    source_text = await _checked_source(session, mid, ask)
+    sentences = await asyncio.to_thread(split_sentences, source_text)
+    targets = sentences
+    if ask.selection is not None:  # UTF-16 offsets in, as the editor counts them; the splitter counts code points
+        targets = in_range(sentences, *(from_utf16(source_text, offset) for offset in ask.selection))
+    papers = {p["key"]: p["paper_id"] for p in await manuscript_papers.list_papers(session, mid)}
+    rows, skipped = plan(targets, papers, ask.include_uncited)
+    pairs = sum(r["status"] == "queued" and r["kind"] == "cited" for r in rows)
+    if pairs > MAX_PAIRS:
+        raise InvalidInput("too_many_claims", detail=f"{pairs} checks", count=pairs)
+    await _replace_rows(session, mid, ask.file, {s.hash for s in sentences}, {r["sentence_hash"] for r in rows})
+    return run_out(await _saved_run(session, mid, ask, rows, skipped))
 
 
 async def _replace_rows(session, mid, file, current: set[str], rechecked: set[str]) -> None:

@@ -28,7 +28,7 @@ def source(text: str) -> RetrievedChunk:
 async def brief_on(session, paper_id, lens, content="A brief [C1].", minutes_ago=0) -> uuid.UUID:
     """Prepares and saves a brief, written `minutes_ago` (the test transaction freezes now())."""
     prepared = await briefs.prepare_brief(session, paper_id, lens)
-    output_id = await briefs.save_brief(session, paper_id, lens, prepared, content, "fake", "Fake")
+    output_id = await briefs.save_brief(session, paper_id, lens, prepared, chat_answers.Reply(content, "fake", "Fake"))
     written = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
     await session.execute(update(LLMOutput).where(LLMOutput.id == output_id).values(created_at=written))
     return output_id
@@ -116,7 +116,11 @@ async def test_save_brief_stores_its_lens_passages_and_citations(session):
     prepared = await briefs.prepare_brief(session, paper.id, "key_ideas")
 
     output_id = await briefs.save_brief(
-        session, paper.id, "key_ideas", prepared, "It claims X [C1] and Y [C3][C9].", "qwen3:8b", "Ollama"
+        session,
+        paper.id,
+        "key_ideas",
+        prepared,
+        chat_answers.Reply("It claims X [C1] and Y [C3][C9].", "qwen3:8b", "Ollama"),
     )
 
     output = await session.get(LLMOutput, output_id)

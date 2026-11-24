@@ -20,20 +20,6 @@ BLOCKS = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast
 FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 LONG: dict[str, int] = {
-    "app/core/citations/citations.py::find": 51,
-    "app/core/citations/reference_listing.py::library_listing": 52,
-    "app/core/citations/references.py::_upsert": 55,
-    "app/core/manuscripts/draft_review.py::review": 59,
-    "app/core/manuscripts/manuscript_checks/number_provenance.py::_file": 51,
-    "app/core/manuscripts/manuscript_draft_review.py::start": 51,
-    "app/core/manuscripts/manuscript_evidence.py::find": 52,
-    "app/core/manuscripts/manuscript_review.py::start": 52,
-    "app/core/manuscripts/manuscript_section_review.py::start": 71,
-    "app/core/notes/charts.py::resolve": 54,
-    "app/core/notes/evidence_cards.py::request_cards": 65,
-    "app/core/workspaces/package_screening_import.py::rebuild": 71,
-    "app/core/workspaces/reading_bridge.py::reading_queue": 51,
-    "app/core/workspaces/workspace_package.py::_parts": 51,
     "app/main.py::create_app": 67,
     "app/providers/llm_fake.py::_replies": 51,
     "app/scripts/tectonic_sandbox_check.py::main": 53,
@@ -44,22 +30,6 @@ LONG: dict[str, int] = {
 WIDE: dict[str, int] = {
     # The search core: ten callers and nine test fakes pass these keyword options by name.
     "app/core/chat/retrieval.py::retrieve": 9,
-    "app/core/citations/citations_import_apply.py::_isolated": 7,
-    "app/core/citations/citations_import_apply.py::_one": 7,
-    "app/core/citations/citations_import_apply.py::apply": 8,
-    "app/core/citations/citations_import_route.py::route": 8,
-    "app/core/citations/citations_import_run.py::start": 7,
-    "app/core/manuscripts/draft_review.py::_lenses": 7,
-    "app/core/manuscripts/manuscript_agent.py::edit_file": 7,
-    "app/core/manuscripts/manuscript_review.py::start": 7,
-    "app/core/manuscripts/manuscript_section_review.py::start": 7,
-    "app/core/notes/capture.py::add_number": 8,
-    "app/core/notes/checks.py::_retrieved": 7,
-    "app/core/notes/datasets.py::create_dataset": 7,
-    "app/core/workspaces/briefs.py::save_brief": 7,
-    "app/core/workspaces/package_import.py::_papers_into": 7,
-    "app/core/workspaces/package_screening_import.py::_place_hit": 7,
-    "app/core/workspaces/triage.py::decide": 11,
     "app/scripts/backfill_biblio.py::run": 7,
 }
 DEEP: dict[str, int] = {

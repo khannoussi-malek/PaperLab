@@ -95,7 +95,7 @@ def basic(keys):
 
 async def go(session, m, **kw):
     kw = {"file": "main.tex", "base": FUTURE, "selection": None} | kw
-    return await mr.start(session, m.id, **kw)
+    return await mr.start(session, m.id, mr.ReviewAsk(**kw))
 
 
 async def rows(session, mid):
@@ -243,7 +243,7 @@ async def test_two_starts_at_once_only_one_runs(monkeypatch):
     async def one():
         async with SessionLocal() as s:
             try:
-                return await mr.start(s, mid, file="main.tex", base=FUTURE, selection=None)
+                return await mr.start(s, mid, mr.ReviewAsk(file="main.tex", base=FUTURE, selection=None))
             except Conflict as exc:
                 return str(exc)
 

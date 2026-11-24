@@ -225,9 +225,18 @@ async def _new_paper(session, pkg: _Package, rec: dict, written: list[Path], que
     return paper, skipped
 
 
-async def _papers_into(session, pkg, workspace_id, held, alias, written, queued) -> tuple[dict, int, int, int]:
+@dataclass(frozen=True)
+class _Known:
+    """Package keys the library already answers: `held` maps to a library paper, `alias` to another package key."""
+
+    held: dict
+    alias: dict
+
+
+async def _papers_into(session, pkg, workspace_id, known: _Known, written, queued) -> tuple[dict, int, int, int]:
     """Links every package paper to the workspace. Returns (key -> paper id, added, matched, pdfs skipped); matched
-    counts the distinct library papers."""
+    counts the distinct library papers. New papers' files go in `written` and their jobs in `queued`."""
+    held, alias = known.held, known.alias
     ids: dict[str, uuid.UUID] = {}
     library: set[uuid.UUID] = set()
     added = skipped = 0
@@ -333,7 +342,8 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
         workspace = _workspace_row(pkg, name)
         session.add(workspace)
         await session.flush()
-        ids, added, matched, skipped = await _papers_into(session, pkg, workspace.id, held, alias, written, queued)
+        known = _Known(held, alias)
+        ids, added, matched, skipped = await _papers_into(session, pkg, workspace.id, known, written, queued)
         await _tags_into(session, workspace.id, pkg.tags, ids)
         note_count = await _notes_into(session, pkg.notes, ids)
         answer_count = await workspace_package_answers.write_rows(session, workspace.id, pkg.answers, ids)

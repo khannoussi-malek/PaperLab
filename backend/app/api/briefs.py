@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.chat import STREAM_RESPONSES, to_sources
 from app.api.chat_stream import stream_output
 from app.api.deps import LLMByModelIdDep, SessionDep
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers
 from app.core.workspaces import briefs
 from app.domain.sections import LensId
 from app.schemas.lenses import BriefOut
@@ -38,7 +38,8 @@ async def generate_brief(
     (410 merged) for the paper, 409 needs_full_text (no PDF), paper_not_ready or lens_empty."""
 
     async def save(session: AsyncSession, content: str) -> uuid.UUID:
-        return await briefs.save_brief(session, paper_id, lens, prepared, content, llm.model, llm.connection_name)
+        reply = chat_answers.Reply(content, llm.model, llm.connection_name)
+        return await briefs.save_brief(session, paper_id, lens, prepared, reply)
 
     async for event in stream_output(prepared, llm, save, "brief", "brief", f"paper {paper_id}, lens {lens}"):
         yield event

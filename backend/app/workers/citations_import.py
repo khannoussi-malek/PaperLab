@@ -59,11 +59,12 @@ async def import_citations(
             async with SessionLocal() as session:
                 with bundle or contextlib.nullcontext():
                     await report(cia.ImportResult())  # the first heartbeat; apply reports after each entry
+                    options = cia.ImportOptions(
+                        uuid.UUID(workspace_id) if workspace_id else None, fetch_free_pdfs, save_without_pdf
+                    )
                     result = await cia.apply(
-                        session, entries, workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
-                        fetch_free_pdfs=fetch_free_pdfs, save_without_pdf=save_without_pdf, bundle=bundle,
-                        progress=report, deadline=deadline,
-                    )  # fmt: skip
+                        session, entries, options, bundle=bundle, progress=report, deadline=deadline
+                    )
     finally:
         Path(path).unlink(missing_ok=True)
     await report(result, finished=True)

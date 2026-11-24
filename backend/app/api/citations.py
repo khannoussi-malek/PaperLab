@@ -126,10 +126,10 @@ async def import_citations(
     service is down."""
     name, source = _upload(file)
     try:
+        options = citations_import_run.cia.ImportOptions(workspace_id, fetch_free_pdfs, save_without_pdf)
         progress = await citations_import_run.start(
-            session, name, source, workspace_id=workspace_id, new_workspace_name=new_workspace_name,
-            fetch_free_pdfs=fetch_free_pdfs, save_without_pdf=save_without_pdf,
-        )  # fmt: skip
+            session, name, source, options, new_workspace_name=new_workspace_name
+        )
     except (RedisError, OSError):  # the job could not be queued; start() already removed the upload and new workspace
         raise HTTPException(503, QUEUE_DOWN) from None
     if progress.state == "queued":

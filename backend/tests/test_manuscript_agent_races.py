@@ -124,7 +124,9 @@ async def test_an_edit_is_refused_when_the_owner_saves_between_its_read_and_its_
     monkeypatch.setattr(manuscripts, "save_text", owner_first)
     async with maker() as s:
         with pytest.raises(Conflict, match="file_changed"):
-            await agent.edit_file(s, mid, "main.tex", "\\documentclass", "\\documentclass[x]", late_base)
+            await agent.edit_file(
+                s, mid, "main.tex", agent.TextEdit("\\documentclass", "\\documentclass[x]"), late_base
+            )
     async with maker() as s:
         assert await manuscripts.get_text(s, mid, "main.tex") == "OWNER typed"
     assert await mcp_snapshots(maker, mid) == 0

@@ -310,16 +310,17 @@ def apply_edit(text: str, old: str, new: str) -> str:
     return text.replace(old, new, 1)
 
 
+@dataclass(frozen=True)
+class TextEdit:
+    old_text: str
+    new_text: str
+
+
 @_committing
 async def edit_file(
-    session: AsyncSession,
-    mid: uuid.UUID,
-    path: str,
-    old_text: str,
-    new_text: str,
-    base: Base,
-    reason: str | None = None,
+    session: AsyncSession, mid: uuid.UUID, path: str, edit: TextEdit, base: Base, reason: str | None = None
 ) -> Written:
+    """Replaces `edit.old_text`, which must occur once in the file, by `edit.new_text`."""
     paths.validate_path(path)  # a hostile path answers its own code, not unknown_file
     row = await _text_row(session, mid, path)
     if row.updated_at > base:
@@ -330,7 +331,7 @@ async def edit_file(
         session,
         mid,
         path,
-        apply_edit(row.text, old_text, new_text),
+        apply_edit(row.text, edit.old_text, edit.new_text),
         base=row.updated_at,
         snapshot=manuscript_history.MCP_REASON,
     )

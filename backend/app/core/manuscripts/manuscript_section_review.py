@@ -21,6 +21,7 @@ from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import ManuscriptSectionReview as Row
 from app.models import Note, note_anchors, note_papers
 from app.models.note import Provenance
+from app.schemas.manuscript_section_review import SectionReviewIn
 
 LIVE = timedelta(minutes=20)  # one long local-model call has no heartbeat inside it
 MAX_SOURCE = 60_000
@@ -108,24 +109,17 @@ async def _notes(session: AsyncSession, papers: list[dict], cited: set[str]) -> 
     return sorted(seen.values(), key=lambda n: not n["cited"])[:MAX_NOTES]  # stable: newest first within each group
 
 
-async def start(
-    session: AsyncSession,
-    mid: uuid.UUID,
-    *,
-    file: str,
-    base: datetime,
-    at: int,
-    role: str | None,
-    confirm_remote: bool,
-) -> dict:
+async def _tex_source(session: AsyncSession, mid: uuid.UUID, ask: SectionReviewIn):
+    """(the manuscript, the file's source), refused when it isn't .tex, changed since the editor saw it, or a review
+    of this manuscript is running. Takes the manuscript's start lock first."""
     # Starts on one manuscript take turns to the commit: the later one sees the earlier row and refuses.
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:mid))"), {"mid": str(mid)})
     manuscript = await manuscripts.get(session, mid)
-    source = await manuscripts.read(session, mid, file)
-    if source.text is None or not file.endswith(".tex"):
+    source = await manuscripts.read(session, mid, ask.file)
+    if source.text is None or not ask.file.endswith(".tex"):
         raise InvalidInput("not_tex", detail="The reviewer reads .tex files.")
-    await llm_connections.refuse_unconfirmed_remote(session, confirm_remote)
-    if source.updated_at > base:
+    await llm_connections.refuse_unconfirmed_remote(session, ask.confirm_remote)
+    if source.updated_at > ask.base:
         raise Conflict("file_changed", updated_at=source.updated_at)
     live = await session.scalars(
         select(Row)
@@ -134,10 +128,30 @@ async def start(
     )
     if any(_live(r) for r in live):
         raise Conflict("review_running")
+    return manuscript, source
+
+
+async def _queued(session: AsyncSession, row: Row) -> dict:
+    session.add(row)
+    await session.commit()  # the job reads this row on its own connection
+    await session.refresh(row)
+    try:
+        await queue.enqueue(JOB, str(row.id))
+    except Exception:
+        logger.exception("could not queue the section review %s", row.id)
+        row.status, row.reason = "failed", "queue_unavailable"
+        await session.commit()
+    return review_out(row)
+
+
+async def start(session: AsyncSession, mid: uuid.UUID, ask: SectionReviewIn) -> dict:
+    """Queues a review of the section around `ask.at` in `ask.file`, as the editor saw it at `ask.base`."""
+    manuscript, source = await _tex_source(session, mid, ask)
+    file = ask.file
     full = normalize_newlines(source.text)  # the editor's buffer is always \n
     slices = section_slices(full, path=file, main_file=manuscript.main_file)
-    section = _section_at(slices, from_utf16(full, at))
-    chosen_role, role_source = _role(role, section)
+    section = _section_at(slices, from_utf16(full, ask.at))
+    chosen_role, role_source = _role(ask.role, section)
     body = full[section.start : section.end]
     sentences = [s for s in split_sentences(body) if s.plain.strip()]
     if len(body) > MAX_SOURCE or len(sentences) > MAX_SENTENCES:
@@ -151,34 +165,18 @@ async def start(
             Row.section_hash.not_in([s.hash for s in slices]) | (Row.section_hash == section.hash),
         )
     )
+    inputs = {
+        "sentences": [" ".join(s.plain.split()) for s in sentences],
+        "hashes": [s.hash for s in sentences],
+        "notes": [n["body"] for n in notes],
+        "note_meta": [{k: n[k] for k in ("note_id", "paper_id", "label")} for n in notes],
+    }
     row = Row(
-        manuscript_id=mid,
-        file_path=file,
-        section_hash=section.hash,
-        title=section.title,
-        role=chosen_role,
-        role_source=role_source,
-        status="queued",
-        confirm_remote=confirm_remote,
-        source=body,
-        inputs={
-            "sentences": [" ".join(s.plain.split()) for s in sentences],
-            "hashes": [s.hash for s in sentences],
-            "notes": [n["body"] for n in notes],
-            "note_meta": [{k: n[k] for k in ("note_id", "paper_id", "label")} for n in notes],
-        },
+        manuscript_id=mid, file_path=file, section_hash=section.hash, title=section.title, role=chosen_role,
+        role_source=role_source, status="queued", confirm_remote=ask.confirm_remote, source=body, inputs=inputs,
         updated_at=func.clock_timestamp(),
     )
-    session.add(row)
-    await session.commit()  # the job reads this row on its own connection
-    await session.refresh(row)
-    try:
-        await queue.enqueue(JOB, str(row.id))
-    except Exception:
-        logger.exception("could not queue the section review %s", row.id)
-        row.status, row.reason = "failed", "queue_unavailable"
-        await session.commit()
-    return review_out(row)
+    return await _queued(session, row)
 
 
 async def cancel(session: AsyncSession, mid: uuid.UUID, review_id: uuid.UUID) -> dict:

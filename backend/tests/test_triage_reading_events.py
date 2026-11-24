@@ -118,7 +118,7 @@ async def test_set_reading_and_decide_racing_chain_their_events(slow_first_lock)
         async def desk():
             await slow_first_lock.wait()
             async with AsyncSession(engine, expire_on_commit=False) as s:
-                await triage.decide(s, paper.id, pile="skim", session_id=uuid.uuid4())
+                await triage.decide(s, paper.id, triage.Decision(pile="skim", session_id=uuid.uuid4()))
 
         await asyncio.gather(reader(), desk())
         async with AsyncSession(engine) as s:

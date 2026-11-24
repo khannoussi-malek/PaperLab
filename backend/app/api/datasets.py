@@ -32,10 +32,8 @@ async def preview_table(paper_id: uuid.UUID, payload: TablePreviewRequest, sessi
 
 @router.post("/api/papers/{paper_id}/numbers", status_code=201)
 async def add_number(paper_id: uuid.UUID, payload: NumberCreate, session: SessionDep) -> NumberAddedOut:
-    return await capture.add_number(
-        session, paper_id, payload.label, payload.raw, payload.unit, payload.page, payload.bbox,
-        suggested=payload.suggested,
-    )
+    number = capture.NumberText(payload.label, payload.raw, payload.unit)
+    return await capture.add_number(session, paper_id, number, payload.page, payload.bbox, suggested=payload.suggested)
 
 
 @router.post("/api/papers/{paper_id}/numbers/suggestions")
@@ -65,9 +63,7 @@ async def create_dataset(payload: DatasetCreate, session: SessionDep) -> Dataset
         payload.name,
         payload.kind,
         payload.grid.to_core(),
-        paper_id=payload.paper_id,
-        page=payload.page,
-        region=payload.region,
+        datasets.TableSource(payload.paper_id, payload.page, payload.region),
     )
 
 

@@ -39,6 +39,14 @@ async def _has_model(session: AsyncSession, confirm_remote: bool) -> bool:
     return True
 
 
+async def _supersede_other_checks(session: AsyncSession, mid: uuid.UUID, h: str) -> None:
+    """Fails the still-queued checks of every other sentence on this manuscript."""
+    await session.execute(update(ManuscriptEvidence).where(
+        ManuscriptEvidence.manuscript_id == mid, ManuscriptEvidence.sentence_hash != h,
+        ManuscriptEvidence.status == "queued",
+    ).values(status="failed", reason="superseded", updated_at=func.now()))
+
+
 async def find(
     session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder=None, confirm_remote: bool = False
 ) -> dict:
@@ -66,10 +74,7 @@ async def find(
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:mid))"), {"mid": str(mid)})
     # Another sentence's checks still waiting would keep the model busy for nothing: stop them (a running job ends after
     # the row it is on, since it only takes queued rows). Asking about that sentence again re-queues them.
-    await session.execute(update(ManuscriptEvidence).where(
-        ManuscriptEvidence.manuscript_id == mid, ManuscriptEvidence.sentence_hash != h,
-        ManuscriptEvidence.status == "queued",
-    ).values(status="failed", reason="superseded", updated_at=func.now()))
+    await _supersede_other_checks(session, mid, h)
     # No model, no rows: nothing would ever resolve them (the passages still show).
     verdicts = "queued" if grouped and has_model else "unavailable"
     if verdicts == "queued":

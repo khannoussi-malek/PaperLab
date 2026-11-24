@@ -17,6 +17,7 @@ from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel, Note, note_anchors, note_papers
 from app.models import ManuscriptSectionReview as Row
 from app.providers.base import LLMError, LLMUnavailable
+from app.schemas.manuscript_section_review import SectionReviewIn
 from app.workers import manuscript_section_review as worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]  # flips the default model
@@ -84,7 +85,7 @@ async def note(session, paper, body, provenance="human", page=None, age=0):
 
 async def go(session, m, **kw):
     kw = {"file": "main.tex", "base": FUTURE, "at": 5, "role": None, "confirm_remote": False} | kw
-    return await msr.start(session, m.id, **kw)
+    return await msr.start(session, m.id, SectionReviewIn(**kw))
 
 
 async def rows(session, mid):
@@ -303,7 +304,7 @@ async def test_two_starts_at_once_only_one_runs(monkeypatch):
     async def one():
         async with Local() as s:
             try:
-                return await msr.start(s, mid, file="main.tex", base=FUTURE, at=5, role=None, confirm_remote=False)
+                return await msr.start(s, mid, SectionReviewIn(file="main.tex", base=FUTURE, at=5))
             except Conflict as exc:
                 return str(exc)
 

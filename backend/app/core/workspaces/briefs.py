@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chat.answer_provenance import snapshot
 from app.core.chat.chat import Prepared, chunk_sources, cut_to_budget, lens_sources
-from app.core.chat.chat_answers import SnapshotPassage, parse_citations, snapshot_passages
+from app.core.chat.chat_answers import Reply, SnapshotPassage, parse_citations, snapshot_passages
 from app.core.chat.chat_context import format_context
 from app.core.chat.retrieval import RetrievedChunk
 from app.core.papers.papers import get_paper
@@ -80,11 +80,10 @@ async def save_brief(
     paper_id: uuid.UUID,
     lens: str,
     prepared: Prepared,
-    content: str,
-    model: str,
-    connection_name: str,
+    reply: Reply,
 ) -> uuid.UUID:
     """The model and connection names are copied, as chat's are, so renaming the connection never changes a brief."""
+    content = reply.content
     source_ids = [s.id for s in prepared.sources]
     cited = parse_citations(content, len(source_ids))
     output = LLMOutput(
@@ -96,8 +95,8 @@ async def save_brief(
         cited_chunks=[source_ids[i - 1] for i in cited],
         source_snapshot=snapshot(prepared.sources, [f"C{i}" for i in cited]),
         whole_paper=prepared.whole_paper,
-        model=model,
-        connection_name=connection_name,
+        model=reply.model,
+        connection_name=reply.connection_name,
         prompt_version=prepared.prompt_version,
     )
     session.add(output)

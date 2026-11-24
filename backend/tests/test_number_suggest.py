@@ -65,8 +65,14 @@ async def test_an_unknown_section_is_refused(session):
 
 async def test_an_added_suggestion_marks_its_label_as_the_models(session):
     paper = await a_paper(session)
-    added = await capture.add_number(session, paper.id, "Accuracy (ours)", "92.3", "%", 5,
-                                     [(72.0, 200.0, 300.0, 220.0)], suggested=True)
+    added = await capture.add_number(
+        session,
+        paper.id,
+        capture.NumberText("Accuracy (ours)", "92.3", "%"),
+        5,
+        [(72.0, 200.0, 300.0, 220.0)],
+        suggested=True,
+    )
     view = await datasets.get_dataset(session, added.dataset_id)
     label, value, unit = view.rows[0].cells
     assert (label.raw, label.origin, value.origin, unit.origin) == ("Accuracy (ours)", "llm", "extracted", "human")
@@ -74,8 +80,9 @@ async def test_an_added_suggestion_marks_its_label_as_the_models(session):
 
 async def test_a_grid_keeps_a_suggested_cell_marked_and_shows_an_edit(session):
     paper = await a_paper(session)
-    added = await capture.add_number(session, paper.id, "Acc", "92.3", "%", 5, [(72.0, 200.0, 300.0, 220.0)],
-                                     suggested=True)
+    added = await capture.add_number(
+        session, paper.id, capture.NumberText("Acc", "92.3", "%"), 5, [(72.0, 200.0, 300.0, 220.0)], suggested=True
+    )
     view = await datasets.get_dataset(session, added.dataset_id)
     columns = [ColumnIn(c.id, c.name, c.unit) for c in view.columns]
     row = view.rows[0]

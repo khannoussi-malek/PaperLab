@@ -142,6 +142,14 @@ def _coauthors(names: str) -> tuple[str, ...]:
     return tuple(parts[1:])
 
 
+def _mark_secondary(found: list[Citation], standalone: list[Citation]) -> list[Citation]:
+    """A "quoted in Y" source with no original of its own: the narrative citations are the originals, read via Y."""
+    originals = [c.text for c in found if c.narrative]
+    via = "; ".join(originals) or None
+    found = [replace(c, superseded=True) if c.narrative else c for c in found]
+    return [replace(c, via=via) if c in standalone else c for c in found]
+
+
 def find(sentence: str) -> list[Citation]:
     """DOIs, then author-year forms, in sentence order."""
     found: list[Citation] = []
@@ -188,10 +196,7 @@ def find(sentence: str) -> list[Citation]:
             )
         )
     if standalone:  # the narrative citations are the originals the author read through Y
-        originals = [c.text for c in found if c.narrative]
-        via = "; ".join(originals) or None
-        found = [replace(c, superseded=True) if c.narrative else c for c in found]
-        found = [replace(c, via=via) if c in standalone else c for c in found]
+        found = _mark_secondary(found, standalone)
     return sorted(found, key=lambda c: c.span)
 
 
