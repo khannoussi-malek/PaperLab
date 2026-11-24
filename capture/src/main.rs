@@ -17,7 +17,7 @@ mod view;
 
 use std::io::BufRead;
 use std::process::Command;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rune::{Align, AppHandle, AppSpec, DisplayTarget, OverlayPlacement, ScreenEdge, TextEdit, WindowOptions, WindowSpec};
 
@@ -35,6 +35,8 @@ pub struct App {
     /// None in tests: effects are kept in `sent` instead of performed.
     ctx: Option<Ctx>,
     sent: Vec<Effect>,
+    /// When the shown list arrived; None after a failed fetch or an add, so the next show asks again.
+    papers_at: Option<Instant>,
 }
 
 struct Ctx {
@@ -46,10 +48,15 @@ struct Ctx {
 
 impl App {
     fn new(ctx: Option<Ctx>) -> Self {
-        App { panel: Panel::default(), query: focused(""), ctx, sent: vec![] }
+        App { panel: Panel::default(), query: focused(""), ctx, sent: vec![], papers_at: None }
     }
 
     pub fn dispatch(&mut self, event: Event) {
+        match &event {
+            Event::Papers(Ok(_)) => self.papers_at = Some(Instant::now()),
+            Event::Papers(Err(_)) | Event::AddDone(Ok(_)) => self.papers_at = None,
+            _ => {}
+        }
         for effect in self.panel.step(event) {
             self.perform(effect);
         }
@@ -66,6 +73,9 @@ impl App {
     }
 
     fn perform(&mut self, effect: Effect) {
+        if effect == Effect::FetchPapers && library::fresh(self.papers_at, Instant::now()) {
+            return; // the list shown is under a minute old: no second download and parse
+        }
         let Some(ctx) = &self.ctx else { return self.sent.push(effect) };
         let (me, api) = (ctx.me.clone(), ctx.api.clone());
         // ponytail: a thread per request; a handful per panel use, so a pool isn't worth it.

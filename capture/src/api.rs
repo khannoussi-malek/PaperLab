@@ -57,7 +57,7 @@ impl Api {
     }
 
     pub fn papers(&self) -> Result<Vec<Paper>, ApiError> {
-        let (status, body) = self.send(self.agent.get(&format!("{}/api/papers", self.base)).call())?;
+        let (status, body) = self.send(self.agent.get(&format!("{}/api/papers/brief", self.base)).call())?;
         ok(status, body)
     }
 
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn papers_and_one_paper() {
         let api = fake(|_, path, _| match path {
-            "/api/papers" => (200, json!([paper_json("p1", "ready")])),
+            "/api/papers/brief" => (200, json!([paper_json("p1", "ready")])),
             "/api/papers/p1" => (200, paper_json("p1", "embedding")),
             _ => (404, json!({ "detail": "paper_not_found" })),
         });

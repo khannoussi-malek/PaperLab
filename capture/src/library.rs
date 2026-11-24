@@ -20,6 +20,14 @@ pub struct Paper {
 
 pub const SHOWN: usize = 8;
 
+/// How long a fetched list is reused when the panel opens again: a big library's list costs seconds and a memory peak.
+pub const LIST_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Whether a list fetched at `fetched` can still be shown at `now` without asking again.
+pub fn fresh(fetched: Option<std::time::Instant>, now: std::time::Instant) -> bool {
+    fetched.is_some_and(|at| now.saturating_duration_since(at) < LIST_MAX_AGE)
+}
+
 /// Up to `SHOWN` papers for `query`, best first: newest when it's empty; otherwise every word must appear in the
 /// title, an author or the year, and a title that starts with the query ranks above one that contains it.
 pub fn matching(papers: &[Paper], query: &str) -> Vec<usize> {
@@ -73,6 +81,16 @@ pub fn paper(id: &str, title: &str, authors: &[&str], year: i32, created_at: &st
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_list_is_reused_for_a_minute_then_fetched_again() {
+        let at = Instant::now();
+        assert!(!super::fresh(None, at));
+        assert!(super::fresh(Some(at), at + Duration::from_secs(59)));
+        assert!(!super::fresh(Some(at), at + Duration::from_secs(60)));
+    }
+
     use super::*;
 
     fn library() -> Vec<Paper> {
