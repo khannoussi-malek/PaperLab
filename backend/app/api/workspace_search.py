@@ -257,7 +257,7 @@ async def snowball_route(
 ) -> SnowballOut:
     result = await snowball_run.snowball(
         session, providers, workspace_id, payload.seed_paper_ids, payload.seed_hit_ids,
-        payload.backward, payload.forward,
+        snowball_run.Directions(payload.backward, payload.forward),
     )
     return SnowballOut(new_hits=result.new_hits, skipped_seeds=result.skipped_seeds, errors=result.errors)
 

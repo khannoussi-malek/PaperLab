@@ -202,7 +202,9 @@ async def test_import_hit_queues_ingest_for_a_free_pdf_and_not_for_a_failure(ses
     every = SourceSettings(contact_email=discovery_fake_data.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
     providers = source_clients.build_providers(every, discovery_fake.transport())
     try:
-        await snowball_run.snowball(session, providers, ws.id, [], [uuid.UUID(seed)], backward=True, forward=False)
+        await snowball_run.snowball(
+            session, providers, ws.id, [], [uuid.UUID(seed)], snowball_run.Directions(backward=True, forward=False)
+        )
     finally:
         await providers.aclose()
     hits = result(await call("list_hits", workspace=f"Import {RUN}"))["hits"]

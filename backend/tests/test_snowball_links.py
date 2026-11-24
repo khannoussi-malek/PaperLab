@@ -12,7 +12,7 @@ from app.core.search import source_clients
 from app.core.search.batch_fetch import search_batch
 from app.core.search.candidates import normal_title
 from app.core.search.hit_links import level_of
-from app.core.search.snowball_run import snowball
+from app.core.search.snowball_run import Directions, snowball
 from app.core.workspaces import workspaces
 from app.models import Paper
 from app.models.provenance import WorkspaceHitLink
@@ -150,7 +150,9 @@ async def test_snowball_from_hit_links_parent_and_level(session, edge_providers)
     workspace, run = await _workspace_and_run(session)
     seed = await _seed_hit(session, workspace, run)
 
-    result = await snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
+    result = await snowball(
+        session, edge_providers, workspace.id, [], [seed.id], Directions(backward=True, forward=False)
+    )
     assert result.new_hits == 1
     links = await _links_of(session, workspace.id, parent_hit_id=seed.id)
     assert [(link.kind, link.parent_paper_id) for link in links] == [("cites", None)]
@@ -158,7 +160,9 @@ async def test_snowball_from_hit_links_parent_and_level(session, edge_providers)
     assert child.snowball_round == 1
     assert await level_of(session, seed.id) == 0 and await level_of(session, child.id) == 1
 
-    result = await snowball(session, edge_providers, workspace.id, [], [child.id], backward=False, forward=True)
+    result = await snowball(
+        session, edge_providers, workspace.id, [], [child.id], Directions(backward=False, forward=True)
+    )
     assert result.new_hits == 1
     grand_links = await _links_of(session, workspace.id, parent_hit_id=child.id)
     assert [link.kind for link in grand_links] == ["cited_by"]
@@ -173,7 +177,7 @@ async def test_snowball_from_imported_paper_attaches_to_its_hit(session, edge_pr
     await workspaces.add_paper(session, workspace.id, paper.id)
     hit = await _seed_hit(session, workspace, run, paper_id=paper.id)
 
-    await snowball(session, edge_providers, workspace.id, [paper.id], [], backward=False, forward=True)
+    await snowball(session, edge_providers, workspace.id, [paper.id], [], Directions(backward=False, forward=True))
 
     links = await _links_of(session, workspace.id, kind="cited_by")
     assert len(links) == 1 and links[0].parent_hit_id == hit.id and links[0].parent_paper_id is None
@@ -187,7 +191,7 @@ async def test_snowball_from_hand_added_paper_uses_parent_paper(session, edge_pr
     await session.flush()
     await workspaces.add_paper(session, workspace.id, paper.id)
 
-    await snowball(session, edge_providers, workspace.id, [paper.id], [], backward=True, forward=False)
+    await snowball(session, edge_providers, workspace.id, [paper.id], [], Directions(backward=True, forward=False))
 
     links = await _links_of(session, workspace.id, kind="cites")
     assert len(links) == 1 and links[0].parent_hit_id is None and links[0].parent_paper_id == paper.id
@@ -198,7 +202,9 @@ async def test_snowball_from_hand_added_paper_uses_parent_paper(session, edge_pr
 async def test_snowball_links_existing_pool_hit(session, edge_providers):
     workspace, run = await _workspace_and_run(session)
     seed = await _seed_hit(session, workspace, run)
-    first = await snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
+    first = await snowball(
+        session, edge_providers, workspace.id, [], [seed.id], Directions(backward=True, forward=False)
+    )
     assert first.new_hits == 1
     child_id = (await _links_of(session, workspace.id, parent_hit_id=seed.id))[0].child_hit_id
     # A second seed whose reference is that same pool hit: the handler's references are per-fixture, so reuse the
@@ -218,7 +224,9 @@ async def test_snowball_links_existing_pool_hit(session, edge_providers):
     client = semantic_scholar.new_client(api_key=None, transport=httpx.MockTransport(handle))
     providers = replace(edge_providers, clients={**edge_providers.clients, "semantic_scholar": client})
     try:
-        second = await snowball(session, providers, workspace.id, [], [other.id], backward=True, forward=False)
+        second = await snowball(
+            session, providers, workspace.id, [], [other.id], Directions(backward=True, forward=False)
+        )
     finally:
         await client.aclose()
 
@@ -331,7 +339,7 @@ async def test_snowball_run_records_seed_stats(session, edge_providers):
     workspace, run = await _workspace_and_run(session)
     seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
 
-    await snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
+    await snowball(session, edge_providers, workspace.id, [], [seed.id], Directions(backward=True, forward=False))
 
     snow_run, stats = await _stats_of(session, workspace.id)
     assert snow_run.query_text == 'Snowball from "Seed Alpha"'
@@ -358,7 +366,7 @@ async def test_partial_failure_records_errors_per_direction(session, fake_provid
     workspace, run = await _workspace_and_run(session)
     seed = await _seed_hit(session, workspace, run)
     try:
-        await snowball(session, providers, workspace.id, [], [seed.id], backward=True, forward=True)
+        await snowball(session, providers, workspace.id, [], [seed.id], Directions(backward=True, forward=True))
     finally:
         await client.aclose()
     _, stats = await _stats_of(session, workspace.id)
@@ -377,7 +385,9 @@ async def test_paper_seed_stats_carry_its_hit_or_none(session, edge_providers):
         await workspaces.add_paper(session, workspace.id, paper.id)
     hit = await _seed_hit(session, workspace, run, paper_id=with_hit.id)
 
-    await snowball(session, edge_providers, workspace.id, [with_hit.id, bare.id], [], backward=True, forward=False)
+    await snowball(
+        session, edge_providers, workspace.id, [with_hit.id, bare.id], [], Directions(backward=True, forward=False)
+    )
 
     _, stats = await _stats_of(session, workspace.id)
     assert {e["title"]: e["hit_id"] for e in stats["seeds"]} == {"Has hit": str(hit.id), "No hit": None}
@@ -388,7 +398,7 @@ async def test_snowball_query_text_counts_extra_seeds(session, edge_providers):
     a = await _seed_hit(session, workspace, run, title="Seed A")
     b = await _seed_hit(session, workspace, run, title="Seed B")
 
-    await snowball(session, edge_providers, workspace.id, [], [a.id, b.id], backward=True, forward=True)
+    await snowball(session, edge_providers, workspace.id, [], [a.id, b.id], Directions(backward=True, forward=True))
 
     snow_run, stats = await _stats_of(session, workspace.id)
     assert snow_run.query_text == 'Snowball from "Seed A" and 1 more'
@@ -407,7 +417,9 @@ async def test_zero_result_snowball_records_seed_and_error(session, fake_provide
     seed = await _seed_hit(session, workspace, run, title="Rate limited seed")
 
     try:
-        result = await snowball(session, providers, workspace.id, [], [seed.id], backward=True, forward=True)
+        result = await snowball(
+            session, providers, workspace.id, [], [seed.id], Directions(backward=True, forward=True)
+        )
     finally:
         await client.aclose()
 
@@ -432,7 +444,7 @@ async def test_skipped_seed_records_reason(session, fake_providers):
     seed = await _seed_hit(session, workspace, run, title="Unknown seed")
 
     try:
-        await snowball(session, providers, workspace.id, [], [seed.id], backward=True, forward=False)
+        await snowball(session, providers, workspace.id, [], [seed.id], Directions(backward=True, forward=False))
     finally:
         await client.aclose()
 

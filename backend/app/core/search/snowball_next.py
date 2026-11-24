@@ -74,7 +74,7 @@ async def run_snowball_next(
         result = await snowball_run.snowball(
             session, providers, workspace_id,
             [i.paper_id for i in items if i.paper_id], [i.hit_id for i in items if i.hit_id],
-            backward="cites" in directions, forward="cited_by" in directions,
+            snowball_run.Directions(backward="cites" in directions, forward="cited_by" in directions),
         )
         new_hits += result.new_hits
         skipped += result.skipped_seeds

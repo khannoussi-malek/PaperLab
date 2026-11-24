@@ -190,7 +190,9 @@ async def test_snowball_next_lists_unrun_directions(session, edge_providers):
     for hit in (seed, fresh):
         await branches.set_branch(session, workspace.id, hit_id=hit.id, state="go_further", directions=BOTH, reason=None)
     await branches.set_branch(session, workspace.id, hit_id=stopped.id, state="stopped", directions=[], reason=None)
-    await snowball_run.snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
+    await snowball_run.snowball(
+        session, edge_providers, workspace.id, [], [seed.id], snowball_run.Directions(backward=True, forward=False)
+    )
 
     items = {i.hit_id: i for i in await snowball_next.snowball_next(session, workspace.id)}
     assert set(items) == {seed.id, fresh.id}
@@ -214,7 +216,8 @@ async def test_snowball_next_leaves_out_a_seed_not_found_in_semantic_scholar(ses
     workspace, run = await _workspace_and_run(session)
     seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
     await branches.set_branch(session, workspace.id, hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
-    entry = snowball_run._seed_entry(seed.id, "hit", "Seed Alpha", skipped=snowball_run.NOT_IN_S2, hit_id=seed.id)
+    seed_of_hop = snowball_run._Seed(seed.id, "hit", "Seed Alpha", None, None, seed.id, None)
+    entry = snowball_run._seed_entry(seed_of_hop, skipped=snowball_run.NOT_IN_S2)
     run.stats_json = {"snowball": {"seeds": [entry], "directions": BOTH}}
     await session.commit()
     assert await snowball_next.snowball_next(session, workspace.id) == []

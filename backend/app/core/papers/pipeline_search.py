@@ -339,7 +339,9 @@ async def snowball(
     backward, forward = DIRECTIONS[direction]
     ws = await workspace_id(session, workspace)
     async with source_clients.open_providers(session) as providers:
-        return await snowball_run.snowball(session, providers, ws, seed_paper_ids, [], backward, forward)
+        return await snowball_run.snowball(
+            session, providers, ws, seed_paper_ids, [], snowball_run.Directions(backward, forward)
+        )
 
 
 async def set_eligibility(
