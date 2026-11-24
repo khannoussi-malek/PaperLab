@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.search import discovery, hit_links
-from app.core.search.batch_fetch import _store_candidates_as_hits
+from app.core.search.batch_fetch import HitOrigin, _store_candidates_as_hits
 from app.core.search.from_indexes import from_s2
 from app.core.search.source_clients import Providers
 from app.core.workspaces import workspaces
@@ -152,12 +152,12 @@ async def _store_hop(
     new: dict[str, int] = {}
     for direction, candidates in found.items():
         source_method, kind = _DIRECTION_KINDS[direction]
-        added, _ = await _store_candidates_as_hits(
-            session, run, source_method, {"semantic_scholar": candidates}, seed_paper_id=seed.paper_id,
-            snowball_round=level + 1, kind=kind, parent_hit_id=seed.hit_id,
+        origin = HitOrigin(
+            source_method, kind, seed_paper_id=seed.paper_id, snowball_round=level + 1, parent_hit_id=seed.hit_id,
             parent_paper_id=None if seed.hit_id else seed.paper_id,
         )
-        new[kind] = added
+        stored = await _store_candidates_as_hits(session, run, {"semantic_scholar": candidates}, origin)
+        new[kind] = stored.new_hits
     return new
 
 

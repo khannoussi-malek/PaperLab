@@ -206,11 +206,8 @@ async def test_workspace_search_counts_new_hits_for_every_source_that_found_them
     from app.domain.candidates import Candidate
 
     found = {"arxiv": [Candidate(title="Shared paper", doi="10.1/shared", sources=("arxiv", "openalex"))]}
-    counted = batch_fetch.Counter()
-    added, child_ids = await batch_fetch._store_candidates_as_hits(
-        session, stored_run, "database_search", found, new_by_source=counted
-    )
-    assert added == 1 and len(child_ids) == 1 and counted["arxiv"] == 1
+    stored = await batch_fetch._store_candidates_as_hits(session, stored_run, found)
+    assert stored.new_hits == 1 and len(stored.hit_ids) == 1 and stored.new_by_source["arxiv"] == 1
 
 
 def test_short_error_reads_httpxs_real_message():
