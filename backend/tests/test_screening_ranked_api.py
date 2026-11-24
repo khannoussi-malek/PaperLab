@@ -142,8 +142,12 @@ async def test_the_ranked_order_can_narrow_to_a_saved_searchs_new_finds(client, 
         ("sleep loss and memory in adults", None),
     ])
     looked = datetime(2026, 10, 1, tzinfo=timezone.utc)
-    saved = await saved_searches.create(session, workspace.id, query="sleep", schedule="0 2 * * *", timezone="UTC",
-                                        now=looked)
+    saved = await saved_searches.create(
+        session,
+        workspace.id,
+        saved_searches.SavedSearchSpec(query="sleep", schedule="0 2 * * *", timezone="UTC"),
+        now=looked,
+    )
     run = WorkspaceSearchRun(workspace_id=workspace.id, query_text="sleep", filters_json={}, query_overrides_json={},
                              sources_json=["arxiv"], status="exhausted", started_at=looked, stats_json={},
                              saved_search_id=saved.id)
@@ -164,6 +168,8 @@ async def test_another_workspaces_saved_search_narrows_to_nothing(client, sessio
 
     workspace, _ = await make_pool(session, [(POSITIVE, "relevant"), (NEGATIVE, "not_relevant"), ("x", None)])
     other, _ = await make_pool(session, [("y", None)])
-    theirs = await saved_searches.create(session, other.id, query="q", schedule="0 2 * * *", timezone="UTC")
+    theirs = await saved_searches.create(
+        session, other.id, saved_searches.SavedSearchSpec(query="q", schedule="0 2 * * *", timezone="UTC")
+    )
     resp = await client.get(_url(workspace), params={"saved_search_id": str(theirs.id)})
     assert resp.status_code == 200 and (resp.json()["items"], resp.json()["total_unscreened"]) == ([], 0)

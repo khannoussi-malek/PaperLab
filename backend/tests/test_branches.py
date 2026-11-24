@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.core.search import branches, screening, search_hits, snowball_run
 from app.domain.errors import InvalidInput, NotFound
 from app.models.provenance import WorkspaceBranchState
+from app.schemas.search_tree import BranchIn
 from app.schemas.workspace_search import HitReviewUpdate
 from tests.screening_pool import make_pool
 
@@ -23,15 +24,18 @@ async def _row(session, hit):
 async def test_set_branch_go_further_and_back_to_undecided(session):
     workspace, (hit,) = await make_pool(session, [("a", None)])
     out = await branches.set_branch(
-        session, workspace.id, hit_id=hit.id, state="go_further",
-        directions=["cited_by", "cites", "cites"], reason="ignored",
+        session,
+        workspace.id,
+        BranchIn(hit_id=hit.id, state="go_further", directions=["cited_by", "cites", "cites"], reason="ignored"),
     )
     assert (out.hit_id, out.state, out.directions, out.reason) == (hit.id, "go_further", BOTH, None)
     stopped = await branches.set_branch(
-        session, workspace.id, hit_id=hit.id, state="stopped", directions=[], reason="off topic"
+        session, workspace.id, BranchIn(hit_id=hit.id, state="stopped", directions=[], reason="off topic")
     )
     assert (stopped.state, stopped.reason) == ("stopped", "off topic")
-    undone = await branches.set_branch(session, workspace.id, hit_id=hit.id, state=None, directions=[], reason=None)
+    undone = await branches.set_branch(
+        session, workspace.id, BranchIn(hit_id=hit.id, state=None, directions=[], reason=None)
+    )
     assert undone.state is None
     assert await _row(session, hit) is None
 
@@ -42,7 +46,7 @@ async def test_set_branch_rejects_bad_input(session):
 
     async def call(**kw):
         args = {"hit_id": hit.id, "state": "stopped", "directions": [], "reason": None} | kw
-        return await branches.set_branch(session, workspace.id, **args)
+        return await branches.set_branch(session, workspace.id, BranchIn(**args))
 
     with pytest.raises(InvalidInput):
         await call(paper_id=uuid.uuid4())  # both targets
@@ -87,7 +91,9 @@ async def test_accepted_suggestion_sets_default(session):
 
 async def test_screening_default_never_overwrites_a_hand_choice(session):
     workspace, (hit,) = await make_pool(session, [("a", None)])
-    await branches.set_branch(session, workspace.id, hit_id=hit.id, state="stopped", directions=[], reason=None)
+    await branches.set_branch(
+        session, workspace.id, BranchIn(hit_id=hit.id, state="stopped", directions=[], reason=None)
+    )
     await search_hits.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
     assert (await _row(session, hit)).state == "stopped"
 
@@ -126,7 +132,7 @@ async def test_undone_decision_clears_a_screening_default(session):
     for h in (hit, owned):
         await search_hits.review_hit(session, h.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
     await branches.set_branch(
-        session, workspace.id, hit_id=owned.id, state="go_further", directions=["cites"], reason=None
+        session, workspace.id, BranchIn(hit_id=owned.id, state="go_further", directions=["cites"], reason=None)
     )
     for h in (hit, owned):
         await search_hits.review_hit(session, h.id, workspace.id, HitReviewUpdate(stage1_status=None))
@@ -162,7 +168,7 @@ async def test_branch_on_a_papers_hit_is_stored_on_the_hit(session):
     await session.flush()
 
     out = await branches.set_branch(
-        session, workspace.id, paper_id=paper.id, state="stopped", directions=[], reason="no"
+        session, workspace.id, BranchIn(paper_id=paper.id, state="stopped", directions=[], reason="no")
     )
     assert (out.hit_id, out.paper_id) == (hit.id, None)
     assert (await _row(session, hit)).state == "stopped"
@@ -188,8 +194,12 @@ async def test_snowball_next_lists_unrun_directions(session, edge_providers):
     fresh = await _seed_hit(session, workspace, run, title="Seed Beta")
     stopped = await _seed_hit(session, workspace, run, title="Seed Gamma")
     for hit in (seed, fresh):
-        await branches.set_branch(session, workspace.id, hit_id=hit.id, state="go_further", directions=BOTH, reason=None)
-    await branches.set_branch(session, workspace.id, hit_id=stopped.id, state="stopped", directions=[], reason=None)
+        await branches.set_branch(
+            session, workspace.id, BranchIn(hit_id=hit.id, state="go_further", directions=BOTH, reason=None)
+        )
+    await branches.set_branch(
+        session, workspace.id, BranchIn(hit_id=stopped.id, state="stopped", directions=[], reason=None)
+    )
     await snowball_run.snowball(
         session, edge_providers, workspace.id, [], [seed.id], snowball_run.Directions(backward=True, forward=False)
     )
@@ -204,8 +214,12 @@ async def test_run_snowball_next_empties_the_list(session, edge_providers):
     workspace, run = await _workspace_and_run(session)
     one = await _seed_hit(session, workspace, run, title="Seed Alpha")
     two = await _seed_hit(session, workspace, run, title="Seed Beta")
-    await branches.set_branch(session, workspace.id, hit_id=one.id, state="go_further", directions=BOTH, reason=None)
-    await branches.set_branch(session, workspace.id, hit_id=two.id, state="go_further", directions=["cites"], reason=None)
+    await branches.set_branch(
+        session, workspace.id, BranchIn(hit_id=one.id, state="go_further", directions=BOTH, reason=None)
+    )
+    await branches.set_branch(
+        session, workspace.id, BranchIn(hit_id=two.id, state="go_further", directions=["cites"], reason=None)
+    )
 
     out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
     assert out.new_hits > 0
@@ -215,7 +229,9 @@ async def test_run_snowball_next_empties_the_list(session, edge_providers):
 async def test_snowball_next_leaves_out_a_seed_not_found_in_semantic_scholar(session):
     workspace, run = await _workspace_and_run(session)
     seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
-    await branches.set_branch(session, workspace.id, hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
+    await branches.set_branch(
+        session, workspace.id, BranchIn(hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
+    )
     seed_of_hop = snowball_run._Seed(seed.id, "hit", "Seed Alpha", None, None, seed.id, None)
     entry = snowball_run._seed_entry(seed_of_hop, skipped=snowball_run.NOT_IN_S2)
     run.stats_json = {"snowball": {"seeds": [entry], "directions": BOTH}}
@@ -227,7 +243,9 @@ async def test_run_snowball_next_takes_a_batch_and_reports_the_rest(session, edg
     workspace, run = await _workspace_and_run(session)
     for i in range(30):
         hit = await _seed_hit(session, workspace, run, title=f"Seed {i:02d}")
-        await branches.set_branch(session, workspace.id, hit_id=hit.id, state="go_further", directions=["cites"], reason=None)
+        await branches.set_branch(
+            session, workspace.id, BranchIn(hit_id=hit.id, state="go_further", directions=["cites"], reason=None)
+        )
 
     out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
     assert out.remaining == 30 - snowball_next.SNOWBALL_NEXT_BATCH == 5
@@ -252,7 +270,9 @@ async def test_remaining_counts_a_batch_item_whose_direction_errored(session, fa
     providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": client})
     workspace, run = await _workspace_and_run(session)
     seed = await _seed_hit(session, workspace, run, title="Rate limited")
-    await branches.set_branch(session, workspace.id, hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
+    await branches.set_branch(
+        session, workspace.id, BranchIn(hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
+    )
 
     try:
         out = await snowball_next.run_snowball_next(session, providers, workspace.id)
@@ -272,7 +292,9 @@ async def test_a_branch_on_a_paper_that_left_the_workspace_is_not_offered_and_ca
     session.add(paper)
     await session.flush()
     await workspaces.add_paper(session, workspace.id, paper.id)
-    await branches.set_branch(session, workspace.id, paper_id=paper.id, state="go_further", directions=BOTH, reason=None)
+    await branches.set_branch(
+        session, workspace.id, BranchIn(paper_id=paper.id, state="go_further", directions=BOTH, reason=None)
+    )
     assert [i.paper_id for i in await snowball_next.snowball_next(session, workspace.id)] == [paper.id]
 
     await workspaces.remove_paper(session, workspace.id, paper.id)
@@ -280,5 +302,7 @@ async def test_a_branch_on_a_paper_that_left_the_workspace_is_not_offered_and_ca
     out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
     assert (out.new_hits, out.remaining) == (0, 0)
 
-    await branches.set_branch(session, workspace.id, paper_id=paper.id, state=None, directions=[], reason=None)
+    await branches.set_branch(
+        session, workspace.id, BranchIn(paper_id=paper.id, state=None, directions=[], reason=None)
+    )
     assert await session.scalar(select(WorkspaceBranchState).where(WorkspaceBranchState.paper_id == paper.id)) is None

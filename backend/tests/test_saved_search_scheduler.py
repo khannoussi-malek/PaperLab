@@ -37,8 +37,14 @@ def _async_return(value):
 
 async def _saved(session, label, now=T0, **fields):
     ws = await workspaces.create(session, f"{label} {RUN}")
-    view = await saved_searches.create(session, ws.id, query="llm creativity", schedule=DAILY, timezone="UTC",
-                                       sources=["arxiv"], now=now, **fields)
+    view = await saved_searches.create(
+        session,
+        ws.id,
+        saved_searches.SavedSearchSpec(
+            query="llm creativity", schedule=DAILY, timezone="UTC", sources=["arxiv"], **fields
+        ),
+        now=now,
+    )
     return ws, view
 
 

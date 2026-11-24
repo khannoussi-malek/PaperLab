@@ -286,10 +286,7 @@ async def run_snowball_next_route(
 
 @router.put("/branch")
 async def set_branch_route(workspace_id: uuid.UUID, payload: BranchIn, session: SessionDep) -> BranchOut:
-    return await branches.set_branch(
-        session, workspace_id, hit_id=payload.hit_id, paper_id=payload.paper_id, state=payload.state,
-        directions=payload.directions, reason=payload.reason,
-    )
+    return await branches.set_branch(session, workspace_id, payload)
 
 
 @router.get("/prisma")

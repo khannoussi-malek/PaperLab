@@ -155,8 +155,16 @@ async def create_saved_search(
         raise InvalidInput("invalid_schedule", hint="cron needs schedule='cron'; weekday needs schedule='weekly'.")
     expression = schedules.to_cron(schedule, time=time, weekday=weekday, cron=cron)
     return await saved_searches.create(
-        session, ws, query=query, schedule=expression, timezone=timezone, sources=sources or [],
-        year_from=year_from, year_to=year_to,
+        session,
+        ws,
+        saved_searches.SavedSearchSpec(
+            query=query,
+            schedule=expression,
+            timezone=timezone,
+            sources=sources or [],
+            year_from=year_from,
+            year_to=year_to,
+        ),
     )
 
 

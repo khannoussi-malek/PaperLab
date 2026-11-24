@@ -27,8 +27,16 @@ async def create_saved_search(
 ) -> SavedSearchOut:
     schedule = _cron(payload.schedule_kind, payload.time, payload.weekday, payload.cron)
     return await saved_searches.create(
-        session, workspace_id, query=payload.query, schedule=schedule, timezone=payload.timezone,
-        sources=payload.sources, year_from=payload.year_from, year_to=payload.year_to,
+        session,
+        workspace_id,
+        saved_searches.SavedSearchSpec(
+            query=payload.query,
+            schedule=schedule,
+            timezone=payload.timezone,
+            sources=payload.sources,
+            year_from=payload.year_from,
+            year_to=payload.year_to,
+        ),
     )
 
 
