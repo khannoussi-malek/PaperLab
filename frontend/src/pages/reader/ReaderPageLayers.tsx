@@ -19,7 +19,7 @@ import type { PageHighlight } from '@/features/reader/pageHighlights'
 import { hoverCardPosition, noteRects } from '@/features/reader/pageHighlights'
 import type { Flash } from '@/features/reader/useFlash'
 import type { PdfRect } from '@/lib/coords'
-import { useReaderPointer } from '@/pages/reader/useReaderPointer'
+import type { useReaderPointer } from '@/pages/reader/useReaderPointer'
 
 type Pointer = ReturnType<typeof useReaderPointer>
 
