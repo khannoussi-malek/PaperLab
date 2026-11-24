@@ -1,0 +1,30 @@
+[package]
+name = "paperlab-capture"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Quick Capture: find or add a PaperLab paper from any app with one shortcut (M65)."
+publish = false
+
+# Its own workspace: Rune's patches below only apply from a workspace root.
+[workspace]
+
+[dependencies]
+# Rune is pre-release: pinned to one dev rev, bumped on purpose. On a bump, copy the [patch.crates-io] list from
+# Rune's root Cargo.toml at the new rev and use the same rev everywhere.
+rune = { git = "https://github.com/anomalyco/rune", rev = "b3503d9b2e41077aef7f4a34c2683a08ae06ed6d" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Plain HTTP to 127.0.0.1 only: no TLS.
+ureq = { version = "3", default-features = false, features = ["json"] }
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "b3503d9b2e41077aef7f4a34c2683a08ae06ed6d" }
+sctk-adwaita = { git = "https://github.com/anomalyco/rune", rev = "b3503d9b2e41077aef7f4a34c2683a08ae06ed6d" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "b3503d9b2e41077aef7f4a34c2683a08ae06ed6d" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "b3503d9b2e41077aef7f4a34c2683a08ae06ed6d" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "b3503d9b2e41077aef7f4a34c2683a08ae06ed6d" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "b3503d9b2e41077aef7f4a34c2683a08ae06ed6d" }
+
+[profile.release]
+strip = true
