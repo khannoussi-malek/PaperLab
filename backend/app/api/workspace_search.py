@@ -116,8 +116,18 @@ async def list_hits(
     saved_search_id: uuid.UUID | None = None, found_after: AwareDatetime | None = None,
 ) -> HitListOut:
     items, next_cursor = await search_hits.list_hits(
-        session, workspace_id, limit, after, stage1_status, acquisition_status,
-        sort=sort, min_relevance=min_relevance, saved_search_id=saved_search_id, found_after=found_after,
+        session,
+        workspace_id,
+        search_hits.HitFilters(
+            stage1_status=stage1_status,
+            acquisition_status=acquisition_status,
+            min_relevance=min_relevance,
+            saved_search_id=saved_search_id,
+            found_after=found_after,
+        ),
+        limit=limit,
+        after=after,
+        sort=sort,
     )
     return HitListOut(items=items, next_cursor=next_cursor)
 

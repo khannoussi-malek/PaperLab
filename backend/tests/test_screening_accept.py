@@ -64,7 +64,7 @@ async def test_ai_sort_orders_by_relevance_then_confidence_then_found_order(sess
 
 async def test_min_relevance_keeps_only_that_and_above(session):
     workspace, (a, b, c, d, e, f) = await _ai_pool(session)
-    items, _ = await search_hits.list_hits(session, workspace.id, sort="ai", min_relevance=4)
+    items, _ = await search_hits.list_hits(session, workspace.id, search_hits.HitFilters(min_relevance=4), sort="ai")
     assert {i["id"] for i in items} == {b.id, c.id, d.id, e.id}
 
 
@@ -106,14 +106,17 @@ async def test_ai_sort_rejects_a_malformed_cursor(session, cursor):
 async def test_ai_pages_do_not_skip_a_hit_after_an_accept_between_pages(session):
     workspace, (a, b, c, d, e, f) = await _ai_pool(session)  # AI order: c d b e a f
     page1, after = await search_hits.list_hits(
-        session, workspace.id, limit=2, sort="ai", stage1_status="undecided")
+        session, workspace.id, search_hits.HitFilters(stage1_status="undecided"), limit=2, sort="ai"
+    )
     assert [i["id"] for i in page1] == [c.id, d.id]
     await screening.accept_suggestions(session, workspace.id, [c.id, d.id])
     page2, after = await search_hits.list_hits(
-        session, workspace.id, limit=2, after=after, sort="ai", stage1_status="undecided")
+        session, workspace.id, search_hits.HitFilters(stage1_status="undecided"), limit=2, after=after, sort="ai"
+    )
     assert [i["id"] for i in page2] == [b.id, e.id]
     page3, _ = await search_hits.list_hits(
-        session, workspace.id, limit=2, after=after, sort="ai", stage1_status="undecided")
+        session, workspace.id, search_hits.HitFilters(stage1_status="undecided"), limit=2, after=after, sort="ai"
+    )
     assert [i["id"] for i in page3] == [a.id, f.id]
 
 
@@ -121,4 +124,4 @@ async def test_ai_pages_do_not_skip_a_hit_after_an_accept_between_pages(session)
 async def test_min_relevance_must_be_1_to_5(session, bad):
     workspace, _ = await _ai_pool(session)
     with pytest.raises(InvalidInput):
-        await search_hits.list_hits(session, workspace.id, min_relevance=bad)
+        await search_hits.list_hits(session, workspace.id, search_hits.HitFilters(min_relevance=bad))

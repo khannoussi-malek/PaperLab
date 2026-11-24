@@ -4,6 +4,7 @@ import base64
 import binascii
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -72,15 +73,72 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         raise InvalidInput("invalid pagination cursor") from exc
 
 
+@dataclass(frozen=True)
+class HitFilters:
+    """Which of a workspace's hits a listing shows."""
+
+    stage1_status: str | None = None  # a decision, or "undecided"
+    acquisition_status: str | None = None
+    run_id: uuid.UUID | None = None
+    saved_search_id: uuid.UUID | None = None  # the saved-search inbox (M7.6): hits its own runs found first
+    found_after: datetime | None = None
+    min_relevance: int | None = None  # 1 to 5
+    suggested_only: bool = False
+
+
+def _filtered(query, filters: HitFilters):
+    hit = WorkspaceSearchHit
+    if filters.stage1_status == "undecided":
+        query = query.where(hit.stage1_status.is_(None))
+    elif filters.stage1_status:
+        query = query.where(hit.stage1_status == filters.stage1_status)
+    if filters.suggested_only:
+        query = query.where(hit.suggestion.is_not(None))
+    if filters.run_id is not None:
+        query = query.where(hit.run_id == filters.run_id)
+    if filters.saved_search_id is not None:
+        runs = select(WorkspaceSearchRun.id).where(WorkspaceSearchRun.saved_search_id == filters.saved_search_id)
+        query = query.where(hit.run_id.in_(runs))
+    if filters.found_after is not None:
+        query = query.where(hit.first_seen_at > filters.found_after)
+    if filters.acquisition_status:
+        query = query.where(hit.acquisition_status == filters.acquisition_status)
+    if filters.min_relevance is not None:
+        if not 1 <= filters.min_relevance <= 5:
+            raise InvalidInput("min_relevance must be 1 to 5")
+        query = query.where(hit.suggestion_relevance >= filters.min_relevance)
+    return query
+
+
+def _paged(query, limit: int, after: str | None, sort: str | None):
+    """Keyset order and cursor: AI order (see ai_sort), or (first_seen_at, id). `tuple_()` on both sides makes
+    SQLAlchemy emit a real SQL row-value comparison (`WHERE (first_seen_at, id) > (:seen_at, :id)`) instead of a
+    no-op Python tuple comparison."""
+    if sort not in (None, "ai"):
+        raise InvalidInput("sort must be 'ai' or empty")
+    if sort == "ai":
+        if after:
+            query = query.where(ai_sort.after_cursor(after))
+        return query.order_by(*ai_sort.AI_ORDER).limit(limit)
+    if after:
+        seen_at, hit_id = _decode_cursor(after)
+        query = query.where(tuple_(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id) > tuple_(seen_at, hit_id))
+    return query.order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(limit)
+
+
+def _next_cursor(rows: list, limit: int, sort: str | None) -> str | None:
+    if len(rows) < limit:
+        return None
+    last = rows[-1][0]
+    return ai_sort.encode_cursor(last) if sort == "ai" else _encode_cursor(last.first_seen_at, last.id)
+
+
 async def list_hits(
-    session: AsyncSession, workspace_id, limit: int = 50, after: str | None = None,
-    stage1_status: str | None = None, acquisition_status: str | None = None, run_id: uuid.UUID | None = None,
-    sort: str | None = None, min_relevance: int | None = None, suggested_only: bool = False,
-    saved_search_id: uuid.UUID | None = None, found_after: datetime | None = None,
+    session: AsyncSession, workspace_id, filters: HitFilters = HitFilters(), limit: int = 50,
+    after: str | None = None, sort: str | None = None,
 ) -> tuple[list[dict], str | None]:
     """Keyset-paginated hit listing, ordered by (first_seen_at, id) so the cursor is stable even when several
-    hits share a first_seen_at timestamp. `tuple_()` on both sides makes SQLAlchemy emit a real SQL row-value
-    comparison (`WHERE (first_seen_at, id) > (:seen_at, :id)`) instead of a no-op Python tuple comparison.
+    hits share a first_seen_at timestamp (or in AI order).
 
     Outer-joins ExternalRef (I7) since external_ref_id is nullable — a hit with no linked ref still comes back,
     with title/authors/year/venue/doi all None via `_hit_out_dict`. Also outer-joins SearchRunEligibility on
@@ -98,51 +156,12 @@ async def list_hits(
         )
         .where(WorkspaceSearchHit.workspace_id == workspace_id)
     )
-    if stage1_status == "undecided":
-        query = query.where(WorkspaceSearchHit.stage1_status.is_(None))
-    elif stage1_status:
-        query = query.where(WorkspaceSearchHit.stage1_status == stage1_status)
-    if suggested_only:
-        query = query.where(WorkspaceSearchHit.suggestion.is_not(None))
-    if run_id is not None:
-        query = query.where(WorkspaceSearchHit.run_id == run_id)
-    if saved_search_id is not None:  # the saved-search inbox (M7.6): hits its own runs found first
-        runs = select(WorkspaceSearchRun.id).where(WorkspaceSearchRun.saved_search_id == saved_search_id)
-        query = query.where(WorkspaceSearchHit.run_id.in_(runs))
-    if found_after is not None:
-        query = query.where(WorkspaceSearchHit.first_seen_at > found_after)
-    if acquisition_status:
-        query = query.where(WorkspaceSearchHit.acquisition_status == acquisition_status)
-    if min_relevance is not None:
-        if not 1 <= min_relevance <= 5:
-            raise InvalidInput("min_relevance must be 1 to 5")
-        query = query.where(WorkspaceSearchHit.suggestion_relevance >= min_relevance)
-    if sort not in (None, "ai"):
-        raise InvalidInput("sort must be 'ai' or empty")
-    if sort == "ai":  # keyset cursor, see ai_sort
-        if after:
-            query = query.where(ai_sort.after_cursor(after))
-        query = query.order_by(*ai_sort.AI_ORDER).limit(limit)
-    else:
-        if after:
-            seen_at, hit_id = _decode_cursor(after)
-            query = query.where(
-                tuple_(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id) > tuple_(seen_at, hit_id)
-            )
-        query = query.order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(limit)
-    rows = (await session.execute(query)).all()
+    rows = (await session.execute(_paged(_filtered(query, filters), limit, after, sort))).all()
     items = [
-        _hit_out_dict(
-            hit, ref,
-            elig.stage2_status if elig else None, elig.stage2_exclude_reason if elig else None,
-        )
+        _hit_out_dict(hit, ref, elig.stage2_status if elig else None, elig.stage2_exclude_reason if elig else None)
         for hit, ref, elig in rows
     ]
-    if len(rows) < limit:
-        return items, None
-    if sort == "ai":
-        return items, ai_sort.encode_cursor(rows[-1][0])
-    return items, _encode_cursor(rows[-1][0].first_seen_at, rows[-1][0].id)
+    return items, _next_cursor(rows, limit, sort)
 
 
 async def get_hit(session: AsyncSession, hit_id, workspace_id) -> dict:

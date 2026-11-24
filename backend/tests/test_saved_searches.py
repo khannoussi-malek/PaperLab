@@ -122,5 +122,7 @@ async def test_the_hit_list_narrows_to_one_saved_searchs_finds_after_a_time(sess
     await _found(session, ws, view.id, datetime(2026, 10, 30, tzinfo=UTC), title="old")
     new = await _found(session, ws, view.id, datetime(2026, 11, 2, tzinfo=UTC), title="new")
     await _found(session, ws, None, datetime(2026, 11, 2, tzinfo=UTC), title="by hand")
-    items, _ = await search_hits.list_hits(session, ws.id, saved_search_id=view.id, found_after=t0)
+    items, _ = await search_hits.list_hits(
+        session, ws.id, search_hits.HitFilters(saved_search_id=view.id, found_after=t0)
+    )
     assert [i["id"] for i in items] == [new.id]
