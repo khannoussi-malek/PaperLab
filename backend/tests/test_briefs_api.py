@@ -142,7 +142,7 @@ async def test_a_brief_that_cant_be_saved_says_so(client, session, fake_llm, mon
 
 
 def save_failure_log(caplog) -> tuple[int, str]:
-    [record] = [r for r in caplog.records if r.name == "app.api.chat" and r.getMessage().startswith("saving")]
+    [record] = [r for r in caplog.records if r.name == "app.api.chat_stream" and r.getMessage().startswith("saving")]
     return record.levelno, record.getMessage()
 
 
