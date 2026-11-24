@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 mod api;
+mod icon;
 mod input;
 mod library;
 mod panel;
@@ -35,6 +36,8 @@ pub struct App {
     /// None in tests: effects are kept in `sent` instead of performed.
     ctx: Option<Ctx>,
     sent: Vec<Effect>,
+    /// PaperLab's icon in the header, decoded once.
+    pub icon: rune::Pixels,
     /// When the shown list arrived; None after a failed fetch or an add, so the next show asks again.
     papers_at: Option<Instant>,
 }
@@ -48,7 +51,7 @@ struct Ctx {
 
 impl App {
     fn new(ctx: Option<Ctx>) -> Self {
-        App { panel: Panel::default(), query: focused(""), ctx, sent: vec![], papers_at: None }
+        App { panel: Panel::default(), query: focused(""), ctx, sent: vec![], icon: icon::pixels(), papers_at: None }
     }
 
     pub fn dispatch(&mut self, event: Event) {
@@ -190,7 +193,7 @@ fn main() {
                 if let Some(ctx) = &s.ctx { show(&ctx.me); }
             })
             .on_focus(|s, focused, _| if !focused { s.close() });
-        [WindowSpec::from_app("capture", app).configured_options(WindowOptions::launcher_panel())]
+        [WindowSpec::from_app("capture", app).configured_options(WindowOptions::launcher_panel().macos(|native| native.shadow(true).corner_radius(14.0)))]
     });
 }
 

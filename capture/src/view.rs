@@ -30,7 +30,7 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
     let mut panel = col().key("panel").w(WIDTH).radius(14.0).clip_rounded(14.0).fill(t.card)
         .border(1.0, if dark { Color::WHITE.alpha(0.1) } else { t.separator })
         .child(row().h(56.0).px(18.0).gap(12.0).center_y()
-            .child(text("⌕").font(type_::TITLE.lh(26.0)).color(t.text_secondary))
+            .child(el().size(26.0, 26.0).radius(6.0).pixels(&app.icon))
             .child(field));
     let status = status_line(p);
     let rows = p.rows();
