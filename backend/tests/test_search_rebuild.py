@@ -10,7 +10,10 @@ from sqlalchemy import delete, text, update
 from test_embedding_index import worker_uses
 
 from app.config import settings
-from app.core import chat, embedding_index, embedding_sources, library, llm_connections, retrieval, workspaces
+from app.core.chat import chat, retrieval
+from app.core.papers import embedding_index, embedding_sources, library
+from app.core.platform import llm_connections
+from app.core.workspaces import workspaces
 from app.domain.errors import Conflict
 from app.models import Chunk, Paper
 from app.providers import embedding

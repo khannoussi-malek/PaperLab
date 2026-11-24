@@ -14,7 +14,7 @@ class ExternalRef(Base):
     """A paper some library paper cites or is cited by. Not a paper: no chunks, no status (addendum §3b).
 
     `external_ids` (Phase 0b) is the canonical per-source identifier map going forward — keyed by
-    app.core.source_registry's own source ids (`"openalex"`, `"semantic_scholar"`, `"arxiv"`, `"core"`), not the
+    app.core.search.source_registry's own source ids (`"openalex"`, `"semantic_scholar"`, `"arxiv"`, `"core"`), not the
     legacy column names. `s2_id`/`openalex_id`/`arxiv_id`/`core_id` below are kept mapped (read by nothing new,
     written by nothing new) so fixtures built before this migration — and unrelated features' own fixtures that
     never matched by identifier in the first place — keep working unchanged; they are dropped in a later migration.

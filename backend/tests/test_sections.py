@@ -7,7 +7,8 @@ from conftest import unit_vector
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.core import papers, sections, skills
+from app.core.papers import papers, sections
+from app.core.platform import skills
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Paper, section_role_overrides

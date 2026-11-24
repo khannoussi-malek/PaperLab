@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
-from app.core import charts, notes
+from app.core.notes import charts, notes
 from app.schemas.charts import ChartCreate, ChartOut, ChartSummaryOut, ChartUpdate, ResolvedDataOut, ResolveRequest
 from app.schemas.notes import NoteOut
 

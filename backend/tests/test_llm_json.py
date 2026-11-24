@@ -3,7 +3,7 @@
 import pytest
 from pydantic import BaseModel, Field
 
-from app.core.llm_json import ask_json
+from app.core.platform.llm_json import ask_json
 
 pytestmark = pytest.mark.anyio
 

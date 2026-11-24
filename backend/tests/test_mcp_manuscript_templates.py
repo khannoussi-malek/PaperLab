@@ -4,7 +4,7 @@ import pytest
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call
 
-from app.core import manuscript_templates
+from app.core.manuscripts import manuscript_templates
 
 pytestmark = pytest.mark.anyio
 

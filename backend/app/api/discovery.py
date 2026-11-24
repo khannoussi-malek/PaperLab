@@ -4,8 +4,10 @@ from fastapi import APIRouter, Query, Request
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core import discovery, papers, workspaces
-from app.core.queue import INGEST_QUEUE
+from app.core.papers import papers
+from app.core.platform.queue import INGEST_QUEUE
+from app.core.search import discovery
+from app.core.workspaces import workspaces
 from app.domain.errors import InvalidInput
 from app.models import PaperStatus
 from app.schemas.discovery import AddPaperRequest, SearchOut

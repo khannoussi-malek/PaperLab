@@ -5,8 +5,8 @@ import httpx2
 import pytest
 
 from app.config import settings
-from app.core import notes
-from app.core.chat import SYSTEM_PROMPT, WORKSPACE_SYSTEM_PROMPT
+from app.core.chat.chat import SYSTEM_PROMPT, WORKSPACE_SYSTEM_PROMPT
+from app.core.notes import notes
 from app.providers import llm, llm_fake
 from app.providers.base import LLMError, LLMUnavailable
 
@@ -523,7 +523,7 @@ async def test_fake_llm_answers_a_question_asking_for_notes_with_two_suggested_n
 
 
 async def test_fake_llm_answers_the_v2_screening_prompt_with_json_whose_quote_is_in_the_abstract():
-    from app.core import screening_suggest as s
+    from app.core.search import screening_suggest as s
 
     abstract = "A controlled study of pagination in fixture search results."
     fake = llm_fake.FakeLLM()
@@ -541,7 +541,7 @@ async def test_fake_llm_answers_the_v2_screening_prompt_with_json_whose_quote_is
 async def test_fake_llm_answers_the_evidence_card_prompt_by_quoting_the_first_passage():
     import json
 
-    from app.core import evidence_cards as e
+    from app.core.notes import evidence_cards as e
 
     texts = [
         "Sleep improved recall by 12 percent in the trained group, a large effect. More words follow here.",

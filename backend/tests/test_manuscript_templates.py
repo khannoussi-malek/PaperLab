@@ -6,8 +6,8 @@ import pymupdf
 import pytest
 
 from app.config import settings
-from app.core import latex_compile as lc
-from app.core import manuscript_templates as mt
+from app.core.manuscripts import latex_compile as lc
+from app.core.manuscripts import manuscript_templates as mt
 from app.domain.errors import InvalidInput
 
 NAMES = sorted(mt.TEMPLATES)

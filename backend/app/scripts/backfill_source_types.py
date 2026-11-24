@@ -13,7 +13,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import enrichment, paper_sources
+from app.core.papers import enrichment, paper_sources
 from app.db import SessionLocal
 from app.models import Paper
 from app.providers import crossref

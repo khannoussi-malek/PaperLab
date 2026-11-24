@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.abstracts import is_citation_only, usable_abstract
+from app.core.papers.abstracts import is_citation_only, usable_abstract
 
 NAACL = (
     "Yining Lu, Dixuan Wang, Tianjian Li, Dongwei Jiang, Sanjeev Khudanpur, Meng Jiang, Daniel Khashabi. "

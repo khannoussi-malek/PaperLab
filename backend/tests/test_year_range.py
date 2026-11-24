@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.core import year_range
+from app.core.search import year_range
 from app.domain.errors import InvalidInput
 
 

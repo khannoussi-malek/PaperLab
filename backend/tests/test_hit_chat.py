@@ -4,7 +4,7 @@ import pytest
 from conftest import parse_sse
 from test_chat_api import make_paper
 
-from app.core import hit_chat
+from app.core.search import hit_chat
 from app.providers.llm_fake import FAKE_ANSWER
 from tests.screening_pool import make_pool
 

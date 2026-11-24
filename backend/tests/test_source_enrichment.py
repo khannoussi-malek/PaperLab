@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.core import enrichment
+from app.core.papers import enrichment
 from app.providers import crossref
 from app.scripts import backfill_source_types
 from tests.test_enrichment import add_paper, hints

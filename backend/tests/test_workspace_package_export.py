@@ -10,9 +10,14 @@ import pytest
 from sqlalchemy import select
 
 from app.config import settings
-from app.core import chat, citations_bundle_read, notes, papers, prisma_export, tags, workspace_package, workspaces
-from app.core.hit_links import record_links
-from app.core.notes import Anchor
+from app.core.chat import chat
+from app.core.citations import citations_bundle_read
+from app.core.notes import notes
+from app.core.notes.notes import Anchor
+from app.core.papers import papers
+from app.core.search import prisma_export
+from app.core.search.hit_links import record_links
+from app.core.workspaces import tags, workspace_package, workspaces
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMConnection, LLMOutput, Note, PaperSources, Workspace, note_papers

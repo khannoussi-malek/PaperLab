@@ -9,7 +9,8 @@ import pytest
 from conftest import FakeEmbedder
 from sqlalchemy import select, text
 
-from app.core import chunk_headers, papers, queue
+from app.core.papers import chunk_headers, papers
+from app.core.platform import queue
 from app.domain.chunking import ChunkDraft
 from app.models import Chunk, Paper
 from app.workers import ingest

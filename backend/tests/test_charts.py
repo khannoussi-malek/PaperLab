@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import event, insert
 
-from app.core import charts, datasets
+from app.core.notes import charts, datasets
 from app.domain.chart_spec import ChartSpecAdapter
 from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.domain.errors import InvalidInput, NotFound

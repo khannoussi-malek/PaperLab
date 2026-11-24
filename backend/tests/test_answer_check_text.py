@@ -1,4 +1,4 @@
-from app.core.answer_check_text import answer_sentences
+from app.core.chat.answer_check_text import answer_sentences
 
 
 def test_marker_inside_and_after_punctuation():

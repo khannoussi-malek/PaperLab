@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.domain import datasets
 from app.schemas.papers import Rect
 
-# Limits a request can't exceed; core/datasets.py checks the same row and column limits for every caller.
+# Limits a request can't exceed; core/notes/datasets.py checks the same row and column limits for every caller.
 CELL_CHARS = 2_000
 MAX_CELL_RECTS = 50
 
@@ -66,7 +66,7 @@ class GridIn(BaseModel):
 
 
 class DatasetCreate(BaseModel):
-    name: str  # stripped and checked (1..200 characters) by core/datasets.py, which answers 422
+    name: str  # stripped and checked (1..200 characters) by core/notes/datasets.py, which answers 422
     kind: Literal["table", "user"]
     paper_id: uuid.UUID | None = None
     page: int | None = Field(default=None, ge=1)

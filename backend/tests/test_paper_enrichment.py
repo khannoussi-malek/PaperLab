@@ -10,7 +10,9 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import update
 
-from app.core import hit_enrichment, paper_enrichment, workspaces
+from app.core.papers import paper_enrichment
+from app.core.search import hit_enrichment
+from app.core.workspaces import workspaces
 from app.models.paper import Paper
 from app.providers import semantic_scholar
 from app.workers.paper_enrichment import enrich_papers as worker_enrich_papers
@@ -189,8 +191,8 @@ async def test_enrich_papers_queues_once_and_reports_already_running(session, jo
 
 
 async def test_enrich_papers_with_s2_off(session, jobs, monkeypatch):
-    from app.core import paper_sources
-    from app.core.source_registry import SOURCE_IDS
+    from app.core.papers import paper_sources
+    from app.core.search.source_registry import SOURCE_IDS
 
     ws = await library(session, arxiv_paper())
     off = paper_sources.SourceSettings(enabled={**dict.fromkeys(SOURCE_IDS, True), "semantic_scholar": False})
@@ -277,7 +279,7 @@ async def test_a_hand_set_source_type_blocks_peer_review(session):
 
 
 async def test_reingest_does_not_flip_a_published_copy_back_to_false(session):
-    from app.core import enrichment
+    from app.core.papers import enrichment
 
     p = arxiv_paper(peer_reviewed="true", published_venue="ICML")
     session.add(p)
@@ -294,7 +296,7 @@ async def test_reingest_does_not_flip_a_published_copy_back_to_false(session):
 
 
 async def test_a_doi_correction_asks_semantic_scholar_again(session):
-    from app.core import enrichment
+    from app.core.papers import enrichment
 
     p = arxiv_paper(published_checked_at=datetime.now(timezone.utc))
     session.add(p)

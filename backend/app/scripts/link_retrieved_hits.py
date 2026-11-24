@@ -9,7 +9,7 @@ import asyncio
 
 from sqlalchemy import select
 
-from app.core import retrieved_hits
+from app.core.search import retrieved_hits
 from app.db import SessionLocal
 from app.models import Paper
 from app.models.workspace_search import WorkspaceSearchHit

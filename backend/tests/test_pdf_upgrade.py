@@ -14,8 +14,11 @@ from test_retrieved_hits import failed_hit, workspace
 from app.api import papers as papers_api
 from app.api import workspace_search as workspace_search_api
 from app.api.deps import get_discovery
-from app.core import discovery, notes, papers, retrieved_hits, tags, workspace_search, workspaces
-from app.core.prisma_export import prisma_export
+from app.core.notes import notes
+from app.core.papers import papers
+from app.core.search import discovery, retrieved_hits, workspace_search
+from app.core.search.prisma_export import prisma_export
+from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict
 from app.models import Paper
 from app.models.references import ExternalRef

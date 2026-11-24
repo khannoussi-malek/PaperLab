@@ -11,7 +11,7 @@ ChartType = Literal["bar", "line", "scatter", "box", "scatter3d", "heatmap", "su
 
 
 class ChartCreate(BaseModel):
-    title: str  # stripped and checked (1..200 characters) by core/charts.py, which answers 422
+    title: str  # stripped and checked (1..200 characters) by core/notes/charts.py, which answers 422
     spec: ChartSpec
 
 

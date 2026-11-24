@@ -7,7 +7,9 @@ import pytest
 from conftest import FakeArq, FakeEmbedder
 from sqlalchemy import select
 
-from app.core import notes, queue, references
+from app.core.citations import references
+from app.core.notes import notes
+from app.core.platform import queue
 from app.models import NoteEmbedding, Paper
 from app.workers import references as references_worker
 
@@ -144,7 +146,7 @@ async def test_embed_new_still_embeds_stale_notes(session, jobs):
 
 
 async def test_an_import_of_many_notes_queues_one_job(session, jobs):
-    from app.core import notes
+    from app.core.notes import notes
 
     ids = [uuid.uuid4() for _ in range(3)]
     await notes.queue_embed(*ids)
@@ -152,7 +154,7 @@ async def test_an_import_of_many_notes_queues_one_job(session, jobs):
 
 
 async def test_queueing_nothing_queues_no_job(session, jobs):
-    from app.core import notes
+    from app.core.notes import notes
 
     await notes.queue_embed()
     assert enqueued(jobs) == []

@@ -18,7 +18,7 @@ export const PILES: Record<
 }
 
 const r = (key: string, label = key.replaceAll('_', ' ')) => ({ key, label })
-/** Mirrors REASONS in backend/app/core/triage.py (a test compares them). */
+/** Mirrors REASONS in backend/app/core/workspaces/triage.py (a test compares them). */
 export const REASONS: Record<Pile, readonly { key: string; label: string }[]> = {
   read_closely: [r('core_to_my_question', 'core to my question'), r('method_i_need', 'method I need'), r('key_background', 'key background')],
   skim: [r('background_only', 'background only'), r('related_work', 'related work'), r('partly_relevant', 'partly relevant')],

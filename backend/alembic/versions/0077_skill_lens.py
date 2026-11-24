@@ -1,7 +1,7 @@
 """skills.lens: a skill can read through a reading lens (M16 lens chat)
 
 Null is the shipped lens for a bundled skill and 'full' for a custom one, so a bundled skill's row needs no value of its
-own until the reader changes it. The CHECK keeps the column to the lens ids core/lenses.py defines.
+own until the reader changes it. The CHECK keeps the column to the lens ids core/papers/lenses.py defines.
 
 Revision ID: 0077
 Revises: 0076

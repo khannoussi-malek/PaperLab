@@ -3,7 +3,7 @@ import uuid
 import pytest
 from conftest import TABLE_ROWS
 
-from app.core import capture, datasets
+from app.core.notes import capture, datasets
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Paper
 

@@ -3,10 +3,10 @@ from sqlalchemy import delete, update
 from test_manuscript_review import FUTURE, rows, wiring  # noqa: F401
 from test_manuscript_review import doc as template_doc
 
-from app.core import manuscript_review as mr
-from app.core import manuscript_review_all as ra
-from app.core import manuscript_review_report as rep
-from app.core import manuscripts
+from app.core.manuscripts import manuscript_review as mr
+from app.core.manuscripts import manuscript_review_all as ra
+from app.core.manuscripts import manuscript_review_report as rep
+from app.core.manuscripts import manuscripts
 from app.domain.errors import NotFound
 from app.models import ManuscriptFile, ManuscriptReviewRun
 

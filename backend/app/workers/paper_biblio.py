@@ -8,7 +8,7 @@ import logging
 import uuid
 from contextlib import AsyncExitStack
 
-from app.core import enrichment, paper_sources
+from app.core.papers import enrichment, paper_sources
 from app.db import SessionLocal
 from app.models import Paper
 from app.providers import crossref, openalex

@@ -6,7 +6,8 @@ import pytest
 from pdf_papers import TWICE, TWO_LINE_QUOTE, TWO_PARAGRAPH_QUOTE, chunked_paper
 from sqlalchemy import func, select
 
-from app.core import notes, papers
+from app.core.notes import notes
+from app.core.papers import papers
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMOutput, Note, Paper, Provenance, note_anchors

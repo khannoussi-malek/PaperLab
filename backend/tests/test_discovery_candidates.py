@@ -2,7 +2,7 @@ import pytest
 from conftest import recorded_discovery
 from pydantic import ValidationError
 
-from app.core.candidates import (
+from app.core.search.candidates import (
     _ids,
     from_acm_dl,
     from_biorxiv,
@@ -25,7 +25,7 @@ from app.core.candidates import (
     ordered_pdf_urls,
     with_s2,
 )
-from app.core.discovery import classify_query
+from app.core.search.discovery import classify_query
 from app.domain.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
 from app.schemas.discovery import SOURCE_ID_PATTERNS, CandidateIn, CandidateOut
 
@@ -251,8 +251,8 @@ def test_candidate_in_rejects_a_non_numeric_pubmed_id():
 
 
 def test_openalex_abstract_is_reconstructed_from_the_inverted_index():
-    # OpenAlex never gives plain abstract text, only a word -> positions map (abstract_text, app/core/enrichment.py,
-    # already used for library-paper enrichment; reused here for search candidates).
+    # OpenAlex never gives plain abstract text, only a word -> positions map (abstract_text,
+    # app/core/papers/enrichment.py, already used for library-paper enrichment; reused here for search candidates).
     work = {
         "title": "A paper",
         "primary_location": {"source": None},
@@ -328,7 +328,7 @@ def test_from_pubmed_with_no_doi_or_abstract_still_maps():
 
 
 def test_two_candidates_sharing_a_pubmed_id_are_the_same_paper():
-    from app.core.candidates import _same_paper
+    from app.core.search.candidates import _same_paper
 
     def record(title: str) -> dict:
         return {"pmid": "42825172", "title": title, "authors": [], "year": None, "doi": None, "abstract": None}

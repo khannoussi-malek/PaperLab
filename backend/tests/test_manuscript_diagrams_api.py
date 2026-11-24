@@ -6,7 +6,8 @@ import pytest
 from test_manuscript_papers import setup
 from test_manuscript_section_review_api import names
 
-from app.core import diagram_compile, queue
+from app.core.manuscripts import diagram_compile
+from app.core.platform import queue
 from app.workers import manuscript_diagrams as worker
 from app.workers import manuscripts as compile_worker
 

@@ -24,7 +24,7 @@ export function detailsSourceLine(paper: Pick<Paper, 'details_source' | 'field_s
   return source ? `Details from ${DETAILS_SOURCE[source]}` : null
 }
 
-/** Each group of details, its readable name, and the fields in it. Mirrors FIELD_GROUPS in backend/app/core/provenance.py. */
+/** Each group of details, its readable name, and the fields in it. Mirrors FIELD_GROUPS in backend/app/core/papers/provenance.py. */
 const GROUPS: readonly { key: string; name: string; fields: readonly string[] }[] = [
   { key: 'bibliographic', name: 'Title, authors and venue', fields: ['title', 'authors', 'year', 'venue', 'issn', 'type'] },
   { key: 'identifiers', name: 'Identifiers', fields: ['doi', 'openalex_id', 'pmid', 'pmcid'] },

@@ -13,19 +13,11 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import delete, func, select, update
 
-from app.core import (
-    chat,
-    chunk_headers,
-    claims,
-    evidence_cards,
-    library,
-    notes,
-    papers,
-    retrieval,
-    screening,
-    tags,
-    workspaces,
-)
+from app.core.chat import chat, claims, retrieval
+from app.core.notes import evidence_cards, notes
+from app.core.papers import chunk_headers, library, papers
+from app.core.search import screening
+from app.core.workspaces import tags, workspaces
 from app.domain import chunking
 from app.domain.errors import Conflict, InvalidInput
 from app.models import Chunk, EvidenceCard, LLMOutput, Paper
@@ -250,7 +242,7 @@ async def test_a_quote_on_a_paper_with_a_pdf_is_422_anchor_required(client, sess
 
 
 async def test_a_failed_paper_without_a_pdf_re_added_by_identifier_is_left_alone(session, jobs):
-    from app.core import pipeline
+    from app.core.papers import pipeline
 
     paper = await pdf_less_paper(session, status="failed")
     added = await pipeline._in_library(session, paper.id, None)
@@ -546,7 +538,7 @@ async def test_a_failed_index_abstract_enqueue_on_edit_leaves_the_paper_ready(cl
 
 async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, monkeypatch):
     """upload_hit_pdf only needs a holder found by identifier; held_version can write a DOI onto an arXiv copy."""
-    from app.core import discovery, workspace_search
+    from app.core.search import discovery, workspace_search
     from app.models import Workspace
     from app.models.references import ExternalRef
     from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun

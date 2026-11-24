@@ -8,8 +8,9 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
-from app.core import embedding_sources, llm_connections
-from app.core.embedding_sources import Source
+from app.core.papers import embedding_sources
+from app.core.papers.embedding_sources import Source
+from app.core.platform import llm_connections
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import EmbeddingSource
 from app.providers import embedding

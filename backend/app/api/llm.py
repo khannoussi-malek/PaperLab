@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from app.api.deps import SessionDep, TransportDep
-from app.core import llm_connections
+from app.core.platform import llm_connections
 from app.db import SessionLocal
 from app.domain.errors import InvalidInput
 from app.models import LLMConnection

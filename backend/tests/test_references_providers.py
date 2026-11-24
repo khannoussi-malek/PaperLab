@@ -1,4 +1,4 @@
-"""M7.5 references panel: the provider calls core/references.py will use (spec §4). Fixtures recorded live by
+"""M7.5 references panel: the provider calls core/citations/references.py will use (spec §4). Fixtures recorded live by
 tests/fixtures/references/record.py.
 """
 

@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import delete, select, text
 
-from app.core import graph, references
+from app.core.citations import references
+from app.core.workspaces import graph
 from app.domain.errors import NotFound
 from app.models import ExternalRef, Paper, Workspace, paper_references, workspace_papers
 

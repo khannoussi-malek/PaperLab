@@ -16,7 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core import chat, llm_connections
+from app.core.chat import chat
+from app.core.platform import llm_connections
 from app.domain.errors import DomainError
 from app.models import Paper, Workspace
 from app.providers.base import LLMError, LLMUnavailable

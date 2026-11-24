@@ -12,7 +12,9 @@ from sqlalchemy.pool import NullPool
 from test_evidence_cards import FULL, Scripted, card_reply
 from test_screening_suggest_worker import _LockConnStub
 
-from app.core import evidence_cards, queue, retrieval
+from app.core.chat import retrieval
+from app.core.notes import evidence_cards
+from app.core.platform import queue
 from app.domain.errors import Conflict
 from app.models import EvidenceCard, Workspace, workspace_papers
 from app.workers import evidence_cards as worker

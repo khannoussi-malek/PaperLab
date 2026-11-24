@@ -10,8 +10,8 @@ from mcp_fixtures import call, result
 from sqlalchemy import select, update
 from test_manuscript_papers import setup
 
-from app.core import manuscript_papers, manuscripts
-from app.core import manuscript_review_report as report
+from app.core.manuscripts import manuscript_papers, manuscripts
+from app.core.manuscripts import manuscript_review_report as report
 from app.models import ManuscriptClaimCheck, ManuscriptFile, ManuscriptReviewRun
 from app.workers import manuscript_review as worker
 from mcp_server import server

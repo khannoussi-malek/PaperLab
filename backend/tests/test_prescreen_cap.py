@@ -4,7 +4,9 @@ import pytest
 from screening_pool import make_pool
 from sqlalchemy import select
 
-from app.core import pipeline, queue, screening
+from app.core.papers import pipeline
+from app.core.platform import queue
+from app.core.search import screening
 from app.models.saved_search import SavedSearch
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 

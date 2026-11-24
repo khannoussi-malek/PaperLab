@@ -10,7 +10,10 @@ from sqlalchemy.exc import IntegrityError
 from test_pdf_upgrade import awaiting
 from test_retrieved_hits import failed_hit, paper, workspace
 
-from app.core import merges, notes, papers, retrieved_hits, tags, workspaces
+from app.core.notes import notes
+from app.core.papers import merges, papers
+from app.core.search import retrieved_hits
+from app.core.workspaces import tags, workspaces
 from app.domain.candidates import Candidate
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import NotFound

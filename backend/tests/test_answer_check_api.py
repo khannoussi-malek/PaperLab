@@ -6,7 +6,9 @@ from test_answer_check_run import make_answer
 from test_chat_workspace_api import make_paper as make_titled_paper
 from test_chat_workspace_api import make_workspace
 
-from app.core import answer_check_run, chat, claims, mcp_reads, queue, workspace_package_answers
+from app.core.chat import answer_check_run, chat, claims
+from app.core.platform import mcp_reads, queue
+from app.core.workspaces import workspace_package_answers
 from app.domain.errors import NotFound
 from app.models import LLMConnection, LLMModel, LLMOutput, Workspace
 from app.providers.llm_fake import FakeLLM

@@ -9,7 +9,10 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
-from app.core import answer_check_run, answer_provenance, chat, chat_charts, each_paper, hit_chat, notes, queue, skills
+from app.core.chat import answer_check_run, answer_provenance, chat, chat_charts, each_paper
+from app.core.notes import notes
+from app.core.platform import queue, skills
+from app.core.search import hit_chat
 from app.db import SessionLocal
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.providers.base import LLM, LLMError, LLMUnavailable

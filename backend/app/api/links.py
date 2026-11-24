@@ -6,7 +6,7 @@ import uuid
 from fastapi import APIRouter
 
 from app.api.deps import SessionDep
-from app.core import paper_links
+from app.core.papers import paper_links
 from app.schemas.graph import LinkIn, LinkOut, LinkUpdate
 
 router = APIRouter(tags=["links"])

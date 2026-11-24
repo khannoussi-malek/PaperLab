@@ -67,7 +67,7 @@ async def test_exit_codes_and_out(tmp_path, capsys):
 
 
 def test_config_file_loads_two_cases_per_reviewable_role():
-    from app.core.section_rubrics import RUBRICS
+    from app.core.manuscripts.section_rubrics import RUBRICS
 
     cfg = ev.load_config(ev.CONFIG)
     assert len(cfg.cases) >= 16

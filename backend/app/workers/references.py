@@ -2,7 +2,9 @@ import logging
 import uuid
 
 from app.config import settings
-from app.core import discovery, paper_sources, papers, references
+from app.core.citations import references
+from app.core.papers import paper_sources, papers
+from app.core.search import discovery
 from app.db import SessionLocal
 from app.domain.errors import Conflict
 from app.providers import discovery_fake

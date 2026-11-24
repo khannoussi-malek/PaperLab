@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from test_note_papers import paper_only_note
 
-from app.core import notes
+from app.core.notes import notes
 from app.models import Note, Paper, Provenance
 
 pytestmark = pytest.mark.anyio

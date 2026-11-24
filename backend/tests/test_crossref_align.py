@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 
-from app.core import enrichment
+from app.core.papers import enrichment
 from app.models import Paper
 from app.scripts import backfill_biblio
 from tests.test_enrichment import add_paper, hints
@@ -203,7 +203,7 @@ async def test_the_report_lists_every_change_and_each_one_is_logged(session, tmp
     paper = await full_paper(session, volume=None)
     client, _ = fake_crossref(crossref_work(volume="10"))
     report = tmp_path / "changes.csv"
-    with caplog.at_level("INFO", logger="app.core.enrichment"):
+    with caplog.at_level("INFO", logger="app.core.papers.enrichment"):
         await backfill_biblio.run(session, client, None, delay=0, only=[paper.id], align=True, report=report)
     rows = list(csv.DictReader(report.open()))
     assert {(r["field"], r["old"], r["new"]) for r in rows} == {

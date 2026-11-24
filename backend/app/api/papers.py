@@ -6,10 +6,12 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core import discovery, enrichment, paper_events, papers, tags, workspaces
-from app.core.note_counts import MAX_PAPERS, note_counts
-from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
-from app.core.queue import INGEST_QUEUE
+from app.core.notes.note_counts import MAX_PAPERS, note_counts
+from app.core.papers import enrichment, paper_events, papers
+from app.core.papers.pipeline import MAX_UPLOAD_PDF_BYTES
+from app.core.platform.queue import INGEST_QUEUE
+from app.core.search import discovery
+from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict, InvalidInput
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut

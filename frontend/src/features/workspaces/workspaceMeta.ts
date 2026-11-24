@@ -11,13 +11,13 @@ export function countsLine(papers: number, notes: number, notIndexed = 0): strin
 export type PaperNotes = { paper: Paper; notes: Note[] }
 
 // Plain code-point order, not `localeCompare`'s locale-aware (roughly case-insensitive) collation: matches the
-// backend's Python string comparison (core/workspaces.py), which sorts "BERT" before "attention…" since uppercase
+// backend's Python string comparison (core/workspaces/workspaces.py), which sorts "BERT" before "attention…" since uppercase
 // code points sort below lowercase. Using `localeCompare` here would pick a different anchor for a note on a tie.
 const comparePlain = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
 /**
  * A workspace's notes grouped by paper. A note linked to two of a workspace's papers shows once, under the one that
- * sorts first by `(title, id)`, plain comparison — matching the API's own order (core/workspaces.py), which also puts
+ * sorts first by `(title, id)`, plain comparison — matching the API's own order (core/workspaces/workspaces.py), which also puts
  * the notes with no passage on that paper first. The API already returns notes in that order, so groups are built, and
  * kept, in the order it sent them. Papers with no notes are left out.
  */

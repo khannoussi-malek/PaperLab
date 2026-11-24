@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter
 
 from app.api.deps import SessionDep
-from app.core import graph
+from app.core.workspaces import graph
 from app.schemas.graph import GraphOut
 
 router = APIRouter(tags=["graph"])

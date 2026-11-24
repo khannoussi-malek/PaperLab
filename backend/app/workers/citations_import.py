@@ -11,7 +11,7 @@ from pathlib import Path
 
 from redis.exceptions import RedisError
 
-from app.core import citations_import_apply as cia
+from app.core.citations import citations_import_apply as cia
 from app.db import SessionLocal
 
 log = logging.getLogger(__name__)

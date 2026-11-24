@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import delete, insert
 
-from app.core import datasets
+from app.core.notes import datasets
 from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Chart, Paper, chart_datasets

@@ -6,7 +6,8 @@ from conftest import unit_vector
 from sqlalchemy import delete, select
 from test_chat import chunks_of, make_paper
 
-from app.core import chat, papers
+from app.core.chat import chat
+from app.core.papers import papers
 from app.domain.errors import Conflict, NotFound
 from app.models import LLMOutput, Workspace
 

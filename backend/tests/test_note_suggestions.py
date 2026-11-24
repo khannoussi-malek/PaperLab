@@ -3,15 +3,15 @@ import uuid
 import pytest
 from test_chat import chunks_of, make_paper
 
-from app.core.note_suggestions import (
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.notes.note_suggestions import (
     NOTE_SUGGESTIONS_PROMPT_VERSION,
     Suggested,
     _sample_evenly,
     save_suggestions,
     suggest,
 )
-from app.core.notes import Anchor, create_human_note, promote_llm_fragment
-from app.core.retrieval import RetrievedChunk
+from app.core.notes.notes import Anchor, create_human_note, promote_llm_fragment
 from app.domain.errors import Conflict
 from app.models import LLMOutput
 from app.providers.llm_fake import FAKE_NOTE_SUGGESTIONS, FakeLLM

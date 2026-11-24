@@ -11,7 +11,8 @@ import uuid
 
 from sqlalchemy import func, select, update
 
-from app.core import claims, llm_connections
+from app.core.chat import claims
+from app.core.platform import llm_connections
 from app.db import SessionLocal
 from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptEvidence

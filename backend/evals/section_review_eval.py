@@ -19,8 +19,9 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from app.core import llm_connections, section_review
-from app.core.section_rubrics import RUBRICS
+from app.core.manuscripts import section_review
+from app.core.manuscripts.section_rubrics import RUBRICS
+from app.core.platform import llm_connections
 from app.db import SessionLocal
 from app.domain.errors import DomainError
 from app.providers.base import LLMError, LLMUnavailable

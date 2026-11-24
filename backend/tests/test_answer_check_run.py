@@ -6,15 +6,15 @@ import pytest
 from sqlalchemy import delete, update
 from test_chat import chunks_of, make_paper
 
-from app.core import answer_check_run, claims
-from app.core.answer_check_run import (
+from app.core.chat import answer_check_run, claims
+from app.core.chat.answer_check_run import (
     ANSWER_CHECK_JOB_TIMEOUT,
     latest_check,
     run_check,
     start_check,
     summary_line,
 )
-from app.core.answer_provenance import MAX_SNAPSHOT_CHARS
+from app.core.chat.answer_provenance import MAX_SNAPSHOT_CHARS
 from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMConnection, LLMModel, LLMOutput
 from app.providers.llm_fake import FakeLLM

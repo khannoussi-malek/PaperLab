@@ -1,4 +1,4 @@
-"""Undo, late reason, history and the session summary (app/core/triage.py)."""
+"""Undo, late reason, history and the session summary (app/core/workspaces/triage.py)."""
 
 import asyncio
 import uuid
@@ -10,7 +10,8 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import papers, triage
+from app.core.papers import papers
+from app.core.workspaces import triage
 from app.domain.errors import Conflict, Gone, InvalidInput, NotFound
 from app.models import Paper, PaperMerge, TriageEvent
 

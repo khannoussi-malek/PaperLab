@@ -7,7 +7,9 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_discovery
-from app.core import discovery, paper_events, papers, pdf_recheck, queue
+from app.core.papers import paper_events, papers, pdf_recheck
+from app.core.platform import queue
+from app.core.search import discovery
 from app.models import Paper, PaperEvent, PaperSources
 from app.workers import pdf_recheck as worker
 from app.workers.settings import WorkerSettings

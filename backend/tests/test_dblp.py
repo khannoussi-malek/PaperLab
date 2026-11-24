@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.core.candidates import from_dblp, merge
+from app.core.search.candidates import from_dblp, merge
 from app.providers import dblp
 
 pytestmark = pytest.mark.anyio
@@ -26,7 +26,7 @@ async def test_publication_type_sets_source_type(publication_type, expected, pee
 
 
 async def test_author_homonym_suffix_is_removed_and_surname_merge_works():
-    from app.core.candidates import surname
+    from app.core.search.candidates import surname
     from app.domain.candidates import Candidate
 
     candidate = from_dblp({
@@ -177,8 +177,9 @@ async def test_mapping_metadata_and_safe_pdf_resolution():
 
 
 async def test_opt_in_persists_and_discovery_survives_another_source_failure(session):
-    from app.core import discovery, paper_sources
-    from app.core.source_registry import SOURCE_IDS
+    from app.core.papers import paper_sources
+    from app.core.search import discovery
+    from app.core.search.source_registry import SOURCE_IDS
     from app.schemas.discovery import CandidateIn
 
     settings = await paper_sources.update(session, {"enabled": {s: s in {"dblp", "crossref"} for s in SOURCE_IDS}})
@@ -200,9 +201,9 @@ async def test_opt_in_persists_and_discovery_survives_another_source_failure(ses
 
 
 async def test_dblp_failure_is_a_notice_or_conflict_when_all_fail(session):
-    from app.core import discovery
-    from app.core.paper_sources import SourceSettings
-    from app.core.source_registry import SOURCE_IDS
+    from app.core.papers.paper_sources import SourceSettings
+    from app.core.search import discovery
+    from app.core.search.source_registry import SOURCE_IDS
     from app.domain.errors import Conflict
 
     def handle(request):
@@ -223,8 +224,8 @@ async def test_dblp_failure_is_a_notice_or_conflict_when_all_fail(session):
 
 
 async def test_default_settings_never_contact_dblp():
-    from app.core.discovery import build_providers
-    from app.core.paper_sources import SourceSettings
+    from app.core.papers.paper_sources import SourceSettings
+    from app.core.search.discovery import build_providers
 
     providers = build_providers(SourceSettings())
     try:

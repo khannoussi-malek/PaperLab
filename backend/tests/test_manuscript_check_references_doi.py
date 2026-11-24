@@ -6,9 +6,9 @@ import pytest
 from conftest import FakeProvider
 from test_manuscript_papers import setup
 
-from app.core import manuscripts
-from app.core.manuscript_checks import doi_service
-from app.core.manuscript_checks.references_doi import DoiEntry, check_dois, doi_entries
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_checks import doi_service
+from app.core.manuscripts.manuscript_checks.references_doi import DoiEntry, check_dois, doi_entries
 from app.domain.errors import InvalidInput, NotFound
 from app.providers import crossref
 

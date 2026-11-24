@@ -4,10 +4,10 @@ import uuid
 from fastapi import APIRouter, Query, Response
 
 from app.api.deps import SessionDep
-from app.core import manuscript_review as review
-from app.core import manuscript_review_all as review_all
-from app.core import manuscript_review_report as review_report
-from app.core import manuscripts
+from app.core.manuscripts import manuscript_review as review
+from app.core.manuscripts import manuscript_review_all as review_all
+from app.core.manuscripts import manuscript_review_report as review_report
+from app.core.manuscripts import manuscripts
 from app.schemas.manuscript_review import (
     EstimateOut,
     LocateIn,

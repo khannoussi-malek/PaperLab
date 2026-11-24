@@ -2,8 +2,8 @@
 
 import pytest
 
-from app.core import enrichment
-from app.core.enrichment import PdfHints, openalex_published
+from app.core.papers import enrichment
+from app.core.papers.enrichment import PdfHints, openalex_published
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

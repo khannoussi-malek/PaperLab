@@ -9,7 +9,7 @@ from fastapi import APIRouter, Form, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import SessionDep
-from app.core import (
+from app.core.manuscripts import (
     manuscript_bib,
     manuscript_evidence,
     manuscript_history,
@@ -21,7 +21,7 @@ from app.core import (
     manuscripts,
     synctex,
 )
-from app.core import manuscript_paths as paths
+from app.core.manuscripts import manuscript_paths as paths
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.schemas.manuscripts import (
     CitablePaperOut,

@@ -23,7 +23,7 @@ from pathlib import Path
 import pymupdf
 
 from app.config import settings
-from app.core.latex_compile import compile_dir
+from app.core.manuscripts.latex_compile import compile_dir
 from app.workers.manuscripts import _lock_pdf_dir
 
 CANARY = "SANDBOXCANARY7731"

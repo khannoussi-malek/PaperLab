@@ -7,8 +7,10 @@ from sqlalchemy import select, update
 from test_chat import chunks_of, make_paper
 from test_sections import paper_with_headings
 
-from app.core import answer_provenance, briefs, chat, papers, workspaces
-from app.core.retrieval import RetrievedChunk
+from app.core.chat import answer_provenance, chat
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.papers import papers
+from app.core.workspaces import briefs, workspaces
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance

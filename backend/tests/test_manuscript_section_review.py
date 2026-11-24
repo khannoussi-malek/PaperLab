@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from test_manuscript_papers import setup
 
-from app.core import manuscript_papers, manuscripts, queue
-from app.core import manuscript_section_review as msr
+from app.core.manuscripts import manuscript_papers, manuscripts
+from app.core.manuscripts import manuscript_section_review as msr
+from app.core.platform import queue
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel, Note, note_anchors, note_papers
 from app.models import ManuscriptSectionReview as Row
@@ -137,7 +138,7 @@ async def test_role_guess_chosen_override_and_the_prompt_holds_only_that_rubric(
     assert (out["role"], out["role_source"], out["title"]) == ("results", "chosen", "Methods")
     llm = Scripted(GOOD)
     await worker.review_manuscript_section({"llm": llm}, str(out["id"]))
-    from app.core.section_rubrics import rubric_for
+    from app.core.manuscripts.section_rubrics import rubric_for
 
     assert all(i.text in llm.prompts[0] for i in rubric_for("results"))
     assert not any(i.text in llm.prompts[0] for i in rubric_for("intro"))

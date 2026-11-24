@@ -1,9 +1,10 @@
 import pytest
 from sqlalchemy import select
 
-from app.core import manuscripts, workspaces
-from app.core.citations_export import _bibtex, bibtex_keys, csl_item
-from app.core.manuscript_bib import build_bib, cited_keys
+from app.core.citations.citations_export import _bibtex, bibtex_keys, csl_item
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_bib import build_bib, cited_keys
+from app.core.workspaces import workspaces
 from app.models import ManuscriptCiteKey, Paper, Workspace
 
 pytestmark = pytest.mark.anyio
@@ -141,7 +142,7 @@ async def test_merging_two_papers_pinned_in_one_manuscript_keeps_both_keys(sessi
 
     from test_paper_merges import EVIDENCE, PROOF, kept, merged
 
-    from app.core import merges
+    from app.core.papers import merges
 
     k, m = await kept(session), await merged(session)
     ws = Workspace(name="W")
@@ -198,7 +199,7 @@ LEAKS = ("in PaperLab", "peer-reviewed", "Source:", "keywords", "abstract", "ann
 
 
 async def test_a_pinned_paper_that_left_the_workspace_leaks_no_library_fields(session):
-    from app.core import manuscript_papers
+    from app.core.manuscripts import manuscript_papers
 
     ws, (p,), m = await setup(session, "Praise and creativity")
     p.peer_reviewed, p.abstract, p.source_type = "true", "Long.", "journal_article"  # has a PDF: full text

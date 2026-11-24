@@ -5,7 +5,8 @@ import uuid
 from fastapi import APIRouter
 
 from app.api.deps import SessionDep
-from app.core import papers, reading_bridge
+from app.core.papers import papers
+from app.core.workspaces import reading_bridge
 from app.schemas.reading_bridge import ReadingContextListOut, ReadingContextOut, ReadingQueueOut, ReadingQueueRowOut
 
 router = APIRouter(prefix="/api/papers", tags=["reading-bridge"])

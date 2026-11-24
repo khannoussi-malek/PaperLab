@@ -7,7 +7,8 @@ from contextlib import asynccontextmanager
 import pytest
 from mcp import Client
 
-from app.core import skill_prompts, skills, workspaces
+from app.core.platform import skill_prompts, skills
+from app.core.workspaces import workspaces
 from app.models import Paper
 from mcp_server import server
 

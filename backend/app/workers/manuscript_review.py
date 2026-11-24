@@ -10,8 +10,9 @@ import uuid
 
 from sqlalchemy import func, select, update
 
-from app.core import claim_detect, claims, llm_connections, queue
-from app.core.manuscript_review import JOB
+from app.core.chat import claim_detect, claims
+from app.core.manuscripts.manuscript_review import JOB
+from app.core.platform import llm_connections, queue
 from app.db import SessionLocal
 from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptClaimCheck as Check

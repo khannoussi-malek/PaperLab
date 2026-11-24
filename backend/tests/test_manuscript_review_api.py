@@ -8,7 +8,9 @@ from conftest import unit_vector
 from sqlalchemy import select
 from test_manuscript_papers import setup
 
-from app.core import manuscript_papers, manuscripts, queue, retrieval
+from app.core.chat import retrieval
+from app.core.manuscripts import manuscript_papers, manuscripts
+from app.core.platform import queue
 from app.models import Chunk, ManuscriptClaimCheck
 from app.workers import manuscript_review as worker
 

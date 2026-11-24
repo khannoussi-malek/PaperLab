@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pymupdf
 
-from app.core import latex_compile
-from app.core.manuscript_checks import pdf
-from app.core.manuscript_checks.base import CheckContext, ManuscriptInfo
+from app.core.manuscripts import latex_compile
+from app.core.manuscripts.manuscript_checks import pdf
+from app.core.manuscripts.manuscript_checks.base import CheckContext, ManuscriptInfo
 
 LOG = (
     "(main.tex\n(sections/method.tex\n"

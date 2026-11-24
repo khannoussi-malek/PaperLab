@@ -4,7 +4,7 @@ import pytest
 from conftest import unit_vector
 from sqlalchemy import insert
 
-from app.core import retrieval
+from app.core.chat import retrieval
 from app.models import Chunk, Paper, Workspace, workspace_papers
 from evals import workspace_run
 

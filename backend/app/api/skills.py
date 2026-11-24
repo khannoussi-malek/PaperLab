@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
-from app.core import skills
+from app.core.platform import skills
 from app.schemas.skills import SkillCreate, SkillDefaultIn, SkillOut, SkillUpdate
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])

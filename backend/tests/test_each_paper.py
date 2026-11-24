@@ -11,7 +11,7 @@ from conftest import unit_vector
 from sqlalchemy import select, text
 from test_retrieval import add_texts, make_workspace
 
-from app.core import claims, each_paper
+from app.core.chat import claims, each_paper
 from app.models import LLMOutput, Paper
 from app.providers.base import LLMUnavailable
 
@@ -286,7 +286,7 @@ async def test_the_prompt_says_how_many_papers_were_not_read(shared, embedder):
 
 
 async def test_a_skill_shapes_the_answer_not_the_reading(shared, embedder):
-    from app.core import skills  # noqa: PLC0415
+    from app.core.platform import skills  # noqa: PLC0415
 
     skill = skills.SkillView(
         id="custom:x", label="Table", description="", scope="workspace", instructions="Answer as a table.",
@@ -305,7 +305,7 @@ async def test_a_skill_shapes_the_answer_not_the_reading(shared, embedder):
 
 
 async def test_the_saved_answer_keeps_its_readings_and_lists_them_again(shared, embedder):
-    from app.core import chat  # noqa: PLC0415
+    from app.core.chat import chat  # noqa: PLC0415
 
     the_plan, readings, prepared = await reduced(shared, embedder, ["Alpha", "Beta"], {})
     scope = chat.Scope(workspace_id=the_plan.workspace_id)

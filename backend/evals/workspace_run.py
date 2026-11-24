@@ -23,8 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core import chat, each_paper, retrieval
-from app.core.retrieval import RetrievedChunk, retrieve
+from app.core.chat import chat, each_paper, retrieval
+from app.core.chat.retrieval import RetrievedChunk, retrieve
 from app.models import Chunk, Paper, Workspace, workspace_papers
 from app.providers import embedding
 from evals.run import KS, EvalError, normalize

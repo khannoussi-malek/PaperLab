@@ -6,17 +6,18 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
-from app.core import discovery, workspaces
-from app.core.candidates import normal_title
-from app.core.paper_sources import SOURCES, SourceSettings
-from app.core.prisma_export import PrismaExport, prisma_export
-from app.core.workspace_search import (
+from app.core.papers.paper_sources import SOURCES, SourceSettings
+from app.core.search import discovery
+from app.core.search.candidates import normal_title
+from app.core.search.prisma_export import PrismaExport, prisma_export
+from app.core.search.workspace_search import (
     _find_or_create_external_ref,
     _insert_hit,
     search_batch,
     set_eligibility,
     snowball,
 )
+from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
@@ -506,7 +507,7 @@ async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_e
     consecutive-iteration retries land within a couple of pacing intervals of each other (a few seconds), which
     doesn't give a brief/transient error (arXiv's API has answered a plain 406 to an otherwise-valid, identical
     request that then succeeded seconds later) any real chance to clear before the source is abandoned."""
-    from app.core import workspace_search as core_module
+    from app.core.search import workspace_search as core_module
 
     fails_once = [True]
 
@@ -544,7 +545,7 @@ async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_e
 async def test_search_batch_retries_a_cooled_down_source_and_a_success_clears_the_error_count(session, fake_providers, monkeypatch):
     """Once the cooldown has genuinely elapsed, the source is tried again — and a page that succeeds this time
     clears the error streak entirely (same as a fresh cursor), not just decrements it."""
-    from app.core import workspace_search as core_module
+    from app.core.search import workspace_search as core_module
 
     fails_once = [True]
 
@@ -602,7 +603,7 @@ async def test_search_batch_marks_a_disabled_source_cursor_exhausted(session):
 
 @pytest.mark.asyncio
 async def test_start_run_creates_cursors_for_each_source(session):
-    from app.core.workspace_search import start_run
+    from app.core.search.workspace_search import start_run
     workspace = Workspace(name=f"Lifecycle {uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
@@ -619,7 +620,7 @@ async def test_start_run_creates_cursors_for_each_source(session):
 
 @pytest.mark.asyncio
 async def test_stop_run_sets_status_and_stopped_at(session):
-    from app.core.workspace_search import start_run, stop_run
+    from app.core.search.workspace_search import start_run, stop_run
     workspace = Workspace(name=f"Stop {uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
@@ -634,7 +635,7 @@ async def test_stop_run_sets_status_and_stopped_at(session):
 
 async def _stopped_run_with_cursors(session, cursors: dict[str, tuple[dict, bool]], status="stopped", stats=None):
     """A run whose cursors are given as {source: (cursor_json, exhausted)}."""
-    from app.core.workspace_search import start_run
+    from app.core.search.workspace_search import start_run
     workspace = Workspace(name=f"Continue {uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
@@ -658,7 +659,7 @@ async def _cursor_rows(session, run) -> dict[str, WorkspaceSearchCursor]:
 
 @pytest.mark.asyncio
 async def test_continue_resumes_a_stopped_run_where_each_source_stopped(session):
-    from app.core.workspace_search import continue_run
+    from app.core.search.workspace_search import continue_run
     workspace, run = await _stopped_run_with_cursors(session, {
         "arxiv": ({"value": 200, "paused": True, "retry_after": "2999-01-01T00:00:00+00:00"}, False),
         "semantic_scholar": ({"value": 40}, False),
@@ -686,7 +687,7 @@ async def test_continue_resumes_a_stopped_run_where_each_source_stopped(session)
 
 @pytest.mark.asyncio
 async def test_continue_counts_a_first_continue_as_the_second_pass(session):
-    from app.core.workspace_search import continue_run
+    from app.core.search.workspace_search import continue_run
     workspace, run = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 5}, False)})
 
     resumed = await continue_run(session, workspace.id, run.id)
@@ -696,7 +697,7 @@ async def test_continue_counts_a_first_continue_as_the_second_pass(session):
 
 @pytest.mark.asyncio
 async def test_continue_refuses_when_nothing_is_left(session):
-    from app.core.workspace_search import continue_run
+    from app.core.search.workspace_search import continue_run
     from app.domain.errors import Conflict
     workspace, run = await _stopped_run_with_cursors(
         session, {"arxiv": ({"value": 9}, True), "crossref": ({"value": 9}, True)}, status="exhausted")
@@ -708,7 +709,7 @@ async def test_continue_refuses_when_nothing_is_left(session):
 
 @pytest.mark.asyncio
 async def test_continue_refuses_a_running_run(session):
-    from app.core.workspace_search import continue_run
+    from app.core.search.workspace_search import continue_run
     from app.domain.errors import Conflict
     workspace, run = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 5}, False)}, status="running")
 
@@ -718,7 +719,7 @@ async def test_continue_refuses_a_running_run(session):
 
 @pytest.mark.asyncio
 async def test_continue_refuses_a_run_of_another_workspace(session):
-    from app.core.workspace_search import continue_run
+    from app.core.search.workspace_search import continue_run
     from app.domain.errors import NotFound
     _, run = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 5}, False)})
     other = Workspace(name=f"Other {uuid.uuid4().hex[:8]}")
@@ -733,7 +734,7 @@ async def test_continue_refuses_a_run_of_another_workspace(session):
 
 @pytest.mark.asyncio
 async def test_a_failed_source_is_not_continued_and_cooldown_is_cleared_only_for_live_cursors(session):
-    from app.core.workspace_search import continue_run
+    from app.core.search.workspace_search import continue_run
     cooling = {"value": 20, "errors": 2, "retry_after": "2999-01-01T00:00:00+00:00"}
     workspace, run = await _stopped_run_with_cursors(session, {
         "arxiv": (cooling, False),
@@ -756,7 +757,7 @@ async def test_a_failed_source_is_not_continued_and_cooldown_is_cleared_only_for
 
 @pytest.mark.asyncio
 async def test_sources_left_lists_each_runs_non_exhausted_sources(session):
-    from app.core.workspace_search import sources_left
+    from app.core.search.workspace_search import sources_left
     _, first = await _stopped_run_with_cursors(
         session, {"arxiv": ({"value": 1}, False), "crossref": ({"value": 1}, True), "openalex": ({"value": 1}, False)})
     _, second = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 1}, True)})
@@ -770,7 +771,7 @@ async def test_sources_left_lists_each_runs_non_exhausted_sources(session):
 async def test_start_run_seeds_openalex_cursor_at_one_not_zero(session):
     """OpenAlex's `page` param is 1-based; every other source's cursor is a 0-based offset (I4). Seeding OpenAlex
     at 0 asked its fake for a negative offset and got nothing back "by coincidence," hiding the bug."""
-    from app.core.workspace_search import start_run
+    from app.core.search.workspace_search import start_run
     workspace = Workspace(name=f"OpenAlex seed {uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
@@ -793,7 +794,7 @@ async def test_start_run_orders_sources_by_paper_sources_trust_order(session):
     """D73's merge trust order is app/core/paper_sources.SOURCES; search_batch's `found` dict is insertion-ordered
     and feeds merge()'s ranking directly, so storing sources in whatever order the caller sent them would let the
     caller's field order silently become the trust order instead (bundled minor)."""
-    from app.core.workspace_search import start_run
+    from app.core.search.workspace_search import start_run
     workspace = Workspace(name=f"Source order {uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
@@ -808,7 +809,7 @@ async def test_start_run_orders_sources_by_paper_sources_trust_order(session):
 async def test_start_run_rejects_non_empty_filters(session):
     """Real per-source filter translation is out of scope for this fix wave; accepting and silently ignoring a
     filter would misreport the search strategy a PRISMA methods section later cites (I6 part 2)."""
-    from app.core.workspace_search import start_run
+    from app.core.search.workspace_search import start_run
     from app.domain.errors import InvalidInput
     workspace = Workspace(name=f"Filters rejected {uuid.uuid4().hex[:8]}")
     session.add(workspace)
@@ -823,7 +824,7 @@ async def test_start_run_rejects_non_empty_filters(session):
 async def test_stop_run_on_a_non_running_run_is_conflict(session):
     """Stopping only applies to a run actually in flight — same "doesn't apply to the current state" convention
     as start_run's own Conflict on an already-running run (bundled minor)."""
-    from app.core.workspace_search import start_run, stop_run
+    from app.core.search.workspace_search import start_run, stop_run
     from app.domain.errors import Conflict
     workspace = Workspace(name=f"Stop conflict {uuid.uuid4().hex[:8]}")
     session.add(workspace)
@@ -839,7 +840,7 @@ async def test_stop_run_on_a_non_running_run_is_conflict(session):
 async def test_search_batch_uses_the_per_source_query_override(session, fake_providers, monkeypatch):
     """P11's per-source override (run.query_overrides_json) must actually reach that source's search_page call —
     before this fix it was accepted, stored, and silently ignored (I6 part 1)."""
-    import app.core.workspace_search as core_module
+    import app.core.search.workspace_search as core_module
 
     seen_queries = []
     real_page = arxiv.search_page
@@ -1329,7 +1330,7 @@ async def test_search_batch_drops_known_out_of_range_years_and_keeps_undated(ses
 
 
 async def test_search_batch_skips_a_paused_source(session, fake_providers, monkeypatch):
-    from app.core import workspace_search as core_module
+    from app.core.search import workspace_search as core_module
 
     asked = []
 
@@ -1357,7 +1358,7 @@ async def test_continue_refuses_while_the_old_job_still_holds_the_run_lock(sessi
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
-    from app.core.workspace_search import TRY_RUN_LOCK, continue_run, run_lock_key
+    from app.core.search.workspace_search import TRY_RUN_LOCK, continue_run, run_lock_key
     from app.domain.errors import Conflict
     workspace, run = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 5}, False)})
 

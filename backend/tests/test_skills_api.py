@@ -8,7 +8,8 @@ from test_chat_workspace_api import make_paper as make_workspace_paper
 from test_chat_workspace_api import make_workspace, query_model  # noqa: F401 (the fixture is a parameter)
 from test_sections import SECTIONED, sectioned_paper
 
-from app.core import chat, skills
+from app.core.chat import chat
+from app.core.platform import skills
 from app.models import LLMOutput
 from tests.screening_pool import make_pool
 

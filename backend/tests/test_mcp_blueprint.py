@@ -7,8 +7,8 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call
 from sqlalchemy import select
 
-from app.core import manuscript_agent, manuscript_templates, manuscripts
-from app.core import manuscript_blueprint as bp
+from app.core.manuscripts import manuscript_agent, manuscript_templates, manuscripts
+from app.core.manuscripts import manuscript_blueprint as bp
 from app.models import ManuscriptSnapshot
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]

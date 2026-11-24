@@ -3,9 +3,9 @@ from sqlalchemy import delete, select, update
 from test_manuscript_review import FUTURE, Scripted, check, claim, rows, wiring  # noqa: F401
 from test_manuscript_review import doc as template_doc
 
-from app.core import manuscript_review as mr
-from app.core import manuscript_review_all as ra
-from app.core import manuscripts
+from app.core.manuscripts import manuscript_review as mr
+from app.core.manuscripts import manuscript_review_all as ra
+from app.core.manuscripts import manuscripts
 from app.domain.errors import Conflict, InvalidInput
 from app.models import LLMConnection, LLMModel, ManuscriptFile, ManuscriptReviewRun
 from app.workers import manuscript_review as worker
@@ -174,7 +174,7 @@ async def test_estimate_says_how_many_earlier_results_a_start_replaces(session, 
 
 
 async def test_a_too_big_start_from_the_agent_is_refused_before_any_write(session, arq, monkeypatch):
-    import app.core.manuscript_agent_review as agent
+    import app.core.manuscripts.manuscript_agent_review as agent
 
     _, _, big = await doc(session, lambda k: cites(601, k[0]), "Alpha")
 

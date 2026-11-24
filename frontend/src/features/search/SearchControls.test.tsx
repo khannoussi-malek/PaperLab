@@ -11,7 +11,7 @@ function renderWithClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
-/** Mirrors app/core/paper_sources.py's defaults: OpenAlex off (P3, it can cost money), everything else on,
+/** Mirrors app/core/papers/paper_sources.py's defaults: OpenAlex off (P3, it can cost money), everything else on,
  * including Unpaywall — whose `enabled` flag must be ignored here, since it has no search role at all (C1). */
 function mockPaperSources(overrides: Partial<Record<PaperSources['sources'][number]['id'], boolean>> = {}) {
   const enabled = (id: PaperSources['sources'][number]['id'], fallback: boolean) => overrides[id] ?? fallback

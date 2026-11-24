@@ -5,7 +5,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from app.core import discovery, paper_sources, pdf_recheck
+from app.core.papers import paper_sources, pdf_recheck
+from app.core.search import discovery
 from app.db import SessionLocal
 
 logger = logging.getLogger(__name__)

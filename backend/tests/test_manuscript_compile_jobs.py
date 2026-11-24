@@ -7,8 +7,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 
-from app.core import manuscript_history, manuscripts, queue
-from app.core.latex_compile import CompileResult
+from app.core.manuscripts import manuscript_history, manuscripts
+from app.core.manuscripts.latex_compile import CompileResult
+from app.core.platform import queue
 from app.models import ManuscriptCiteKey
 from app.workers import manuscripts as worker
 
@@ -145,7 +146,7 @@ async def test_compile_again_runs_a_second_pass_in_the_same_job(session, monkeyp
 
 
 async def test_bib_written_beside_the_sources_pins_cited_keys(session, monkeypatch):
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
     from app.models import Paper, Workspace
 
     ws = Workspace(name="W")
@@ -317,7 +318,7 @@ async def test_splitting_a_real_paper_into_files_keeps_the_pdf_text(session, mon
     import pymupdf
 
     from app.config import settings
-    from app.core import manuscript_section_ops as ops
+    from app.core.manuscripts import manuscript_section_ops as ops
     monkeypatch.setattr(settings, "tectonic_bin", os.environ["TECTONIC_BIN"])
     monkeypatch.setattr(settings, "tectonic_only_cached", True)
     if os.environ.get("TECTONIC_CACHE_DIR"):

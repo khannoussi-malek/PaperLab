@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from app.core import claim_detect, prompts
+from app.core.chat import claim_detect
+from app.core.platform import prompts
 from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
@@ -55,7 +56,7 @@ async def test_fake_llm_claim_detect_branch():
 
 
 async def test_fake_llm_claim_check_branch_quotes_the_first_passage():
-    from app.core import claims
+    from app.core.chat import claims
 
     prompt = claims.PROMPT_TEMPLATE.format(
         claim="c",

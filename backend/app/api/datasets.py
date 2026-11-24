@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Form, Response, UploadFile
 
 from app.api.deps import LLMByModelIdDep, SessionDep
-from app.core import capture, datasets, number_suggest
+from app.core.notes import capture, datasets, number_suggest
 from app.domain.numbers import find_numbers
 from app.schemas.datasets import (
     DatasetCreate,

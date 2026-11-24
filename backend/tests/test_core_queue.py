@@ -4,7 +4,8 @@ import pytest
 from conftest import FakeArq
 
 from app.config import settings
-from app.core import discovery, queue
+from app.core.platform import queue
+from app.core.search import discovery
 from app.providers import discovery_fake
 
 pytestmark = pytest.mark.anyio

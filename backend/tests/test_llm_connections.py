@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from app.core import llm_connections as connections
+from app.core.platform import llm_connections as connections
 from app.db import engine
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel
@@ -319,7 +319,7 @@ async def test_seed_from_env_seeds_nothing_for_fake_or_for_anthropic_without_a_k
     await session.execute(delete(LLMConnection))
 
     assert await connections.seed_from_env(session, "fake", "qwen3:8b", "http://localhost:11434", None) is False
-    with caplog.at_level(logging.WARNING, logger="app.core.llm_connections"):
+    with caplog.at_level(logging.WARNING, logger="app.core.platform.llm_connections"):
         assert await connections.seed_from_env(session, "anthropic", "claude-sonnet-5", "http://x", None) is False
     assert await session.scalar(select(func.count()).select_from(LLMConnection)) == 0
     assert "ANTHROPIC_API_KEY" in caplog.text

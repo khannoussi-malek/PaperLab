@@ -4,7 +4,8 @@ import zipfile
 
 import pytest
 
-from app.core import manuscripts, queue
+from app.core.manuscripts import manuscripts
+from app.core.platform import queue
 from app.domain.errors import Conflict
 from app.models import Workspace
 
@@ -115,7 +116,7 @@ async def test_uploads_binary_text_rename_delete(client):
 
 
 async def test_upload_over_the_cap_is_refused_whatever_content_length_says(client, monkeypatch):
-    from app.core import manuscript_paths
+    from app.core.manuscripts import manuscript_paths
     monkeypatch.setattr(manuscript_paths, "MAX_BINARY", 10)
     m = await make(client)
     body = b"x" * 50
@@ -155,7 +156,7 @@ async def test_pdf_404_before_first_compile_then_served(client):
 
 
 async def test_snapshot_restore_round_trip(client, session):
-    from app.core import manuscript_history
+    from app.core.manuscripts import manuscript_history
     m = await make(client)
     base = f"/api/manuscripts/{m['id']}"
     snap = await manuscript_history.take(session, uuid.UUID(m["id"]), "autosave")
@@ -228,7 +229,7 @@ async def test_import_skips_unsupported_files_and_names_a_bad_member(client):
 
 
 async def test_import_body_over_the_cap_is_manuscript_too_large(client, monkeypatch):
-    from app.core import manuscript_paths
+    from app.core.manuscripts import manuscript_paths
     monkeypatch.setattr(manuscript_paths, "MAX_TOTAL", 10)
     refused = await client.post("/api/manuscripts/import", files={"file": ("p.zip", b"x" * 50)})
     assert refused.status_code == 409 and refused.json()["detail"] == "manuscript_too_large"
@@ -339,7 +340,7 @@ async def test_synctex_lookups_404_without_an_index_and_answer_with_one(client):
 
 
 async def test_papers_pin_and_rank_routes(client, session):
-    from app.core import workspaces
+    from app.core.workspaces import workspaces
     from app.models import Paper
     ws = Workspace(name=f"W {uuid.uuid4().hex[:6]}")
     session.add(ws)
@@ -405,8 +406,8 @@ async def test_the_latex_only_export_leaves_the_pdf_out_and_says_so_in_its_name(
 
 
 async def test_ai_log_fields_on_snapshots(client, session):
-    from app.core import manuscript_agent as agent
-    from app.core import manuscript_history
+    from app.core.manuscripts import manuscript_agent as agent
+    from app.core.manuscripts import manuscript_history
     m = await make(client)
     mid = uuid.UUID(m["id"])
     base = f"/api/manuscripts/{m['id']}"

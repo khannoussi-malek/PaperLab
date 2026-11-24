@@ -53,7 +53,8 @@ from app.api import setup as setup_api
 from app.api import skills as skills_api
 from app.api import workspace_search as workspace_search_api
 from app.config import LOCAL_HOSTS, settings
-from app.core import llm_connections, paper_sources
+from app.core.papers import paper_sources
+from app.core.platform import llm_connections
 from app.db import SessionLocal
 from app.domain.errors import Conflict, DomainError, Gone, InvalidInput, NotFound
 

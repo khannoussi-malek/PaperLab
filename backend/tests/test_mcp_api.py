@@ -3,7 +3,7 @@
 import pytest
 
 from app.config import settings
-from app.core import mcp_check
+from app.core.platform import mcp_check
 
 pytestmark = pytest.mark.anyio
 

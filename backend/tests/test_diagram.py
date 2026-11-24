@@ -1,7 +1,7 @@
 import pytest
 
-from app.core import diagram as dg
-from app.core import diagram_tikz as dt
+from app.core.manuscripts import diagram as dg
+from app.core.manuscripts import diagram_tikz as dt
 from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio

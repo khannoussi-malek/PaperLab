@@ -7,7 +7,7 @@ import pytest
 from pdf_papers import chunked_paper
 from test_mcp_server import call
 
-from app.core import workspaces
+from app.core.workspaces import workspaces
 from app.providers import embedding
 from mcp_server import server
 

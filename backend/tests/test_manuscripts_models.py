@@ -5,7 +5,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from test_paper_merges import EVIDENCE, PROOF, kept, merged
 
-from app.core import merges
+from app.core.papers import merges
 from app.models import (
     Manuscript,
     ManuscriptCiteKey,

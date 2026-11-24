@@ -3,9 +3,10 @@ from datetime import datetime, timedelta, timezone
 import pymupdf
 import pytest
 
-from app.core import manuscript_agent_compile as mc
-from app.core import manuscripts, queue
-from app.core.latex_compile import CompileResult
+from app.core.manuscripts import manuscript_agent_compile as mc
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.latex_compile import CompileResult
+from app.core.platform import queue
 from app.domain.errors import InvalidInput, NotFound
 from app.workers import manuscripts as worker
 

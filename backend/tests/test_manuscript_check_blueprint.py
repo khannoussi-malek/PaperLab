@@ -1,8 +1,8 @@
 import json
 from types import MappingProxyType
 
-from app.core.manuscript_checks import blueprint
-from app.core.manuscript_checks.base import CheckContext, ManuscriptInfo
+from app.core.manuscripts.manuscript_checks import blueprint
+from app.core.manuscripts.manuscript_checks.base import CheckContext, ManuscriptInfo
 
 
 def run(name, files, template="custom"):

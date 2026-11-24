@@ -67,7 +67,7 @@ describe('REASONS', () => {
     expect(REASONS.not_relevant[0]).toEqual({ key: 'off_topic', label: 'off-topic' })
   })
   // glob, not node:fs: tsc keeps vite/client only; an absent file gives an empty glob and skips the test.
-  const found = import.meta.glob('../../../../backend/app/core/triage.py', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+  const found = import.meta.glob('../../../../backend/app/core/workspaces/triage.py', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
   const src = Object.values(found)[0]
   it.skipIf(!src)('equals the backend', () => {
     const block = src.slice(src.indexOf('REASONS'), src.indexOf('NOTE_MAX'))

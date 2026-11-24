@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from app.api.deps import SessionDep
-from app.core import setup
+from app.core.platform import setup
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 

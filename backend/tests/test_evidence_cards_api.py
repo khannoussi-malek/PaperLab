@@ -7,7 +7,9 @@ from pdf_papers import chunked_paper
 from sqlalchemy import insert
 from test_evidence_cards import FULL, INTRO, Scripted, card_reply
 
-from app.core import evidence_cards, queue, retrieval
+from app.core.chat import retrieval
+from app.core.notes import evidence_cards
+from app.core.platform import queue
 from app.models import Workspace, workspace_papers
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

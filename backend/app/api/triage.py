@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
-from app.core import triage
+from app.core.workspaces import triage
 from app.schemas.triage import (
     TriageDecisionIn,
     TriageDecisionOut,

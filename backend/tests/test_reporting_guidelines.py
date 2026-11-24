@@ -3,7 +3,7 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from app.core import reporting_guidelines as rg
+from app.core.manuscripts import reporting_guidelines as rg
 from app.domain.errors import InvalidInput
 
 ML_IDS = ("data.source data.size data.splits data.preprocessing data.leakage method.algorithm method.hyperparameters "
@@ -95,7 +95,7 @@ def test_apply_errors_list_valid_ids_in_file_order():
 def test_apply_rejects_bare_string_tick():
     import pytest
 
-    from app.core.reporting_guidelines import apply
+    from app.core.manuscripts.reporting_guidelines import apply
     from app.domain.errors import InvalidInput
 
     with pytest.raises(InvalidInput):
@@ -105,14 +105,14 @@ def test_apply_rejects_bare_string_tick():
 
 
 def test_apply_untick_wins_when_id_in_both():
-    from app.core.reporting_guidelines import apply
+    from app.core.manuscripts.reporting_guidelines import apply
 
     out = apply({"guideline": "prisma2020", "prisma2020:3": True}, tick=["3", "4"], untick=["3"])
     assert "prisma2020:3" not in out and out["prisma2020:4"] is True
 
 
 def test_guideline_wording_fixes():
-    from app.core.reporting_guidelines import get
+    from app.core.manuscripts.reporting_guidelines import get
 
     t = lambda g, i: next(x.text for x in get(g).items if x.id == i)  # noqa: E731
     assert "search strategy" in t("prisma2020", "7")

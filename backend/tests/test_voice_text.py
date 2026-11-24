@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.voice_text import SentenceSplitter, heard_text, speakable
+from app.core.chat.voice_text import SentenceSplitter, heard_text, speakable
 
 
 def chunks_of(tokens):

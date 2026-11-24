@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from test_manuscript_papers import setup
 
-from app.core import manuscript_papers, manuscripts, queue, retrieval
-from app.core import manuscript_review as mr
+from app.core.chat import retrieval
+from app.core.manuscripts import manuscript_papers, manuscripts
+from app.core.manuscripts import manuscript_review as mr
+from app.core.platform import queue
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import (
     Chunk,

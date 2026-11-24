@@ -3,8 +3,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.core import manuscript_history as history
-from app.core import manuscripts
+from app.core.manuscripts import manuscript_history as history
+from app.core.manuscripts import manuscripts
 from app.domain.errors import Conflict, NotFound
 from app.models import ManuscriptSnapshot
 

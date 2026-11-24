@@ -4,8 +4,9 @@ from types import SimpleNamespace
 import pytest
 from conftest import FakeProvider
 
-from app.core import manuscripts, queue
-from app.core.manuscript_checks import doi_service
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_checks import doi_service
+from app.core.platform import queue
 from app.providers import crossref
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]

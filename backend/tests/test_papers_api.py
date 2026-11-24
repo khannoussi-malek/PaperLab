@@ -8,7 +8,7 @@ from sqlalchemy import select, text, update
 from starlette.datastructures import UploadFile
 
 from app.config import settings
-from app.core import papers
+from app.core.papers import papers
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import InvalidInput
 from app.models import Chunk, Paper, PaperStatus

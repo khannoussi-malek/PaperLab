@@ -8,9 +8,10 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call
 from test_citations_import_api import FakeJobRedis, bib, title
 
-from app.core import citations_import_apply as cia
-from app.core import citations_import_run as run
-from app.core import queue, workspaces
+from app.core.citations import citations_import_apply as cia
+from app.core.citations import citations_import_run as run
+from app.core.platform import queue
+from app.core.workspaces import workspaces
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 RUN = uuid.uuid4().hex[:8]

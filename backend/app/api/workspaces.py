@@ -6,8 +6,12 @@ from fastapi.responses import StreamingResponse
 
 from app.api.citations import CappedBody, download
 from app.api.deps import SessionDep
-from app.core import citations_bundle, notes_markdown, pipeline, tags, workspace_package, workspace_search, workspaces
-from app.core.citations_export import filename_slug
+from app.core.citations import citations_bundle
+from app.core.citations.citations_export import filename_slug
+from app.core.notes import notes_markdown
+from app.core.papers import pipeline
+from app.core.search import workspace_search
+from app.core.workspaces import tags, workspace_package, workspaces
 from app.domain.errors import NotFound
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut

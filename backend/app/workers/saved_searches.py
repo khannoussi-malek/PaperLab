@@ -3,7 +3,7 @@ PaperLab was closed runs once when it opens."""
 
 from datetime import datetime, timezone
 
-from app.core import saved_searches
+from app.core.search import saved_searches
 from app.db import SessionLocal
 
 

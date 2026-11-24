@@ -3,7 +3,7 @@ import logging
 import pytest
 from sqlalchemy import delete
 
-from app.core import paper_sources
+from app.core.papers import paper_sources
 from app.domain.errors import InvalidInput
 from app.models import PaperSources
 

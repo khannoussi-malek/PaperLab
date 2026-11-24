@@ -4,7 +4,7 @@ stuck. Ten ingests at once ran the worker out of memory and left 67 papers mid-i
 import pytest
 from conftest import FakeArq
 
-from app.core import queue
+from app.core.platform import queue
 from app.models import Paper
 from app.workers import ingest
 from app.workers.settings import IngestWorkerSettings, WorkerSettings

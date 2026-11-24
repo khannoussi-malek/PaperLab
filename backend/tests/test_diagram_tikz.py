@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core import diagram_tikz as dt
+from app.core.manuscripts import diagram_tikz as dt
 
 ROOT = Path(__file__).resolve().parents[2]
 PIC = "\\begin{tikzpicture}\n\\node {A};\n\\end{tikzpicture}"

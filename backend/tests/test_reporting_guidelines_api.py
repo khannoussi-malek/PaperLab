@@ -1,6 +1,6 @@
 import pytest
 
-from app.core import queue
+from app.core.platform import queue
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
 

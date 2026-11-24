@@ -10,7 +10,7 @@ from conftest import FakeEmbedder, FakeOpenAlex, recorded, unit_vector
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import chunk_headers, embedding_sources, enrichment, paper_sources, papers
+from app.core.papers import chunk_headers, embedding_sources, enrichment, paper_sources, papers
 from app.models import Author, Chunk, Paper, PaperStatus, paper_authors, paper_topics
 from app.providers import embedding
 from app.workers import ingest
@@ -328,8 +328,8 @@ async def test_a_second_copy_of_a_matched_paper_still_reaches_ready(
     await ingest.ingest_paper(openalex_on, str(copy.id))
     await worker_session.refresh(copy)
 
-    # papers.doi is UNIQUE: doi is dropped instead of raising (core/enrichment.py's _taken), the rest of the match
-    # (title included) still applies -- symmetric with test_enrichment.py's test_a_duplicate_openalex_match_....
+    # papers.doi is UNIQUE: doi is dropped instead of raising (core/papers/enrichment.py's _taken), the rest of the
+    # match (title included) still applies -- symmetric with test_enrichment.py's test_a_duplicate_openalex_match_....
     assert (copy.status, copy.status_error, copy.doi) == ("ready", None, None)
     assert copy.title.startswith("BERT: Pre-training")
     assert "enrichment failed" in caplog.text  # _enrich's except actually ran, not a lucky no-op

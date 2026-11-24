@@ -51,9 +51,9 @@ def test_the_sql_matcher_flags_calls_not_longer_names():
     [
         "app.providers.llm",
         "app.providers.embedding",
-        "app.core.retrieval",
-        "app.core.embedding_sources",
-        "app.core.chat",
+        "app.core.chat.retrieval",
+        "app.core.papers.embedding_sources",
+        "app.core.chat.chat",
     ],
 )
 def test_each_module_imports_first_without_a_cycle(module):

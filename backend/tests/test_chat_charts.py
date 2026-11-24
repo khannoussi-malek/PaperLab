@@ -5,7 +5,9 @@ import uuid
 
 import pytest
 
-from app.core import chat, chat_charts, datasets, workspaces
+from app.core.chat import chat, chat_charts
+from app.core.notes import datasets
+from app.core.workspaces import workspaces
 from app.domain.chart_spec import SeriesChart
 from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.domain.errors import InvalidInput
@@ -207,7 +209,7 @@ def test_the_block_keeps_each_dataset_on_one_line_and_says_what_was_left_out():
 
 
 async def test_chart_answers_stay_out_of_packages_without_counting_as_left_out(session):
-    from app.core import workspace_package_answers
+    from app.core.workspaces import workspace_package_answers
 
     paper = await a_paper(session)
     await scores(session, paper)

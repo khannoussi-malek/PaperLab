@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from test_chat_workspace_api import make_paper, make_workspace
 
 from app.config import settings
-from app.core import llm_connections
+from app.core.platform import llm_connections
 from app.models import LLMModel, LLMOutput, Paper
 from app.providers import embedding, llm
 
@@ -89,7 +89,7 @@ async def test_an_unknown_model_is_404_and_no_default_is_409_before_anything_els
     # Not ready: prepare would answer 409 paper_not_ready or workspace_not_indexed, so a model code shows it ran first.
     await session.execute(update(Paper).where(Paper.id == paper.id).values(status="extracting"))
     retrievals = []
-    monkeypatch.setattr("app.core.chat.retrieve", lambda *args, **kwargs: retrievals.append(args))
+    monkeypatch.setattr("app.core.chat.chat.retrieve", lambda *args, **kwargs: retrievals.append(args))
 
     unknown = await client.post(path, json={"question": "why?", "model_id": str(uuid.uuid4())})
     await session.execute(update(LLMModel).values(is_default=False))

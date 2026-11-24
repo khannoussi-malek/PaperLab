@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.manuscript_paths import is_text, validate_path
+from app.core.manuscripts.manuscript_paths import is_text, validate_path
 from app.domain.errors import InvalidInput
 
 

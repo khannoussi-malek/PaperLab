@@ -5,8 +5,8 @@ import re
 
 import pytest
 
-from app.core.prompts import PROMPTS_DIR
-from app.core.skills import BUNDLED
+from app.core.platform.prompts import PROMPTS_DIR
+from app.core.platform.skills import BUNDLED
 
 FORMAT_WORDS = re.compile(r"\[C\d*|\bcit(e|es|ed|ing|ation|ations)\b|\bformat(ting|ted)?\b|\bmarkdown\b", re.I)
 

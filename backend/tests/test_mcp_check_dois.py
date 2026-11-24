@@ -10,7 +10,7 @@ from mcp_fixtures import call
 from test_manuscript_check_references_doi import BIB, wire
 from test_manuscript_papers import setup
 
-from app.core import manuscripts
+from app.core.manuscripts import manuscripts
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
 

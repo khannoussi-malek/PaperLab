@@ -11,9 +11,10 @@ import sys
 import time
 from dataclasses import dataclass
 
-from app.core import llm_connections, workspaces
-from app.core.screening import hit_text, load_pool
-from app.core.screening_suggest import SYSTEM_PROMPT, build_prompt, parse_reply
+from app.core.platform import llm_connections
+from app.core.search.screening import hit_text, load_pool
+from app.core.search.screening_suggest import SYSTEM_PROMPT, build_prompt, parse_reply
+from app.core.workspaces import workspaces
 from app.db import SessionLocal
 from app.providers.llm import build_llm
 

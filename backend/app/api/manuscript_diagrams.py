@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
-from app.core import manuscript_diagrams as diagrams
+from app.core.manuscripts import manuscript_diagrams as diagrams
 from app.schemas.manuscript_diagrams import DiagramCodeIn, DiagramIn, DiagramOut
 
 router = APIRouter(tags=["manuscripts"])

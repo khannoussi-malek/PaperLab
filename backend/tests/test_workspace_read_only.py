@@ -16,7 +16,10 @@ from sqlalchemy import update
 from test_chat_workspace_api import make_paper, make_workspace, query_model  # noqa: F401 - fixture for chat
 
 from app.api.deps import get_discovery
-from app.core import papers, queue, saved_searches, schedules, tags, workspace_package, workspace_search, workspaces
+from app.core.papers import papers
+from app.core.platform import queue
+from app.core.search import saved_searches, schedules, workspace_search
+from app.core.workspaces import tags, workspace_package, workspaces
 from app.domain.errors import Conflict, NotFound
 from app.models import Workspace
 from tests.test_workspace_package_import import _package, _paper

@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.core import novelty
+from app.core.workspaces import novelty
 from app.domain.errors import Conflict
 
 pytestmark = pytest.mark.anyio

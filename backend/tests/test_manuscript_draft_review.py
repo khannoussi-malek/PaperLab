@@ -9,9 +9,10 @@ from sqlalchemy import select, update
 from test_draft_review import LONG_FILES, Routed, issues
 from test_manuscript_papers import setup
 
-from app.core import draft_review, manuscripts, queue
-from app.core import draft_review_issues as di
-from app.core import manuscript_draft_review as mdr
+from app.core.manuscripts import draft_review, manuscripts
+from app.core.manuscripts import draft_review_issues as di
+from app.core.manuscripts import manuscript_draft_review as mdr
+from app.core.platform import queue
 from app.domain.errors import Conflict, InvalidInput
 from app.models import LLMConnection, LLMModel, Manuscript
 from app.models import ManuscriptDraftReview as Row

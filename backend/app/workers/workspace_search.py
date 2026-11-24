@@ -7,9 +7,11 @@ from datetime import datetime, timezone
 from sqlalchemy import select, update
 
 from app.config import settings
-from app.core import discovery, paper_sources, queue, screening
-from app.core.redact import redact
-from app.core.workspace_search import (
+from app.core.papers import paper_sources
+from app.core.platform import queue
+from app.core.platform.redact import redact
+from app.core.search import discovery, screening
+from app.core.search.workspace_search import (
     PER_SOURCE_PASS_LIMIT,
     SEARCH_RUN_JOB_TIMEOUT,
     get_run,

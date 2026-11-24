@@ -10,7 +10,8 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import delete, func, select
 
-from app.core import mcp_activity, workspaces
+from app.core.platform import mcp_activity
+from app.core.workspaces import workspaces
 from app.models import McpActivity, Paper
 from mcp_server import server
 

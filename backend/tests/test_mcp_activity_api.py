@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import delete
 
-from app.core import mcp_activity
+from app.core.platform import mcp_activity
 from app.models import McpActivity
 
 pytestmark = pytest.mark.anyio

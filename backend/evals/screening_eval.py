@@ -22,9 +22,10 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import llm_connections, workspaces
-from app.core.screening import load_pool
-from app.core.screening_suggest import suggest
+from app.core.platform import llm_connections
+from app.core.search.screening import load_pool
+from app.core.search.screening_suggest import suggest
+from app.core.workspaces import workspaces
 from app.db import SessionLocal
 from app.domain.errors import DomainError
 from app.providers.llm import build_llm

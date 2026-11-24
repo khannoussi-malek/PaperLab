@@ -7,9 +7,10 @@ from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import manuscript_papers as mp
-from app.core import manuscripts, workspaces
-from app.core.manuscript_bib import build_bib
+from app.core.manuscripts import manuscript_papers as mp
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_bib import build_bib
+from app.core.workspaces import workspaces
 from app.domain.errors import Conflict, NotFound
 from app.models import (
     Chunk,

@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
-from app.core import paper_links
+from app.core.papers import paper_links
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, PaperLink
 

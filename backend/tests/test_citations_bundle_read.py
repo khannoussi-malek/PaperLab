@@ -6,9 +6,9 @@ import zipfile
 
 import pytest
 
-from app.core import citations_bundle_read as cbr
-from app.core.citations_bundle_read import read_bundle
-from app.core.citations_import import CitationsImportError
+from app.core.citations import citations_bundle_read as cbr
+from app.core.citations.citations_bundle_read import read_bundle
+from app.core.citations.citations_import import CitationsImportError
 
 PDF = b"%PDF-1.7 body"
 BIB = (

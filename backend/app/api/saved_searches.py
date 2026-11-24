@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
-from app.core import saved_searches, schedules, workspace_search
+from app.core.search import saved_searches, schedules, workspace_search
 from app.schemas.saved_searches import SavedSearchCreate, SavedSearchOut, SavedSearchUpdate
 from app.schemas.workspace_search import SearchRunOut
 

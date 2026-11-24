@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from app.core.manuscript_checks import pdf_log
-from app.core.manuscript_checks.pdf_log import Box
+from app.core.manuscripts.manuscript_checks import pdf_log
+from app.core.manuscripts.manuscript_checks.pdf_log import Box
 
 FIX = Path(__file__).parent / "fixtures" / "tectonic"
 
@@ -108,7 +108,7 @@ def test_two_pass_compile_reports_only_the_final_pass_box():
 @pytest.mark.skipif(not os.environ.get("TECTONIC_BIN"), reason="TECTONIC_BIN unset (scripts/tectonic-dev.sh)")
 async def test_live_compile_boxes_get_a_file(tmp_path, monkeypatch):
     from app.config import settings
-    from app.core import latex_compile as lc
+    from app.core.manuscripts import latex_compile as lc
 
     monkeypatch.setattr(settings, "tectonic_bin", os.environ["TECTONIC_BIN"])
     monkeypatch.setattr(settings, "tectonic_only_cached", True)

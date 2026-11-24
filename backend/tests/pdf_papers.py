@@ -6,7 +6,7 @@ from pathlib import Path
 import pymupdf
 from conftest import unit_vector
 
-from app.core import papers
+from app.core.papers import papers
 from app.domain.chunking import chunk_blocks
 from app.models import Chunk, Paper, PaperStatus
 from app.providers.extraction import extract

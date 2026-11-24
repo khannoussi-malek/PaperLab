@@ -19,7 +19,9 @@ from sqlalchemy.pool import NullPool
 from app.api import chat as chat_api
 from app.api.deps import get_transport, resolve_check_llm, resolve_llm, resolve_llm_by_model_id
 from app.config import settings
-from app.core import discovery, queue, voice_turn
+from app.core.chat import voice_turn
+from app.core.platform import queue
+from app.core.search import discovery
 from app.db import get_session
 from app.main import create_app
 from app.models import Author, LLMConnection, LLMModel, Paper, PaperEvent, PaperSources

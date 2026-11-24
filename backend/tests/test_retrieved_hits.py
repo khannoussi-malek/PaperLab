@@ -7,10 +7,12 @@ import pytest
 from conftest import pdf_attached
 from sqlalchemy import delete, select
 
-from app.core import discovery, papers, retrieved_hits, tags, workspace_search, workspaces
-from app.core.candidates import normal_title
-from app.core.prisma_export import prisma_export
-from app.core.workspace_search import import_hits, upload_hit_pdf
+from app.core.papers import papers
+from app.core.search import discovery, retrieved_hits, workspace_search
+from app.core.search.candidates import normal_title
+from app.core.search.prisma_export import prisma_export
+from app.core.search.workspace_search import import_hits, upload_hit_pdf
+from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict
 from app.models import Paper, PaperMerge, paper_tags, workspace_papers
 from app.models.references import ExternalRef

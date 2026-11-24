@@ -4,8 +4,8 @@ import json
 import pytest
 from sqlalchemy import update
 
-from app.core import hit_suggest
-from app.core.screening_suggest import SCREENING_PROMPT_VERSION
+from app.core.search import hit_suggest
+from app.core.search.screening_suggest import SCREENING_PROMPT_VERSION
 from app.domain.errors import Conflict, NotFound
 from app.models import LLMConnection, LLMModel
 from app.providers.llm_fake import FakeLLM

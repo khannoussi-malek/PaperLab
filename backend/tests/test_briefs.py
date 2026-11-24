@@ -7,8 +7,10 @@ import pytest
 from sqlalchemy import update
 from test_sections import paper_with_headings
 
-from app.core import briefs, chat, papers, sections
-from app.core.retrieval import RetrievedChunk
+from app.core.chat import chat
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.papers import papers, sections
+from app.core.workspaces import briefs
 from app.domain.chunking import ChunkDraft
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMOutput

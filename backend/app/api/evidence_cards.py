@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
-from app.core import evidence_cards
+from app.core.notes import evidence_cards
 from app.schemas.evidence_cards import CardOut, CardRowOut, EditIn, GenerateIn
 
 router = APIRouter(tags=["evidence-cards"])

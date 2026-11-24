@@ -16,10 +16,14 @@ from conftest import FakeArq, pdf_attached
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import func, select
 
-from app.core import citations_import_apply as cia
-from app.core import discovery, notes, papers, queue, tags, workspaces
-from app.core.citations_bundle_read import Bundle, read_bundle
-from app.core.citations_import import CitationsImportError, ImportEntry
+from app.core.citations import citations_import_apply as cia
+from app.core.citations.citations_bundle_read import Bundle, read_bundle
+from app.core.citations.citations_import import CitationsImportError, ImportEntry
+from app.core.notes import notes
+from app.core.papers import papers
+from app.core.platform import queue
+from app.core.search import discovery
+from app.core.workspaces import tags, workspaces
 from app.domain.candidates import Candidate
 from app.models import Note, Paper, Provenance, note_papers
 from app.workers import citations_import as worker

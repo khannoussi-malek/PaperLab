@@ -9,7 +9,7 @@ from conftest import unit_vector
 from sqlalchemy import text
 from test_retrieval import add_texts, hybrid
 
-from app.core.retrieval import retrieve
+from app.core.chat.retrieval import retrieve
 
 pytestmark = pytest.mark.anyio
 

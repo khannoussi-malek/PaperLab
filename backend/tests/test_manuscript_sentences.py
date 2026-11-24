@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from app.core import manuscript_sentences
-from app.core.manuscript_sentences import cite_spans, claim_hash, in_range, split_sentences, to_plain
+from app.core.manuscripts import manuscript_sentences
+from app.core.manuscripts.manuscript_sentences import cite_spans, claim_hash, in_range, split_sentences, to_plain
 
 TEX = (Path(__file__).parent / "fixtures" / "review_sample.tex").read_text()
 
@@ -119,7 +119,7 @@ def test_one_long_paragraph_splits_in_linear_time():
 
 
 def test_crlf_text_gives_the_same_sentences_once_normalised():
-    from app.core.manuscript_sentences import normalize_newlines
+    from app.core.manuscripts.manuscript_sentences import normalize_newlines
 
     crlf = TEX.replace("\n", "\r\n")
     assert [(s.start, s.end, s.hash) for s in split_sentences(normalize_newlines(crlf))] == [

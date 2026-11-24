@@ -4,7 +4,8 @@ import pytest
 from pdf_papers import chunked_paper
 from sqlalchemy import func, select
 
-from app.core import evidence_cards, retrieval
+from app.core.chat import retrieval
+from app.core.notes import evidence_cards
 from app.models import Chunk, EvidenceCard, LLMOutput, Paper, PaperStatus
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -203,7 +204,7 @@ async def test_an_effect_size_with_no_number_in_its_value_is_dropped_as_no_stati
 
 
 def test_prompt_v2_asks_for_the_statistic_as_printed():
-    from app.core import prompts
+    from app.core.platform import prompts
 
     text = prompts.load("evidence_card", 2)
     assert "exactly as the paper prints it" in text and "participants" in text

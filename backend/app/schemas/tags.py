@@ -16,7 +16,7 @@ class TagOut(BaseModel):
 
 
 class TagApply(BaseModel):
-    tag: str  # checked (1..64 characters) by core/tags.py, which answers 422
+    tag: str  # checked (1..64 characters) by core/workspaces/tags.py, which answers 422
     paper_ids: list[uuid.UUID]
 
 

@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.voice_latency import percentiles
+from app.core.chat.voice_latency import percentiles
 from app.models.voice_turn import VoiceTurn
 
 pytestmark = pytest.mark.anyio

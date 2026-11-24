@@ -3,10 +3,10 @@ import uuid
 from fastapi import APIRouter
 
 from app.api.deps import SessionDep
-from app.core import manuscripts
-from app.core.manuscript_checks import service
-from app.core.manuscript_checks.registry import REGISTRY
-from app.schemas.manuscript_checks import CheckInfoOut, CheckFindingOut, RunChecksIn, RunChecksOut
+from app.core.manuscripts import manuscripts
+from app.core.manuscripts.manuscript_checks import service
+from app.core.manuscripts.manuscript_checks.registry import REGISTRY
+from app.schemas.manuscript_checks import CheckFindingOut, CheckInfoOut, RunChecksIn, RunChecksOut
 
 router = APIRouter(tags=["manuscripts"])
 BASE = "/api/manuscripts/{manuscript_id}/checks"

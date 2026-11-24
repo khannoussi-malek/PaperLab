@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.config import settings
-from app.core import latex_compile as lc
+from app.core.manuscripts import latex_compile as lc
 
 pytestmark = pytest.mark.anyio
 FIX = Path(__file__).parent / "fixtures" / "tectonic"

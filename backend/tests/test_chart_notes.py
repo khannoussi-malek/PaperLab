@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.core import capture, charts, datasets, notes
+from app.core.notes import capture, charts, datasets, notes
 from app.domain.chart_spec import ChartSpecAdapter
 from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.domain.errors import InvalidInput, NotFound

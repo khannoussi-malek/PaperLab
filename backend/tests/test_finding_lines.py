@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from app.core.finding_lines import clean_line, grams, reads_as_wording, split_label
+from app.core.notes.finding_lines import clean_line, grams, reads_as_wording, split_label
 
 REF = re.compile(r"\[C(\d+)\]")
 

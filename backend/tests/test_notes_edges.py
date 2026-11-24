@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.core import notes
+from app.core.notes import notes
 from app.domain.errors import InvalidInput
 from app.models import Note, Paper, Provenance
 

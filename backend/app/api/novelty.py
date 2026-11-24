@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.deps import SessionDep
-from app.core import novelty
+from app.core.workspaces import novelty
 from app.schemas.novelty import NoveltyIn, NoveltyOut
 
 router = APIRouter(prefix="/api/novelty", tags=["novelty"])

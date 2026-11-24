@@ -2,7 +2,7 @@ import random
 import time
 import uuid
 
-from app.core.screening_rank import Doc, StopHint, rank, stop_hint, tokens
+from app.core.search.screening_rank import Doc, StopHint, rank, stop_hint, tokens
 
 
 def _doc(text, label=None):

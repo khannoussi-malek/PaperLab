@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class WorkspaceCreate(BaseModel):
-    name: str  # stripped and checked (1..80 characters) by core/workspaces.py, which answers 422
+    name: str  # stripped and checked (1..80 characters) by core/workspaces/workspaces.py, which answers 422
 
 
 class WorkspaceRename(BaseModel):

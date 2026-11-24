@@ -1,8 +1,10 @@
 import pytest
 from sqlalchemy import delete, text
 
-from app.core import discovery, pdf_links, references
-from app.core.paper_sources import SOURCES, SourceSettings
+from app.core.citations import references
+from app.core.papers import pdf_links
+from app.core.papers.paper_sources import SOURCES, SourceSettings
+from app.core.search import discovery
 from app.domain.errors import Conflict
 from app.models import Paper
 from app.providers import (
@@ -24,8 +26,8 @@ from app.providers import (
 )
 from app.providers.extraction import extract
 
-# Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these
-# files share one xdist worker, or two of them deadlock on the same stored reference.
+# Fetches and embeds take one advisory lock (core/citations/references.py); in a test it lasts until the rollback, so
+# these files share one xdist worker, or two of them deadlock on the same stored reference.
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
 

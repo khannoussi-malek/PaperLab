@@ -219,7 +219,7 @@ def test_card_ms_above_the_cap_is_clamped_not_refused():
 def test_the_request_pile_literal_matches_the_core_piles():
     from typing import get_args
 
-    from app.core import triage
+    from app.core.workspaces import triage
     from app.schemas.triage import TriageDecisionIn
 
     assert get_args(TriageDecisionIn.model_fields["pile"].annotation) == tuple(triage.PILES)

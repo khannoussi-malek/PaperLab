@@ -1,4 +1,4 @@
-"""Deciding on the desk (app/core/triage.py): the pile mapping, reasons, the locked write, retries."""
+"""Deciding on the desk (app/core/workspaces/triage.py): the pile mapping, reasons, the locked write, retries."""
 
 import asyncio
 import uuid
@@ -9,7 +9,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import papers, triage
+from app.core.papers import papers
+from app.core.workspaces import triage
 from app.domain.errors import Gone, InvalidInput, NotFound
 from app.models import Paper, PaperMerge, TriageEvent
 

@@ -12,9 +12,9 @@ from pathlib import Path
 from sqlalchemy import select, update
 
 from app.config import settings
-from app.core import manuscript_history, manuscripts, synctex
-from app.core.latex_compile import COMPILE_TIMEOUT, compile_dir
-from app.core.manuscript_bib import build_bib
+from app.core.manuscripts import manuscript_history, manuscripts, synctex
+from app.core.manuscripts.latex_compile import COMPILE_TIMEOUT, compile_dir
+from app.core.manuscripts.manuscript_bib import build_bib
 from app.db import SessionLocal
 from app.models import Manuscript, ManuscriptFile
 

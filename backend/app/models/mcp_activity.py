@@ -8,7 +8,8 @@ from app.models.base import Base
 
 
 class McpActivity(Base):
-    """One row per tool call an MCP client made on the library (M36). Capped at 1000 rows by app.core.mcp_activity."""
+    """One row per tool call an MCP client made on the library (M36). Capped at 1000 rows by
+    app.core.platform.mcp_activity."""
 
     __tablename__ = "mcp_activity"
 

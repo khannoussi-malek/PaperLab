@@ -10,8 +10,9 @@ from sqlalchemy import select, update
 from test_manuscript_papers import setup
 
 from app.config import settings
-from app.core import diagram_compile, queue
-from app.core import manuscript_diagrams as md
+from app.core.manuscripts import diagram_compile
+from app.core.manuscripts import manuscript_diagrams as md
+from app.core.platform import queue
 from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel
 from app.models import ManuscriptDiagram as Row

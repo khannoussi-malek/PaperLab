@@ -9,8 +9,9 @@ from pydantic import BaseModel
 from redis.exceptions import RedisError
 
 from app.api.deps import SessionDep
-from app.core import citations_import_run, pipeline
-from app.core.citations_export import FORMATS, filename_slug
+from app.core.citations import citations_import_run
+from app.core.citations.citations_export import FORMATS, filename_slug
+from app.core.papers import pipeline
 from app.schemas.citations_import import ImportPreviewOut, ImportProgressOut
 
 router = APIRouter(tags=["citations"])

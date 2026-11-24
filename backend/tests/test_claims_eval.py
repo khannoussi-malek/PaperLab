@@ -6,7 +6,7 @@ from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 from pydantic import ValidationError
 from sqlalchemy import func, select
 
-from app.core import retrieval
+from app.core.chat import retrieval
 from app.domain.errors import Conflict
 from app.models import LLMOutput, Note
 from app.providers.base import LLMError

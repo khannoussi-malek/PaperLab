@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.core.citations_export import bibtex_keys, csl_item
+from app.core.citations.citations_export import bibtex_keys, csl_item
 
 
 def paper(**kw):
@@ -179,7 +179,7 @@ import json  # noqa: E402
 import bibtexparser  # noqa: E402
 import rispy  # noqa: E402
 
-from app.core.citations_export import FORMATS, render  # noqa: E402
+from app.core.citations.citations_export import FORMATS, render  # noqa: E402
 
 
 def items_of(*papers):

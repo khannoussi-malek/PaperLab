@@ -7,8 +7,10 @@ import pytest
 from conftest import recorded
 from sqlalchemy import update
 
-from app.core import citations_import_apply, discovery, enrichment, paper_enrichment, papers, provenance
-from app.core.citations_import import ImportEntry
+from app.core.citations import citations_import_apply
+from app.core.citations.citations_import import ImportEntry
+from app.core.papers import enrichment, paper_enrichment, papers, provenance
+from app.core.search import discovery
 from app.domain.candidates import Candidate
 from app.models import Paper
 from tests.test_enrichment import BERT_DOI, BERT_WORK, add_paper, hints

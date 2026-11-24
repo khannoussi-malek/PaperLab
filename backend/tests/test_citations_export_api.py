@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.core import pipeline
+from app.core.papers import pipeline
 from app.domain.errors import InvalidInput, NotFound
 from app.models import Paper
 
@@ -59,7 +59,7 @@ async def test_selection_export_keeps_the_given_order_and_names_the_file_citatio
 
 async def test_selection_export_from_a_workspace_carries_that_workspaces_tags(client, session):
     workspace, (paper,) = await workspace_with(client, session, f"Tagged {RUN}")
-    from app.core import tags
+    from app.core.workspaces import tags
 
     await tags.tag_papers(session, uuid.UUID(workspace["id"]), f"RQ-{RUN}", [paper.id])
     body = {"paper_ids": [str(paper.id)], "format": "ris", "workspace_id": workspace["id"]}

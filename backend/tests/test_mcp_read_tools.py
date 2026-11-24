@@ -10,8 +10,11 @@ from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
 from sqlalchemy import delete
 
-from app.core import chat, datasets, references, workspaces
-from app.core.retrieval import RetrievedChunk
+from app.core.chat import chat
+from app.core.chat.retrieval import RetrievedChunk
+from app.core.citations import references
+from app.core.notes import datasets
+from app.core.workspaces import workspaces
 from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.models import Chunk, ExternalRef, LLMOutput, Note, NoteEmbedding, Paper, PaperSources, paper_references
 

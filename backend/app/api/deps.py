@@ -6,7 +6,8 @@ import httpx
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import discovery, llm_connections
+from app.core.platform import llm_connections
+from app.core.search import discovery
 from app.db import get_session
 from app.providers.base import LLM, Speech
 from app.providers.llm import build_llm

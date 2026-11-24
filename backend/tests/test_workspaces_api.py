@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.core import notes
+from app.core.notes import notes
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

@@ -3,8 +3,8 @@ import zipfile
 
 import pytest
 
-from app.core import manuscript_paths as paths
-from app.core import manuscript_zip
+from app.core.manuscripts import manuscript_paths as paths
+from app.core.manuscripts import manuscript_zip
 from app.domain.errors import Conflict, InvalidInput
 
 TEX = "\\documentclass{article}\\begin{document}Hi\\end{document}"

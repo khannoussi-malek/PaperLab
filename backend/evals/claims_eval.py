@@ -23,7 +23,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import claims, llm_connections, prompts
+from app.core.chat import claims
+from app.core.platform import llm_connections, prompts
 from app.db import SessionLocal
 from app.domain.errors import DomainError
 from app.models import LLMOutput

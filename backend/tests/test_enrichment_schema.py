@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import func, insert, select
 from sqlalchemy.exc import IntegrityError
 
-from app.core import papers
+from app.core.papers import papers
 from app.models import Author, Paper, paper_authors, paper_topics
 
 pytestmark = pytest.mark.anyio

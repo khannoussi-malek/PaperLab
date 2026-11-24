@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import SessionDep
-from app.core import lenses, sections
+from app.core.papers import lenses, sections
 from app.schemas.lenses import LensOut, SectionOut, SectionRoleIn, SectionsOut
 
 router = APIRouter(prefix="/api/papers", tags=["lenses"])
