@@ -1,59 +1,30 @@
-import { ArrowUp, ChartColumn, CornerDownRight, Files, MessageSquareText, Settings2, X } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react'
-import type { ChartSpec, ChatScope, ChatSource, Note, NoteSource, ChatAnswer as SavedAnswer } from '@/entities'
-import { useAskChart, useChatHistory, useChatModels, usePromoteNote, useSkills } from '@/services/queries'
+import { ArrowUp } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import type { ChatScope, ChatSource, Note, NoteSource } from '@/entities'
+import { useAskChart, useChatHistory, useChatModels, useSkills } from '@/services/queries'
 import { pressable } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { browserStorage } from '@/components/highlightColors'
-import { settingsHref } from '@/router/route'
 import { cn } from '@/lib/utils'
-import { readAnswerSelection } from './answerSelection'
-import { ChatAnswer } from './ChatAnswer'
 import { loadChatModel, saveChatModel } from './chatModel'
-import { splitCitations } from '@/components/citations'
-import { ModelPicker } from './ModelPicker'
-import { promoteInPart } from './noteBlocks'
-import { promoteErrorMessage, type PromoteDraft } from './promote'
-import { saveButtonPosition } from './saveButton'
 import { SaveAsNoteButton } from './SaveAsNoteButton'
-import { SkillPicker } from './SkillPicker'
-import { ChatChart } from './ChatChart'
-import { chartTitle } from './chartTitle'
 import { resolveSkill } from './skillChoice'
-import { ProblemAlert } from './ProblemAlert'
 import { threadOrder } from './threads'
 import { useChatStream } from './useChatStream'
 import { useVoiceTurn } from '@/features/voice/useVoiceTurn'
 import { looksPerPaper } from './eachPaperHint'
 import { VoiceButton } from '@/features/voice/VoiceButton'
+import { EmptyChat } from './EmptyChat'
+import { ThreadAnswer } from './ThreadAnswer'
+import { LiveAnswer } from './LiveAnswer'
+import { ComposerAlerts, ComposerOptions, FollowingChip } from './ChatComposerParts'
+import { useAnswerPromote } from './useAnswerPromote'
 
 const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
 // How close to the bottom (px) still counts as "at the bottom", so a streaming answer keeps the list following it.
 const FOLLOW_THRESHOLD = 48
-// What an empty chat offers, by scope: a workspace's starter questions look across its papers.
-const EMPTY_CHAT = {
-  paper: {
-    heading: 'Ask this paper',
-    help: 'Answers cite the passages they use. Click a citation to see it in the paper.',
-    starters: ['Summarize the main contribution', 'What method do they use?', 'What are the limitations?'],
-  },
-  workspace: {
-    heading: 'Ask this workspace',
-    help: 'Answers cite passages from its papers and your notes. Click a citation to open it in the paper.',
-    starters: ['Compare their main contributions', 'How do their methods differ?', 'What do my notes say about them?'],
-  },
-  hit: {
-    heading: 'Ask about this paper',
-    help: 'Answers use its abstract, or the full text once the paper has a file.',
-    starters: ['Summarize the main contribution', 'What method do they use?', 'Is this relevant to my question?'],
-  },
-}
-
-/** Labels whose chunk or note still exists; markers for any other label render as plain text. */
-const knownLabels = (answer: SavedAnswer) =>
-  new Set([...answer.sources, ...answer.notes].flatMap((source) => (source ? [source.label] : [])))
 
 type Props = {
   scope: ChatScope
@@ -69,8 +40,6 @@ type Props = {
   /** Called with the new note once it is saved and listed. */
   onPromoted: (note: Note) => void
 }
-
-type Promote = { outputId: string; draft: PromoteDraft; style: CSSProperties }
 
 export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSource, onPromoted }: Props) {
   const history = useChatHistory(scope)
@@ -118,9 +87,6 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
   useEffect(() => {
     if (streamSource) onSource?.(streamSource)
   }, [streamSource]) // eslint-disable-line react-hooks/exhaustive-deps -- fires on the event, not on a new callback
-  const [promote, setPromote] = useState<Promote | null>(null)
-  const [promoteError, setPromoteError] = useState<string | null>(null)
-  const promoteNote = usePromoteNote()
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -170,60 +136,11 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
     wasBusy.current = busy
   }, [busy])
 
-  function captureSelection() {
-    const selected = readAnswerSelection()
-    const answer = answers.find((a) => a.id === selected?.outputId)
-    const draft = selected && answer && promoteInPart(answer.content, answer.sources, selected.anchor, selected.focus)
-    const box = rootRef.current?.getBoundingClientRect()
-    if (!selected || !draft || !box) {
-      setPromote(null)
-      setPromoteError(null)
-      return
-    }
-    // Only a genuinely different selection retires a shown error: a recapture of the *same* selection (a resize, or
-    // any other re-run of this function) must not silently clear an error the user hasn't acted on yet.
-    if (promote?.outputId !== selected.outputId || promote?.draft.body !== draft.body) setPromoteError(null)
-    setPromote({ outputId: selected.outputId, draft, style: saveButtonPosition(selected.rect, box) })
-  }
-
-  // The selection can change without a mouseup: dragging still fires this repeatedly, and so does
-  // Shift+Arrow. Re-running the full capture (not just hiding on collapse) keeps the draft live, not stale.
-  useEffect(() => {
-    document.addEventListener('selectionchange', captureSelection)
-    return () => document.removeEventListener('selectionchange', captureSelection)
+  const { promote, promoteError, savePending, captureSelection, saveAsNote, hidePromote } = useAnswerPromote({
+    answers,
+    rootRef,
+    onPromoted,
   })
-
-  // The freshest captureSelection, for the ResizeObserver below: observing must start exactly once (`observe()`
-  // itself fires one immediate callback, so re-subscribing on every render would re-fire it every render too, right
-  // after any state change -- including the one that had just set an error, clearing it straight back out).
-  const captureSelectionRef = useRef(captureSelection)
-  useEffect(() => {
-    captureSelectionRef.current = captureSelection
-  })
-
-  // The panel (or the split it sits in) can change size from under an open selection: a drag on the resize handle,
-  // or coming back to a tab that was hidden. Re-measuring keeps the button under its selection either way.
-  useEffect(() => {
-    const node = rootRef.current
-    if (!node) return
-    const observer = new ResizeObserver(() => captureSelectionRef.current())
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [])
-
-  async function saveAsNote() {
-    if (!promote || promoteNote.isPending) return
-    const { outputId, draft } = promote
-    try {
-      const note = await promoteNote.mutateAsync({ output_id: outputId, body: draft.body, chunk_ids: draft.chunkIds })
-      setPromote(null)
-      window.getSelection()?.removeAllRanges()
-      onPromoted(note)
-    } catch (e) {
-      // The button (and selection) stay up: the message sits right next to it, and the user can retry.
-      setPromoteError(promoteErrorMessage(e))
-    }
-  }
 
   function submit() {
     const text = question.trim()
@@ -244,42 +161,18 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
     textareaRef.current?.focus()
   }
 
-  // The answer being asked now: at the end of the thread it follows up, or last, until its saved copy is listed.
-  const liveAnswer = () =>
-    showLive && (
-      <ChatAnswer
-        question={stream.question}
-        readings={stream.readings}
-        readingsTotal={stream.readings[0]?.total}
-        readingsLive={stream.status === 'sources'}
-        parentId={stream.parentId}
-        reply={liveReply}
-        wholePaper={stream.wholePaper}
-        sources={stream.sources}
-        notes={stream.notes}
-        notesUsed={stream.notesUsed}
-        notesTotal={stream.notesTotal}
-        segments={stream.segments}
-        footer={
-          // A spoken answer's saved id arrives before its model; the footer waits for the saved copy.
-          stream.done?.model
-            ? {
-                model: stream.done.model,
-                connectionName: stream.done.connection_name,
-                promptVersion: stream.done.prompt_version,
-                skillLabel: stream.done.skill_label,
-                lens: stream.done.lens,
-              }
-            : null
-        }
-        pending={busy}
-        animate
-        paperLabel={paperLabel}
-        onCite={onCite}
-      >
-        {stream.problem && <ProblemAlert scope={scope} problem={stream.problem} onRetry={retry} />}
-      </ChatAnswer>
-    )
+  // The answer being asked now, shown at the end of the thread it follows up, or last, until its saved copy is listed.
+  const liveNode = showLive && (
+    <LiveAnswer
+      scope={scope}
+      stream={stream}
+      liveReply={liveReply}
+      busy={busy}
+      retry={retry}
+      paperLabel={paperLabel}
+      onCite={onCite}
+    />
+  )
 
   return (
     <div ref={rootRef} className="relative flex min-h-0 flex-1 flex-col">
@@ -292,7 +185,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
         onScroll={(e) => {
           const el = e.currentTarget
           followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_THRESHOLD
-          setPromote(null)
+          hidePromote()
         }}
       >
         {history.error && (
@@ -305,45 +198,26 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
         )}
         {placed.map(({ answer, reply }, index) => (
           <Fragment key={answer.id}>
-            {index === liveAt && liveAnswer()}
-            <ChatAnswer
-              outputId={answer.id}
-              checkable={scope.kind !== 'hit' && !answer.chart_spec}
-              hasCheck={answer.has_check}
-              parentId={answer.parent_id}
+            {index === liveAt && liveNode}
+            <ThreadAnswer
+              answer={answer}
               reply={reply}
-              question={answer.question}
-              readings={answer.readings}
-              wholePaper={answer.whole_paper}
-              sources={answer.sources}
-              notes={answer.notes}
-              notesUsed={answer.notes_used}
-              notesTotal={answer.notes_total}
-              segments={splitCitations(answer.content, knownLabels(answer))}
-              footer={{
-                model: answer.model,
-                connectionName: answer.connection_name,
-                promptVersion: answer.prompt_version,
-                skillLabel: answer.skill_label,
-                lens: answer.lens,
-              }}
+              scope={scope}
+              closed={closed}
               paperLabel={paperLabel}
               onCite={onCite}
-              followUp={scope.kind !== 'workspace' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
-              suggestions={{ scope, saved: answer.saved_notes }}
-            >
-              {answer.chart_spec && <ChatChart spec={answer.chart_spec as ChartSpec} title={chartTitle(answer.content)} />}
-            </ChatAnswer>
+              onFollowUp={followUp}
+            />
           </Fragment>
         ))}
-        {liveAt === placed.length && liveAnswer()}
+        {liveAt === placed.length && liveNode}
       </div>
 
       {/* Outside the list, so pressing it doesn't re-run the list's mouseup selection check. */}
       {promote && (
         <SaveAsNoteButton
           canSave={promote.draft.chunkIds.length > 0}
-          saving={promoteNote.isPending}
+          saving={savePending}
           error={promoteError}
           style={promote.style}
           onSave={() => void saveAsNote()}
@@ -358,24 +232,7 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
         }}
       >
         {notice && <p className="px-1 text-xs text-muted-foreground">{notice}</p>}
-        {followingQuestion !== null && (
-          <p className="chat-following flex min-w-0 items-center gap-1.5 px-1 text-xs text-muted-foreground">
-            <CornerDownRight aria-hidden className="size-3.5 shrink-0" />
-            <span className="min-w-0 truncate" title={followingQuestion}>
-              Following: {followingQuestion}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className={cn('ml-auto', pressable)}
-              aria-label="Stop following"
-              onClick={() => setFollowingId(null)}
-            >
-              <X aria-hidden />
-            </Button>
-          </p>
-        )}
+        {followingQuestion !== null && <FollowingChip question={followingQuestion} onStop={() => setFollowingId(null)} />}
         {/* One field-looking box: the ring moves from the textarea to the box so the send button sits inside it. */}
         <div className="flex items-end gap-2 rounded-xl border border-input bg-glass-strong p-1.5 pl-3 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
           <Textarea
@@ -403,36 +260,19 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
           </Button>
         </div>
         {chatModels.data && chatModels.data.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            <ModelPicker models={chatModels.data} value={modelId} onChange={pickModel} />
-            {scope.kind !== 'hit' && skills.data && <SkillPicker skills={skills.data} value={skillId} onChange={setSkillPick} />}
-            {scope.kind === 'workspace' && (
-              <Button
-                type="button"
-                size="sm"
-                variant={eachPaper ? 'secondary' : 'ghost'}
-                aria-pressed={eachPaper}
-                title="Asks the model once per paper, up to 10, then answers from what each says"
-                onClick={() => setEachPaper((on) => !on)}
-              >
-                <Files aria-hidden />
-                Ask each paper
-              </Button>
-            )}
-            {scope.kind !== 'hit' && (
-              <Button
-                type="button"
-                size="sm"
-                variant={chartMode ? 'secondary' : 'ghost'}
-                aria-pressed={chartMode}
-                title="Draw a chart from this chat's captured tables instead of writing an answer"
-                onClick={() => setChartMode((on) => !on)}
-              >
-                <ChartColumn aria-hidden />
-                Chart
-              </Button>
-            )}
-          </div>
+          <ComposerOptions
+            kind={scope.kind}
+            models={chatModels.data}
+            modelId={modelId}
+            onPickModel={pickModel}
+            skills={skills.data}
+            skillId={skillId}
+            onSkillPick={setSkillPick}
+            eachPaper={eachPaper}
+            setEachPaper={setEachPaper}
+            chartMode={chartMode}
+            setChartMode={setChartMode}
+          />
         )}
         {scope.kind === 'workspace' && !eachPaper && looksPerPaper(question) && (
           <Button
@@ -447,59 +287,15 @@ export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onSo
             <span> · Ask each paper</span>
           </Button>
         )}
-        {askChart.error && (
-          <p role="alert" className="px-1 text-xs text-destructive">
-            {askChart.error.message === 'no_datasets'
-              ? `No captured tables in this ${scope.kind} yet. Capture one in a paper's Data tab first.`
-              : askChart.error.message}
-          </p>
-        )}
-        {voice.problem && (
-          <p role="alert" className="px-1 text-xs text-destructive">
-            {voice.problem}
-          </p>
-        )}
-        {chatModels.isError && <p className="px-1 text-xs text-muted-foreground">Couldn’t load your models; using the default.</p>}
-        {noModels && (
-          <a href={settingsHref} className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground">
-            <Settings2 aria-hidden className="size-3.5" />
-            Set up a model
-          </a>
-        )}
-        <p id="chat-question-hint" className="px-1 text-xs text-muted-foreground">
-          {unavailable ?? (noModels ? 'Set up a model to chat.' : 'Enter to send · Shift+Enter for a new line')}
-        </p>
+        <ComposerAlerts
+          kind={scope.kind}
+          chartError={askChart.error}
+          voiceProblem={voice.problem}
+          modelsError={chatModels.isError}
+          noModels={noModels}
+          unavailable={unavailable}
+        />
       </form>
-    </div>
-  )
-}
-
-type EmptyChatProps = { kind: ChatScope['kind']; disabled: boolean; onAsk: (question: string) => void }
-
-function EmptyChat({ kind, disabled, onAsk }: EmptyChatProps) {
-  const { heading, help, starters } = EMPTY_CHAT[kind]
-  return (
-    <div className="m-auto flex w-full max-w-xs flex-col items-center gap-3 py-6 text-center">
-      <span className="flex size-10 items-center justify-center rounded-full bg-provenance-llm-surface text-provenance-llm">
-        <MessageSquareText aria-hidden className="size-5" />
-      </span>
-      <h2 className="font-heading text-xl font-semibold">{heading}</h2>
-      <p className="text-sm text-muted-foreground">{help}</p>
-      <ul aria-label="Suggested questions" className="mt-1 flex w-full flex-col gap-2">
-        {starters.map((starter) => (
-          <li key={starter}>
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn('h-auto w-full justify-start bg-glass-strong py-1.5 text-left whitespace-normal', pressable)}
-              disabled={disabled}
-              onClick={() => onAsk(starter)}
-            >
-              {starter}
-            </Button>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }
