@@ -2,7 +2,7 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import { ExternalLink, LoaderCircle, Plus } from 'lucide-react'
 import { useMemo, useRef, type CSSProperties } from 'react'
 import type { Reference, References } from '@/entities'
-import { api } from '@/services/api'
+import { paperFileUrl } from '@/services/api'
 import { useImportReference } from '@/services/queries'
 import { delayedIn, popIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
@@ -75,7 +75,7 @@ function MatchedBody({ view }: { view: Matched }) {
     },
   })
   // A library paper saved without its PDF has no first page to draw.
-  const fileUrl = reference.paper_id && reference.paper_has_pdf !== false ? api.paperFileUrl(reference.paper_id) : null
+  const fileUrl = reference.paper_id && reference.paper_has_pdf !== false ? paperFileUrl(reference.paper_id) : null
 
   // A keyboard user's focus was on Add to library; once that add turns this card into In library, that button
   // unmounts and focus would otherwise fall to <body>. No state, no effect: a ref carries the "just added" flag, and

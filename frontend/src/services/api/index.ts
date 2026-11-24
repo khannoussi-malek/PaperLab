@@ -39,3 +39,6 @@ export { AlreadyInLibraryError, ApiError, errorDetail, isConflict, NoFreePdfErro
 export { ALREADY_SAVED } from './chat'
 export { citationsUrl, zoteroZipUrl } from './citations'
 export { notesZipUrl, packageRecordUrl, packageUrl } from './workspaces'
+export { evidenceCardsCsvUrl } from './evidence'
+export { manuscriptDiagramPdfUrl, manuscriptExportUrl, manuscriptPdfUrl, reviewReportHref } from './manuscripts'
+export { paperFileUrl } from './papers'

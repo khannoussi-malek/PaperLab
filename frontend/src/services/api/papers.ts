@@ -1,6 +1,8 @@
 import { request, sendJson } from '../http'
 import type { Brief, Chunk, EmbeddingProgress, FoundPdf, LensId, Paper, PaperEvent, PaperSections, PaperUpdate, SectionRoleIn } from '@/entities'
 
+export const paperFileUrl = (id: string) => `/api/papers/${id}/file`
+
 export const papersApi = {
   listPapers: () => request<Paper[]>('/api/papers'),
   getPaper: (id: string) => request<Paper>(`/api/papers/${id}`),
@@ -22,7 +24,6 @@ export const papersApi = {
   /** Looks for a free copy and attaches it. Rejects NoFreePdfError (what was tried), AlreadyInLibraryError, or already_has_pdf. */
   findPaperPdf: (id: string) => request<Paper>(`/api/papers/${id}/find-pdf`, { method: 'POST' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
-  paperFileUrl: (id: string) => `/api/papers/${id}/file`,
   embeddingProgress: (paperId: string) => request<EmbeddingProgress>(`/api/papers/${paperId}/embedding-progress`),
   listChunks: (paperId: string, page: number) => request<Chunk[]>(`/api/papers/${paperId}/chunks?page=${page}`),
   /** Every chunk of a paper, in reading order: the lens fades and jumps need their rects. */

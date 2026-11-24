@@ -1,6 +1,6 @@
 import { BookOpen, LoaderCircle, TriangleAlert } from 'lucide-react'
 import type { Paper } from '@/entities'
-import { api } from '@/services/api'
+import { paperFileUrl } from '@/services/api'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { readerHref } from '@/router/route'
@@ -52,7 +52,7 @@ function PagePlaceholder({ paper }: { paper: Paper }) {
 
 export function PaperPreview({ paper }: { paper: Paper }) {
   const facts = [paper.year, paper.venue, pageCountLabel(paper.page_count)].filter(Boolean)
-  const fileUrl = api.paperFileUrl(paper.id)
+  const fileUrl = paperFileUrl(paper.id)
 
   return (
     <aside

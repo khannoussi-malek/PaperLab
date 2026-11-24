@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download } from 'lucide-react'
 import type { EvidenceCardRow } from '@/entities'
-import { api } from '@/services/api'
+import { evidenceCardsCsvUrl } from '@/services/api'
 import { useEvidenceCards, useGenerateEvidenceCard, useGenerateEvidenceCards, useWorkspacePapers } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { LoadError } from '@/features/library/ErrorAlert'
@@ -42,7 +42,7 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
           Generate cards
         </Button>
         <Button variant="outline" asChild>
-          <a href={api.evidenceCardsCsvUrl(workspaceId)} download>
+          <a href={evidenceCardsCsvUrl(workspaceId)} download>
             <Download aria-hidden /> Export CSV
           </a>
         </Button>

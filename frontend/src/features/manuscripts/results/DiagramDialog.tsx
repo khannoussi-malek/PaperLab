@@ -1,7 +1,7 @@
 import { Loader2, TriangleAlert } from 'lucide-react'
 import { lazy, Suspense, useRef, useState } from 'react'
 import type { Diagram } from '@/entities'
-import { api } from '@/services/api'
+import { manuscriptDiagramPdfUrl } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -181,7 +181,7 @@ function Draft({ row, manuscriptId, live, busy, tab, onTab, code, dirty, onCode,
           </TabsList>
           <TabsContent value="preview" forceMount className="data-[state=inactive]:hidden">
             {drawn
-              ? <Suspense fallback={<p className="text-sm text-muted-foreground">Loading the preview…</p>}><DiagramPreview url={api.manuscriptDiagramPdfUrl(manuscriptId, row.id, row.updated_at)} /></Suspense>
+              ? <Suspense fallback={<p className="text-sm text-muted-foreground">Loading the preview…</p>}><DiagramPreview url={manuscriptDiagramPdfUrl(manuscriptId, row.id, row.updated_at)} /></Suspense>
               : <p className="text-sm text-muted-foreground">{live ? 'The preview shows once it is drawn.' : 'No preview: the diagram didn\'t compile.'}</p>}
           </TabsContent>
           <TabsContent value="latex" className="space-y-2">

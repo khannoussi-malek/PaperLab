@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ChevronLeft, ChevronRight, Minus, Plus, Scan } from 'lucide-react'
-import { api } from '@/services/api'
+import { paperFileUrl } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { PdfPage } from '../reader/PdfPage'
 import { ZOOM_STEPS } from '../reader/zoom'
@@ -27,7 +27,7 @@ type Props = {
 }
 
 function Column({ paperId, target, onInteract, onPage, initialPage }: Omit<Props, 'active'>) {
-  const { doc, error } = useCachedPdf(api.paperFileUrl(paperId))
+  const { doc, error } = useCachedPdf(paperFileUrl(paperId))
   const total = doc?.numPages ?? 0
   const [zoom, setZoom] = useState(FIT_INDEX)
   const [page, setPage] = useState(initialPage ?? 1)
