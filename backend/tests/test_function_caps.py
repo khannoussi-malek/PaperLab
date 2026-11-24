@@ -59,7 +59,6 @@ WIDE: dict[str, int] = {
     "app/core/workspaces/briefs.py::save_brief": 7,
     "app/core/workspaces/package_import.py::_papers_into": 7,
     "app/core/workspaces/package_screening_import.py::_place_hit": 7,
-    "app/core/workspaces/triage.py::decide": 11,
     "app/scripts/backfill_biblio.py::run": 7,
 }
 DEEP: dict[str, int] = {

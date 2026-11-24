@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api", tags=["triage"])
 async def decide(paper_id: uuid.UUID, payload: TriageDecisionIn, session: SessionDep, response: Response):
     """A desk decision. 201; 200 with the first result when `client_id` was already used (a retry). 404 unknown
     paper, 410 merged, 422 reason_required | unknown_reason (with allowed) | note_too_long."""
-    paper, event, replayed = await triage.decide(session, paper_id, **payload.model_dump())
+    paper, event, replayed = await triage.decide(session, paper_id, triage.Decision(**payload.model_dump()))
     if replayed:
         response.status_code = 200
     return {"paper": paper, "event": event}

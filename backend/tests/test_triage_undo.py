@@ -33,7 +33,9 @@ async def count(session, paper_id) -> int:
 
 async def desk(session, paper, pile, sid=None, **kw):
     reason = "off_topic" if pile == "not_relevant" else None
-    _, event, _ = await triage.decide(session, paper.id, pile=pile, session_id=sid or uuid.uuid4(), reason=reason, **kw)
+    _, event, _ = await triage.decide(
+        session, paper.id, triage.Decision(pile=pile, session_id=sid or uuid.uuid4(), reason=reason, **kw)
+    )
     return event
 
 
