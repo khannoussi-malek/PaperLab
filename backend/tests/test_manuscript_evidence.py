@@ -13,11 +13,20 @@ from app.core.manuscripts import manuscript_evidence as ev
 from app.core.manuscripts import manuscript_papers, manuscripts
 from app.core.platform import queue
 from app.core.workspaces import workspaces
+from app.db import engine
 from app.domain.errors import Conflict, InvalidInput
 from app.models import Chunk, LLMModel, LLMOutput, Manuscript, ManuscriptEvidence, Paper, Workspace
 from app.workers import manuscript_evidence as worker
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture(autouse=True)
+async def fresh_app_pool():
+    """Two tests here use the app's own SessionLocal. Its pool keeps connections bound to the test's event loop, and
+    every test gets a new loop, so the pool is emptied after each test or the next one fails on a closed loop."""
+    yield
+    await engine.dispose()
 SENTENCE = "Sleep helps memory."
 
 
