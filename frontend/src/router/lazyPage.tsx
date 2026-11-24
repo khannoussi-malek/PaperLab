@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, type ComponentType } from 'react'
-import { AppShell } from '@/components/AppShell'
+import { AppShell } from '@/layout/AppShell'
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary'
 
 /**

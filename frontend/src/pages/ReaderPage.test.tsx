@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { ChatSource, Paper } from '@/entities'
 import { PaperMergedError } from '@/services/api'
-import { ReaderPage } from './ReaderPage'
+import { ReaderPage } from '@/pages/ReaderPage'
 
 type NotesProps = {
   draft: { quotedText: string } | null
@@ -22,7 +22,7 @@ const state = vi.hoisted(() => ({
   reading: null as null | { onWriteNote?: (kind: string) => void; onOpenNote?: (id: string) => void },
 }))
 const getDocument = vi.hoisted(() => vi.fn(() => ({ promise: new Promise(() => {}), destroy: vi.fn() })))
-vi.mock('./pdfjs', () => ({ getDocument, pdfWorker: null }))
+vi.mock('@/features/reader/pdfjs', () => ({ getDocument, pdfWorker: null }))
 vi.mock('@/services/queries', () => {
   const idle = { data: undefined, error: null }
   return {
@@ -36,37 +36,37 @@ vi.mock('@/services/queries', () => {
   }
 })
 // The side panel's tabs and the toolbar's menus have their own tests; here they only need to mount.
-vi.mock('../chat/ChatPanel', () => ({
+vi.mock('@/features/chat/ChatPanel', () => ({
   ChatPanel: ({ onCite }: { onCite: (s: ChatSource) => void }) => {
     state.onCite = onCite
     return null
   },
 }))
-vi.mock('../notes/NotesPanel', () => ({
+vi.mock('@/features/notes/NotesPanel', () => ({
   NotesPanel: (props: NotesProps) => {
     state.notes = props
     return null
   },
 }))
-vi.mock('../data/DataPanel', () => ({ DataPanel: () => null }))
-vi.mock('../lenses/queries', () => ({
+vi.mock('@/features/data/DataPanel', () => ({ DataPanel: () => null }))
+vi.mock('@/features/lenses/queries', () => ({
   usePaperSections: () => ({ data: undefined }),
   usePaperChunks: () => ({ data: undefined }),
 }))
-vi.mock('../lenses/LensPanel', () => ({ LensPanel: () => null }))
-vi.mock('../discovery/SimilarTab', () => ({ SimilarTab: () => null }))
-vi.mock('../references/ReferencesTab', () => ({ ReferencesTab: () => null }))
-vi.mock('../evidence/EvidencePanel', () => ({ EvidencePanel: () => null }))
-vi.mock('../library/GetPdfActions', () => ({ GetPdfActions: () => null }))
-vi.mock('./PaperTagChips', () => ({ PaperTagChips: () => null }))
-vi.mock('./ReadingContextBanner', () => ({ ReadingContextBanner: () => null }))
-vi.mock('../reading/ReadingControl', () => ({
+vi.mock('@/features/lenses/LensPanel', () => ({ LensPanel: () => null }))
+vi.mock('@/features/discovery/SimilarTab', () => ({ SimilarTab: () => null }))
+vi.mock('@/features/references/ReferencesTab', () => ({ ReferencesTab: () => null }))
+vi.mock('@/features/evidence/EvidencePanel', () => ({ EvidencePanel: () => null }))
+vi.mock('@/features/library/GetPdfActions', () => ({ GetPdfActions: () => null }))
+vi.mock('@/features/reader/PaperTagChips', () => ({ PaperTagChips: () => null }))
+vi.mock('@/features/reader/ReadingContextBanner', () => ({ ReadingContextBanner: () => null }))
+vi.mock('@/features/reading/ReadingControl', () => ({
   ReadingControl: (props: NonNullable<typeof state.reading>) => {
     state.reading = props
     return null
   },
 }))
-vi.mock('./PaperDetailsDialog', () => ({ PaperDetailsDialog: () => null }))
+vi.mock('@/features/reader/PaperDetailsDialog', () => ({ PaperDetailsDialog: () => null }))
 vi.mock('@/components/mode-toggle', () => ({ ModeToggle: () => null }))
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 

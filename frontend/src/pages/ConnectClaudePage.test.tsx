@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { ConnectClaudePage } from './ConnectClaudePage'
+import { ConnectClaudePage } from '@/pages/ConnectClaudePage'
 
 const tools = Array.from({ length: 60 }, (_, i) => `tool_${i}`)
 const mutate = vi.fn()
@@ -17,14 +17,14 @@ vi.mock('@/services/queries', () => ({
     mutate,
   }),
 }))
-vi.mock('./ClaudeActivity', () => ({
+vi.mock('@/features/connect-claude/ClaudeActivity', () => ({
   ClaudeActivity: () => (
     <section aria-labelledby="activity-test-heading">
       <h2 id="activity-test-heading">What Claude did</h2>
     </section>
   ),
 }))
-vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div> }))
+vi.mock('@/layout/AppShell', () => ({ AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div> }))
 vi.mock('@/features/settings/desktop', () => ({ useDesktop: () => null }))
 
 afterEach(cleanup)

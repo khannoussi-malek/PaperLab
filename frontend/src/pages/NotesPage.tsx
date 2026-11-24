@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import type { Note } from '@/entities'
 import { useAllNotes, useNoteMutations, usePapers } from '@/services/queries'
-import { AppShell } from '@/components/AppShell'
+import { AppShell } from '@/layout/AppShell'
 import { LoadingState } from '@/components/LoadingState'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { plural } from '@/features/charts/chartMeta'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { notesHref } from '@/router/route'
-import { ImportMarkdownButton } from './ImportMarkdownButton'
-import { NoteCard } from './NoteCard'
-import { emptyNotesText, filterOptions, filterValue, routeFilter } from './notesPage'
+import { ImportMarkdownButton } from '@/features/notes/ImportMarkdownButton'
+import { NoteCard } from '@/features/notes/NoteCard'
+import { emptyNotesText, filterOptions, filterValue, routeFilter } from '@/features/notes/notesPage'
 
 /** Every note, filtered by paper or "No paper" (D98): where a note on no paper is read, edited and relinked. */
 export function NotesPage({ paper }: { paper: string | null }) {

@@ -1,4 +1,4 @@
-import { PersistentRail } from './components/PersistentRail'
+import { PersistentRail } from '@/layout/PersistentRail'
 import { useKeptCount } from './features/manuscripts/keptTexts'
 import { useLeaveWarning } from './features/manuscripts/useLeaveWarning'
 import { downloadAnnouncement } from './features/settings/searchModel'

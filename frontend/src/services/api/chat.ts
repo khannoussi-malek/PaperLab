@@ -1,6 +1,9 @@
 import { ApiError, request, sendJson } from '../http'
 import type { AnswerCheck, AnswerProvenance, ChatAnswer, ChatScope, Note } from '@/entities'
 
+/** The server's code for a suggested note that was saved already. */
+export const ALREADY_SAVED = 'already_saved'
+
 const chatUrl = (scope: ChatScope) =>
   scope.kind === 'hit'
     ? `/api/workspaces/${scope.workspaceId}/search/hits/${scope.id}/chat`

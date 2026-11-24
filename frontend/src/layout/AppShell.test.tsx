@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { AppShell } from './AppShell'
+import { AppShell } from '@/layout/AppShell'
 
 vi.mock('@/features/workspaces/WorkspaceSidebar', () => ({ WorkspaceSidebar: () => null }))
 vi.mock('@/components/mode-toggle', () => ({ ModeToggle: () => null }))

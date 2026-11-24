@@ -1,4 +1,5 @@
 import type { ChatSource, SavedNote } from '@/entities'
+import { ALREADY_SAVED } from '@/services/api'
 import { noteHref, notesHref } from '@/router/route'
 import { promoteSelection, type PromoteDraft } from './promote'
 
@@ -13,7 +14,6 @@ export type NotePart =
 
 const OPEN = ':::note'
 const CLOSE = ':::'
-export const ALREADY_SAVED = 'already_saved'
 
 /**
  * An answer cut the way backend `notes.note_blocks` reads it (same rules, tested on the same noteBlocks.cases.json): a

@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ALREADY_SAVED } from '@/features/chat/noteBlocks'
-import { api } from '@/services/api'
+import { ALREADY_SAVED, api } from '@/services/api'
 import type { ChatScope } from '@/entities'
 import { keys } from './core'
 import { refreshNotes } from './notes'

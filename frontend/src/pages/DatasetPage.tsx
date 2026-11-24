@@ -1,16 +1,16 @@
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useDataset, useDatasetMutations } from '@/services/queries'
-import { AppShell, shellTitle } from '@/components/AppShell'
+import { AppShell, shellTitle } from '@/layout/AppShell'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { chartsHref, newChartHref, readerHref, type CellFocus } from '@/router/route'
 import { cn } from '@/lib/utils'
-import { ChartsUsingDataDialog } from './ChartsUsingDataDialog'
-import { datasetSource } from './datasetMeta'
-import { chartsLosingColumns, fromDataset, type Grid, toGridIn } from './gridModel'
-import { GridEditor } from './GridEditor'
+import { ChartsUsingDataDialog } from '@/features/data/ChartsUsingDataDialog'
+import { datasetSource } from '@/features/data/datasetMeta'
+import { chartsLosingColumns, fromDataset, type Grid, toGridIn } from '@/features/data/gridModel'
+import { GridEditor } from '@/features/data/GridEditor'
 
 type Props = { datasetId: string; focus: CellFocus | null }
 

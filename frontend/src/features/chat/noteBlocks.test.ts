@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatSource } from '@/entities'
 import cases from './noteBlocks.cases.json'
+import { ALREADY_SAVED } from '@/services/api'
 import {
-  ALREADY_SAVED,
   partSelection,
   promoteInPart,
   savedNoteHref,

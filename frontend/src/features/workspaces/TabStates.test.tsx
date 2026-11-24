@@ -29,3 +29,8 @@ test('the step-1 action links to the workspace search tab', () => {
   render(<GoToSearchAction workspaceId="w1" />)
   expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toHaveAttribute('href', '#/workspaces/w1?tab=search')
 })
+
+test("the skeleton shows LoadingState's retry line once the app fails to answer", () => {
+  render(<TabSkeleton label="Loading notes" failureCount={2} />)
+  expect(screen.getByText("The app didn't answer; trying again…")).toBeInTheDocument()
+})

@@ -1,6 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 import { useReferencePage, useRefreshReferences, useWorkspace, useWorkspaces } from '@/services/queries'
-import { AppShell } from '@/components/AppShell'
+import { AppShell } from '@/layout/AppShell'
 import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -8,8 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { readerHref, referencesHref } from '@/router/route'
 import { cn } from '@/lib/utils'
-import { ReferenceRow } from './ReferenceRow'
-import { coverageLine, sectionEmptyText } from './referencesMeta'
+import { ReferenceRow } from '@/features/references/ReferenceRow'
+import { coverageLine, sectionEmptyText } from '@/features/references/referencesMeta'
 
 function UnfetchedRow({ paper }: { paper: { id: string; title: string; state: string; error: string | null } }) {
   const refresh = useRefreshReferences(paper.id)

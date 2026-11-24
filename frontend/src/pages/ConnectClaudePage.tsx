@@ -1,15 +1,15 @@
 import { Check, CircleCheck, Copy } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useCheckMcpServer, useMcpSetup } from '@/services/queries'
-import { AppShell } from '@/components/AppShell'
+import { AppShell } from '@/layout/AppShell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ClaudeActivity } from './ClaudeActivity'
+import { ClaudeActivity } from '@/features/connect-claude/ClaudeActivity'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { useDesktop } from '@/features/settings/desktop'
 import { copyText } from '@/lib/clipboard'
-import { claudeCodeCommand, configFileHint, desktopConfig, detectOs, LAUNCHER, type SetupOs } from './connectClaude'
+import { claudeCodeCommand, configFileHint, desktopConfig, detectOs, LAUNCHER, type SetupOs } from '@/features/connect-claude/connectClaude'
 
 const COPIED_MS = 2000
 const SYSTEMS: { os: SetupOs; label: string }[] = [

@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 import { lazyPage } from './lazyPage'
 
-vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <div data-testid="shell">{children}</div> }))
+vi.mock('@/layout/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <div data-testid="shell">{children}</div> }))
 
 const Hello = ({ name }: { name: string }) => <p>hello {name}</p>
 
