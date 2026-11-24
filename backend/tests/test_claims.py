@@ -52,7 +52,9 @@ async def test_full_text_verdict_with_a_kept_quote_and_its_provenance_row(sessio
     llm = Scripted(reply(passage=1, quote=TWO_LINE_QUOTE))
     # the quote is in the second paragraph's chunk; point at whichever passage number holds it
     text_of = {c.id: c.text for c in chunks}
-    check = await claims.verify_claim(session, "Models cite their passages.", paper_id=paper.id, llm=llm)
+    check = await claims.verify_claim(
+        session, "Models cite their passages.", claims.ClaimTarget(paper_id=paper.id), llm=llm
+    )
 
     assert check.verdict == "supported" and check.evidence_level == "full_text" and check.confidence == "high"
     assert quotes.fold(TWO_LINE_QUOTE) in quotes.fold(text_of[check.quote_chunk_id])
@@ -71,12 +73,14 @@ async def test_a_quote_naming_the_wrong_passage_is_kept_and_the_passage_correcte
     other = next(c for c in chunks if c.id != holder.id)
 
     async def shown_number(chunk):
-        probe = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("not_addressed")))
+        probe = await claims.verify_claim(
+            session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("not_addressed"))
+        )
         return [p["chunk_id"] for p in probe.passages].index(chunk.id) + 1
 
     wrong = await shown_number(other)
     check = await claims.verify_claim(
-        session, "c", paper_id=paper.id, llm=Scripted(reply(passage=wrong, quote=TWO_LINE_QUOTE))
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply(passage=wrong, quote=TWO_LINE_QUOTE))
     )
     # passages come back in distance order, which the random vectors may reshuffle between calls: assert on the chunk
     assert check.quote == TWO_LINE_QUOTE and check.quote_chunk_id == holder.id and check.confidence == "high"
@@ -85,7 +89,7 @@ async def test_a_quote_naming_the_wrong_passage_is_kept_and_the_passage_correcte
 async def test_an_out_of_range_passage_number_still_finds_the_quote(session, tmp_path):
     paper, chunks, _ = await chunked_paper(session, tmp_path)
     check = await claims.verify_claim(
-        session, "c", paper_id=paper.id, llm=Scripted(reply(passage=99, quote=TWO_LINE_QUOTE))
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply(passage=99, quote=TWO_LINE_QUOTE))
     )
     assert check.quote == TWO_LINE_QUOTE and check.confidence == "high"
 
@@ -93,7 +97,10 @@ async def test_an_out_of_range_passage_number_still_finds_the_quote(session, tmp
 async def test_an_invented_quote_is_dropped_and_the_check_is_low(session, tmp_path):
     paper, _, _ = await chunked_paper(session, tmp_path)
     check = await claims.verify_claim(
-        session, "c", paper_id=paper.id, llm=Scripted(reply(quote="a sentence the paper never wrote"))
+        session,
+        "c",
+        claims.ClaimTarget(paper_id=paper.id),
+        llm=Scripted(reply(quote="a sentence the paper never wrote")),
     )
     assert check.verdict == "supported" and check.quote is None and check.quote_chunk_id is None
     assert check.confidence == "low"
@@ -101,15 +108,21 @@ async def test_an_invented_quote_is_dropped_and_the_check_is_low(session, tmp_pa
 
 async def test_supported_with_no_quote_is_low_but_not_addressed_with_none_is_high(session, tmp_path):
     paper, _, _ = await chunked_paper(session, tmp_path)
-    supported = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("supported")))
-    silent = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("not_addressed")))
+    supported = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("supported"))
+    )
+    silent = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("not_addressed"))
+    )
     assert (supported.confidence, silent.confidence) == ("low", "high")
 
 
 async def test_abstract_only_uses_the_abstract_as_the_one_passage(session):
     paper = await bare_paper(session, abstract=ABSTRACT)
     llm = Scripted(reply(passage=1, quote="Outputs were 23% less diverse"))
-    check = await claims.verify_claim(session, "LLMs make writing less diverse.", paper_id=paper.id, llm=llm)
+    check = await claims.verify_claim(
+        session, "LLMs make writing less diverse.", claims.ClaimTarget(paper_id=paper.id), llm=llm
+    )
     assert check.evidence_level == "abstract_only" and check.quote == "Outputs were 23% less diverse"
     assert check.passages == [{"chunk_id": None, "page": None, "section": None}] and check.quote_page is None
     assert check.confidence == "high" and "[1] (abstract)" in llm.prompts[0]
@@ -119,7 +132,7 @@ async def test_abstract_only_uses_the_abstract_as_the_one_passage(session):
 async def test_metadata_only_cannot_verify_without_asking_the_model_or_writing_a_row(session):
     paper = await bare_paper(session)
     llm = Scripted()
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=llm)
+    check = await claims.verify_claim(session, "c", claims.ClaimTarget(paper_id=paper.id), llm=llm)
     assert (check.verdict, check.reason, check.evidence_level) == ("cannot_verify", "no_text", "metadata_only")
     assert llm.prompts == [] and check.output_id is None
     assert await session.scalar(select(LLMOutput).where(LLMOutput.paper_id == paper.id)) is None
@@ -127,23 +140,27 @@ async def test_metadata_only_cannot_verify_without_asking_the_model_or_writing_a
 
 async def test_doi_lookup_ignores_case_and_a_missing_doi_is_not_in_the_library(session):
     paper = await bare_paper(session, abstract=ABSTRACT, doi="10.1234/claims-abc")
-    check = await claims.verify_claim(session, "c", doi=" 10.1234/CLAIMS-ABC ", llm=Scripted(reply("not_addressed")))
+    check = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(doi=" 10.1234/CLAIMS-ABC "), llm=Scripted(reply("not_addressed"))
+    )
     assert check.paper_id == paper.id
     with pytest.raises(NotFound, match="paper_not_in_library") as missing:
-        await claims.verify_claim(session, "c", doi="10.1234/nope", llm=Scripted())
+        await claims.verify_claim(session, "c", claims.ClaimTarget(doi="10.1234/nope"), llm=Scripted())
     assert missing.value.details["doi"] == "10.1234/nope"
 
 
 @pytest.mark.parametrize("scope", [{}, {"paper_id": "x", "doi": "10.1/x"}])
 async def test_both_or_neither_of_paper_and_doi_is_claim_scope(session, scope):
     with pytest.raises(InvalidInput) as raised:
-        await claims.verify_claim(session, "c", llm=Scripted(), **scope)
+        await claims.verify_claim(session, "c", claims.ClaimTarget(**scope), llm=Scripted())
     assert str(raised.value) == "claim_scope"
 
 
 async def test_two_invalid_replies_cannot_verify_with_model_error_and_a_row_saying_so(session):
     paper = await bare_paper(session, abstract=ABSTRACT)
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted("nope", "still nope"))
+    check = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted("nope", "still nope")
+    )
     assert (check.verdict, check.reason) == ("cannot_verify", "model_error")
     assert json.loads((await session.get(LLMOutput, check.output_id)).content)["reason"] == "model_error"
 
@@ -156,7 +173,7 @@ async def test_every_returned_quote_is_a_fold_substring_of_a_returned_passage(se
     for attempt in attempts:
         for passage in (None, 1, 2, 7):
             check = await claims.verify_claim(
-                session, "c", paper_id=paper.id, llm=Scripted(reply(passage=passage, quote=attempt))
+                session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply(passage=passage, quote=attempt))
             )
             if check.quote is not None:
                 kept = notes.fold(check.quote).replace("- ", "-")
@@ -186,7 +203,9 @@ async def saved(session, paper_id, note_id):
 async def test_save_on_full_text_writes_an_anchored_ai_note_on_the_check_row(session, tmp_path):
     paper, _, _ = await chunked_paper(session, tmp_path)
     llm = Scripted(reply(passage=1, quote=TWO_LINE_QUOTE, reason="It cites them."))
-    check = await claims.verify_claim(session, "Models cite.", paper_id=paper.id, llm=llm, save=True)
+    check = await claims.verify_claim(
+        session, "Models cite.", claims.ClaimTarget(paper_id=paper.id), llm=llm, save=True
+    )
     note = await saved(session, paper.id, check.note_id)
     assert (note.provenance, note.source_id, note.paper_ids) == ("llm", check.output_id, [paper.id])
     assert note.body == "Claim: Models cite.\nVerdict: Supported. It cites them."
@@ -196,7 +215,7 @@ async def test_save_on_full_text_writes_an_anchored_ai_note_on_the_check_row(ses
 async def test_save_on_abstract_only_or_an_unlocatable_quote_is_an_unanchored_note(session, tmp_path):
     paper = await bare_paper(session, abstract=ABSTRACT)
     llm = Scripted(reply("partially_supported", passage=1, quote="Outputs were 23% less diverse"))
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=llm, save=True)
+    check = await claims.verify_claim(session, "c", claims.ClaimTarget(paper_id=paper.id), llm=llm, save=True)
     note = await saved(session, paper.id, check.note_id)
     assert note.anchors == [] and note.paper_ids == [paper.id] and note.body.startswith("Claim: c\nVerdict: Partly")
     full, _, _ = await chunked_paper(session, tmp_path)
@@ -206,8 +225,12 @@ async def test_save_on_abstract_only_or_an_unlocatable_quote_is_an_unanchored_no
 
 async def test_cannot_verify_and_unsaved_checks_write_no_note(session):
     paper = await bare_paper(session, abstract=ABSTRACT)
-    bad = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted("x", "y"), save=True)
-    kept = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("not_addressed")))
+    bad = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted("x", "y"), save=True
+    )
+    kept = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("not_addressed"))
+    )
     assert (bad.verdict, bad.note_id, kept.note_id) == ("cannot_verify", None, None)
 
 
@@ -215,31 +238,35 @@ async def test_an_ingesting_paper_without_an_abstract_is_not_ready_and_a_failed_
     llm = Scripted()
     ingesting = await bare_paper(session)
     ingesting.status = PaperStatus.EMBEDDING
-    check = await claims.verify_claim(session, "c", paper_id=ingesting.id, llm=llm)
+    check = await claims.verify_claim(session, "c", claims.ClaimTarget(paper_id=ingesting.id), llm=llm)
     assert (check.verdict, check.reason, check.paper_status) == ("cannot_verify", "not_ready", "embedding")
     failed = await bare_paper(session)
     failed.status = PaperStatus.FAILED
-    check = await claims.verify_claim(session, "c", paper_id=failed.id, llm=llm)
+    check = await claims.verify_claim(session, "c", claims.ClaimTarget(paper_id=failed.id), llm=llm)
     assert (check.reason, check.paper_status) == ("no_text", None) and llm.prompts == []
 
 
 async def test_an_ingesting_paper_with_an_abstract_is_checked_on_the_abstract(session):
     paper = await bare_paper(session, abstract=ABSTRACT)
     paper.status = PaperStatus.CHUNKING
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("not_addressed")))
+    check = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("not_addressed"))
+    )
     assert check.evidence_level == "abstract_only" and check.paper_status is None
 
 
 async def test_doi_lookup_accepts_a_url_and_a_bracketed_doi(session):
     paper = await bare_paper(session, abstract=ABSTRACT, doi="10.1016/0140-6736(93)00000-x")
     for given in ("https://doi.org/10.1016/0140-6736(93)00000-X.", "doi:10.1016/0140-6736(93)00000-X"):
-        check = await claims.verify_claim(session, "c", doi=given, llm=Scripted(reply("not_addressed")))
+        check = await claims.verify_claim(
+            session, "c", claims.ClaimTarget(doi=given), llm=Scripted(reply("not_addressed"))
+        )
         assert check.paper_id == paper.id
 
 
 async def test_a_blank_claim_is_empty_claim(session):
     with pytest.raises(InvalidInput) as raised:
-        await claims.verify_claim(session, "  ", paper_id=uuid.uuid4(), llm=Scripted())
+        await claims.verify_claim(session, "  ", claims.ClaimTarget(paper_id=uuid.uuid4()), llm=Scripted())
     assert str(raised.value) == "empty_claim"
 
 
@@ -270,7 +297,7 @@ async def test_a_passage_starting_mid_sentence_shows_the_sentence_start_from_the
     monkeypatch.setattr(retrieval, "retrieve", only(second))
     llm = Scripted(reply("supported", 1, "the LLMs produce assessments that correlate positively"))
     claim = "No LLM judge correlated positively with experts."
-    check = await claims.verify_claim(session, claim, paper_id=paper.id, llm=llm)
+    check = await claims.verify_claim(session, claim, claims.ClaimTarget(paper_id=paper.id), llm=llm)
     assert "On average, we find that none of" in llm.prompts[0]
     assert llm.prompts[0].index("none of") < llm.prompts[0].index("the LLMs produce")
     assert check.quote == "the LLMs produce assessments that correlate positively"  # still a quote from its own passage
@@ -282,7 +309,9 @@ async def test_a_passage_starting_a_sentence_gets_no_context(session, monkeypatc
     )
     monkeypatch.setattr(retrieval, "retrieve", only(second))
     llm = Scripted(reply("not_addressed"))
-    await claims.verify_claim(session, "No LLM judge correlated positively.", paper_id=paper.id, llm=llm)
+    await claims.verify_claim(
+        session, "No LLM judge correlated positively.", claims.ClaimTarget(paper_id=paper.id), llm=llm
+    )
     assert "This sentence ends here" not in llm.prompts[0]
 
 
@@ -290,7 +319,7 @@ async def test_a_previous_chunk_that_ends_cleanly_adds_no_context(session, monke
     paper, second = await split_sentence_paper(session, "It ends cleanly.", "and then a lower-case start follows here.")
     monkeypatch.setattr(retrieval, "retrieve", only(second))
     llm = Scripted(reply("not_addressed"))
-    await claims.verify_claim(session, "Something holds here.", paper_id=paper.id, llm=llm)
+    await claims.verify_claim(session, "Something holds here.", claims.ClaimTarget(paper_id=paper.id), llm=llm)
     assert "It ends cleanly" not in llm.prompts[0]
 
 
@@ -304,7 +333,9 @@ SPANNING = "effective is often substituted with the terms useful, valuable, adap
 async def test_a_quote_running_from_the_lead_into_its_passage_is_kept(session, monkeypatch):
     paper, last = await chunks_on_pages(session, (2, LEAD_P2), (3, LEAD_P3))
     monkeypatch.setattr(retrieval, "retrieve", only(last))
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("supported", 1, SPANNING)))
+    check = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("supported", 1, SPANNING))
+    )
     assert check.quote == SPANNING and check.quote_page == 3 and check.confidence == "high"
     assert (check.quote_page_start, check.quote_page) == (2, 3)
 
@@ -313,14 +344,18 @@ async def test_a_quote_inside_its_passage_has_no_start_page(session, monkeypatch
     paper, last = await chunks_on_pages(session, (2, LEAD_P2), (3, LEAD_P3))
     monkeypatch.setattr(retrieval, "retrieve", only(last))
     quote = "adaptive, fitting, or appropriate (Abraham, 2018)"
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("supported", 1, quote)))
+    check = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("supported", 1, quote))
+    )
     assert check.quote == quote and check.quote_page_start is None
 
 
 async def test_a_spanning_quote_with_its_lead_on_the_same_page_has_no_start_page(session, monkeypatch):
     paper, last = await chunks_on_pages(session, (3, LEAD_P2), (3, LEAD_P3))
     monkeypatch.setattr(retrieval, "retrieve", only(last))
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("supported", 1, SPANNING)))
+    check = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("supported", 1, SPANNING))
+    )
     assert check.quote == SPANNING and check.quote_page == 3 and check.quote_page_start is None
 
 
@@ -328,7 +363,9 @@ async def test_a_quote_wholly_inside_the_lead_is_still_dropped(session, monkeypa
     paper, last = await chunks_on_pages(session, (2, LEAD_P2), (3, LEAD_P3))
     monkeypatch.setattr(retrieval, "retrieve", only(last))
     quote = "effective is often substituted with the terms useful, valuable"
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=Scripted(reply("supported", 1, quote)))
+    check = await claims.verify_claim(
+        session, "c", claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("supported", 1, quote))
+    )
     assert check.quote is None and check.confidence == "low"
 
 
@@ -336,7 +373,7 @@ async def test_saving_a_spanning_quote_writes_the_note(session, monkeypatch):
     paper, last = await chunks_on_pages(session, (2, LEAD_P2), (3, LEAD_P3))
     monkeypatch.setattr(retrieval, "retrieve", only(last))
     llm = Scripted(reply("supported", 1, SPANNING, reason="Defined."))
-    check = await claims.verify_claim(session, "c", paper_id=paper.id, llm=llm, save=True)
+    check = await claims.verify_claim(session, "c", claims.ClaimTarget(paper_id=paper.id), llm=llm, save=True)
     note = await saved(session, paper.id, check.note_id)
     assert note.body == "Claim: c\nVerdict: Supported. Defined."
     assert note.anchors == []
@@ -364,7 +401,9 @@ async def test_a_sidebar_between_the_halves_does_not_hide_the_sentence_start(ses
     )
     monkeypatch.setattr(retrieval, "retrieve", only(last))
     llm = Scripted(reply("not_addressed"))
-    await claims.verify_claim(session, "No LLM judge correlated positively.", paper_id=paper.id, llm=llm)
+    await claims.verify_claim(
+        session, "No LLM judge correlated positively.", claims.ClaimTarget(paper_id=paper.id), llm=llm
+    )
     assert "On average, we find that none of" in llm.prompts[0]
     assert llm.prompts[0].index("none of") < llm.prompts[0].index("the LLMs produce")
 
@@ -378,7 +417,9 @@ async def test_a_dangling_chunk_just_before_wins_over_the_previous_page(session,
     )
     monkeypatch.setattr(retrieval, "retrieve", only(last))
     llm = Scripted(reply("not_addressed"))
-    await claims.verify_claim(session, "No LLM judge correlated positively.", paper_id=paper.id, llm=llm)
+    await claims.verify_claim(
+        session, "No LLM judge correlated positively.", claims.ClaimTarget(paper_id=paper.id), llm=llm
+    )
     assert "Results show that most of the models fail and then the" in llm.prompts[0]
     assert "On average, we find" not in llm.prompts[0]
 
@@ -404,7 +445,9 @@ async def test_a_claim_with_figures_also_ranks_by_words_and_marks_never_reach_th
     calls = []
     monkeypatch.setattr(retrieval, "retrieve", spy(calls))
     for claim in ("Top-1 rose from 28.95 to 65.32 [this paper].", "Dense [other source] retrieval helps [this paper]."):
-        await claims.verify_claim(session, claim, paper_id=paper.id, llm=Scripted(reply("not_addressed")))
+        await claims.verify_claim(
+            session, claim, claims.ClaimTarget(paper_id=paper.id), llm=Scripted(reply("not_addressed"))
+        )
     assert calls == [("Top-1 rose from 28.95 to 65.32.", True), ("Dense retrieval helps.", None)]
 
 

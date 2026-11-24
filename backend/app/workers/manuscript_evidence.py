@@ -79,7 +79,9 @@ async def verify_manuscript_evidence(ctx: dict, mid: str, sentence_hash: str) ->
             async with SessionLocal() as session:
                 if ctx.get("llm") is None:  # the ask's yes, against the default as it is now
                     await llm_connections.refuse_unconfirmed_remote(session, confirmed)
-                check = await claims.verify_claim(session, sentence, paper_id=paper_id, llm=ctx.get("llm"))
+                check = await claims.verify_claim(
+                    session, sentence, claims.ClaimTarget(paper_id=paper_id), llm=ctx.get("llm")
+                )
                 await session.commit()  # the llm_outputs row
         except DomainError as exc:
             await _write(row_id, stamp, status="failed", reason=error_code(exc))

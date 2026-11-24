@@ -187,14 +187,11 @@ async def set_saved_search_enabled(
 
 
 async def verify_claim(
-    session: AsyncSession, claim: str, paper_id: uuid.UUID | None = None, doi: str | None = None,
-    quoted_text: str | None = None, save: bool = False, allow_remote: bool = False,
+    session: AsyncSession, claim: str, target: claims.ClaimTarget, save: bool = False, allow_remote: bool = False
 ) -> claims.ClaimCheck:
     await _refuse_remote(session, allow_remote)
     try:
-        return await claims.verify_claim(
-            session, claim, paper_id=paper_id, doi=doi, quoted_text=quoted_text, save=save
-        )
+        return await claims.verify_claim(session, claim, target, save=save)
     except (LLMError, LLMUnavailable) as exc:
         raise Conflict("model_unavailable", detail=str(exc)) from exc
 

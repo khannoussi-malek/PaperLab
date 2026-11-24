@@ -79,7 +79,7 @@ async def _judge(kind: str, paper_id, plain: str, confirmed: bool, llm) -> dict:
         if llm is None:
             await llm_connections.refuse_unconfirmed_remote(session, confirmed)
         if kind == "cited":
-            check = await claims.verify_claim(session, plain, paper_id=paper_id, llm=llm)
+            check = await claims.verify_claim(session, plain, claims.ClaimTarget(paper_id=paper_id), llm=llm)
             await session.commit()  # the llm_outputs row
             return {
                 "status": "done",

@@ -198,15 +198,19 @@ def _pick_quote(reply: _Reply, texts: list[str], leads: list[str]) -> tuple[str 
     return None, None, True, False
 
 
-async def _write_output(session, paper, claim, content: dict, passages, model, connection_name) -> uuid.UUID:
+def _model(llm) -> str:
+    return getattr(llm, "model", "unknown")
+
+
+async def _write_output(session, paper, claim, content: dict, passages, llm) -> uuid.UUID:
     output = LLMOutput(
         paper_id=paper.id,
         kind=OUTPUT_KIND,
         question=claim,
         content=json.dumps(content),
         source_chunks=[p["chunk_id"] for p in passages if p["chunk_id"] is not None],
-        model=model,
-        connection_name=connection_name,
+        model=_model(llm),
+        connection_name=getattr(llm, "connection_name", None),
         prompt_version=CLAIM_PROMPT_VERSION,
     )
     session.add(output)
@@ -250,15 +254,53 @@ def _answered_by(llm) -> str:
     return getattr(llm, "last_model", None) or getattr(llm, "model", "unknown")
 
 
+@dataclass(frozen=True)
+class ClaimTarget:
+    """The paper a claim is checked against (by id or by DOI, exactly one), and the passage it quotes, if any."""
+
+    paper_id: uuid.UUID | None = None
+    doi: str | None = None
+    quoted_text: str | None = None
+
+
+def _unverifiable(base: dict, paper) -> ClaimCheck:
+    """A metadata-only paper: nothing to check against."""
+    if paper.status not in (PaperStatus.READY, PaperStatus.FAILED):  # still ingesting: text may come
+        return ClaimCheck(**base, verdict="cannot_verify", reason="not_ready", paper_status=str(paper.status))
+    return ClaimCheck(**base, verdict="cannot_verify", reason="no_text")
+
+
+def _checked(base: dict, reply: "_Reply", found: tuple, llm) -> ClaimCheck:
+    """The model's verdict, with the quote it gave placed on its passage (low confidence when unplaced)."""
+    _, passages, texts, leads, lead_pages = found
+    quote, index, dropped, spans = _pick_quote(reply, texts, leads)
+    chosen = passages[index] if index is not None else {}
+    start = lead_pages[index] if spans and lead_pages[index] != chosen.get("page") else None
+    low = dropped or (reply.verdict in CHECKED and quote is None)
+    return ClaimCheck(
+        **base,
+        verdict=reply.verdict,
+        reason=reply.reason.strip(),
+        quote=quote,
+        quote_page=chosen.get("page"),
+        quote_page_start=start,
+        quote_section=chosen.get("section"),
+        quote_chunk_id=chosen.get("chunk_id"),
+        passages=passages,
+        confidence="low" if low else "high",
+        model=_model(llm),
+        answered_by=_answered_by(llm),
+    )
+
+
+async def _save_note(session: AsyncSession, paper, claim: str, check: ClaimCheck, output_id: uuid.UUID) -> uuid.UUID:
+    body = f"Claim: {claim}\nVerdict: {VERDICT_WORDS[check.verdict]}. {check.reason}"
+    note = await ai_notes.create_ai_note(session, paper.id, body, output_id, check.quote)
+    return note.id
+
+
 async def verify_claim(
-    session: AsyncSession,
-    claim: str,
-    *,
-    paper_id: uuid.UUID | None = None,
-    doi: str | None = None,
-    quoted_text: str | None = None,
-    llm=None,
-    save: bool = False,
+    session: AsyncSession, claim: str, target: ClaimTarget = ClaimTarget(), *, llm=None, save: bool = False
 ) -> ClaimCheck:
     """Checks `claim` against one library paper (by id or by DOI, exactly one) and returns the verdict.
 
@@ -270,48 +312,26 @@ async def verify_claim(
     """
     if not claim.strip():
         raise InvalidInput("empty_claim", detail="The claim is empty.")
-    paper = await _paper(session, paper_id, doi)
-    level, passages, texts, leads, lead_pages = await _passages(session, paper, claim, quoted_text)
+    paper = await _paper(session, target.paper_id, target.doi)
+    found = await _passages(session, paper, claim, target.quoted_text)
+    level, passages, texts, leads, _ = found
     base = {"claim": claim, "paper_id": paper.id, "paper_title": paper.title, "evidence_level": level}
     if level == "metadata_only":
-        if paper.status not in (PaperStatus.READY, PaperStatus.FAILED):  # still ingesting: text may come
-            return ClaimCheck(**base, verdict="cannot_verify", reason="not_ready", paper_status=str(paper.status))
-        return ClaimCheck(**base, verdict="cannot_verify", reason="no_text")
+        return _unverifiable(base, paper)
     llm = await _llm(session, llm)
-    model = getattr(llm, "model", "unknown")
-    connection_name = getattr(llm, "connection_name", None)
-    reply = await _ask_with_retry(llm, SYSTEM_PROMPT, _prompt(claim, quoted_text, texts, passages, leads), _Reply)
+    prompt = _prompt(claim, target.quoted_text, texts, passages, leads)
+    reply = await _ask_with_retry(llm, SYSTEM_PROMPT, prompt, _Reply)
     if reply is None:
         content = {"verdict": "cannot_verify", "reason": "model_error"}
-        output_id = await _write_output(session, paper, claim, content, passages, model, connection_name)
+        output_id = await _write_output(session, paper, claim, content, passages, llm)
         return ClaimCheck(
-            **base, verdict="cannot_verify", reason="model_error", passages=passages, model=model, output_id=output_id
+            **base, verdict="cannot_verify", reason="model_error", passages=passages, model=_model(llm),
+            output_id=output_id,
         )
-    quote, index, dropped, spans = _pick_quote(reply, texts, leads)
-    chosen = passages[index] if index is not None else {}
-    start = lead_pages[index] if spans and lead_pages[index] != chosen.get("page") else None
-    low = dropped or (reply.verdict in CHECKED and quote is None)
-    check = ClaimCheck(
-        **base,
-        verdict=reply.verdict,
-        reason=reply.reason.strip(),
-        quote=quote,
-        quote_page=chosen.get("page"),
-        quote_page_start=start,
-        quote_section=chosen.get("section"),
-        quote_chunk_id=chosen.get("chunk_id"),
-        passages=passages,
-        confidence="low" if low else "high",
-        model=model,
-        answered_by=_answered_by(llm),
-    )
+    check = _checked(base, reply, found, llm)
     content = {k: str(v) if isinstance(v, uuid.UUID) else v for k, v in asdict(check).items() if k != "passages"}
-    output_id = await _write_output(session, paper, claim, content, passages, model, connection_name)
-    note_id = None
-    if save:
-        body = f"Claim: {claim}\nVerdict: {VERDICT_WORDS[check.verdict]}. {check.reason}"
-        note = await ai_notes.create_ai_note(session, paper.id, body, output_id, quote)
-        note_id = note.id
+    output_id = await _write_output(session, paper, claim, content, passages, llm)
+    note_id = await _save_note(session, paper, claim, check, output_id) if save else None
     return ClaimCheck(**{**asdict(check), "output_id": output_id, "note_id": note_id})
 
 
