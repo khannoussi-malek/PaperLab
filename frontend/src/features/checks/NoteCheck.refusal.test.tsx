@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, expect, test, vi } from 'vitest'
-import { api, type Check, type Note } from '@/api/client'
+import type { Check, Note } from '@/entities'
+import { api } from '@/services/api'
 import { NoteCheck } from './NoteCheck'
 
 // The real useCheckStream: NoteCheck.test.tsx mocks it, which hid a refusal that left no way to check again.
 let checks: Check[] = []
 vi.mock('./queries', () => ({ usePaperChecks: () => ({ data: checks }), useInvalidateChecks: () => vi.fn() }))
 vi.mock('@/features/settings/DownloadSearchModel', () => ({ DownloadSearchModel: () => <div>download-model</div> }))
-vi.mock('@/api/queries', () => ({
+vi.mock('@/services/queries', () => ({
   useChatModels: () => ({ data: [{ id: 'm1', is_default: true }] }),
   useReindexPaper: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, error: null }),
   useEmbeddingStatus: () => ({ data: undefined }),

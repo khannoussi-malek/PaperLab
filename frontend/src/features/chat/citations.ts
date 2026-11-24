@@ -1,4 +1,4 @@
-import type { ChatSource, NoteSource } from '@/api/client'
+import type { ChatSource, NoteSource } from '@/entities'
 import { PROVENANCE_LABEL } from '@/features/notes/ProvenanceBadge'
 import { chunkHref, pageHref, readerHref } from '@/lib/route'
 

@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, ApiError, type CheckItem } from '@/api/client'
+import type { CheckItem } from '@/entities'
+import { api, ApiError } from '@/services/api'
 import { ReviewPanel } from './ReviewPanel'
 
 const item = (o: Partial<CheckItem>): CheckItem => ({ id: 'i1', kind: 'cited', file: 'main.tex', sentence_hash: 'h1', sentence: 'Models help a lot.', ord: 0, cite_key: 'lewis2020', paper_id: 'p1', paper_title: 'Lewis', status: 'done', verdict: 'supported', reason: 'It says so.', quote: 'models help', page: 4, chunk_id: 'c1', output_id: null, model: 'm', ai: true, ...o })

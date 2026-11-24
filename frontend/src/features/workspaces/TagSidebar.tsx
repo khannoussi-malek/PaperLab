@@ -1,5 +1,5 @@
 import { useId, useRef } from 'react'
-import { useTags } from '@/api/queries'
+import { useTags } from '@/services/queries'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'

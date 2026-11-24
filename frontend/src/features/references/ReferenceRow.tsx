@@ -1,6 +1,6 @@
 import { Bookmark, BookmarkCheck, ExternalLink, LoaderCircle, Plus } from 'lucide-react'
-import type { Reference, ReferencesDirection } from '@/api/client'
-import { useImportReference, useQueueReference } from '@/api/queries'
+import type { Reference, ReferencesDirection } from '@/entities'
+import { useImportReference, useQueueReference } from '@/services/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { citationsLabel, pageLink } from '@/features/discovery/candidateMeta'

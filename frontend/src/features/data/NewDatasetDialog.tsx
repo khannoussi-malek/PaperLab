@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useDatasetMutations } from '@/api/queries'
+import { useDatasetMutations } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

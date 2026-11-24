@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type Chart, type ChartSummary, type ResolvedData } from '@/api/client'
+import type { Chart, ChartSummary, ResolvedData } from '@/entities'
+import { api } from '@/services/api'
 import { ChartDialog } from './ChartDialog'
 import type { InsertResult } from './useInsertBlock'
 

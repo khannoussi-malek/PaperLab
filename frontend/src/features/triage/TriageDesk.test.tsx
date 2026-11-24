@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
-import { api, type Paper } from '@/api/client'
+import type { Paper } from '@/entities'
+import { api } from '@/services/api'
 vi.mock('./pdfCache', () => ({ useCachedPdf: () => ({ doc: null, error: null }), retainOnly: vi.fn(), prefetchPdf: vi.fn() }))
 vi.mock('../reader/PdfPage', () => ({ PdfPage: () => null }))
 import { TriageDesk } from './TriageDesk'
@@ -93,7 +94,7 @@ it('Esc leaves once and removes the session', () => {
 })
 
 it('prefetches the sections of the next two cards only', async () => {
-  const { api } = await import('@/api/client')
+  const { api } = await import('@/services/api')
   const spy = vi.spyOn(api, 'paperSections').mockResolvedValue({ sections: [], lenses: [] } as never)
   setup([...base, mk('4', 'Fourth')])
   await vi.waitFor(() => expect(spy.mock.calls.map((c) => c[0]).sort()).toEqual(['1', '2', '3']))

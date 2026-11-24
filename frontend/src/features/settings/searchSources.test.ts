@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LLMConnection, SearchSource } from '@/api/client'
+import type { LLMConnection, SearchSource } from '@/entities'
 import {
   costWords,
   eligibleConnections,

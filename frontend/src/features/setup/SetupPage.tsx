@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useFinishSetup } from '@/api/queries'
+import { useFinishSetup } from '@/services/queries'
 import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

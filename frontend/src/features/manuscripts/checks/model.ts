@@ -1,4 +1,4 @@
-import type { CheckFinding, CheckRunResult } from '@/api/client'
+import type { CheckFinding, CheckRunResult } from '@/entities'
 
 export type Severity = CheckFinding['severity']
 const CAP = 20

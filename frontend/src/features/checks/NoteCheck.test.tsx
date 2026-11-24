@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeAll, beforeEach, expect, test, vi } from 'vitest'
-import type { Check, Note } from '@/api/client'
+import type { Check, Note } from '@/entities'
 import { NoteCheck } from './NoteCheck'
 
 const run = vi.fn()
@@ -11,7 +11,7 @@ let checks: Check[] = []
 vi.mock('./useCheckStream', () => ({ useCheckStream: () => ({ stream, run, cancelConfirm }) }))
 vi.mock('./queries', () => ({ usePaperChecks: () => ({ data: checks }) }))
 vi.mock('@/features/settings/DownloadSearchModel', () => ({ DownloadSearchModel: () => <div>download-model</div> }))
-vi.mock('@/api/queries', () => ({ useReindexPaper: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, error: null }), useEmbeddingStatus: () => ({ data: undefined }) }))
+vi.mock('@/services/queries', () => ({ useReindexPaper: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, error: null }), useEmbeddingStatus: () => ({ data: undefined }) }))
 
 const note = (over: Partial<Note> = {}) => ({ id: 'n1', kind: 'summary', provenance: 'human', ...over }) as Note
 const idle = { status: 'idle', host: null, sources: null, lines: [], problem: null }

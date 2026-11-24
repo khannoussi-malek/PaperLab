@@ -1,4 +1,4 @@
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import type { ChartTheme } from '@/features/charts/palette'
 
 /** The switcher's tabs, in the spec's order and words (§4). */

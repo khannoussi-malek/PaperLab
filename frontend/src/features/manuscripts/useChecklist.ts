@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { useUpdateManuscript } from '@/api/queries'
+import { useUpdateManuscript } from '@/services/queries'
 
 export type Ticks = Record<string, unknown>
 type Store = { shown: Ticks; server: Ticks; pending: number; listeners: Set<() => void> }

@@ -1,18 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  api,
-  errorDetail,
-  type ChatDoneEvent,
-  type ChatErrorEvent,
-  type ChatScope,
-  type ChatSource,
-  type ChatSourcesEvent,
-  type HitMetaEvent,
-  type ChatTokenEvent,
-  type NoteSource,
-  type ReadingEvent,
-} from '@/api/client'
-import { useInvalidateChatHistory, useInvalidateModels } from '@/api/queries'
+import type { ChatDoneEvent, ChatErrorEvent, ChatScope, ChatSource, ChatSourcesEvent, HitMetaEvent, ChatTokenEvent, NoteSource, ReadingEvent } from '@/entities'
+import { api, errorDetail } from '@/services/api'
+import { useInvalidateChatHistory, useInvalidateModels } from '@/services/queries'
 import { appendSegments, citationSplitter, type Segment } from './citations'
 import { refusal, type ChatProblem } from './refusals'
 import { readSse } from './sse'

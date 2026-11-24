@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { Note } from '@/api/client'
-import { usePapers, useSetNotePapers } from '@/api/queries'
+import type { Note } from '@/entities'
+import { usePapers, useSetNotePapers } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

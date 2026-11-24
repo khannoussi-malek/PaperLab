@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useSnowballNext, useWorkspace } from '@/api/queries'
+import { useSnowballNext, useWorkspace } from '@/services/queries'
 import { AppShell, shellTitle } from '@/components/AppShell'
 import { glass } from '@/components/glass'
 import { delayedIn, fadeIn } from '@/components/motion'

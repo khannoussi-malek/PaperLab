@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, ApiError, type ReviewState } from '@/api/client'
+import type { ReviewState } from '@/entities'
+import { api, ApiError } from '@/services/api'
 import { remoteHost } from './reviewModel'
 
 const POLL_MS = 2000

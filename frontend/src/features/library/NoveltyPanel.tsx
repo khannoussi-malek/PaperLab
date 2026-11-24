@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { useNovelty } from '@/api/queries'
+import { useNovelty } from '@/services/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'

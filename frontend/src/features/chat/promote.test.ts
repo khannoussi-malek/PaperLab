@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ChatSource } from '@/api/client'
+import type { ChatSource } from '@/entities'
 import { promoteErrorMessage, promoteSelection } from './promote'
 
 const source = (label: string): ChatSource => ({

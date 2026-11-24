@@ -1,4 +1,4 @@
-import { usePaperTagGroups } from '@/api/queries'
+import { usePaperTagGroups } from '@/services/queries'
 import { Badge } from '@/components/ui/badge'
 import { workspaceHref } from '@/lib/route'
 

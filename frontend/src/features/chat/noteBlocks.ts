@@ -1,4 +1,4 @@
-import type { ChatSource, SavedNote } from '@/api/client'
+import type { ChatSource, SavedNote } from '@/entities'
 import { noteHref, notesHref } from '@/lib/route'
 import { promoteSelection, type PromoteDraft } from './promote'
 

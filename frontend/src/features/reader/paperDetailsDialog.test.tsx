@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { PaperDetailsDialog } from './PaperDetailsDialog'
 
 // jsdom has no ResizeObserver, which the Radix dialog's form controls ask for

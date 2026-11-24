@@ -1,6 +1,6 @@
 import { Sparkles } from 'lucide-react'
 import { useMemo } from 'react'
-import type { Brief, ChatSource, Lens } from '@/api/client'
+import type { Brief, ChatSource, Lens } from '@/entities'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { describeSource, splitCitations } from '@/features/chat/citations'

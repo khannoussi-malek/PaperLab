@@ -1,4 +1,4 @@
-import type { ChatSource } from '@/api/client'
+import type { ChatSource } from '@/entities'
 import { MARKER } from './citations'
 
 /** What "Save as note" sends. No chunk ids means there is nothing to anchor on, so saving is disabled. */

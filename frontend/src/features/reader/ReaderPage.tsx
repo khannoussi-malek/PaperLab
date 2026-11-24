@@ -1,15 +1,8 @@
 import { Table2, Undo2 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { api, PaperMergedError, type Note, type NoteKind } from '@/api/client'
-import {
-  useChunksOnPage,
-  useDataset,
-  useNoteMutations,
-  useNotes,
-  usePaper,
-  usePaperDatasets,
-  useReferences,
-} from '@/api/queries'
+import type { Note, NoteKind } from '@/entities'
+import { api, PaperMergedError } from '@/services/api'
+import { useChunksOnPage, useDataset, useNoteMutations, useNotes, usePaper, usePaperDatasets, useReferences } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { fadeIn, popIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'

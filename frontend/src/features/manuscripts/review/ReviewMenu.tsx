@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react'
-import type { ReviewRun } from '@/api/client'
+import type { ReviewRun } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { isLive } from './reviewModel'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'

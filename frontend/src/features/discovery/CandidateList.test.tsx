@@ -2,8 +2,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { Candidate } from "@/api/client";
-import { AlreadyInLibraryError, NoFreePdfError, api } from "@/api/client";
+import type { Candidate } from '@/entities'
+import { AlreadyInLibraryError, NoFreePdfError, api } from '@/services/api'
 import { CandidateList } from "./CandidateList";
 
 const found = {

@@ -4,7 +4,7 @@ import { expect, test, vi } from 'vitest'
 import { WorkspaceNotes } from './WorkspaceNotes'
 
 const state = vi.hoisted(() => ({ notes: [] as unknown[] | undefined, error: null as Error | null, refetch: vi.fn() }))
-vi.mock('@/api/queries', () => ({
+vi.mock('@/services/queries', () => ({
   useWorkspaceNotes: () => ({ data: state.notes, error: state.error, refetch: state.refetch }),
   useWorkspacePapers: () => ({ data: [], error: null }),
 }))

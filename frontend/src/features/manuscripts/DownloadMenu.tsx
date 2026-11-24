@@ -1,5 +1,6 @@
 import { ChevronDown, Download } from 'lucide-react'
-import { api, type ManuscriptDetail } from '@/api/client'
+import type { ManuscriptDetail } from '@/entities'
+import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 

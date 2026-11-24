@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import type { ChatSource, Paper } from '@/api/client'
-import { PaperMergedError } from '@/api/client'
+import type { ChatSource, Paper } from '@/entities'
+import { PaperMergedError } from '@/services/api'
 import { ReaderPage } from './ReaderPage'
 
 type NotesProps = {
@@ -23,7 +23,7 @@ const state = vi.hoisted(() => ({
 }))
 const getDocument = vi.hoisted(() => vi.fn(() => ({ promise: new Promise(() => {}), destroy: vi.fn() })))
 vi.mock('./pdfjs', () => ({ getDocument, pdfWorker: null }))
-vi.mock('@/api/queries', () => {
+vi.mock('@/services/queries', () => {
   const idle = { data: undefined, error: null }
   return {
     usePaper: () => ({ data: state.paper, error: state.paperError, isError: state.paperError !== null }),

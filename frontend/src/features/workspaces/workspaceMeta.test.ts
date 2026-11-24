@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Note, Paper } from '@/api/client'
+import type { Note, Paper } from '@/entities'
 import { countsLine, notesByPaper } from './workspaceMeta'
 
 const paper = (id: string, title: string) => ({ id, title }) as Paper

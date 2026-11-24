@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
-import { AlreadyInLibraryError, NoFreePdfError, api } from '@/api/client'
+import { AlreadyInLibraryError, NoFreePdfError, api } from '@/services/api'
 import { GetPdfActions } from './GetPdfActions'
 
 function setup() {

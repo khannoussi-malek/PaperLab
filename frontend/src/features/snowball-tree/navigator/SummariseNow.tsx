@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ApiError, isConflict } from '@/api/client'
-import { useSuggestHit } from '@/api/queries'
+import { ApiError, isConflict } from '@/services/api'
+import { useSuggestHit } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { RemoteConfirmDialog } from '@/features/manuscripts/review/RemoteConfirm'
 

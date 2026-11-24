@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import type { CheckItem } from '@/api/client'
+import type { CheckItem } from '@/entities'
 import { citeThisEdit, reasonCopy, REASON_CODES, itemTone, marksFor, VERDICT_LABEL } from './reviewModel'
 
 const item = (o: Partial<CheckItem>): CheckItem => ({ id: 'i', kind: 'cited', sentence_hash: 'h1', verdict: 'supported', ...o }) as CheckItem

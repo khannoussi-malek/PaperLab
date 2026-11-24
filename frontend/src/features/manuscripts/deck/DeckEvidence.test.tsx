@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { api, ApiError, type CitablePaper, type EvidenceFound, type EvidenceRow } from '@/api/client'
+import type { CitablePaper, EvidenceFound, EvidenceRow } from '@/entities'
+import { api, ApiError } from '@/services/api'
 
 vi.mock('../../graph/hands/HandsMode', () => ({ default: () => null }))
 import { DeckColumn } from './DeckColumn'

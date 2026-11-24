@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  api,
-  errorDetail,
-  type ChatDoneEvent,
-  type ChatErrorEvent,
-  type ChatSource,
-  type ChatSourcesEvent,
-  type ChatTokenEvent,
-  type LensId,
-} from '@/api/client'
+import type { ChatDoneEvent, ChatErrorEvent, ChatSource, ChatSourcesEvent, ChatTokenEvent, LensId } from '@/entities'
+import { api, errorDetail } from '@/services/api'
 import { useInvalidateBriefs } from './queries'
 import { appendSegments, citationSplitter, type Segment } from '@/features/chat/citations'
 import type { ChatProblem } from '@/features/chat/refusals'

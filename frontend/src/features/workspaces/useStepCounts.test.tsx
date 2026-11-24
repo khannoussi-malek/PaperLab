@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { renderHook } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
+import * as queries from '@/services/queries'
 import { useStepCounts } from './useStepCounts'
 
 const hit = (extra: object = {}) => ({ id: 'h', ...extra })

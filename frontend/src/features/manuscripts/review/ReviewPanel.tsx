@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import type { CheckItem, SectionReview } from '@/api/client'
+import type { CheckItem, SectionReview } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { chunkHref } from '@/lib/route'
 import { RemoteConfirmDialog } from './RemoteConfirm'

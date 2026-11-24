@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, type MockInstance, test, vi } from 'vitest'
-import { api, type ImportPreview, type ImportProgress, type ImportResult } from '@/api/client'
+import type { ImportPreview, ImportProgress, ImportResult } from '@/entities'
+import { api } from '@/services/api'
 import * as clipboard from '@/lib/clipboard'
 import { ImportFromZoteroButton } from './ImportFromZoteroButton'
 

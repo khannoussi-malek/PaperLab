@@ -1,4 +1,4 @@
-import type { NotesImportResult, Paper } from '@/api/client'
+import type { NotesImportResult, Paper } from '@/entities'
 
 /** The filter select's value for every note: a select item can't have an empty value. */
 export const ALL_NOTES = 'all'

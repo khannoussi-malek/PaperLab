@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import { ApiError } from '@/api/client'
-import { useAllDatasets, useDataset, usePinPaper } from '@/api/queries'
+import { ApiError } from '@/services/api'
+import { useAllDatasets, useDataset, usePinPaper } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'

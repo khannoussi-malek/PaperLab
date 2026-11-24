@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { sileo } from 'sileo'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, ApiError, type CheckFinding, type DoiCheckResult } from '@/api/client'
+import type { CheckFinding, DoiCheckResult } from '@/entities'
+import { api, ApiError } from '@/services/api'
 import { DoiCheck } from './DoiCheck'
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

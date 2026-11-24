@@ -1,0 +1,15 @@
+import type { components } from './schema'
+
+export type Paper = components['schemas']['PaperOut']
+export type PaperUpdate = components['schemas']['PaperUpdate']
+export type Chunk = components['schemas']['ChunkOut']
+export type EmbeddingProgress = components['schemas']['EmbeddingProgressOut']
+export type PaperEvent = components['schemas']['PaperEventOut']
+export type FoundPdf = components['schemas']['FoundPdfOut']
+export type PaperSections = components['schemas']['SectionsOut']
+export type Section = components['schemas']['SectionOut']
+export type Lens = components['schemas']['LensOut']
+export type LensId = Lens['id']
+export type Role = Section['role']
+export type SectionRoleIn = components['schemas']['SectionRoleIn']
+export type Brief = components['schemas']['BriefOut']

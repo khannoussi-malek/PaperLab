@@ -3,7 +3,8 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, ApiError, type ReviewState } from '@/api/client'
+import type { ReviewState } from '@/entities'
+import { api, ApiError } from '@/services/api'
 import { reviewAllStartError, reviewStartError, useCiteProposals, useReview } from './useReview'
 
 const wrapper = ({ children }: { children: ReactNode }) => (

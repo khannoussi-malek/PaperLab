@@ -1,4 +1,4 @@
-import type { Skill } from '@/api/client'
+import type { Skill } from '@/entities'
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { settingsHref } from '@/lib/route'
 

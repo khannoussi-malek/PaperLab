@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useContinueSearchRun, useSearchRuns } from '@/api/queries'
+import { useContinueSearchRun, useSearchRuns } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { Term } from '@/features/workspaces/Term'
 import { cn } from '@/lib/utils'

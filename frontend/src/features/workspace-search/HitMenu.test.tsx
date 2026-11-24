@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
-import type { Hit } from '@/api/client'
+import type { Hit } from '@/entities'
 import { HitContextMenu, HitMenu } from './HitMenu'
 
 const hit: Hit = {

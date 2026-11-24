@@ -1,4 +1,5 @@
-import { isConflict, type ApiError, type CheckItem, type ReviewSentence } from '@/api/client'
+import type { CheckItem, ReviewSentence } from '@/entities'
+import { isConflict, type ApiError } from '@/services/api'
 
 export const VERDICT_LABEL: Record<string, string> = {
   supported: 'Supports',

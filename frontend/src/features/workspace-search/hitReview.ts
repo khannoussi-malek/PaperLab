@@ -1,4 +1,4 @@
-import type { Hit } from '@/api/client'
+import type { Hit } from '@/entities'
 import { SOURCE_NAMES } from '@/features/discovery/candidateMeta'
 
 /** Stage-1 exclusion reasons, shared by HitMenu's "Not relevant…" submenu and HitPreview's reason select —

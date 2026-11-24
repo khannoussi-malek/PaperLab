@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Lens, Section } from '@/api/client'
+import type { Lens, Section } from '@/entities'
 import { NO_PDF_LENS_TEXT, briefProblem, emptyLensText, fadeRects, lensNotice, lensRuns, lensSections, stepRun } from './lenses'
 
 type Rect = [number, number, number, number]

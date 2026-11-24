@@ -1,4 +1,4 @@
-import type { ResolvedCell, ResolvedData, ResolvedDataset } from '@/api/client'
+import type { ResolvedCell, ResolvedData, ResolvedDataset } from '@/entities'
 import { datasetHref, regionHref } from '@/lib/route'
 import type { PdfRect } from '../reader/coords'
 

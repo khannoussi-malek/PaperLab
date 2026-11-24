@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ApiError } from '@/api/client'
+import { ApiError } from '@/services/api'
 import { createWriter } from './triageWriter'
 
 const deferred = <T,>() => {

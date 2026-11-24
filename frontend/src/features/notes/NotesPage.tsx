@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { Note } from '@/api/client'
-import { useAllNotes, useNoteMutations, usePapers } from '@/api/queries'
+import type { Note } from '@/entities'
+import { useAllNotes, useNoteMutations, usePapers } from '@/services/queries'
 import { AppShell } from '@/components/AppShell'
 import { LoadingState } from '@/components/LoadingState'
 import { Label } from '@/components/ui/label'

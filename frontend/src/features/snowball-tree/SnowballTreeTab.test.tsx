@@ -2,8 +2,9 @@
 import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
-import { api, type ProvenanceOut } from '@/api/client'
+import * as queries from '@/services/queries'
+import type { ProvenanceOut } from '@/entities'
+import { api } from '@/services/api'
 import { SnowballTreeTab } from './SnowballTreeTab'
 
 vi.stubGlobal('ResizeObserver', class { cb: any; constructor(cb: any) { this.cb = cb } observe() { this.cb([{ contentRect: { width: 800, height: 600 } }]) } disconnect() {} })

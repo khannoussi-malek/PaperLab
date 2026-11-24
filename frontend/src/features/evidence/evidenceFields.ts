@@ -1,4 +1,4 @@
-import type { EvidenceCard, EvidenceChange } from '@/api/client'
+import type { EvidenceCard, EvidenceChange } from '@/entities'
 
 export type FieldKey = 'research_question' | 'design' | 'sample' | 'findings' | 'effect_sizes' | 'limitations'
 

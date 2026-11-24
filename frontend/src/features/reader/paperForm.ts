@@ -1,4 +1,4 @@
-import type { Paper, PaperUpdate } from '@/api/client'
+import type { Paper, PaperUpdate } from '@/entities'
 
 export type SourceType = NonNullable<Paper['source_type']>
 export type PeerReviewed = Paper['peer_reviewed']

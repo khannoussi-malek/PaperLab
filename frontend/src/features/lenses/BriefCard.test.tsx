@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { Brief, Lens } from '@/api/client'
+import type { Brief, Lens } from '@/entities'
 import { BriefCard } from './BriefCard'
 import type { BriefStream } from './useBriefStream'
 

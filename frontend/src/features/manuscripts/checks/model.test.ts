@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { CheckFinding, CheckRunResult } from '@/api/client'
+import type { CheckFinding, CheckRunResult } from '@/entities'
 import { badgeOf, groupByCheck, rowsOf, summary } from './model'
 
 const f = (check: string, severity: CheckFinding['severity'], line = 1): CheckFinding =>

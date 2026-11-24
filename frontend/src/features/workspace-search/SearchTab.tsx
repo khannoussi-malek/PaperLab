@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { useContinueSearchRun, useSearchRun, useSearchRuns, useStartSearchRun, useStopSearchRun, type SavedSearchInbox } from '@/api/queries'
+import type { SavedSearchInbox } from '@/entities'
+import { useContinueSearchRun, useSearchRun, useSearchRuns, useStartSearchRun, useStopSearchRun } from '@/services/queries'
 import { Scene3D } from '@/features/scene3d/Scene3D'
 import type { SearchRunStatus } from '@/features/scene3d/poses'
 import { SearchControls } from './SearchControls'

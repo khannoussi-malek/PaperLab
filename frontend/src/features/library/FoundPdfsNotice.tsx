@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { keys, useFoundPdfs, useMarkFoundPdfsSeen } from '@/api/queries'
+import { keys, useFoundPdfs, useMarkFoundPdfsSeen } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'

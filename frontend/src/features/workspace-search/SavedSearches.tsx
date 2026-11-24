@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useDeleteSavedSearch, useMarkSavedSearchSeen, useRunSavedSearchNow, useSavedSearches, useUpdateSavedSearch, type SavedSearchInbox } from '@/api/queries'
-import type { SavedSearch } from '@/api/client'
+import type { SavedSearchInbox, SavedSearch } from '@/entities'
+import { useDeleteSavedSearch, useMarkSavedSearchSeen, useRunSavedSearchNow, useSavedSearches, useUpdateSavedSearch } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'

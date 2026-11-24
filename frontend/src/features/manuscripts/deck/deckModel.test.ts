@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CitablePaper, Note } from '@/api/client'
-import type { EvidenceRow } from '@/api/client'
+import type { CitablePaper, Note, EvidenceRow } from '@/entities'
 import { bookItems, cardTransform, citedKeys, deckOrder, insertText, NO_MODEL, turnDirection, verdictView, windowAround } from './deckModel'
 import { latexEscape } from './latex'
 

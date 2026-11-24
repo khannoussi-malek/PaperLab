@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { DeskStage } from './DeskStage'
 
 vi.mock('./TriageCard', () => ({

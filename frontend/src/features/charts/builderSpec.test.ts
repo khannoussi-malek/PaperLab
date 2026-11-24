@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Dataset } from '@/api/client'
+import type { Dataset } from '@/entities'
 import { changeType, columnInfo, copyTitle, newSeries, nextSeriesId, panelProblem, quickChartSpec, specDatasetIds } from './builderSpec'
 import { id } from './testData'
 

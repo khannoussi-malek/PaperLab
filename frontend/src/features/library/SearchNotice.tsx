@@ -1,4 +1,4 @@
-import { useEmbeddingStatus } from '@/api/queries'
+import { useEmbeddingStatus } from '@/services/queries'
 import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'
 import { showSearchNotice } from '@/features/settings/searchModel'
 import { rebuildLine } from '@/features/settings/searchSources'

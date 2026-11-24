@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, type Lens, type Section } from '@/api/client'
+import type { Lens, Section } from '@/entities'
+import { api } from '@/services/api'
 import { LensPanel } from './LensPanel'
 import type { LensReader } from './useLensReader'
 

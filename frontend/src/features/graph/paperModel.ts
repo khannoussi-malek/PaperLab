@@ -1,4 +1,4 @@
-import type { GraphLink } from '@/api/client'
+import type { GraphLink } from '@/entities'
 import { endId } from './graphModel'
 
 // What the 3D view makes stand out, so the owner always knows which paper they are looking at: the selected paper

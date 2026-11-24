@@ -10,7 +10,7 @@ type Rows = { items: { stage2_status?: string | null }[] }
 const hits = vi.hoisted(() => ({
   byKey: {} as Record<string, { rows: { stage2_status?: string | null }[]; more?: boolean }>,
 }))
-vi.mock('@/api/queries', () => ({
+vi.mock('@/services/queries', () => ({
   useSnowballNext: () => ({ data: [{}, {}, {}] }),
   useSavedSearches: () => ({ data: [] }),
   useWorkspace: () => ({ data: { name: 'W', ...counts }, error: null }),

@@ -1,5 +1,5 @@
-import type { ChatSource, NoteSource, Workspace } from '@/api/client'
-import { usePapers, useWorkspacePapers } from '@/api/queries'
+import type { ChatSource, NoteSource, Workspace } from '@/entities'
+import { usePapers, useWorkspacePapers } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { ChatPanel } from '@/features/chat/ChatPanel'
 import { paperLabel } from '@/features/library/paperMeta'

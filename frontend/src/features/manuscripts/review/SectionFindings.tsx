@@ -1,4 +1,4 @@
-import type { SectionRef, SectionReview } from '@/api/client'
+import type { SectionRef, SectionReview } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { noteHref } from '@/lib/route'
 import { failedReason, FINDING_ICON, LOST_REVIEW, FINDING_LABEL, findingTone, groupFindings, refChip, ROLE_LABEL } from './sectionReviewModel'

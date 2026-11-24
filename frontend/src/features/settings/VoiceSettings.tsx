@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useVoiceLatency, useVoiceStatus } from '@/api/queries'
-import type { VoiceLatencyGroup, VoicePercentiles, VoiceStatus } from '@/api/client'
+import { useVoiceLatency, useVoiceStatus } from '@/services/queries'
+import type { VoiceLatencyGroup, VoicePercentiles, VoiceStatus } from '@/entities'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { INTERRUPT_SUSTAIN_MS } from '../voice/constants'
 import { useVoiceBridge } from './desktop'

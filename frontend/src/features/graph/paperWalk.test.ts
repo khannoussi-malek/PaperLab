@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { hopKey, hopTarget, linkedInOrder, tourByLinks, tourByYear } from './paperWalk'
 
 const link = (source: string, target: string, kind: GraphLink['kind']) => ({ source, target, kind }) as GraphLink

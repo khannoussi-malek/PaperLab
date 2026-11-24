@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 
 vi.mock('@/features/triage/pdfCache', () => ({ useCachedPdf: () => ({ doc: null, error: null }), retainOnly: vi.fn(), prefetchPdf: vi.fn() })) // pdfjs needs a worker
 vi.mock('@/features/reader/PdfPage', () => ({ PdfPage: () => null }))

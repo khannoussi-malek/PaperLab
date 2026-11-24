@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { useCreateSavedSearch, usePaperSources, useUpdateSavedSearch } from '@/api/queries'
-import type { SavedSearch, SavedSearchCreate } from '@/api/client'
+import { useCreateSavedSearch, usePaperSources, useUpdateSavedSearch } from '@/services/queries'
+import type { SavedSearch, SavedSearchCreate } from '@/entities'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

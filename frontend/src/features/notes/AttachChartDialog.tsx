@@ -1,5 +1,5 @@
-import type { Note } from '@/api/client'
-import { useChartMutations, useCharts } from '@/api/queries'
+import type { Note } from '@/entities'
+import { useChartMutations, useCharts } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'

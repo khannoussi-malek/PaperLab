@@ -1,4 +1,4 @@
-import { useReadingContext } from '@/api/queries'
+import { useReadingContext } from '@/services/queries'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { workspaceHref } from '@/lib/route'
 

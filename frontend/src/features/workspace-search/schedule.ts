@@ -1,5 +1,5 @@
 import { codeInWords } from '@/lib/errorWords'
-import type { SavedSearch } from '@/api/client'
+import type { SavedSearch } from '@/entities'
 
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 

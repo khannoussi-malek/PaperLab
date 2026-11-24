@@ -2,8 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { api } from '@/api/client'
-import { keys } from '@/api/queries'
+import { api } from '@/services/api'
+import { keys } from '@/services/queries'
 import { FoundPdfsNotice } from './FoundPdfsNotice'
 
 afterEach(() => vi.restoreAllMocks())

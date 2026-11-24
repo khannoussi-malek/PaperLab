@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { ReaderToolbar } from './ReaderToolbar'
 
 vi.mock('../reading/ReadingControl', () => ({ ReadingControl: () => null }))

@@ -1,4 +1,4 @@
-import { useTriageEvents } from '@/api/queries'
+import { useTriageEvents } from '@/services/queries'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { describeEvent } from './historyText'
 

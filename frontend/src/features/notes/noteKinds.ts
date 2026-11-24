@@ -1,4 +1,4 @@
-import type { Note, NoteKind } from '@/api/client'
+import type { Note, NoteKind } from '@/entities'
 import { PASSES } from '../reading/passes'
 
 export const KIND_LABEL: Record<NoteKind, string> = {

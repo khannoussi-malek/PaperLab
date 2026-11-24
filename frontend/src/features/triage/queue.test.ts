@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { buildQueue, countsByPile, current, isDone, newSince, orderPapers, progress, queueReducer, type DoneEntry, type QueueState } from './queue'
 
 let n = 0

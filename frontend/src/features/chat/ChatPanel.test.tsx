@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, type ChatModel, type ChatScope, type Skill } from '@/api/client'
+import type { ChatModel, ChatScope, Skill } from '@/entities'
+import { api } from '@/services/api'
 
 const mocks = vi.hoisted(() => ({
   startMicrophone: vi.fn(),

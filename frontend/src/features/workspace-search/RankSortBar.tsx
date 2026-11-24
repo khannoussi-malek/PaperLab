@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react'
-import type { RankedHits } from '@/api/client'
+import type { RankedHits } from '@/entities'
 import type { HitSort } from './hitSort'
 
 /** The hit pool's sort choice and, in ranked order, what the ranking knows so far (M31a). Text only: the stop hint

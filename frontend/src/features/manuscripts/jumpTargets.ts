@@ -1,4 +1,4 @@
-import type { CitablePaper } from '@/api/client'
+import type { CitablePaper } from '@/entities'
 import { COMMENT, crumbsAt, type OutlineItem } from './outline'
 import type { SectionRow } from './sections'
 

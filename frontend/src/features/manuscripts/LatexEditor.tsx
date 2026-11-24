@@ -10,7 +10,7 @@ import { citeKeyAt } from './deck/citeKeyAt'
 import type { DeckPaper } from './deck/deckModel'
 import { citeSource, paperDrop } from './citeCompletion'
 import { reviewExtension, reviewHandle, type ReviewHandle } from './review/reviewMarks'
-import type { ReviewSentence } from '@/api/client'
+import type { ReviewSentence } from '@/entities'
 import { ownLine, type PreambleEdit } from './results/insertBlock'
 
 type LineError = { line: number; message: string }

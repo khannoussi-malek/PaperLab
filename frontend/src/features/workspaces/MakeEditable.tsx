@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { Workspace } from '@/api/client'
-import { useMakeWorkspaceEditable } from '@/api/queries'
+import type { Workspace } from '@/entities'
+import { useMakeWorkspaceEditable } from '@/services/queries'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

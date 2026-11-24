@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { expect, test } from 'vitest'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { PaperDetailsPanel } from './PaperDetailsPanel'
 
 test('the details panel of a paper without a PDF offers Upload PDF and Find free copy', () => {

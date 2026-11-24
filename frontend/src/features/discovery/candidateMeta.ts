@@ -1,4 +1,4 @@
-import type { Candidate, PaperSourceId } from '@/api/client'
+import type { Candidate, PaperSourceId } from '@/entities'
 
 /** How a source is named on a found paper's badges. */
 export const SOURCE_NAMES: Record<PaperSourceId, string> = {

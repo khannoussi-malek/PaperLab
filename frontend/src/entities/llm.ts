@@ -1,0 +1,15 @@
+import type { components } from './schema'
+
+export type ChatModel = components['schemas']['ChatModelOut']
+export type Skill = components['schemas']['SkillOut']
+export type SkillCreate = components['schemas']['SkillCreate']
+export type SkillUpdate = components['schemas']['SkillUpdate']
+export type LLMConnection = components['schemas']['ConnectionOut']
+export type LLMConnectionCreate = components['schemas']['ConnectionCreate']
+export type LLMConnectionUpdate = components['schemas']['ConnectionUpdate']
+export type LLMModel = components['schemas']['ModelOut']
+export type ConnectionCheck = components['schemas']['ConnectionCheckOut']
+export type AvailableModels = components['schemas']['AvailableModelsOut']
+export type PullProgressEvent = components['schemas']['PullProgressEvent']
+export type PullDoneEvent = components['schemas']['PullDoneEvent']
+export type PullErrorEvent = components['schemas']['PullErrorEvent']

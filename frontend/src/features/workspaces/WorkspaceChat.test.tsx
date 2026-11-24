@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import type { ChatSource, Workspace } from '@/api/client'
+import type { ChatSource, Workspace } from '@/entities'
 import { WorkspaceChat } from './WorkspaceChat'
 
 const cite = vi.hoisted(() => ({ onCite: null as null | ((source: ChatSource) => void) }))
@@ -11,7 +11,7 @@ vi.mock('@/features/chat/ChatPanel', () => ({
     return null
   },
 }))
-vi.mock('@/api/queries', () => ({ usePapers: () => ({ data: [] }), useWorkspacePapers: () => ({ data: [] }) }))
+vi.mock('@/services/queries', () => ({ usePapers: () => ({ data: [] }), useWorkspacePapers: () => ({ data: [] }) }))
 afterEach(() => { window.location.hash = '' })
 
 const PAPER = '6f1c2a40-1111-4a8e-9c4e-000000000001'

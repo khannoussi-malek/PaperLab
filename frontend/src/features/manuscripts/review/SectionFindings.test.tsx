@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import type { SectionFinding, SectionReview } from '@/api/client'
+import type { SectionFinding, SectionReview } from '@/entities'
 import { ReviewPanel } from './ReviewPanel'
 import { SectionFindings } from './SectionFindings'
 

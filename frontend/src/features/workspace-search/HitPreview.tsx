@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { sileo } from 'sileo'
-import type { Hit, HitReviewUpdate } from '@/api/client'
+import type { Hit, HitReviewUpdate } from '@/entities'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { pageLink } from '@/features/discovery/candidateMeta'

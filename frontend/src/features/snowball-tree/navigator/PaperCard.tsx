@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Hit, Paper, ProvenanceOut, ProvNode } from '@/api/client'
-import { refreshTree, useImportSearchHits, usePatchSearchHit, useSearchHit, useUploadHitPdf, useWorkspacePapers } from '@/api/queries'
+import type { Hit, Paper, ProvenanceOut, ProvNode } from '@/entities'
+import { refreshTree, useImportSearchHits, usePatchSearchHit, useSearchHit, useUploadHitPdf, useWorkspacePapers } from '@/services/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import { HitPreview } from '@/features/workspace-search/HitPreview'
 import { Button } from '@/components/ui/button'

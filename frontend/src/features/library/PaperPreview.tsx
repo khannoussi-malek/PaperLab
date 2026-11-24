@@ -1,5 +1,6 @@
 import { BookOpen, LoaderCircle, TriangleAlert } from 'lucide-react'
-import { api, type Paper } from '@/api/client'
+import type { Paper } from '@/entities'
+import { api } from '@/services/api'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'

@@ -1,4 +1,4 @@
-import type { Reference, References, ReferencesDirection } from '@/api/client'
+import type { Reference, References, ReferencesDirection } from '@/entities'
 
 const COCITATION_BADGE_MIN = 2
 

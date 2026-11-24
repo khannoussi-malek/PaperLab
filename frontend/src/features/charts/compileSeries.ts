@@ -1,5 +1,5 @@
 import type { Data, Layout } from 'plotly.js-dist-min'
-import type { ResolvedCell, ResolvedData, ResolvedDataset, SeriesChartSpec, SeriesSpec } from '@/api/client'
+import type { ResolvedCell, ResolvedData, ResolvedDataset, SeriesChartSpec, SeriesSpec } from '@/entities'
 import { escapeText, fitLinear, symlog, symlogTicks } from './chartMath'
 import { axisStyle, baseLayout, CHART_INK, seriesColor, type ChartTheme } from './palette'
 import { columnName, isDrawable, seriesName, seriesPoints } from './seriesPoints'

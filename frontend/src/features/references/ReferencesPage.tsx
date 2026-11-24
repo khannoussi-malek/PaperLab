@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
-import { useReferencePage, useRefreshReferences, useWorkspace, useWorkspaces } from '@/api/queries'
+import { useReferencePage, useRefreshReferences, useWorkspace, useWorkspaces } from '@/services/queries'
 import { AppShell } from '@/components/AppShell'
 import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'

@@ -1,5 +1,5 @@
 import { Sparkles, UserRound } from 'lucide-react'
-import type { Note } from '@/api/client'
+import type { Note } from '@/entities'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 

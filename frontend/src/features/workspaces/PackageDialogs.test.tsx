@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { sileo } from "sileo";
-import { ApiError, api, type PackageImportResult, type Workspace } from "@/api/client";
+import type { PackageImportResult, Workspace } from '@/entities'
+import { ApiError, api } from '@/services/api'
 import { workspaceHref } from "@/lib/route";
 import { PackageExportDialog, PackageRecordLink, ImportPackageButton } from "./PackageDialogs";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";

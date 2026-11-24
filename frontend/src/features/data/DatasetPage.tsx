@@ -1,6 +1,6 @@
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useDataset, useDatasetMutations } from '@/api/queries'
+import { useDataset, useDatasetMutations } from '@/services/queries'
 import { AppShell, shellTitle } from '@/components/AppShell'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

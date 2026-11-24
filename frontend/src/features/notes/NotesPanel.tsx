@@ -1,6 +1,6 @@
 import { Check, FilePen, Sparkles, UserRound } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import type { ChatSource, Note, NoteKind } from '@/api/client'
+import type { ChatSource, Note, NoteKind } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pressable } from '@/components/motion'

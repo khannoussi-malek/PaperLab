@@ -2,8 +2,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, test, vi } from 'vitest'
-import { NoFreePdfError, api } from '@/api/client'
-import type { Paper } from '@/api/client'
+import { NoFreePdfError, api } from '@/services/api'
+import type { Paper } from '@/entities'
 import { PaperPreview as Preview } from './PaperPreview'
 
 const qc = new QueryClient()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Note } from '@/api/client'
+import type { Note } from '@/entities'
 import { unlinkWarnings } from './notePapers'
 
 const anchor = (paper_id: string, page: number) => ({ paper_id, page, bbox: [], quoted_text: 'q' })

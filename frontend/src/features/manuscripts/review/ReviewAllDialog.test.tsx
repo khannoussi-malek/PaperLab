@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError } from '@/services/api'
 import { ReviewAllDialog } from './ReviewAllDialog'
 
 const estimate = (pairs: number, replaces = 0) => ({

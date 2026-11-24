@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { Note } from '@/api/client'
+import type { Note } from '@/entities'
 import { popIn } from '@/components/motion'
 import { cn } from '@/lib/utils'
 import { NoteCard } from './NoteCard'

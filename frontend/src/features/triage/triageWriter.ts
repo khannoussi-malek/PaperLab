@@ -1,4 +1,4 @@
-import { isConflict } from '@/api/client'
+import { isConflict } from '@/services/api'
 
 export type Settled = { status: 'saved'; eventId: string } | { status: 'noop' } | { status: 'refused' } | { status: 'failed'; error: unknown }
 type Entry = { id: string; clientId: string }

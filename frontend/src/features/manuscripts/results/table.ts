@@ -1,4 +1,4 @@
-import type { Dataset } from '@/api/client'
+import type { Dataset } from '@/entities'
 import { latexEscape } from '../deck/latex'
 
 export type TableCell = { raw: string; value: number | null; error: number | null }

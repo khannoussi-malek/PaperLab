@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { queryClient } from './api/queries'
+import { queryClient } from './services/queries'
 import App from './App.tsx'
 import { LiquidGlassProvider } from './components/liquid-glass/LiquidGlass'
 import { Notifications } from './components/Notifications'

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Hit } from '@/api/client'
+import type { Hit } from '@/entities'
 import { Badge } from '@/components/ui/badge'
 import { Term } from '@/features/workspaces/Term'
 import { reasonLabel } from './hitReview'

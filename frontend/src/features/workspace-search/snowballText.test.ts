@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { SnowballStats } from '@/api/client'
+import type { SnowballStats } from '@/entities'
 import { friendlySnowballError, snowballLine } from './snowballText'
 
 const seed = (found: { cites: number; cited_by: number }, o: object = {}) => ({

@@ -1,4 +1,4 @@
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { CHART_INK, SERIES_COLORS, type ChartTheme } from '@/features/charts/palette'
 
 export type LinkKind = GraphLink['kind']

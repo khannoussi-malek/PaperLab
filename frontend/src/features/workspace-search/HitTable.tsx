@@ -2,23 +2,8 @@ import { CircleHelp, CircleX, Sparkles, ThumbsUp } from 'lucide-react'
 import { codeInWords } from '@/lib/errorWords'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { Hit, HitReviewUpdate, SearchRun } from '@/api/client'
-import {
-  totalRawFound,
-  useAcceptSuggestions,
-  useBulkPatchSearchHits,
-  useClearSearchHits,
-  useImportAllHits,
-  useImportSearchHits,
-  useNewHitsAvailable,
-  usePatchSearchHit,
-  useRankedHits,
-  useRefreshHits,
-  useSearchHits,
-  useSnowball,
-  useUploadHitPdf,
-  type SavedSearchInbox,
-} from '@/api/queries'
+import type { Hit, HitReviewUpdate, SearchRun, SavedSearchInbox } from '@/entities'
+import { totalRawFound, useAcceptSuggestions, useBulkPatchSearchHits, useClearSearchHits, useImportAllHits, useImportSearchHits, useNewHitsAvailable, usePatchSearchHit, useRankedHits, useRefreshHits, useSearchHits, useSnowball, useUploadHitPdf } from '@/services/queries'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { loadPanelWidth, panelTrack, savePanelWidth, type PanelLimits } from '@/components/panelWidth'
 import { Button } from '@/components/ui/button'

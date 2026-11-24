@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AlreadyInLibraryError, ApiError, api, errorDetail, NoFreePdfError, PaperMergedError } from './client'
+import { AlreadyInLibraryError, ApiError, api, errorDetail, NoFreePdfError, PaperMergedError } from '@/services/api'
 
 const jsonResponse = (body: unknown) => new Response(JSON.stringify(body), { status: 422 })
 

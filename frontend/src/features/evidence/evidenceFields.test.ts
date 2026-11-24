@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { EvidenceCard } from '@/api/client'
+import type { EvidenceCard } from '@/entities'
 import { cellView, editChange, failureReason } from './evidenceFields'
 
 const item = (value: string | null, extra = {}) => ({ value, quote: value ? 'the quote here' : null, page: 3, chunk_id: 'c1', flags: [], ...extra })

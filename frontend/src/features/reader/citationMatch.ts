@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query'
-import type { Reference, References } from '@/api/client'
+import type { Reference, References } from '@/entities'
 import type { Entry } from './citationEntry'
 
 /**

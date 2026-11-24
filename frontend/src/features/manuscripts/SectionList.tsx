@@ -1,6 +1,6 @@
 import { FilePlus, MoreHorizontal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useAddSection, useDeleteSection, useMoveSection, useRetitleSection, useSplitSections } from '@/api/queries'
+import { useAddSection, useDeleteSection, useMoveSection, useRetitleSection, useSplitSections } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'

@@ -1,4 +1,4 @@
-import { useSavedSearches, useSearchHits } from '@/api/queries'
+import { useSavedSearches, useSearchHits } from '@/services/queries'
 import type { WorkspaceTab } from '@/lib/route'
 
 /** Badge counts for the tabs that have one: Search counts saved searches' new finds (M7.6). A paper saved without its PDF waits under Get PDFs

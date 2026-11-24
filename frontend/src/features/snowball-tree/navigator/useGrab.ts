@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { refreshTree, useSnowball } from '@/api/queries'
+import { refreshTree, useSnowball } from '@/services/queries'
 import { friendlySnowballError, skippedSeedsText } from '@/features/workspace-search/snowballText'
 import type { BranchTarget } from '../BranchControl'
 

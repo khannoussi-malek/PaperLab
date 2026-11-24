@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ChartSpec } from '@/api/client'
+import type { ChartSpec } from '@/entities'
 import { compileChart } from './compile'
 import { sequentialScale } from './palette'
 import { BERT, BERT_B, bertTable, data, F1, GRID, GX, GY, GZ, longGrid, STD, SYSTEM } from './testData'

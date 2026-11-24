@@ -1,4 +1,4 @@
-import type { ChartSpec, ResolvedData, SeriesChartSpec, SeriesSpec } from '@/api/client'
+import type { ChartSpec, ResolvedData, SeriesChartSpec, SeriesSpec } from '@/entities'
 import { columnName, isDrawable, seriesName, seriesPoints, type SeriesPoint } from '@/features/charts/seriesPoints'
 import { latexEscape } from '../deck/latex'
 

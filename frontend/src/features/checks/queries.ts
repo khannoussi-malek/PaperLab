@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 
-// Starts with ['papers', paperId], like api/queries.ts's keys, so Re-index refreshes it; isNotesList matches 'checks'.
+// Starts with ['papers', paperId], like services/queries/core.ts's keys, so Re-index refreshes it; isNotesList matches 'checks'.
 const checksKey = (paperId: string) => ['papers', paperId, 'checks'] as const
 
 /** The newest check per note on a paper, each saying whether its note changed since. */

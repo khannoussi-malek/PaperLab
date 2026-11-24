@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
-import type { ChatSource } from '@/api/client'
+import type { ChatSource } from '@/entities'
 import { CheckResult } from './CheckResult'
 
 const source = { label: 'C1', page: 4, section: 'Method', from_abstract: false, bbox: [], paper_id: 'p1' } as unknown as ChatSource

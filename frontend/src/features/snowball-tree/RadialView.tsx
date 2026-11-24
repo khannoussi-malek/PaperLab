@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef, useState } from 'react'
-import type { ProvenanceOut } from '@/api/client'
+import type { ProvenanceOut } from '@/entities'
 import { useBoxSize } from '@/features/graph/useBoxSize'
 import { cn } from '@/lib/utils'
 import { isUnknown, PARENT_NOT_RECORDED, tidyLayout } from './layout'

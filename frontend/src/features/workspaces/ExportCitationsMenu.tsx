@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Quote } from "lucide-react";
 import { useState } from "react";
-import { useWorkspacePapers } from "@/api/queries";
-import { api, citationsUrl, zoteroZipUrl } from "@/api/client";
+import { useWorkspacePapers } from '@/services/queries'
+import { api, citationsUrl, zoteroZipUrl } from '@/services/api'
 import { glass } from "@/components/glass";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

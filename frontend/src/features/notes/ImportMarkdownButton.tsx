@@ -1,6 +1,6 @@
 import { Upload } from 'lucide-react'
 import { useRef } from 'react'
-import { useImportNotes } from '@/api/queries'
+import { useImportNotes } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { importSummary } from './notesPage'

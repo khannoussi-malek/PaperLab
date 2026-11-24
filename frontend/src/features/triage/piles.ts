@@ -1,4 +1,4 @@
-import type { TriageDecisionIn } from '@/api/client'
+import type { TriageDecisionIn } from '@/entities'
 import { PASSES } from '@/features/reading/passes'
 
 export type Pile = 'read_closely' | 'skim' | 'later' | 'not_relevant' | 'skip'

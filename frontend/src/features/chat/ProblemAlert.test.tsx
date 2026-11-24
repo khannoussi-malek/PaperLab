@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type ChatScope } from '@/api/client'
+import type { ChatScope } from '@/entities'
+import { api } from '@/services/api'
 import { ProblemAlert } from './ProblemAlert'
 
 const problem = { message: 'This paper is not indexed yet.', retryable: false, reindex: true }

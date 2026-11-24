@@ -1,6 +1,6 @@
 import { ChartColumn, LoaderCircle } from 'lucide-react'
-import type { ChartSummary } from '@/api/client'
-import { useChart } from '@/api/queries'
+import type { ChartSummary } from '@/entities'
+import { useChart } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'

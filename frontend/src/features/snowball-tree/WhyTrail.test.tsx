@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
+import * as queries from '@/services/queries'
 import { WhyTrail } from './WhyTrail'
 
 const link = (parent: string, child: string, kind: string) => ({ parent, child, kind, run_id: 'r1', created_at: null })

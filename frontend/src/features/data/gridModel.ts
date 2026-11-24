@@ -1,4 +1,4 @@
-import type { ChartUse, Dataset, GridIn, TablePreview } from '@/api/client'
+import type { ChartUse, Dataset, GridIn, TablePreview } from '@/entities'
 import type { PdfRect } from '../reader/coords'
 
 /**

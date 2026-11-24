@@ -3,7 +3,7 @@ import { history, undo } from '@codemirror/commands'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { expect, test } from 'vitest'
-import type { CheckItem } from '@/api/client'
+import type { CheckItem } from '@/entities'
 import { reviewExtension, reviewHandle } from './reviewMarks'
 
 // jsdom has no layout; CodeMirror's scroll-into-view asks for rects.

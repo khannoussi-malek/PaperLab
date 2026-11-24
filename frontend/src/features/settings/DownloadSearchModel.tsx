@@ -1,5 +1,5 @@
 import { Download } from 'lucide-react'
-import { useEmbeddingStatus } from '@/api/queries'
+import { useEmbeddingStatus } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'

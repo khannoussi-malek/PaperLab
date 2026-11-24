@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Role, SectionSpan } from '@/api/client'
+import type { Role, SectionSpan } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { RemoteConfirm } from './RemoteConfirm'

@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
-import { usePaperTags, useTags, useUploadPapers, useWorkspacePapers } from '@/api/queries'
+import { usePaperTags, useTags, useUploadPapers, useWorkspacePapers } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { FindPapersButton } from '@/features/discovery/FindPapersButton'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'

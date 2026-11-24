@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { usePrismaExport, useReadingQueue, useWorkspacePapers } from '@/api/queries'
+import { usePrismaExport, useReadingQueue, useWorkspacePapers } from '@/services/queries'
 import { Badge } from '@/components/ui/badge'
 import { NoPdfBadge } from '@/features/reader/SourceBadges'
 import { readingChip } from '@/features/reading/passes'

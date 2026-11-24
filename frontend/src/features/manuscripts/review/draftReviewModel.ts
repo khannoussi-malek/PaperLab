@@ -1,4 +1,5 @@
-import { ApiError, api, type DraftReview, type DraftReviewEstimate } from '@/api/client'
+import type { DraftReview, DraftReviewEstimate } from '@/entities'
+import { ApiError, api } from '@/services/api'
 
 export type DraftMode = 'light' | 'full'
 export type DraftEstimate = DraftReviewEstimate['modes'][number]

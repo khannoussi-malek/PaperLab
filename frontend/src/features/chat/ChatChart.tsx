@@ -1,5 +1,5 @@
-import { useChartMutations } from '@/api/queries'
-import type { ChartSpec } from '@/api/client'
+import { useChartMutations } from '@/services/queries'
+import type { ChartSpec } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { ChartView } from '@/features/charts/ChartView'
 import { chartHref } from '@/lib/route'

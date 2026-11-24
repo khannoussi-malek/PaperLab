@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 import { useChatStream } from './useChatStream'
 
-vi.mock('@/api/queries', () => ({ useInvalidateChatHistory: () => vi.fn(), useInvalidateModels: () => vi.fn() }))
+vi.mock('@/services/queries', () => ({ useInvalidateChatHistory: () => vi.fn(), useInvalidateModels: () => vi.fn() }))
 
 const sse = (...events: [string, unknown][]) =>
   new Response(events.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join(''), {

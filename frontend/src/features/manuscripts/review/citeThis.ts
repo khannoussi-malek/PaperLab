@@ -1,4 +1,4 @@
-import { api, ApiError } from '@/api/client'
+import { api, ApiError } from '@/services/api'
 import type { ReviewHandle } from './reviewMarks'
 
 export const CHANGED = 'That sentence changed. Check again.'

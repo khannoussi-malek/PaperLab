@@ -1,4 +1,4 @@
-import type { ChartSpec, ResolvedData } from '@/api/client'
+import type { ChartSpec, ResolvedData } from '@/entities'
 import { seriesName } from './compileSeries'
 import { isEditedCell, sourceLabel } from './points'
 

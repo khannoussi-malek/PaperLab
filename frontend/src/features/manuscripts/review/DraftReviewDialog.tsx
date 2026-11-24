@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { isConflict, type DraftReview, type DraftReviewEstimate } from '@/api/client'
+import type { DraftReview, DraftReviewEstimate } from '@/entities'
+import { isConflict } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DraftReviewResult } from './DraftReviewResult'

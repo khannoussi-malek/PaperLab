@@ -1,4 +1,4 @@
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { degrees, KINDS } from './graphModel'
 
 /** A paper's linked papers in the side panel's order: by kind, then as the links come, each paper once. */

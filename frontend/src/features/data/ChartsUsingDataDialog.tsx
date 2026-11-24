@@ -1,4 +1,4 @@
-import type { ChartUse } from '@/api/client'
+import type { ChartUse } from '@/entities'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'

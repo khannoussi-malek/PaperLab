@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, type Skill } from '@/api/client'
+import type { Skill } from '@/entities'
+import { ApiError } from '@/services/api'
 import { SkillEditorDialog } from './SkillEditorDialog'
 
 const mocks = vi.hoisted(() => ({ useCreateSkill: vi.fn(), useUpdateSkill: vi.fn() }))
-vi.mock('@/api/queries', () => mocks)
+vi.mock('@/services/queries', () => mocks)
 
 function mutation(overrides: Record<string, unknown> = {}) {
   return { mutate: vi.fn(), isPending: false, error: null, reset: vi.fn(), ...overrides }

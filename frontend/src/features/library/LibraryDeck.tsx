@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import type { Paper } from '@/api/client'
-import { useNoteCounts, useNotes } from '@/api/queries'
+import type { Paper } from '@/entities'
+import { useNoteCounts, useNotes } from '@/services/queries'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { noteHref, readerHref } from '@/lib/route'
 import { bookItems, toDeckPaper, type DeckPaper } from '../manuscripts/deck/deckModel'

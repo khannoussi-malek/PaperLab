@@ -1,5 +1,5 @@
-import type { ChatScope } from '@/api/client'
-import { useEmbeddingStatus, useReindexPaper } from '@/api/queries'
+import type { ChatScope } from '@/entities'
+import { useEmbeddingStatus, useReindexPaper } from '@/services/queries'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'

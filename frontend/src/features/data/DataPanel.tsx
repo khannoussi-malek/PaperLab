@@ -1,6 +1,6 @@
 import { ChartColumn, Crosshair, Hash, Table2 } from 'lucide-react'
-import type { DatasetSummary } from '@/api/client'
-import { usePaperDatasets } from '@/api/queries'
+import type { DatasetSummary } from '@/entities'
+import { usePaperDatasets } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'

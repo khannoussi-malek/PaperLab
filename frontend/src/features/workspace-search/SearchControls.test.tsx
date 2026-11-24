@@ -3,8 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 import { SearchControls } from './SearchControls'
-import * as queries from '@/api/queries'
-import type { PaperSources } from '@/api/client'
+import * as queries from '@/services/queries'
+import type { PaperSources } from '@/entities'
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

@@ -1,4 +1,4 @@
-import type { SnowballStats } from '@/api/client'
+import type { SnowballStats } from '@/entities'
 
 const S2_REFUSED = 'Semantic Scholar refused: add a free key in Settings → Paper sources.'
 

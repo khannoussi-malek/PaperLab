@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { ListChecks } from 'lucide-react'
-import type { ChatSource, Note } from '@/api/client'
+import type { ChatSource, Note } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ProblemAlert } from '@/features/chat/ProblemAlert'

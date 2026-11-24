@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Check, Note } from '@/api/client'
+import type { Check, Note } from '@/entities'
 import { checkProblem, exitTestLine, exitTestNote, exitTestStatus, streamedLine } from './exitTest'
 
 const note = (fields: Partial<Note>): Note => ({ id: 'n', kind: 'summary', provenance: 'human', created_at: '2026-10-01T00:00:00Z', ...fields }) as Note

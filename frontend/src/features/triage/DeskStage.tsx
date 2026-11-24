@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { cn } from '@/lib/utils'
 import type { DeskLayout } from './layout'
 import { PILES, type Pile } from './piles'

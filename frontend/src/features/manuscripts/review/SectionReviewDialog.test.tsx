@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
-import { ApiError, type SectionSpan } from '@/api/client'
+import type { SectionSpan } from '@/entities'
+import { ApiError } from '@/services/api'
 import { SectionReviewDialog } from './SectionReviewDialog'
 
 const span = (o: Partial<SectionSpan> = {}): SectionSpan => ({ title: 'Our approach', start: 0, end: 50, hash: 'h', words: 40, guess: 'method', ...o })

@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, type Hit, type ProvNode } from '@/api/client'
+import type { Hit, ProvNode } from '@/entities'
+import { api } from '@/services/api'
 import { AskPanel } from './AskPanel'
 
 const node = (id: string, extra: object = {}) => ({ id, title: `Paper ${id}`, level: 0, snowballed: [], paths: 1, ...extra }) as unknown as ProvNode

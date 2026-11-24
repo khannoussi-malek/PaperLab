@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import type { ChatSource, Paper } from '@/api/client'
+import type { ChatSource, Paper } from '@/entities'
 import { ReaderPage, groupHighlights } from './ReaderPage'
 
 type NotesProps = {
@@ -29,7 +29,7 @@ vi.mock('../data/useCaptureDrag', () => ({
 }))
 const getDocument = vi.hoisted(() => vi.fn(() => ({ promise: new Promise(() => {}), destroy: vi.fn() })))
 vi.mock('./pdfjs', () => ({ getDocument, pdfWorker: null }))
-vi.mock('@/api/queries', () => {
+vi.mock('@/services/queries', () => {
   const idle = { data: undefined, error: null }
   return {
     usePaper: () => ({ data: state.paper, error: state.paperError, isError: state.paperError !== null }),

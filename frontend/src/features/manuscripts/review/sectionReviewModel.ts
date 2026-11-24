@@ -1,5 +1,5 @@
 import { Check, CircleDashed, TriangleAlert, type LucideIcon } from 'lucide-react'
-import type { Role, SectionFinding, SectionRef, SectionReview, SectionSpan } from '@/api/client'
+import type { Role, SectionFinding, SectionRef, SectionReview, SectionSpan } from '@/entities'
 import type { Tone } from './reviewModel'
 
 export { ROLE_LABEL } from '@/features/lenses/lenses'

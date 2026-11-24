@@ -1,4 +1,4 @@
-import type { AnswerCheckSentence } from '@/api/client'
+import type { AnswerCheckSentence } from '@/entities'
 
 export type Tone = 'quiet' | 'warn' | 'bad' | 'muted'
 export type Chip = { symbol: string; word: string; tone: Tone }

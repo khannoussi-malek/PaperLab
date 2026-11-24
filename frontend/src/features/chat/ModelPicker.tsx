@@ -1,4 +1,4 @@
-import type { ChatModel } from '@/api/client'
+import type { ChatModel } from '@/entities'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { settingsHref } from '@/lib/route'

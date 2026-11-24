@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import type { GraphNode } from '@/api/client'
+import type { GraphNode } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'

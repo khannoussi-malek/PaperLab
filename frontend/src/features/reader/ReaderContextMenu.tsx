@@ -1,5 +1,5 @@
 import { Copy, Hash, NotebookPen, Pencil, Trash2, X } from 'lucide-react'
-import type { Note } from '@/api/client'
+import type { Note } from '@/entities'
 import { glass } from '@/components/glass'
 import {
   DropdownMenu,

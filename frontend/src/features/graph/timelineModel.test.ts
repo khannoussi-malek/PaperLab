@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { MISSING_YEARS_HINT, TIME_AXIS_LABELS, timelineLayout, UNKNOWN_LANE } from './timelineModel'
 
 const link = (source: string, target: string, kind: GraphLink['kind'], label: string | null = null): GraphLink => ({

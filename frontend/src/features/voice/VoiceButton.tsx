@@ -1,6 +1,6 @@
 import { Mic } from 'lucide-react'
-import { useVoiceStatus } from '@/api/queries'
-import type { VoiceStatus } from '@/api/client'
+import { useVoiceStatus } from '@/services/queries'
+import type { VoiceStatus } from '@/entities'
 import { pressable } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'

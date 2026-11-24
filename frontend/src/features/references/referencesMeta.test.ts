@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Reference } from '@/api/client'
+import type { Reference } from '@/entities'
 import { cocitationBadge, coverageLine, rowAction, sectionEmptyText, summaryLine } from './referencesMeta'
 
 describe('summaryLine', () => {

@@ -1,4 +1,4 @@
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { quietStatus } from '@/features/library/paperMeta'
 import { PILE_ORDER, type Pile } from './piles'
 

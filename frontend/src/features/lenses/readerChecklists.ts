@@ -1,4 +1,4 @@
-import type { Role } from '@/api/client'
+import type { Role } from '@/entities'
 
 /**
  * What a reader looks for in each kind of section (D180): the IMRaD guide the owner follows, flipped from the author's

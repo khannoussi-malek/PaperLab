@@ -1,4 +1,4 @@
-import type { ChartSummary } from '@/api/client'
+import type { ChartSummary } from '@/entities'
 
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
 const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [

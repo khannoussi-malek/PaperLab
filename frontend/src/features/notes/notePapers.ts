@@ -1,4 +1,4 @@
-import type { Note, Paper } from '@/api/client'
+import type { Note, Paper } from '@/entities'
 
 /**
  * What Save will take away (N2): one line per unticked paper the note has a highlight on, naming the first page it is

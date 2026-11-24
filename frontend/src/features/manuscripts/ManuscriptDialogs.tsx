@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { Manuscript } from '@/api/client'
-import { useDeleteManuscript, useUpdateManuscript, useWorkspaces } from '@/api/queries'
+import type { Manuscript } from '@/entities'
+import { useDeleteManuscript, useUpdateManuscript, useWorkspaces } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'

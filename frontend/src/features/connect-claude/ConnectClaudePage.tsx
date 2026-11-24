@@ -1,6 +1,6 @@
 import { Check, CircleCheck, Copy } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import { useCheckMcpServer, useMcpSetup } from '@/api/queries'
+import { useCheckMcpServer, useMcpSetup } from '@/services/queries'
 import { AppShell } from '@/components/AppShell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

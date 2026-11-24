@@ -1,5 +1,6 @@
 /** A diagram drawn from the researcher's own description: the block it inserts and its states in plain words (D118). */
-import { ApiError, type Diagram } from '@/api/client'
+import type { Diagram } from '@/entities'
+import { ApiError } from '@/services/api'
 import { remoteHost } from '../review/reviewModel'
 import { slug, TIKZ_LIBRARY, uniqueLabel } from './insertBlock'
 

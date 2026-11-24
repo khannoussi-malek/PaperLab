@@ -1,4 +1,4 @@
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 
 type FieldSource = Paper['field_sources'][string]
 

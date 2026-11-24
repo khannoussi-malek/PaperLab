@@ -1,4 +1,4 @@
-import type { ProvNode } from '@/api/client'
+import type { ProvNode } from '@/entities'
 import type { BranchTarget } from './BranchControl'
 import { isUnknown } from './layout'
 import { decisionWord } from './levelText'

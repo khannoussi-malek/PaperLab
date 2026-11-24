@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { ProvLink } from '@/api/client'
-import { usePaths, useProvenance } from '@/api/queries'
+import type { ProvLink } from '@/entities'
+import { usePaths, useProvenance } from '@/services/queries'
 import { PARENT_NOT_RECORDED, isUnknown } from './layout'
 
 const ARROW: Record<string, string> = { cites: '(it cites)', cited_by: '(cited by)' }

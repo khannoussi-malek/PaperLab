@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, within, cleanup } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
-import type { SavedSearch } from '@/api/client'
+import * as queries from '@/services/queries'
+import type { SavedSearch } from '@/entities'
 import { SavedSearches } from './SavedSearches'
 
 const row: SavedSearch = {

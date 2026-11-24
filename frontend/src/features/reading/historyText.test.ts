@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TriageEvent } from '@/api/client'
+import type { TriageEvent } from '@/entities'
 import { describeEvent } from './historyText'
 
 const at = (h: number, m: number) => new Date(2026, 9, 29, h, m).toISOString()

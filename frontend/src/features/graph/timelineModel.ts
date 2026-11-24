@@ -1,4 +1,4 @@
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { KIND_LABELS, type LinkKind } from './graphModel'
 
 export type TimeAxis = 'published' | 'added'

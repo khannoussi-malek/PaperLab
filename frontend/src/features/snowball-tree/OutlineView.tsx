@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ProvenanceOut } from '@/api/client'
-import { useSetBranch } from '@/api/queries'
+import type { ProvenanceOut } from '@/entities'
+import { useSetBranch } from '@/services/queries'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isUnknown, PARENT_NOT_RECORDED, tidyLayout, type Box } from './layout'

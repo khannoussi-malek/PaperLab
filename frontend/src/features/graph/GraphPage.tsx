@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { GraphLink } from '@/api/client'
-import { useEmbeddingStatus, useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/api/queries'
+import type { GraphLink } from '@/entities'
+import { useEmbeddingStatus, useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/services/queries'
 import { LoadingState } from '@/components/LoadingState'
 import { AppShell } from '@/components/AppShell'
 import { glass } from '@/components/glass'

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import type { Paper } from '@/api/client'
-import { useTriageEvents } from '@/api/queries'
+import type { Paper } from '@/entities'
+import { useTriageEvents } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { GetPdfActions } from '@/features/library/GetPdfActions'
 import { byline, pageCountLabel } from '@/features/library/paperMeta'

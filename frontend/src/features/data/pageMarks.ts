@@ -1,4 +1,4 @@
-import type { Dataset, DatasetSummary } from '@/api/client'
+import type { Dataset, DatasetSummary } from '@/entities'
 import type { PdfRect } from '../reader/coords'
 import { rectContains } from '../reader/hitTest'
 

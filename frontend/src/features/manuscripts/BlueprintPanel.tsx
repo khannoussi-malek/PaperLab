@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { api, isConflict, type ManuscriptFile } from '@/api/client'
-import { useManuscriptTemplates } from '@/api/queries'
+import type { ManuscriptFile } from '@/entities'
+import { api, isConflict } from '@/services/api'
+import { useManuscriptTemplates } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { BLUEPRINT_PATH, latexTitle, parseBlueprint, starterBlueprint } from './blueprint'
 

@@ -1,4 +1,4 @@
-import type { LLMConnection } from '@/api/client'
+import type { LLMConnection } from '@/entities'
 
 /** The first-run setup's pure pieces (spec §5); the page is SetupPage.tsx. */
 

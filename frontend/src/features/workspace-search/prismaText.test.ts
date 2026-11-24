@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { PrismaExportOut } from '@/api/client'
+import type { PrismaExportOut } from '@/entities'
 import { prismaCsv, prismaText } from './prismaText'
 
 const data: PrismaExportOut = {

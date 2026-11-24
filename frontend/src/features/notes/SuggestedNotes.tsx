@@ -1,7 +1,7 @@
 import { Sparkles } from 'lucide-react'
 import { useState } from 'react'
-import type { NoteSuggestion } from '@/api/client'
-import { usePromoteNote, useSuggestNotes } from '@/api/queries'
+import type { NoteSuggestion } from '@/entities'
+import { usePromoteNote, useSuggestNotes } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 

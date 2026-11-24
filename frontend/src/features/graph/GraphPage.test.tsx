@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { GraphPage } from './GraphPage'
 
 const pending = { data: undefined, isError: false, isPending: true, failureCount: 0 }
-vi.mock('@/api/queries', () => ({
+vi.mock('@/services/queries', () => ({
   useLibraryGraph: () => pending,
   useWorkspaces: () => ({ data: [], isError: false }),
   useEmbeddingStatus: () => ({ data: undefined }),

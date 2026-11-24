@@ -1,4 +1,4 @@
-import { useSimilarPapers } from '@/api/queries'
+import { useSimilarPapers } from '@/services/queries'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { CandidateList } from './CandidateList'
 

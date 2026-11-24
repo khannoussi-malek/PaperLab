@@ -1,8 +1,8 @@
 import { BookOpenCheck, Compass, EllipsisVertical, FolderMinus, FolderPlus, Snowflake } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { sileo } from 'sileo'
-import type { Paper, ReadingIn } from '@/api/client'
-import { useSnowball, useWorkspaces } from '@/api/queries'
+import type { Paper, ReadingIn } from '@/entities'
+import { useSnowball, useWorkspaces } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import {

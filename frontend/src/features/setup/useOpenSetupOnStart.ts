@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useSetup } from '@/api/queries'
+import { useSetup } from '@/services/queries'
 import { setupHref } from '@/lib/route'
 import { openSetupOnStart } from './setup'
 

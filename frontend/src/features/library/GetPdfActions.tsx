@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import { AlreadyInLibraryError, NoFreePdfError } from '@/api/client'
-import { useFindPaperPdf, useUploadPaperPdf } from '@/api/queries'
+import { AlreadyInLibraryError, NoFreePdfError } from '@/services/api'
+import { useFindPaperPdf, useUploadPaperPdf } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { codeInWords, outcomeInWords } from '@/lib/errorWords'
 import { readerHref } from '@/lib/route'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { sequentialScale } from '@/features/charts/palette'
 import { DIAGONAL, kindsText, matrix, MATRIX_CAP, MATRIX_CAP_LINE, MATRIX_CAPTION } from './matrixModel'
 

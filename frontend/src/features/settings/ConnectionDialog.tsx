@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import type { LLMConnection } from '@/api/client'
-import { useConnectionMutations } from '@/api/queries'
+import type { LLMConnection } from '@/entities'
+import { useConnectionMutations } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

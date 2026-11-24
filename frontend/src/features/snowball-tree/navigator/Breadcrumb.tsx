@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import type { ProvenanceOut } from '@/api/client'
+import type { ProvenanceOut } from '@/entities'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { collapse, type NavEntry } from './navPath'
 

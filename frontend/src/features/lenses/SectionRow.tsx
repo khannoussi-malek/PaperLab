@@ -1,7 +1,7 @@
 import { ChevronDown, Ellipsis } from 'lucide-react'
 import { useState } from 'react'
 import { Collapsible } from 'radix-ui'
-import type { Role, Section } from '@/api/client'
+import type { Role, Section } from '@/entities'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {

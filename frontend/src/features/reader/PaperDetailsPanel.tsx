@@ -1,4 +1,4 @@
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { GetPdfActions } from '@/features/library/GetPdfActions'
 import { Term } from '@/features/workspaces/Term'
 import { detailsSourceLine } from './detailsSource'

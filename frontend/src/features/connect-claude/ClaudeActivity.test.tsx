@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn(),
 }))
 
-vi.mock('@/api/queries', () => ({
+vi.mock('@/services/queries', () => ({
   useMcpActivity: () => mocks.activity,
   useMcpSettings: () => mocks.settings,
   useSetMcpWrites: () => ({ mutate: mocks.setWrites, isPending: false, error: null }),

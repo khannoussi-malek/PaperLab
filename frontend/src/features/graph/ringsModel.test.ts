@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { OUTER_RING, RINGS_HINT, ringsCentre, ringsLayout } from './ringsModel'
 
 const link = (source: string, target: string, kind: GraphLink['kind'] = 'similar'): GraphLink => ({

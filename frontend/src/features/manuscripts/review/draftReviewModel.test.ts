@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { DraftReview, DraftReviewEstimate } from '@/api/client'
+import type { DraftReview, DraftReviewEstimate } from '@/entities'
 import { discardedCount, isLive, modeText, reasonText, severityLabel, startBody } from './draftReviewModel'
 
 test('a failed review reason in plain words; an unknown one is not blamed on the model', () => {

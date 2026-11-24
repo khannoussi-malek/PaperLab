@@ -3,7 +3,8 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { HitTable } from './HitTable'
-import { api, type Hit } from '@/api/client'
+import type { Hit } from '@/entities'
+import { api } from '@/services/api'
 import { GLOSSARY } from '@/features/workspaces/glossary'
 import { sileo } from 'sileo'
 

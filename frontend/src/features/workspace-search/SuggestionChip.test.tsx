@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { Hit } from '@/api/client'
+import type { Hit } from '@/entities'
 import { fireEvent } from '@testing-library/react'
 import { SuggestionChip, SuggestionWhy } from './SuggestionChip'
 

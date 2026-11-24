@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { EligibilityUpdate, Hit } from '@/api/client'
-import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
+import type { EligibilityUpdate, Hit } from '@/entities'
+import { useSearchHits, useSetEligibility, useSnowball } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { codeInWords } from '@/lib/errorWords'

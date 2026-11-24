@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type SectionReview } from '@/api/client'
+import type { SectionReview } from '@/entities'
+import { api } from '@/services/api'
 import { citeThis } from './citeThis'
 import type { ReviewHandle } from './reviewMarks'
 import { marksFor } from './reviewModel'

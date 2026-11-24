@@ -1,4 +1,4 @@
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { sequentialScale, type ChartTheme } from '@/features/charts/palette'
 import { byFirstWorkspace, degrees, KIND_LABELS, KINDS, type LinkKind } from './graphModel'
 

@@ -2,8 +2,8 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { expect, test, vi, afterEach } from 'vitest'
 import { PrismaTab } from './PrismaTab'
-import * as queries from '@/api/queries'
-import type { PrismaExportOut } from '@/api/client'
+import * as queries from '@/services/queries'
+import type { PrismaExportOut } from '@/entities'
 
 const combinedData: PrismaExportOut = {
   identified: 120, sources_searched: [], sources_not_searched: [],

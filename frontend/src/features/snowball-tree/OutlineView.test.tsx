@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
-import type { ProvenanceOut } from '@/api/client'
+import * as queries from '@/services/queries'
+import type { ProvenanceOut } from '@/entities'
 import { OutlineView } from './OutlineView'
 
 const data: ProvenanceOut = {

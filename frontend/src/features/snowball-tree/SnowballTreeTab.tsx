@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { refreshTree, useProvenance, useSearchRuns, useSnowball } from '@/api/queries'
+import { refreshTree, useProvenance, useSearchRuns, useSnowball } from '@/services/queries'
 import { LoadingState } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
