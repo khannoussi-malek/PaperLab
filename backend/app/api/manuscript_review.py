@@ -30,11 +30,7 @@ async def start_review(manuscript_id: uuid.UUID, body: ReviewIn, session: Sessio
         **await review.start(
             session,
             manuscript_id,
-            file=body.file,
-            base=body.base,
-            selection=selection,
-            include_uncited=body.include_uncited,
-            confirm_remote=body.confirm_remote,
+            review.ReviewAsk(body.file, body.base, selection, body.include_uncited, body.confirm_remote),
         )
     )
 

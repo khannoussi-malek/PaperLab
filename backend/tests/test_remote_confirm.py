@@ -69,15 +69,15 @@ async def test_citation_check_start_refuses_a_remote_model_without_confirm(sessi
     await _remote(session)
     kw = {"file": "main.tex", "base": FUTURE, "selection": None}
     with pytest.raises(Conflict, match="remote_model_needs_confirm"):
-        await mr.start(session, m.id, **kw)
+        await mr.start(session, m.id, mr.ReviewAsk(**kw))
     assert arq.jobs == []
-    assert (await mr.start(session, m.id, **kw, confirm_remote=True))["status"] == "queued"
+    assert (await mr.start(session, m.id, mr.ReviewAsk(**kw, confirm_remote=True)))["status"] == "queued"
 
 
 async def test_citation_check_start_runs_a_local_model_without_asking(session, local_default_model):
     _, _, m = await setup(session, "Alpha", name=f"W {uuid.uuid4().hex[:8]}")
     await manuscripts.upsert_text(session, m.id, "main.tex", "Walking is good for health in most adults.")
-    out = await mr.start(session, m.id, file="main.tex", base=FUTURE, selection=None)
+    out = await mr.start(session, m.id, mr.ReviewAsk(file="main.tex", base=FUTURE, selection=None))
     assert out["status"] == "queued"
 
 
@@ -102,7 +102,9 @@ async def test_a_citation_check_whose_default_turns_remote_is_refused_by_the_job
     monkeypatch.setattr(review_worker, "SessionLocal", shared_session)
     _, _, m = await setup(session, "Alpha", name=f"W {uuid.uuid4().hex[:8]}")
     await manuscripts.upsert_text(session, m.id, "main.tex", "Walking is good for health in most adults.")
-    out = await mr.start(session, m.id, file="main.tex", base=FUTURE, selection=None)  # local: no yes needed
+    out = await mr.start(
+        session, m.id, mr.ReviewAsk(file="main.tex", base=FUTURE, selection=None)
+    )  # local: no yes needed
     await _remote(session)
     await review_worker.check_manuscript_citations({}, str(out["id"]))
     found = list(

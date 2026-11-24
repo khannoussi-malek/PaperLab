@@ -78,7 +78,9 @@ async def test_report_reads_only_the_latest_runs_rows(session, arq):
         r.status, r.verdict = "done", "supported"
     await session.execute(update(ManuscriptReviewRun).values(status="done"))
     await session.flush()
-    await mr.start(session, m.id, file="main.tex", base=FUTURE, selection=None, include_uncited=False)  # a per-file run
+    await mr.start(
+        session, m.id, mr.ReviewAsk(file="main.tex", base=FUTURE, selection=None, include_uncited=False)
+    )  # a per-file run
     r = await rep.build(session, m.id)
     assert r["run"]["file"] == "main.tex"
     assert [f["path"] for f in r["files"]] == ["main.tex"] and sum(
