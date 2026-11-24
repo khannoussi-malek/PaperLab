@@ -4,14 +4,14 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { CheckFinding, ManuscriptDetail } from '@/entities'
 import { api, ApiError } from '@/services/api'
-import { keptTexts } from './keptTexts'
-import { ManuscriptPage } from './ManuscriptPage'
+import { keptTexts } from '@/features/manuscripts/keptTexts'
+import { ManuscriptPage } from '@/pages/ManuscriptPage'
 
 const pdf = vi.hoisted(() => vi.fn((_url: string | null) => ({ doc: null, error: null })))
 // jsdom can't lay CodeMirror out, so here the editor is a textarea with the same props (LatexEditor.test.tsx runs the real one).
 type EditorProps = { value: string; onChange: (v: string) => void; onFindEvidence?: (doc: string, from: number, to: number) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; onCiteKey?: (k: string) => void; registerInsert?: (f: ((t: string) => void) | null) => void; jumpTo?: { line: number; n: number } | null }
 const editor = vi.hoisted(() => ({ current: null as null | EditorProps }))
-vi.mock('./LatexEditor', async () => {
+vi.mock('@/features/manuscripts/LatexEditor', async () => {
   const { useEffect, useRef } = await import('react')
   return {
     LatexEditor: (props: EditorProps) => {
@@ -24,13 +24,13 @@ vi.mock('./LatexEditor', async () => {
     },
   }
 })
-vi.mock('@/components/AppShell', () => ({
+vi.mock('@/layout/AppShell', () => ({
   AppShell: ({ title, actions, status, children }: { title: string; actions?: React.ReactNode; status?: React.ReactNode; children: React.ReactNode }) => (
     <div><h1>{title}</h1>{actions}<main>{children}</main>{status}</div>
   ),
 }))
-vi.mock('../reader/usePdfDocument', () => ({ usePdfDocument: pdf }))
-vi.mock('../reader/PdfPage', () => ({ PdfPage: () => null }))
+vi.mock('@/features/reader/usePdfDocument', () => ({ usePdfDocument: pdf }))
+vi.mock('@/features/reader/PdfPage', () => ({ PdfPage: () => null }))
 
 const T1 = '2026-10-01T00:00:00Z'
 const T2 = '2026-10-02T00:00:00Z'

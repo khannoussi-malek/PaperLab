@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { api } from '@/services/api'
-import { LibraryPage } from './LibraryPage'
+import { LibraryPage } from '@/pages/LibraryPage'
 
 const state = vi.hoisted(() => ({ papers: [] as { id: string; title: string }[] }))
 vi.mock('@/services/queries', () => ({
@@ -11,13 +11,14 @@ vi.mock('@/services/queries', () => ({
   useUploadPapers: () => ({ isPending: false, error: null, mutate: vi.fn() }),
   useEmbeddingStatus: () => ({ data: undefined }),
   useManuscripts: () => ({ data: undefined }),
+  useNovelty: () => ({ data: undefined, error: null, isPending: false, mutate: vi.fn(), reset: vi.fn() }),
 }))
-vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }))
-vi.mock('./FoundPdfsNotice', () => ({ FoundPdfsNotice: () => null }))
-vi.mock('../discovery/FindPapersButton', () => ({ FindPapersButton: () => null }))
+vi.mock('@/layout/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }))
+vi.mock('@/features/library/FoundPdfsNotice', () => ({ FoundPdfsNotice: () => null }))
+vi.mock('@/features/discovery/FindPapersButton', () => ({ FindPapersButton: () => null }))
 type Selection = { selected: ReadonlySet<string>; onToggle: (id: string) => void }
 // The real list pulls in pdfjs, which needs a worker: a checkbox per paper stands in for its rows.
-vi.mock('./PaperList', () => ({
+vi.mock('@/features/library/PaperList', () => ({
   PaperList: ({ papers, selection, view }: { papers: { id: string; title: string }[]; selection?: Selection; view?: string }) => (
     <ul data-view={view}>
       {papers.map((p) => (
@@ -81,4 +82,11 @@ test('the List | Deck switch defaults to list, remembers deck, and the deck offe
   unmount()
   render(<QueryClientProvider client={new QueryClient()}><LibraryPage /></QueryClientProvider>)
   expect(view()).toBe('deck')
+})
+
+test('the Library page opens the novelty panel from a Has this been done? button', () => {
+  render(<QueryClientProvider client={new QueryClient()}><LibraryPage /></QueryClientProvider>)
+  expect(screen.queryByLabelText('Paste an idea or an abstract')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Has this been done?' }))
+  expect(screen.getByLabelText('Paste an idea or an abstract')).toBeInTheDocument()
 })

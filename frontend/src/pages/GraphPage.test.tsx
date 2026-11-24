@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { GraphPage } from './GraphPage'
+import { GraphPage } from '@/pages/GraphPage'
 
 const pending = { data: undefined, isError: false, isPending: true, failureCount: 0 }
 vi.mock('@/services/queries', () => ({
@@ -14,7 +14,7 @@ vi.mock('@/services/queries', () => ({
     return { create: idle, rename: idle, remove: idle }
   },
 }))
-vi.mock('@/components/AppShell', () => ({
+vi.mock('@/layout/AppShell', () => ({
   AppShell: ({ children, status }: { children: ReactNode; status: ReactNode }) => (
     <div>
       <footer data-testid="status">{status}</footer>

@@ -5,22 +5,8 @@ import { afterEach, expect, test, vi } from 'vitest'
 import type { NoveltyResult } from '@/entities'
 import { api } from '@/services/api'
 import { readerHref } from '@/router/route'
-import { LibraryPage } from './LibraryPage'
 import { NoveltyPanel } from './NoveltyPanel'
 
-// The page test needs the library shell stubbed, as LibraryPage.test.tsx does: the real list pulls in pdfjs and the theme.
-vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }))
-vi.mock('./PaperList', () => ({ PaperList: () => null }))
-vi.mock('./FoundPdfsNotice', () => ({ FoundPdfsNotice: () => null }))
-vi.mock('../discovery/FindPapersButton', () => ({ FindPapersButton: () => null }))
-vi.mock('@/features/graph/viewModel', () => ({ hasWebGL: () => false }))
-vi.mock('@/services/queries', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/services/queries')>()),
-  usePapers: () => ({ data: [], isError: false }),
-  useUploadPapers: () => ({ isPending: false, error: null, mutate: vi.fn() }),
-  useManuscripts: () => ({ data: undefined }),
-}))
-vi.stubGlobal('matchMedia', () => ({ matches: false }))
 
 const PAPER = '11111111-1111-1111-1111-111111111111'
 const CHUNK = '22222222-2222-2222-2222-222222222222'
@@ -96,13 +82,6 @@ test('a 409 search_not_set_up shows plain words, not the code', async () => {
   fireEvent.click(check())
   expect(await screen.findByText("Search isn't set up yet. Download the search model in Settings, then try again.")).toBeInTheDocument()
   expect(screen.queryByText('search_not_set_up')).toBeNull()
-})
-
-test('the Library page opens the panel from a Has this been done? button', () => {
-  render(<QueryClientProvider client={new QueryClient()}><LibraryPage /></QueryClientProvider>)
-  expect(screen.queryByLabelText('Paste an idea or an abstract')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Has this been done?' }))
-  expect(idea()).toBeInTheDocument()
 })
 
 test('a 409 search_rebuilding shows plain words, not the code', async () => {

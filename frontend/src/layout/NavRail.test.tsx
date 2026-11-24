@@ -2,8 +2,8 @@
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chartsHref, graphHref } from '@/router/route'
-import { NavRail } from './NavRail'
-import { forgetRailPill } from './useRailPill'
+import { NavRail } from '@/layout/NavRail'
+import { forgetRailPill } from '@/layout/useRailPill'
 
 vi.mock('@/features/workspaces/WorkspaceSidebar', () => ({ WorkspaceSidebar: () => null }))
 // The page change in progress, as withViewTransition reports it; none unless a test sets one.

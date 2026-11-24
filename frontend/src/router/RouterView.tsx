@@ -4,20 +4,20 @@ import { lazyPage } from './lazyPage'
 import { useRoute, type Route } from './route'
 
 // Each page is its own chunk, loaded the first time its route opens.
-const LibraryPage = lazyPage(() => import('@/features/library/LibraryPage').then((m) => m.LibraryPage))
-const ReaderPage = lazyPage(() => import('@/features/reader/ReaderPage').then((m) => m.ReaderPage), { bare: true })
-const WorkspacePage = lazyPage(() => import('@/features/workspaces/WorkspacePage').then((m) => m.WorkspacePage))
-const ManuscriptPage = lazyPage(() => import('@/features/manuscripts/ManuscriptPage').then((m) => m.ManuscriptPage))
-const ChartsPage = lazyPage(() => import('@/features/charts/ChartsPage').then((m) => m.ChartsPage))
-const ChartPage = lazyPage(() => import('@/features/charts/ChartPage').then((m) => m.ChartPage))
-const ChartBuilderPage = lazyPage(() => import('@/features/charts/ChartBuilderPage').then((m) => m.ChartBuilderPage))
-const DatasetPage = lazyPage(() => import('@/features/data/DatasetPage').then((m) => m.DatasetPage))
-const SettingsPage = lazyPage(() => import('@/features/settings/SettingsPage').then((m) => m.SettingsPage))
-const ConnectClaudePage = lazyPage(() => import('@/features/connect-claude/ConnectClaudePage').then((m) => m.ConnectClaudePage))
-const SetupPage = lazyPage(() => import('@/features/setup/SetupPage').then((m) => m.SetupPage), { bare: true })
-const NotesPage = lazyPage(() => import('@/features/notes/NotesPage.tsx').then((m) => m.NotesPage))
-const ReferencesPage = lazyPage(() => import('@/features/references/ReferencesPage').then((m) => m.ReferencesPage))
-const GraphPage = lazyPage(() => import('@/features/graph/GraphPage').then((m) => m.GraphPage))
+const LibraryPage = lazyPage(() => import('@/pages/LibraryPage').then((m) => m.LibraryPage))
+const ReaderPage = lazyPage(() => import('@/pages/ReaderPage').then((m) => m.ReaderPage), { bare: true })
+const WorkspacePage = lazyPage(() => import('@/pages/WorkspacePage').then((m) => m.WorkspacePage))
+const ManuscriptPage = lazyPage(() => import('@/pages/ManuscriptPage').then((m) => m.ManuscriptPage))
+const ChartsPage = lazyPage(() => import('@/pages/ChartsPage').then((m) => m.ChartsPage))
+const ChartPage = lazyPage(() => import('@/pages/ChartPage').then((m) => m.ChartPage))
+const ChartBuilderPage = lazyPage(() => import('@/pages/ChartBuilderPage').then((m) => m.ChartBuilderPage))
+const DatasetPage = lazyPage(() => import('@/pages/DatasetPage').then((m) => m.DatasetPage))
+const SettingsPage = lazyPage(() => import('@/pages/SettingsPage').then((m) => m.SettingsPage))
+const ConnectClaudePage = lazyPage(() => import('@/pages/ConnectClaudePage').then((m) => m.ConnectClaudePage))
+const SetupPage = lazyPage(() => import('@/pages/SetupPage').then((m) => m.SetupPage), { bare: true })
+const NotesPage = lazyPage(() => import('@/pages/NotesPage').then((m) => m.NotesPage))
+const ReferencesPage = lazyPage(() => import('@/pages/ReferencesPage').then((m) => m.ReferencesPage))
+const GraphPage = lazyPage(() => import('@/pages/GraphPage').then((m) => m.GraphPage))
 
 type RouteOf<N extends Route['name']> = Extract<Route, { name: N }>
 

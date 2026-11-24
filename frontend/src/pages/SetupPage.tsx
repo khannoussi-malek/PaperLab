@@ -4,9 +4,9 @@ import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { SetupChat } from './SetupChat'
-import { SetupSearch } from './SetupSearch'
-import { SKIPPED, type SetupStep } from './setup'
+import { SetupChat } from '@/features/setup/SetupChat'
+import { SetupSearch } from '@/features/setup/SetupSearch'
+import { SKIPPED, type SetupStep } from '@/features/setup/setup'
 
 const STEPS: { step: SetupStep; label: string }[] = [
   { step: 'chat', label: '1. Chat' },

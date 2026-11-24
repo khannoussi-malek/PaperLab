@@ -2,7 +2,7 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { workspaceHref } from '@/router/route'
-import { WorkspacePage } from './WorkspacePage'
+import { WorkspacePage } from '@/pages/WorkspacePage'
 
 const counts = vi.hoisted(() => ({ paper_count: 1, note_count: 0 }))
 const seen = vi.hoisted(() => ({ reading: null as unknown, papers: null as unknown }))
@@ -19,8 +19,8 @@ vi.mock('@/services/queries', () => ({
     return { data: { pages: [{ items: entry.rows } as Rows] }, hasNextPage: !!entry.more }
   },
 }))
-vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main>, shellTitle: () => null }))
-vi.mock('./WorkspacePapers', () => ({
+vi.mock('@/layout/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main>, shellTitle: () => null }))
+vi.mock('@/features/workspaces/WorkspacePapers', () => ({
   WorkspacePapers: (props: { onTagsChange: (t: string[], m: 'any' | 'all') => void }) => {
     seen.papers = props
     return <button onClick={() => props.onTagsChange(['rct'], 'all')}>pick</button>
@@ -32,11 +32,11 @@ vi.mock('@/features/workspace-search/ReadingQueueTab', () => ({ ReadingQueueTab:
 vi.mock('@/features/workspace-search/ScreeningTab', () => ({ ScreeningTab: () => null }))
 vi.mock('@/features/snowball-tree/SnowballTreeTab', () => ({ SnowballTreeTab: () => null }))
 vi.mock('@/features/workspace-search/SearchTab', () => ({ SearchTab: () => null }))
-vi.mock('../evidence/EvidenceTab', () => ({ EvidenceTab: () => null }))
-vi.mock('../manuscripts/ManuscriptList', () => ({ ManuscriptList: () => null }))
-vi.mock('./WorkspaceChat', () => ({ WorkspaceChat: () => null }))
-vi.mock('./WorkspaceNotes', () => ({ WorkspaceNotes: () => null }))
-vi.mock('./ExportCitationsMenu', () => ({ ExportCitationsMenu: () => null }))
+vi.mock('@/features/evidence/EvidenceTab', () => ({ EvidenceTab: () => null }))
+vi.mock('@/features/manuscripts/ManuscriptList', () => ({ ManuscriptList: () => null }))
+vi.mock('@/features/workspaces/WorkspaceChat', () => ({ WorkspaceChat: () => null }))
+vi.mock('@/features/workspaces/WorkspaceNotes', () => ({ WorkspaceNotes: () => null }))
+vi.mock('@/features/workspaces/ExportCitationsMenu', () => ({ ExportCitationsMenu: () => null }))
 
 afterEach(() => {
   cleanup()

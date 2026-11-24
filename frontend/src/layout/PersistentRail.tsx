@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { NavRail } from '@/components/NavRail'
+import { NavRail } from '@/layout/NavRail'
 
 /**
  * The sidebar's one DOM home for the whole session. Every view draws its own `AppShell`, so a sidebar inside the shell

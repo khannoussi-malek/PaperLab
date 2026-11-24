@@ -2,18 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import type { GraphLink } from '@/entities'
 import { useEmbeddingStatus, useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/services/queries'
 import { LoadingState } from '@/components/LoadingState'
-import { AppShell } from '@/components/AppShell'
+import { AppShell } from '@/layout/AppShell'
 import { glass } from '@/components/glass'
 import { useChartTheme } from '@/features/charts/useChartTheme'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { rebuildLine } from '@/features/settings/searchSources'
 import { cn } from '@/lib/utils'
-import { GraphControls } from './GraphControls'
-import { GraphPanel } from './GraphPanel'
-import { GraphViews } from './GraphViews'
-import { hopTarget, linkedInOrder } from './paperWalk'
-import { LinkDialog, type LinkDraft } from './LinkDialog'
+import { GraphControls } from '@/features/graph/GraphControls'
+import { GraphPanel } from '@/features/graph/GraphPanel'
+import { GraphViews } from '@/features/graph/GraphViews'
+import { hopTarget, linkedInOrder } from '@/features/graph/paperWalk'
+import { LinkDialog, type LinkDraft } from '@/features/graph/LinkDialog'
 import {
   countsLine,
   DEFAULT_LAYERS,
@@ -23,9 +23,9 @@ import {
   visibleLinks,
   workspaceColors,
   type LinkKind,
-} from './graphModel'
-import type { TimeAxis } from './timelineModel'
-import { readView, writeView, type GraphView } from './viewModel'
+} from '@/features/graph/graphModel'
+import type { TimeAxis } from '@/features/graph/timelineModel'
+import { readView, writeView, type GraphView } from '@/features/graph/viewModel'
 
 const EMPTY =
   'No links yet. Import references, add papers to a workspace, or turn on OpenAlex to fill this in.'
