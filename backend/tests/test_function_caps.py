@@ -23,7 +23,6 @@ LONG: dict[str, int] = {
     "app/main.py::create_app": 67,
     "app/providers/llm_fake.py::_replies": 51,
     "app/scripts/tectonic_sandbox_check.py::main": 53,
-    "app/workers/ingest.py::ingest_paper": 73,
 }
 WIDE: dict[str, int] = {
     # The search core: ten callers and nine test fakes pass these keyword options by name.
@@ -35,7 +34,6 @@ DEEP: dict[str, int] = {
     "app/providers/llm.py::OpenAICompatibleLLM.stream": 5,
     "app/providers/search_model.py::_fetch": 5,
     "app/workers/evidence_cards.py::generate_evidence_cards": 5,
-    "app/workers/ingest.py::ingest_paper": 5,
 }
 
 
