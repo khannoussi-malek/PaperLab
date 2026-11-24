@@ -291,7 +291,7 @@ async def search_library(
     has no PDF yet): cite it as the abstract, never by a page."""
     async with sessions() as session:
         return await library.search(
-            session, query, workspace, tags=tags, match=match, paper_id=paper_id, doi=doi, limit=limit
+            session, query, workspace, library.SearchFilter(tags, match, paper_id, doi), limit=limit
         )
 
 
