@@ -44,3 +44,12 @@ test('features depend on each other no more than the baseline', () => {
   }
   expect(edges.size).toBeLessThanOrEqual(CROSS_FEATURE_EDGES)
 })
+
+// Big files mix jobs. Split a file before it passes this, the way ReaderPage and HitTable were; don't raise the limit.
+const MAX_LINES = 400
+
+test(`no source file is longer than ${MAX_LINES} lines`, () => {
+  const sources = import.meta.glob(['./**/*.{ts,tsx}', '!./**/*.test.{ts,tsx}', '!./**/*.d.ts'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+  const long = Object.entries(sources).filter(([, text]) => text.split('\n').length > MAX_LINES).map(([file, text]) => `${file}: ${text.split('\n').length}`)
+  expect(long).toEqual([])
+})

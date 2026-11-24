@@ -824,7 +824,7 @@ Patterns from ui-ux-pro-max (`--domain ux`): *Deep Linking*, *Back Button*, *Act
   plus a `Badge variant="secondary" reading-chip` when the paper has a level or a decision — so its accessible name is
   "Reading" or "Reading Pass 2 · Later", the badge text after `aria-label`, never from content alone. It opens a
   non-modal `Popover` (`reading-popover`, `w-96`, `bg-glass-strong`): two `RadioGroup`s side by side, **Passes
-  finished** and **Decision**, each saving on change; then the next pass's guide from `features/reading/passes.ts`
+  finished** and **Decision**, each saving on change; then the next pass's guide from `entities/passes.ts`
   (steps, "Done when", the five Cs and the decision line at pass 1, an **Open References** button at passes 1–2); at
   level 3, one line saying every pass is finished. A last, muted line: "Only you set this. PaperLab never marks a
   pass for you." (D118). Escape returns focus to the button (Radix).

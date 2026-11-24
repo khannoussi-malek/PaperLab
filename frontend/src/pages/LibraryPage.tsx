@@ -83,7 +83,7 @@ export function LibraryPage() {
                 <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear</Button>
               </div>
             )}
-            <PaperList papers={list} selection={view === 'list' ? { selected: new Set(selectedIds), onToggle: toggle } : undefined} onVisibleChange={setVisible} view={view} triageScope="library" sourceLabel="your library" onTriageExit={exitTriage} onShowKept={() => setView('list')} />
+            <PaperList papers={list} selection={view === 'list' ? { selected: new Set(selectedIds), onToggle: toggle } : undefined} onVisibleChange={setVisible} view={view} triage={{ scope: 'library', sourceLabel: 'your library', onExit: exitTriage, onShowKept: () => setView('list') }} />
           </div>
         )}
 

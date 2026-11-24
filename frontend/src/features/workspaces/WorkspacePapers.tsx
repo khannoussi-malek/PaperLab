@@ -103,11 +103,7 @@ export function WorkspacePapers({
             <PaperList
               selection={view === 'list' ? { selected: new Set(selectedIds), onToggle: toggle } : undefined}
               view={view}
-              libraryPapers={all}
-              triageScope={`workspace:${workspaceId}`}
-              sourceLabel="this workspace"
-              onTriageExit={exitTriage}
-              onShowKept={() => setView('list')}
+              triage={{ scope: `workspace:${workspaceId}`, sourceLabel: 'this workspace', libraryPapers: all, onExit: exitTriage, onShowKept: () => setView('list') }}
               papers={list}
               onVisibleChange={setVisible}
               workspaceId={workspaceId}

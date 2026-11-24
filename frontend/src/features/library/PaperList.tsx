@@ -162,12 +162,18 @@ type Props = {
   onVisibleChange?: (ids: string[]) => void
   /** `deck` shows the papers the toolbar leaves as a 3D deck, `triage` as a desk to sort them: neither offers selection or row actions. */
   view?: PaperView
-  /** Triage only: every paper loaded for the scope, unfiltered (defaults to `papers`). */
+  /** What the triage desk needs; only read when `view` is `triage`. */
+  triage?: TriageOptions
+}
+
+export type TriageOptions = {
+  /** The session's scope (`library` or `workspace:<id>`) and its name in the bar. */
+  scope: string
+  sourceLabel: string
+  /** Every paper loaded for the scope, unfiltered (defaults to `papers`). */
   libraryPapers?: Paper[]
-  /** Triage only: the session's scope (`library` or `workspace:<id>`), its name in the bar, and where Exit and "show kept" go. */
-  triageScope?: string
-  sourceLabel?: string
-  onTriageExit?: () => void
+  /** Where Exit and "show kept" go. */
+  onExit?: () => void
   onShowKept?: () => void
 }
 
@@ -175,7 +181,7 @@ type Props = {
  * A search bar over paper rows, beside a preview of the hovered or focused one. The library and each workspace's Papers
  * tab use it.
  */
-export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection, onVisibleChange, view = 'list', libraryPapers, triageScope = 'library', sourceLabel = 'your library', onTriageExit, onShowKept }: Props) {
+export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection, onVisibleChange, view = 'list', triage = { scope: 'library', sourceLabel: 'your library' } }: Props) {
   const remove = useDeletePaper()
   const membership = useWorkspaceMembership()
   const reading = useSetReading()
@@ -213,7 +219,7 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
   // The desk unmounts with its button: focus goes to the List switch, and the list shows what was kept.
   function showKept() {
     setFilter('keep')
-    onShowKept?.()
+    triage.onShowKept?.()
     queueMicrotask(() => document.querySelector<HTMLElement>('[data-view-switch="list"]')?.focus())
   }
 
@@ -276,12 +282,12 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
               papers={shown}
               searching={query.trim() !== ''}
               onClearSearch={clearSearch}
-              library={libraryPapers ?? papers}
-              scope={triageScope}
-              sourceLabel={sourceLabel}
+              library={triage.libraryPapers ?? papers}
+              scope={triage.scope}
+              sourceLabel={triage.sourceLabel}
               filterKey={filterKey}
               workspaceId={workspaceId}
-              onExit={() => onTriageExit?.()}
+              onExit={() => triage.onExit?.()}
               onShowKept={showKept}
             />
           ) : shown.length === 0 ? (
