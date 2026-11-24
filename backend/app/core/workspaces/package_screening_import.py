@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -152,20 +152,29 @@ async def _reference(session, hit: dict, used: set[uuid.UUID]) -> ExternalRef:
     return ref
 
 
-async def _place_hit(session, workspace_id, hit, run_ids, paper_ids, hit_ids, used) -> uuid.UUID | None:
+@dataclass(frozen=True)
+class _Keys:
+    """The package's keys mapped to this library's new ids."""
+
+    runs: dict[str, uuid.UUID]
+    papers: dict[str, uuid.UUID]
+    hits: dict[str, uuid.UUID]
+
+
+async def _place_hit(session, workspace_id, hit, keys: _Keys, used) -> uuid.UUID | None:
     """One hit with its reference found or created. None only if the insert conflicts, which the copies above rule out;
     the count check would then refuse the package."""
     ref = await _reference(session, hit, used)
     ai, stage1 = hit["ai_suggestion"] or {}, hit["stage1"]
     row = {
-        "id": hit_ids[hit["key"]], "workspace_id": workspace_id, "run_id": run_ids[hit["run"]],
+        "id": keys.hits[hit["key"]], "workspace_id": workspace_id, "run_id": keys.runs[hit["run"]],
         "external_ref_id": ref.id, "source_method": hit["source_method"],
-        "seed_paper_id": paper_ids.get(hit["seed_paper"]), "snowball_round": hit["snowball_round"],
+        "seed_paper_id": keys.papers.get(hit["seed_paper"]), "snowball_round": hit["snowball_round"],
         "normalized_title": normal_title(hit["title"]), "first_seen_at": _when(hit["first_seen_at"]),
         "stage1_status": stage1["status"], "stage1_exclude_reason": stage1["exclude_reason"],
         "stage1_note": stage1["note"], "stage1_decided_at": _when(hit["stage1_decided_at"]),
         "priority": hit["priority"], "topic_fit": hit["topic_fit"], "acquisition_status": hit["acquisition_status"],
-        "paper_id": paper_ids.get(hit["paper"]), "suggestion": ai.get("suggestion"),
+        "paper_id": keys.papers.get(hit["paper"]), "suggestion": ai.get("suggestion"),
         "suggestion_reason": ai.get("reason"), "suggestion_note": ai.get("note"), "suggestion_model": ai.get("model"),
         "suggestion_relevance": ai.get("relevance"), "suggestion_confidence": ai.get("confidence"),
         "suggestion_quotes": ai.get("quotes"), "suggestion_flags": ai.get("flags"),
@@ -193,76 +202,89 @@ def _cursor_rows(runs: list[dict], run_ids: dict[str, uuid.UUID]) -> list[dict]:
     ]
 
 
+def _add_runs(session, doc: dict, workspace, keys: _Keys) -> None:
+    for run in doc["runs"]:
+        session.add(WorkspaceSearchRun(
+            id=keys.runs[run["key"]], workspace_id=workspace.id, query_text=run["query"],
+            query_overrides_json=run["query_overrides"] or {}, filters_json=run["filters"],
+            sources_json=run["sources"], status="exhausted", started_at=_when(run["started_at"]),
+            stopped_at=_when(run["stopped_at"]), stats_json=_stats_in(run["stats"], keys.hits),
+        ))  # fmt: skip
+
+
+async def _place_hits(session, doc: dict, workspace_id: uuid.UUID, keys: _Keys) -> dict[str, uuid.UUID]:
+    """Package hit key -> the placed hit's id."""
+    placed: dict[str, uuid.UUID] = {}
+    used: set[uuid.UUID] = set()
+    for hit in doc["hits"]:
+        if (new_id := await _place_hit(session, workspace_id, hit, keys, used)) is not None:
+            placed[hit["key"]] = new_id
+    return placed
+
+
+def _eligibility_rows(doc: dict, keys: _Keys) -> list[dict]:
+    return [
+        {
+            "paper_id": keys.papers[row["paper"]],
+            "search_run_id": keys.runs[row["run"]],
+            "stage2_status": row["stage2_status"],
+            "stage2_exclude_reason": row["exclude_reason"],
+            "assessed_at": _when(row["assessed_at"]),
+        }
+        for row in doc["eligibility"]
+    ]
+
+
+def _link_rows(doc: dict, workspace_id: uuid.UUID, keys: _Keys, placed: dict[str, uuid.UUID]) -> list[dict]:
+    return [
+        {
+            "workspace_id": workspace_id,
+            "child_hit_id": placed[link["child_hit"]],
+            "parent_hit_id": placed.get(link["parent_hit"]),
+            "parent_paper_id": keys.papers.get(link["parent_paper"]),
+            "run_id": keys.runs[link["run"]],
+            "kind": link["kind"],
+        }
+        for link in doc["links"]
+        if link["child_hit"] in placed and (link["parent_hit"] is None or link["parent_hit"] in placed)
+    ]
+
+
+def _branch_rows(doc: dict, workspace_id: uuid.UUID, keys: _Keys, placed: dict[str, uuid.UUID]) -> list[dict]:
+    return [
+        {
+            "workspace_id": workspace_id,
+            "hit_id": placed.get(b["hit"]) if b["hit"] else None,
+            "paper_id": keys.papers.get(b["paper"]) if b["paper"] else None,
+            "state": b["state"],
+            "directions": b["directions"] or [],
+            "reason": b["reason"],
+            "set_by": b["set_by"],
+        }
+        for b in doc["branches"]
+        if (placed.get(b["hit"]) if b["hit"] else keys.papers.get(b["paper"])) is not None
+    ]
+
+
 async def rebuild(session, doc: dict, workspace, paper_ids: dict[str, uuid.UUID]) -> int:
     """Adds the package's screening to `workspace` (flushed; its papers are in `paper_ids`, every key the package
     holds). Rows only: the caller owns the commit. Returns the number of search results (hits) rebuilt."""
     workspace.screening_ranked_used = doc["workspace"]["screening_ranked_used"]
     workspace.screening_criteria = doc["workspace"]["screening_criteria"]
-    run_ids = {run["key"]: uuid.uuid4() for run in doc["runs"]}
-    hit_ids = {hit["key"]: uuid.uuid4() for hit in doc["hits"]}
-    for run in doc["runs"]:
-        session.add(WorkspaceSearchRun(
-            id=run_ids[run["key"]], workspace_id=workspace.id, query_text=run["query"],
-            query_overrides_json=run["query_overrides"] or {}, filters_json=run["filters"],
-            sources_json=run["sources"], status="exhausted", started_at=_when(run["started_at"]),
-            stopped_at=_when(run["stopped_at"]), stats_json=_stats_in(run["stats"], hit_ids),
-        ))  # fmt: skip
+    keys = _Keys(
+        runs={run["key"]: uuid.uuid4() for run in doc["runs"]},
+        papers=paper_ids,
+        hits={hit["key"]: uuid.uuid4() for hit in doc["hits"]},
+    )
+    _add_runs(session, doc, workspace, keys)
     await session.flush()
-    if cursors := _cursor_rows(doc["runs"], run_ids):
+    if cursors := _cursor_rows(doc["runs"], keys.runs):
         await session.execute(pg_insert(WorkspaceSearchCursor).values(cursors).on_conflict_do_nothing())
-    placed: dict[str, uuid.UUID] = {}
-    used: set[uuid.UUID] = set()
-    for hit in doc["hits"]:
-        if (new_id := await _place_hit(session, workspace.id, hit, run_ids, paper_ids, hit_ids, used)) is not None:
-            placed[hit["key"]] = new_id
+    placed = await _place_hits(session, doc, workspace.id, keys)
     await session.flush()
-    await _insert_rows(
-        session,
-        SearchRunEligibility,
-        [
-            {
-                "paper_id": paper_ids[row["paper"]],
-                "search_run_id": run_ids[row["run"]],
-                "stage2_status": row["stage2_status"],
-                "stage2_exclude_reason": row["exclude_reason"],
-                "assessed_at": _when(row["assessed_at"]),
-            }
-            for row in doc["eligibility"]
-        ],
-    )
-    await _insert_rows(
-        session,
-        WorkspaceHitLink,
-        [
-            {
-                "workspace_id": workspace.id,
-                "child_hit_id": placed[link["child_hit"]],
-                "parent_hit_id": placed.get(link["parent_hit"]),
-                "parent_paper_id": paper_ids.get(link["parent_paper"]),
-                "run_id": run_ids[link["run"]],
-                "kind": link["kind"],
-            }
-            for link in doc["links"]
-            if link["child_hit"] in placed and (link["parent_hit"] is None or link["parent_hit"] in placed)
-        ],
-    )
-    await _insert_rows(
-        session,
-        WorkspaceBranchState,
-        [
-            {
-                "workspace_id": workspace.id,
-                "hit_id": placed.get(b["hit"]) if b["hit"] else None,
-                "paper_id": paper_ids.get(b["paper"]) if b["paper"] else None,
-                "state": b["state"],
-                "directions": b["directions"] or [],
-                "reason": b["reason"],
-                "set_by": b["set_by"],
-            }
-            for b in doc["branches"]
-            if (placed.get(b["hit"]) if b["hit"] else paper_ids.get(b["paper"])) is not None
-        ],
-    )
+    await _insert_rows(session, SearchRunEligibility, _eligibility_rows(doc, keys))
+    await _insert_rows(session, WorkspaceHitLink, _link_rows(doc, workspace.id, keys, placed))
+    await _insert_rows(session, WorkspaceBranchState, _branch_rows(doc, workspace.id, keys, placed))
     return len(placed)
 
 

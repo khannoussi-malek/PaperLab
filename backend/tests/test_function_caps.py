@@ -31,7 +31,6 @@ LONG: dict[str, int] = {
     "app/core/manuscripts/manuscript_section_review.py::start": 71,
     "app/core/notes/charts.py::resolve": 54,
     "app/core/notes/evidence_cards.py::request_cards": 65,
-    "app/core/workspaces/package_screening_import.py::rebuild": 71,
     "app/core/workspaces/reading_bridge.py::reading_queue": 51,
     "app/core/workspaces/workspace_package.py::_parts": 51,
     "app/main.py::create_app": 67,
@@ -58,7 +57,6 @@ WIDE: dict[str, int] = {
     "app/core/notes/datasets.py::create_dataset": 7,
     "app/core/workspaces/briefs.py::save_brief": 7,
     "app/core/workspaces/package_import.py::_papers_into": 7,
-    "app/core/workspaces/package_screening_import.py::_place_hit": 7,
     "app/scripts/backfill_biblio.py::run": 7,
 }
 DEEP: dict[str, int] = {
