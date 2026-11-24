@@ -1,19 +1,24 @@
 //! The galaxy behind the panel: a click-through layer over the whole screen. When the panel opens, nebula light and
-//! stars fade in and a few papers fly out of the panel, fall and fade; then the stars settle to a dim, slow twinkle.
+//! stars fade in, the star field turns slowly around the screen's centre, and papers drift out of the panel and fall
+//! like leaves down the whole screen, swaying, fading near the end; then the stars settle to a dim, slow twinkle.
 //! Everything is a pure function of the seconds since the panel opened, so it's unit-tested without a screen.
 
 use rune::{Color, Cx, DisplayTarget, El, KeyPolicy, OverlayInput, OverlayOptions, OverlayPlacement, OverlaySpec, Tx, el};
 
-const STARS: usize = 140;
-const PAPERS: usize = 10;
-/// The intro: stars and nebula fade in, papers fly and fade.
-const INTRO: f64 = 1.5;
+const STARS: usize = 220;
+const PAPERS: usize = 14;
+/// Stars and nebula fade in over this long, then the stars stay bright until INTRO.
+const FADE_IN: f64 = 2.0;
+const INTRO: f64 = 4.0;
 /// From the intro's brightness to the calm one.
-const SETTLE: f64 = 0.8;
+const SETTLE: f64 = 2.0;
+/// The star field turns once in this many seconds: slow enough to feel, never to watch.
+const TURN: f64 = 600.0;
+/// A paper's size in points.
+const PAPER: (f32, f32) = (34.0, 44.0);
 /// Where papers start: the panel's place (centred, 150 points from the top, about 60 points tall).
 const PANEL_TOP: f32 = 150.0;
 const PANEL_HEIGHT: f32 = 60.0;
-const GRAVITY: f32 = 420.0;
 
 pub struct Galaxy {
     /// Screen size in points.
@@ -29,8 +34,9 @@ pub struct Galaxy {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Star {
-    x: f32,
-    y: f32,
+    /// Polar position around the screen's centre: the field turns as one.
+    angle: f32,
+    distance: f32,
     radius: f32,
     brightness: f32,
     tint: Tint,
@@ -50,11 +56,15 @@ enum Tint {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Flight {
-    /// Start offset from the panel's centre bottom, and velocity in points per second.
+    /// Start offset from the panel's centre, and how far out it drifts (points, signed).
     x0: f32,
-    vx: f32,
-    vy: f32,
-    spin: f32,
+    drift: f32,
+    /// Side-to-side sway: amplitude in points, period in seconds, phase.
+    sway: f32,
+    sway_period: f32,
+    phase: f32,
+    /// Its gentle rocking, in radians either way.
+    rock: f32,
     delay: f64,
     life: f64,
 }
@@ -71,10 +81,12 @@ pub struct Sprite {
 impl Galaxy {
     pub fn new(size: (f32, f32)) -> Self {
         let mut rng = Rng(0x5eed_7a9e_11ab);
+        // Out to the corners, so turning never leaves an empty corner.
+        let reach = (size.0 * size.0 + size.1 * size.1).sqrt() / 2.0;
         let stars = (0..STARS)
             .map(|_| Star {
-                x: rng.unit() * size.0,
-                y: rng.unit() * size.1,
+                angle: rng.unit() * std::f32::consts::TAU,
+                distance: reach * rng.unit().sqrt(),
                 radius: 0.6 + rng.unit() * 1.3,
                 brightness: 0.4 + rng.unit() * 0.6,
                 tint: match rng.unit() {
@@ -82,8 +94,8 @@ impl Galaxy {
                     u if u < 0.88 => Tint::Blue,
                     _ => Tint::Violet,
                 },
-                delay: f64::from(rng.unit()) * 0.8,
-                period: 3.0 + f64::from(rng.unit()) * 4.0,
+                delay: f64::from(rng.unit()) * (FADE_IN - 0.8),
+                period: 4.0 + f64::from(rng.unit()) * 5.0,
                 phase: f64::from(rng.unit()) * std::f64::consts::TAU,
             })
             .collect();
@@ -91,12 +103,14 @@ impl Galaxy {
             .map(|i| {
                 let side = if i % 2 == 0 { -1.0 } else { 1.0 };
                 Flight {
-                    x0: (rng.unit() - 0.5) * 360.0,
-                    vx: side * (40.0 + rng.unit() * 160.0),
-                    vy: -(120.0 + rng.unit() * 180.0),
-                    spin: (rng.unit() - 0.5) * 6.0,
-                    delay: f64::from(rng.unit()) * 0.25,
-                    life: 1.1 + f64::from(rng.unit()) * 0.4,
+                    x0: (rng.unit() - 0.5) * 420.0,
+                    drift: side * (60.0 + rng.unit() * size.0 * 0.32),
+                    sway: 18.0 + rng.unit() * 40.0,
+                    sway_period: 2.4 + rng.unit() * 1.8,
+                    phase: rng.unit() * std::f32::consts::TAU,
+                    rock: 0.12 + rng.unit() * 0.25,
+                    delay: f64::from(i as f32 * 0.22 + rng.unit() * 0.2),
+                    life: 5.0 + f64::from(rng.unit()) * 2.0,
                 }
             })
             .collect();
@@ -114,7 +128,7 @@ impl Galaxy {
 
     /// How bright the nebula light is, 0 to 1.
     fn nebula(&self, still: bool) -> f32 {
-        if still { 1.0 } else { ease((self.t / 0.9).min(1.0)) as f32 }
+        if still { 1.0 } else { ease((self.t / FADE_IN).min(1.0)) as f32 }
     }
 
     fn star(&self, s: &Star, still: bool) -> Sprite {
@@ -122,12 +136,15 @@ impl Galaxy {
         let alpha = if still {
             calm
         } else {
-            let fade_in = ease(((self.t - s.delay) / 0.5).clamp(0.0, 1.0)) as f32;
+            let fade_in = ease(((self.t - s.delay) / 0.8).clamp(0.0, 1.0)) as f32;
             let settle = ease(((self.t - INTRO) / SETTLE).clamp(0.0, 1.0)) as f32;
             let twinkle = 0.75 + 0.25 * ((self.t / s.period * std::f64::consts::TAU + s.phase).sin() as f32);
             fade_in * (s.brightness + (calm * twinkle - s.brightness) * settle)
         };
-        Sprite { x: s.x, y: s.y, alpha, rotation: 0.0 }
+        let turned = if still { 0.0 } else { (self.t / TURN * std::f64::consts::TAU) as f32 };
+        let (sin, cos) = (s.angle + turned).sin_cos();
+        let (cx, cy) = (self.size.0 / 2.0, self.size.1 / 2.0);
+        Sprite { x: cx + s.distance * cos, y: cy + s.distance * sin, alpha, rotation: 0.0 }
     }
 
     /// A paper in flight, or None before it starts and once it has faded.
@@ -136,13 +153,20 @@ impl Galaxy {
         if still || age < 0.0 || age >= p.life {
             return None;
         }
+        // Falling leaves: out from the panel and down the whole screen, slowing their sideways drift, swaying and
+        // rocking; a quick fade in, then a long fade over the last third.
+        let k = (age / p.life) as f32;
         let a = age as f32;
-        let fade = 1.0 - (age / p.life).powi(2) as f32;
+        let start_y = PANEL_TOP + PANEL_HEIGHT;
+        let fall = self.size.1 - start_y + PAPER.1;
+        let wave = (a / p.sway_period * std::f32::consts::TAU + p.phase).sin();
+        let fade_in = (age / 0.4).min(1.0) as f32;
+        let fade_out = (1.0 - ((k - 0.66) / 0.34).max(0.0)).max(0.0);
         Some(Sprite {
-            x: self.size.0 / 2.0 + p.x0 + p.vx * a,
-            y: PANEL_TOP + PANEL_HEIGHT + p.vy * a + 0.5 * GRAVITY * a * a,
-            alpha: fade.clamp(0.0, 1.0),
-            rotation: p.spin * a,
+            x: self.size.0 / 2.0 + p.x0 + p.drift * (1.0 - (1.0 - k).powi(2)) + p.sway * wave,
+            y: start_y + fall * (k * (0.35 + 0.65 * k)),
+            alpha: (fade_in * fade_out).clamp(0.0, 1.0),
+            rotation: p.rock * wave,
         })
     }
 }
@@ -199,17 +223,18 @@ fn view(g: &Galaxy, cx: &mut Cx<Galaxy>) -> El {
     root
 }
 
-/// A tiny page: white, with two lines and a yellow highlight, like the icon's.
+/// A page like the icon's: white, a few grey lines and one yellow highlight, with a soft shadow.
 fn paper_el(i: usize, at: Sprite) -> El {
-    let (w, h) = (16.0, 21.0);
-    let line = |top: f32, width: f32, color: Color| el().absolute(3.0, top).size(width, 1.5).radius(0.75).fill(color);
-    let ink = Color::BLACK.alpha(0.35);
+    let (w, h) = PAPER;
+    let line = |top: f32, width: f32, color: Color| el().absolute(6.0, top).size(width, 2.5).radius(1.25).fill(color);
+    let ink = Color::BLACK.alpha(0.28);
     let yellow = rune::color::hex("#facc15").expect("a valid colour");
-    el().key(format!("paper-{i}")).absolute(at.x - w / 2.0, at.y - h / 2.0).size(w, h).radius(2.0)
-        .fill(Color::WHITE.alpha(0.92)).rotate(at.rotation).opacity(at.alpha)
-        .child(line(5.0, 10.0, ink))
-        .child(line(9.0, 10.0, yellow))
-        .child(line(13.0, 7.0, ink))
+    el().key(format!("paper-{i}")).absolute(at.x - w / 2.0, at.y - h / 2.0).size(w, h).radius(4.0)
+        .fill(Color::WHITE.alpha(0.94)).shadow(4.0, 10.0, Color::BLACK.alpha(0.25)).rotate(at.rotation).opacity(at.alpha)
+        .child(line(9.0, 22.0, ink))
+        .child(line(16.0, 22.0, yellow))
+        .child(line(23.0, 22.0, ink))
+        .child(line(30.0, 14.0, ink))
 }
 
 fn ease(x: f64) -> f64 {
@@ -238,26 +263,36 @@ mod tests {
     }
 
     #[test]
-    fn papers_fly_out_during_the_intro_and_are_gone_after() {
-        let g = at(0.3);
+    fn papers_drift_for_seconds_then_are_gone() {
+        let g = at(1.0);
         let flying: Vec<_> = g.papers.iter().filter_map(|p| g.paper(p, false)).collect();
         assert!(!flying.is_empty());
         assert!(flying.iter().all(|s| (0.0..=1.0).contains(&s.alpha)));
-        let late = at(INTRO + 0.5);
+        let late = at(12.0);
         assert!(late.papers.iter().all(|p| late.paper(p, false).is_none()));
     }
 
     #[test]
-    fn papers_fall_and_fade() {
-        let p = Flight { x0: 0.0, vx: 100.0, vy: -150.0, spin: 1.0, delay: 0.0, life: 1.4 };
-        let (early, late) = (at(0.2).paper(&p, false).unwrap(), at(1.2).paper(&p, false).unwrap());
-        assert!(late.y > early.y, "gravity wins over the throw");
-        assert!(late.alpha < early.alpha, "it fades as it drops");
+    fn a_paper_falls_down_the_whole_screen_and_fades_near_the_end() {
+        let p = Flight { x0: 0.0, drift: 200.0, sway: 30.0, sway_period: 3.0, phase: 0.0, rock: 0.2, delay: 0.0, life: 6.0 };
+        let (early, mid, end) = (at(1.0).paper(&p, false).unwrap(), at(3.0).paper(&p, false).unwrap(), at(5.9).paper(&p, false).unwrap());
+        assert!(early.y < mid.y && mid.y < end.y);
+        assert!(end.y > 900.0 * 0.85, "it reaches the bottom of the screen");
+        assert!(mid.alpha > 0.99 && end.alpha < 0.2, "it holds, then fades out at the end");
+    }
+
+    #[test]
+    fn the_star_field_turns_slowly_and_reduce_motion_holds_it() {
+        let star = at(0.0).stars[3];
+        let (a, b) = (at(10.0).star(&star, false), at(20.0).star(&star, false));
+        let moved = ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt();
+        assert!(moved > 0.0 && moved < 200.0, "it moves, gently ({moved} points in 10 s)");
+        assert_eq!(at(10.0).star(&star, true), at(20.0).star(&star, true));
     }
 
     #[test]
     fn stars_fade_in_then_settle_dimmer() {
-        let star = Star { x: 1.0, y: 1.0, radius: 1.0, brightness: 0.8, tint: Tint::White, delay: 0.2, period: 4.0, phase: 0.0 };
+        let star = Star { angle: 0.0, distance: 10.0, radius: 1.0, brightness: 0.8, tint: Tint::White, delay: 0.2, period: 4.0, phase: 0.0 };
         assert_eq!(at(0.0).star(&star, false).alpha, 0.0);
         let bright = at(1.0).star(&star, false).alpha;
         let calm = at(INTRO + SETTLE + 2.0).star(&star, false).alpha;
@@ -266,10 +301,8 @@ mod tests {
 
     #[test]
     fn reduce_motion_holds_the_sky_still_without_papers() {
-        let g = at(0.3);
+        let g = at(1.0);
         assert!(g.papers.iter().all(|p| g.paper(p, true).is_none()));
-        let star = g.stars[0];
-        assert_eq!(at(0.3).star(&star, true), at(5.0).star(&star, true));
     }
 
     #[test]
