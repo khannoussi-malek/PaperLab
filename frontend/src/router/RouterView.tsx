@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useOpenSetupOnStart } from '@/features/setup/useOpenSetupOnStart'
 import { lazyPage } from './lazyPage'
-import { useRoute, type Route } from './route'
+import { loadPagesWith, useRoute, type Route } from './route'
 
 // Each page is its own chunk, loaded the first time its route opens.
 const LibraryPage = lazyPage(() => import('@/pages/LibraryPage').then((m) => m.LibraryPage))
@@ -18,6 +18,25 @@ const SetupPage = lazyPage(() => import('@/pages/SetupPage').then((m) => m.Setup
 const NotesPage = lazyPage(() => import('@/pages/NotesPage').then((m) => m.NotesPage))
 const ReferencesPage = lazyPage(() => import('@/pages/ReferencesPage').then((m) => m.ReferencesPage))
 const GraphPage = lazyPage(() => import('@/pages/GraphPage').then((m) => m.GraphPage))
+
+// The code each route needs, fetched before a navigation's fade so the fade shows the page, not its Loading….
+const pageCode: { [N in Route['name']]: { preload: () => Promise<unknown> } } = {
+  library: LibraryPage,
+  workspace: WorkspacePage,
+  reader: ReaderPage,
+  manuscript: ManuscriptPage,
+  charts: ChartsPage,
+  'chart-builder': ChartBuilderPage,
+  chart: ChartPage,
+  dataset: DatasetPage,
+  settings: SettingsPage,
+  'connect-claude': ConnectClaudePage,
+  setup: SetupPage,
+  notes: NotesPage,
+  references: ReferencesPage,
+  graph: GraphPage,
+}
+loadPagesWith((route) => pageCode[route.name].preload())
 
 type RouteOf<N extends Route['name']> = Extract<Route, { name: N }>
 

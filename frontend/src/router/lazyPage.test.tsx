@@ -39,3 +39,16 @@ test('a chunk that fails shows Try again, which loads it afresh', async () => {
   expect(await screen.findByText('hello ada')).toBeInTheDocument()
   expect(load).toHaveBeenCalledTimes(2)
 })
+
+test("a preloaded page renders at once on its first mount, so a navigation's fade shows the page, not Loading…", async () => {
+  const Page = lazyPage(() => Promise.resolve(Hello))
+  await Page.preload()
+  render(<Page name="ada" />)
+  expect(screen.getByText('hello ada')).toBeInTheDocument()
+})
+
+test('Loading… waits 150 ms before it shows, like every loading placeholder', () => {
+  const Page = lazyPage(() => new Promise<typeof Hello>(() => {}))
+  render(<Page name="ada" />)
+  expect(screen.getByRole('status')).toHaveClass('motion-safe:delay-150')
+})

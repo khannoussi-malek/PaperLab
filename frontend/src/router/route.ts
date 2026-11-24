@@ -225,13 +225,33 @@ export const samePage = (oldURL: string, newURL: string) => new URL(oldURL).hash
 // One hashchange listener for every useRoute, so a navigation is one cross-fade however many components read the route.
 // A new page cross-fades; a tab or a target within one swaps at once, since its panel fades in by itself and the page
 // takes no clicks while a transition runs.
-// ponytail: the snapshot reads the live hash, so a render that lands before the transition's update shows the new page
-// early and that navigation skips its fade; hold the hash in the store if that ever shows.
+// ponytail: the snapshot reads the live hash, so a render that lands before the transition's update (at most
+// MAX_CODE_WAIT_MS while the page's code loads) shows the new page early and that navigation skips its fade; hold the
+// hash in the store if that ever shows.
 const listeners = new Set<() => void>()
 function notifyAll(event: HashChangeEvent) {
   const notify = () => listeners.forEach((listener) => listener())
-  if (samePage(event.oldURL, event.newURL)) notify()
-  else withViewTransition(notify)
+  if (samePage(event.oldURL, event.newURL)) return notify()
+  const hash = window.location.hash
+  // A navigation overtaken by a newer one while its code loaded is dropped: the newer one shows the screen.
+  const current = (run: () => void) => () => {
+    if (window.location.hash === hash) run()
+  }
+  const ready = loadPage(parseRoute(hash))
+  if (!ready) return withViewTransition(notify)
+  const waited = Promise.race([ready, new Promise((resolve) => setTimeout(resolve, MAX_CODE_WAIT_MS))])
+  // A page whose code fails still opens, to show its Try again.
+  void waited.then(current(() => withViewTransition(notify)), current(notify))
+}
+
+// How long a navigation keeps the old page while the new one's code loads; slower code fades to its Loading….
+const MAX_CODE_WAIT_MS = 2000
+
+// The router sets this to fetch a page's code before the fade starts, so a navigation fades to the page itself and
+// not to its Loading… (each page is a lazily loaded chunk). This file stays free of page imports.
+let loadPage: (route: Route) => Promise<unknown> | undefined = () => undefined
+export function loadPagesWith(load: typeof loadPage) {
+  loadPage = load
 }
 
 function subscribe(onChange: () => void) {
