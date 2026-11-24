@@ -10,7 +10,8 @@ import yaml
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.citations.citations_export import bibtex_keys, csl_item, filename_slug
+from app.core.citations.citations_export import filename_slug
+from app.core.citations.csl_items import bibtex_keys, csl_item
 from app.core.notes import notes
 from app.core.workspaces import workspaces
 from app.domain.errors import InvalidInput

@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import select
 
 from app.config import settings
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers
 from app.core.citations import citations_bundle_read
 from app.core.notes import notes
 from app.core.notes.notes import Anchor
@@ -97,7 +97,7 @@ async def cited_answer(session, ws, alpha, beta) -> uuid.UUID:
     prepared = chat.Prepared(
         sources=sources, system="", prompt="", whole_paper=False, skill_label="Plain English", skill_version=2
     )
-    return await chat.save_answer(
+    return await chat_answers.save_answer(
         session, chat.Scope(workspace_id=ws.id), "Does sleep help?", prepared, ANSWER, "qwen3:8b", "Ollama"
     )
 

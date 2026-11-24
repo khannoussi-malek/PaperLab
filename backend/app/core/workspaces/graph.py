@@ -19,7 +19,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.citations.references import IN_LIBRARY
+from app.core.citations.reference_listing import IN_LIBRARY
 from app.core.papers import embedding_sources
 from app.core.papers.papers import get_paper
 from app.core.workspaces.workspaces import get as get_workspace

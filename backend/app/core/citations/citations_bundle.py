@@ -12,7 +12,7 @@ from typing import IO
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.citations import citations_export
+from app.core.citations import citations_export, csl_items
 from app.domain.errors import InvalidInput
 
 # The references file's name: Zotero names the collection it imports into after it, and citations_bundle_read reads
@@ -25,7 +25,7 @@ CHUNK = 64 * 1024
 
 
 def _write(items: list[dict], papers: list, fmt: str) -> tuple[IO[bytes], int]:
-    keys = citations_export.bibtex_keys(items)
+    keys = csl_items.bibtex_keys(items)
     on_disk = {p.id: Path(p.file_path) for p in papers if p.file_path and Path(p.file_path).is_file()}
     out = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
     try:

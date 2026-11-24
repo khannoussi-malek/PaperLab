@@ -9,6 +9,7 @@ from mcp_fixtures import call
 from test_citations_import_api import FakeJobRedis, bib, title
 
 from app.core.citations import citations_import_apply as cia
+from app.core.citations import citations_import_route
 from app.core.citations import citations_import_run as run
 from app.core.platform import queue
 from app.core.workspaces import workspaces
@@ -90,9 +91,12 @@ async def test_a_fetching_import_is_a_job_to_poll_with_job_id(session, redis):
 
     assert result(await call("import_citations", job_id=job_id))["state"] == "queued"
     redis.start(job_id)
-    await redis.set(cia.progress_key(job_id), json.dumps(cia.progress_payload(cia.ImportResult(), 1, False)))
+    await redis.set(
+        citations_import_route.progress_key(job_id),
+        json.dumps(citations_import_route.progress_payload(cia.ImportResult(), 1, False)),
+    )
     assert result(await call("import_citations", job_id=job_id))["state"] == "running"
-    redis.finish(job_id, cia.progress_payload(cia.ImportResult(imported=1), 1, True))
+    redis.finish(job_id, citations_import_route.progress_payload(cia.ImportResult(imported=1), 1, True))
     done = result(await call("import_citations", job_id=job_id))
     assert done["state"] == "finished" and done["result"]["imported"] == 1
     assert result(await call("import_citations", job_id="nope"))["state"] == "expired"

@@ -7,7 +7,7 @@ import pytest
 from conftest import FakeEmbedder, unit_vector
 from sqlalchemy import delete, func, select, update
 
-from app.core.citations import references
+from app.core.citations import reference_embed, reference_listing, references
 from app.domain.errors import NotFound
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
 
@@ -89,7 +89,7 @@ async def test_a_fetch_the_worker_never_finished_is_listed_as_failed_without_wri
     stale = now - references.FETCH_STALE * 2
     lost = await add_paper(library, doi="10.5555/m75-lost", references_state="fetching", references_requested_at=stale)
 
-    listed = [await references.listing(library, paper.id, "cites") for paper in (running, lost)]
+    listed = [await reference_listing.listing(library, paper.id, "cites") for paper in (running, lost)]
 
     assert [(listing.state, listing.error) for listing in listed] == [
         ("fetching", None), ("failed", references.FETCH_FAILED)
@@ -104,26 +104,29 @@ async def test_a_fetch_the_worker_never_finished_is_listed_as_failed_without_wri
 async def test_only_missing_or_stale_vectors_are_embedded(library, embedder):
     reader = await add_paper(library, doi=READER_DOI)
     library.add_all(
-        [ExternalRef(title="Needs a vector", queued_at=func.now()), Note(body="a note about attention", provenance="human")]
+        [
+            ExternalRef(title="Needs a vector", queued_at=func.now()),
+            Note(body="a note about attention", provenance="human"),
+        ]
     )
     await library.flush()
 
-    await references.embed_new(library, embedder)
-    await references.embed_new(library, embedder)  # nothing new
+    await reference_embed.embed_new(library, embedder)
+    await reference_embed.embed_new(library, embedder)  # nothing new
 
     assert [texts for texts, _ in embedder.calls] == [
         ["search_document: Needs a vector"],
         ["search_document: a note about attention"],
     ]
     await library.execute(update(Note).values(body="edited", updated_at=func.now() + timedelta(seconds=1)))
-    await references.embed_new(library, embedder)
+    await reference_embed.embed_new(library, embedder)
     assert embedder.calls[-1][0] == ["search_document: edited"]
     assert reader.id  # the paper itself is untouched
 
 
 async def test_only_the_references_a_listing_ranks_are_embedded_in_bounded_batches(library, embedder, monkeypatch):
     """Harvests insert thousands of references no paper cites; embedding them all under the lock stalled every fetch."""
-    monkeypatch.setattr(references, "EMBED_BATCH", 2)
+    monkeypatch.setattr(reference_embed, "EMBED_BATCH", 2)
     reader = await add_paper(library, doi=READER_DOI)
     linked = [ExternalRef(title=f"Cited {i}") for i in range(5)]
     queued = ExternalRef(title="Queued", queued_at=func.now())
@@ -135,7 +138,7 @@ async def test_only_the_references_a_listing_ranks_are_embedded_in_bounded_batch
             paper_references.insert().values(paper_id=reader.id, ref_id=ref.id, direction="cites", position=position)
         )
 
-    await references.embed_new(library, embedder)
+    await reference_embed.embed_new(library, embedder)
 
     sizes = [len(texts) for texts, _ in embedder.calls]
     assert sizes == [2, 2, 2] and sum(sizes) == 6
@@ -153,7 +156,7 @@ async def test_a_cloud_source_embeds_notes_and_titles_as_a_local_one_does_under_
     library.add_all([ref, note])
     await library.flush()
 
-    await references.embed_new(library, cloud)
+    await reference_embed.embed_new(library, cloud)
 
     assert [texts for texts, _ in cloud.calls] == [
         ["search_document: Needs a vector"],
@@ -170,7 +173,7 @@ async def test_with_no_search_model_nothing_is_embedded(library):
     )
     await library.flush()
 
-    await references.embed_new(library, None)
+    await reference_embed.embed_new(library, None)
 
     assert await library.scalar(select(func.count()).select_from(NoteEmbedding)) == 0
     assert await library.scalar(select(func.count(ExternalRef.title_embedding))) == 0
@@ -196,7 +199,7 @@ async def test_a_reference_two_library_papers_cite_outranks_a_famous_uncited_one
     await link(library, reader, famous, shared)
     await link(library, second, shared)
 
-    listing = await references.listing(library, reader.id, "cites")
+    listing = await reference_listing.listing(library, reader.id, "cites")
 
     assert [(r.title, r.cocitation) for r in listing.rows] == [("Shared", 2), ("Famous", 1)]
 
@@ -217,7 +220,7 @@ async def test_ties_break_on_closeness_to_notes_then_a_free_pdf_then_citations(l
     await library.flush()
     await link(library, reader, cited, with_pdf, close)
 
-    listing = await references.listing(library, reader.id, "cites")
+    listing = await reference_listing.listing(library, reader.id, "cites")
 
     assert [r.title for r in listing.rows] == ["Close to a note", "Has a PDF", "Cited more"]
 
@@ -232,7 +235,7 @@ async def test_the_summary_counts_references_cited_three_times_and_those_with_pd
         await link(library, paper, common)
     await link(library, papers_[0], rare)
 
-    listing = await references.listing(library, papers_[0].id, "cites")
+    listing = await reference_listing.listing(library, papers_[0].id, "cites")
 
     assert (listing.summary.cited_by_3plus, listing.summary.with_pdf) == (1, 1)
     assert listing.state == "none"
@@ -246,7 +249,7 @@ async def test_a_reference_uploaded_after_the_fetch_still_shows_in_library(libra
     await link(library, reader, ref)
     uploaded = await add_paper(library, doi="10.5555/m75-later")
 
-    [row] = (await references.listing(library, reader.id, "cites")).rows
+    [row] = (await reference_listing.listing(library, reader.id, "cites")).rows
 
     assert row.paper_id == uploaded.id
 
@@ -260,6 +263,6 @@ async def test_a_reference_with_an_uppercase_arxiv_id_is_in_library_under_its_lo
     await link(library, reader, ref)
     uploaded = await add_paper(library, doi=f"10.48550/arxiv.{arxiv_id.lower()}")
 
-    [row] = (await references.listing(library, reader.id, "cites")).rows
+    [row] = (await reference_listing.listing(library, reader.id, "cites")).rows
 
     assert row.paper_id == uploaded.id

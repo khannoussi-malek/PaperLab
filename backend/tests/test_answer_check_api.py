@@ -6,7 +6,7 @@ from test_answer_check_run import make_answer
 from test_chat_workspace_api import make_paper as make_titled_paper
 from test_chat_workspace_api import make_workspace
 
-from app.core.chat import answer_check_run, chat, claims
+from app.core.chat import answer_check_run, chat, chat_answers, claims
 from app.core.platform import mcp_reads, queue
 from app.core.workspaces import workspace_package_answers
 from app.domain.errors import NotFound
@@ -112,8 +112,8 @@ async def test_check_rows_stay_out_of_answer_lists(client, session, local_defaul
     check = (await client.post(url(answer.id), json={})).json()
     ws_check = (await client.post(url(ws_answer.id), json={})).json()
 
-    paper_list = await chat.list_answers(session, answer.paper_id)
-    ws_list = await chat.list_answers(session, chat.Scope(workspace_id=workspace.id))
+    paper_list = await chat_answers.list_answers(session, answer.paper_id)
+    ws_list = await chat_answers.list_answers(session, chat.Scope(workspace_id=workspace.id))
     rows, _ = await workspace_package_answers.export_rows(session, workspace.id, {})
     mcp = await mcp_reads.answers_out(session, paper_id=answer.paper_id, workspace=None, offset=0)
 

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.core.citations.citations_export import bibtex_keys, csl_item
+from app.core.citations.csl_items import bibtex_keys, csl_item
 
 
 def paper(**kw):

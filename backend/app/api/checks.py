@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.chat import STREAM_RESPONSES, stream_output, to_sources
+from app.api.chat import STREAM_RESPONSES, to_sources
+from app.api.chat_stream import stream_output
 from app.api.deps import CheckLLMDep, SessionDep
 from app.core.notes import checks
 from app.schemas.checks import CheckLineOut, CheckOut

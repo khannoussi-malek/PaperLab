@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import update
 from test_sections import paper_with_headings
 
-from app.core.chat import chat
+from app.core.chat import chat_answers
 from app.core.chat.retrieval import RetrievedChunk
 from app.core.papers import papers, sections
 from app.core.workspaces import briefs
@@ -186,4 +186,4 @@ async def test_an_unknown_paper_has_no_briefs_and_chat_history_never_lists_one(s
 
     with pytest.raises(NotFound):
         await briefs.list_briefs(session, uuid.uuid4())
-    assert await chat.list_answers(session, paper.id) == []
+    assert await chat_answers.list_answers(session, paper.id) == []

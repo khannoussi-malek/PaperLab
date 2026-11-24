@@ -7,7 +7,7 @@ import pytest
 from conftest import FakeArq, FakeEmbedder
 from sqlalchemy import select
 
-from app.core.citations import references
+from app.core.citations import reference_embed
 from app.core.notes import notes
 from app.core.platform import queue
 from app.models import NoteEmbedding, Paper
@@ -129,10 +129,10 @@ async def test_embed_notes_counts_what_it_embedded(session):
     second = await notes.create_paper_note(session, paper.id, "two")
     embedder = FakeEmbedder()
 
-    assert await references.embed_notes(session, embedder, [first.id]) == 1
-    assert await references.embed_notes(session, embedder, [first.id]) == 0  # current now, so nothing stale
-    assert await references.embed_notes(session, embedder, [second.id]) == 1
-    assert await references.embed_notes(session, None, [second.id]) == 0
+    assert await reference_embed.embed_notes(session, embedder, [first.id]) == 1
+    assert await reference_embed.embed_notes(session, embedder, [first.id]) == 0  # current now, so nothing stale
+    assert await reference_embed.embed_notes(session, embedder, [second.id]) == 1
+    assert await reference_embed.embed_notes(session, None, [second.id]) == 0
 
 
 async def test_embed_new_still_embeds_stale_notes(session, jobs):
@@ -140,7 +140,7 @@ async def test_embed_new_still_embeds_stale_notes(session, jobs):
     note = await notes.create_paper_note(session, paper.id, "saved before the job existed")
     jobs.jobs.clear()
 
-    await references.embed_new(session, FakeEmbedder())
+    await reference_embed.embed_new(session, FakeEmbedder())
 
     assert await embedded(session, note.id) == {note.id}
 

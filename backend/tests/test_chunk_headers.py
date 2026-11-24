@@ -13,7 +13,7 @@ from app.core.papers import chunk_headers, papers
 from app.core.platform import queue
 from app.domain.chunking import ChunkDraft
 from app.models import Chunk, Paper
-from app.workers import ingest
+from app.workers import header_jobs, ingest
 from app.workers.settings import IngestWorkerSettings
 
 pytestmark = pytest.mark.anyio
@@ -97,8 +97,8 @@ async def headed_and_old(session, embedder) -> tuple[Paper, Paper]:
 async def test_a_starting_ingest_worker_queues_papers_embedded_before_headers(worker_session, embedder):
     _, old = await headed_and_old(worker_session, embedder)
 
-    await ingest.queue_chunk_headers({})
-    await ingest.queue_chunk_headers({})  # a restart: the job id keeps it to one
+    await header_jobs.queue_chunk_headers({})
+    await header_jobs.queue_chunk_headers({})  # a restart: the job id keeps it to one
 
     assert queue._pool.jobs == [("add_chunk_headers", str(old.id))]
     assert f"chunk-headers:{old.id}" in queue._pool.job_ids
@@ -115,10 +115,10 @@ async def test_header_reembeds_are_spread_out_so_a_new_upload_never_waits_behind
     await worker_session.execute(text("UPDATE chunks SET header = NULL"))
     await worker_session.commit()
 
-    await ingest.queue_chunk_headers({})
+    await header_jobs.queue_chunk_headers({})
 
     assert len(queue._pool.jobs) == 2
-    assert queue._pool.deferred == [None, 2 / ingest.HEADER_PACE]  # the first now, the next after its 2 chunks
+    assert queue._pool.deferred == [None, 2 / header_jobs.HEADER_PACE]  # the first now, the next after its 2 chunks
 
 
 async def test_a_cloud_search_source_is_never_billed_for_headers(worker_session, embedder, monkeypatch):
@@ -129,7 +129,7 @@ async def test_a_cloud_search_source_is_never_billed_for_headers(worker_session,
 
     monkeypatch.setattr(ingest.embedding_sources, "active", cloud)
 
-    await ingest.queue_chunk_headers({})
+    await header_jobs.queue_chunk_headers({})
 
     assert queue._pool.jobs == []
 
@@ -142,7 +142,7 @@ async def test_the_header_job_embeds_only_the_chunks_still_without_one(worker_se
     await worker_session.commit()
     fresh = FakeEmbedder()
 
-    await ingest.add_chunk_headers({"embedder": fresh}, str(old.id))
+    await header_jobs.add_chunk_headers({"embedder": fresh}, str(old.id))
 
     assert fresh.calls == [(["search_document: Old\nStore below 30 °C."], {})]
     assert [c.header for c in await chunks_of(worker_session, old.id)] == ["done", "Old"]
@@ -152,8 +152,8 @@ async def test_the_header_job_does_nothing_for_a_paper_gone_since_or_a_cloud_sou
     _, old = await headed_and_old(worker_session, embedder)
     cloud = FakeEmbedder(is_local=False)
 
-    await ingest.add_chunk_headers({"embedder": embedder}, str(uuid.uuid4()))  # deleted after it was queued
-    await ingest.add_chunk_headers({"embedder": cloud}, str(old.id))  # switched to a cloud source meanwhile
+    await header_jobs.add_chunk_headers({"embedder": embedder}, str(uuid.uuid4()))  # deleted after it was queued
+    await header_jobs.add_chunk_headers({"embedder": cloud}, str(old.id))  # switched to a cloud source meanwhile
 
     assert cloud.calls == []
     assert [c.header for c in await chunks_of(worker_session, old.id)] == [None, None]

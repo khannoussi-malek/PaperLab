@@ -8,7 +8,7 @@ from test_chat import NOTE_RULE_V3
 from test_chat_workspace import add_note
 from test_note_papers import paper_only_note
 
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper
 from app.providers import embedding
@@ -111,7 +111,7 @@ async def test_save_failure_sends_an_error_event_instead_of_done(client, session
     async def broken_save(*args):
         raise RuntimeError("database went away")
 
-    monkeypatch.setattr(chat, "save_answer", broken_save)
+    monkeypatch.setattr(chat_answers, "save_answer", broken_save)
 
     response = await client.post(f"/api/papers/{paper.id}/chat", json={"question": "why?"})
 

@@ -13,16 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chat.answer_provenance import snapshot
-from app.core.chat.chat import (
-    Prepared,
-    SnapshotPassage,
-    chunk_sources,
-    cut_to_budget,
-    format_context,
-    lens_sources,
-    parse_citations,
-    snapshot_passages,
-)
+from app.core.chat.chat import Prepared, chunk_sources, cut_to_budget, lens_sources
+from app.core.chat.chat_answers import SnapshotPassage, parse_citations, snapshot_passages
+from app.core.chat.chat_context import format_context
 from app.core.chat.retrieval import RetrievedChunk
 from app.core.papers.papers import get_paper
 from app.core.platform import prompts

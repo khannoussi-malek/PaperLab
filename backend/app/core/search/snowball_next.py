@@ -7,14 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.search import snowball_run
 from app.core.search.branches import DIRECTIONS
-from app.core.search.hit_links import _runs, _seeds
+from app.core.search.hit_provenance import _runs, _seeds
 from app.core.search.source_clients import Providers
 from app.core.workspaces import workspaces
 from app.models import Paper, workspace_papers
 from app.models.provenance import WorkspaceBranchState
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchHit
-from app.schemas.workspace_search import NextItem, SnowballNextOut
+from app.schemas.search_tree import NextItem, SnowballNextOut
 
 SNOWBALL_NEXT_BATCH = 25
 

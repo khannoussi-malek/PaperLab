@@ -13,7 +13,8 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat.chat import chunk_sources, format_context
+from app.core.chat.chat import chunk_sources
+from app.core.chat.chat_context import format_context
 from app.core.chat.retrieval import RetrievedChunk
 from app.core.notes.notes import list_notes_for_paper
 from app.core.papers.papers import get_paper

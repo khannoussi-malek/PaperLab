@@ -14,7 +14,7 @@ from time import perf_counter
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers
 from app.core.chat.voice_text import SentenceSplitter, heard_text, speakable
 from app.db import SessionLocal
 from app.domain.errors import Conflict, DomainError, error_code
@@ -265,7 +265,7 @@ async def _record(
 async def _save(session: AsyncSession, result: TurnResult, llm: LLM, content: str) -> uuid.UUID:
     prepared = result.prepared
     assert prepared is not None  # callers check: nothing to save before run_turn prepared the question
-    return await chat.save_answer(
+    return await chat_answers.save_answer(
         session, result.scope, result.question, prepared, content, llm.model, llm.connection_name, result.parent_id
     )
 

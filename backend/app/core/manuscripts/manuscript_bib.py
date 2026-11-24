@@ -7,7 +7,8 @@ from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.citations.citations_export import _bibtex, bibtex_keys, csl_item, publishable
+from app.core.citations.citations_export import _bibtex, publishable
+from app.core.citations.csl_items import bibtex_keys, csl_item
 from app.core.workspaces import workspaces
 from app.models import Manuscript, ManuscriptCiteKey
 

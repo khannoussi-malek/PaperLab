@@ -8,7 +8,7 @@ from sqlalchemy import delete, insert
 from test_note_papers import paper_only_note
 from test_sections import SECTIONED, sectioned_paper
 
-from app.core.chat import chat, retrieval
+from app.core.chat import chat, chat_answers, chat_context, retrieval
 from app.core.notes.notes import Anchor, NoteView
 from app.core.platform import skills
 from app.domain.errors import Conflict, NotFound
@@ -33,7 +33,7 @@ def test_notes_block_all_fit_newest_first_with_badges_labels_and_pages():
     middle = view(DPR, body="Dual encoders.", quote="dense retrieval", provenance="llm", page=3, minutes_ago=1)
     newest = view(DPR, body="Negatives\n matter.", quote="in-batch negatives", provenance="llm_edited", page=5)
 
-    block, used = chat.format_notes_block([oldest, middle, newest], PAPERS)
+    block, used = chat_context.format_notes_block([oldest, middle, newest], PAPERS)
 
     assert block == (
         '[N1] (AI · edited · Karpukhin 2020 p.5) "in-batch negatives" — Negatives matter.\n'
@@ -41,19 +41,23 @@ def test_notes_block_all_fit_newest_first_with_badges_labels_and_pages():
         '[N3] (You · BERT p.4) "masked language model" — Masked LM is the key.'
     )
     assert used == [
-        chat.NoteSource(id=newest.id, paper_id=DPR.id, page=5, provenance="llm_edited"),
-        chat.NoteSource(id=middle.id, paper_id=DPR.id, page=3, provenance="llm"),
-        chat.NoteSource(id=oldest.id, paper_id=BERT.id, page=4, provenance="human"),
+        chat_context.NoteSource(id=newest.id, paper_id=DPR.id, page=5, provenance="llm_edited"),
+        chat_context.NoteSource(id=middle.id, paper_id=DPR.id, page=3, provenance="llm"),
+        chat_context.NoteSource(id=oldest.id, paper_id=BERT.id, page=4, provenance="human"),
     ]
-    assert chat.format_notes_block([], PAPERS) == ("", [])
+    assert chat_context.format_notes_block([], PAPERS) == ("", [])
 
 
 def test_notes_block_cuts_quote_and_body_at_the_exact_limits():
-    assert (chat.NOTE_QUOTE_CHARS, chat.NOTE_BODY_CHARS, chat.NOTES_CHAR_BUDGET) == (160, 400, 16_000)
+    assert (chat_context.NOTE_QUOTE_CHARS, chat_context.NOTE_BODY_CHARS, chat_context.NOTES_CHAR_BUDGET) == (
+        160,
+        400,
+        16_000,
+    )
     fits = view(BERT, quote="q" * 160, body="b" * 400, minutes_ago=1)
     cut = view(BERT, quote="q" * 161, body="b" * 401)
 
-    block, _ = chat.format_notes_block([fits, cut], PAPERS)
+    block, _ = chat_context.format_notes_block([fits, cut], PAPERS)
 
     first, second = block.split("\n")
     assert first == f'[N1] (You · BERT p.1) "{"q" * 159}…" — {"b" * 399}…'
@@ -63,7 +67,7 @@ def test_notes_block_cuts_quote_and_body_at_the_exact_limits():
 def test_notes_block_strips_stale_citation_markers_from_quote_and_body():
     note = view(BERT, quote="in-batch negatives [C1][C2]", body="DPR uses in-batch negatives [C1][C2] as noted [N2].")
 
-    block, _ = chat.format_notes_block([note], PAPERS)
+    block, _ = chat_context.format_notes_block([note], PAPERS)
 
     assert block == '[N1] (You · BERT p.1) "in-batch negatives" — DPR uses in-batch negatives as noted .'
 
@@ -72,13 +76,13 @@ def test_notes_block_strips_markers_before_the_length_limit_is_applied():
     quote = "q" * 160 + "[C1]"  # only fits the 160-char budget once the marker is stripped first
     note = view(BERT, quote=quote, body="")
 
-    block, _ = chat.format_notes_block([note], PAPERS)
+    block, _ = chat_context.format_notes_block([note], PAPERS)
 
     assert block == f'[N1] (You · BERT p.1) "{"q" * 160}"'
 
 
 def test_notes_block_omits_an_empty_body():
-    block, _ = chat.format_notes_block([view(BERT, body="  \n ", quote="just a highlight")], PAPERS)
+    block, _ = chat_context.format_notes_block([view(BERT, body="  \n ", quote="just a highlight")], PAPERS)
 
     assert block == '[N1] (You · BERT p.1) "just a highlight"'
 
@@ -86,7 +90,7 @@ def test_notes_block_omits_an_empty_body():
 def test_notes_block_overflow_keeps_the_newest_whole_lines():
     notes = [view(BERT, quote="q" * 160, body="b" * 400, minutes_ago=i) for i in range(40)]
 
-    block, used = chat.format_notes_block(list(reversed(notes)), PAPERS)
+    block, used = chat_context.format_notes_block(list(reversed(notes)), PAPERS)
 
     # N1-N9 lines are 587 characters, N10+ 588: 27 lines make 15,893; a 28th would need 589 more.
     assert (len(used), len(block)) == (27, 15_893)
@@ -100,7 +104,7 @@ def test_notes_block_keeps_every_line_when_the_block_lands_exactly_on_the_budget
     full = [view(BERT, quote="q" * 160, body="b" * 400, minutes_ago=i) for i in range(27)]
     boundary = view(BERT, quote="x" * 81, body="", minutes_ago=27)
 
-    block, used = chat.format_notes_block(full + [boundary], PAPERS)
+    block, used = chat_context.format_notes_block(full + [boundary], PAPERS)
 
     assert len(block) == 16_000
     assert [s.id for s in used] == [n.id for n in full] + [boundary.id]
@@ -112,7 +116,7 @@ def test_notes_block_drops_the_line_that_would_push_past_the_budget():
     full = [view(BERT, quote="q" * 160, body="b" * 400, minutes_ago=i) for i in range(27)]
     over = view(BERT, quote="x" * 82, body="", minutes_ago=27)
 
-    block, used = chat.format_notes_block(full + [over], PAPERS)
+    block, used = chat_context.format_notes_block(full + [over], PAPERS)
 
     assert len(block) == 15_893
     assert [s.id for s in used] == [n.id for n in full]  # notes_used (27) is one less than notes_total (28)
@@ -123,10 +127,10 @@ def test_notes_block_names_a_note_on_the_whole_paper_by_its_first_linked_paper_w
         uuid.uuid4(), "Dual encoders [C1] scale.", "human", "#facc15", None, NOW, NOW, [], [BERT.id, DPR.id]
     )
 
-    block, used = chat.format_notes_block([whole], PAPERS)
+    block, used = chat_context.format_notes_block([whole], PAPERS)
 
     assert block == "[N1] (You · BERT) — Dual encoders scale."
-    assert used == [chat.NoteSource(id=whole.id, paper_id=BERT.id, page=None, provenance="human")]
+    assert used == [chat_context.NoteSource(id=whole.id, paper_id=BERT.id, page=None, provenance="human")]
 
 
 def test_notes_block_names_a_note_by_its_linked_paper_in_scope_when_its_passage_is_elsewhere():
@@ -135,16 +139,16 @@ def test_notes_block_names_a_note_by_its_linked_paper_in_scope_when_its_passage_
         uuid.uuid4(), "Compare.", "llm", "#facc15", None, NOW, NOW, [elsewhere], [DPR.id, elsewhere.paper_id]
     )
 
-    block, used = chat.format_notes_block([note], PAPERS)
+    block, used = chat_context.format_notes_block([note], PAPERS)
 
     assert block == "[N1] (AI · Karpukhin 2020) — Compare."
-    assert used == [chat.NoteSource(id=note.id, paper_id=DPR.id, page=None, provenance="llm")]
+    assert used == [chat_context.NoteSource(id=note.id, paper_id=DPR.id, page=None, provenance="llm")]
 
 
 def test_notes_block_leaves_out_a_note_with_no_passage_in_scope_and_no_body():
     empty = NoteView(uuid.uuid4(), "  ", "human", "#facc15", None, NOW, NOW, [], [DPR.id])
 
-    assert chat.format_notes_block([empty], PAPERS) == ("", [])
+    assert chat_context.format_notes_block([empty], PAPERS) == ("", [])
 
 
 async def make_workspace(session, papers: list[Paper]) -> Workspace:
@@ -268,8 +272,8 @@ def test_scope_requires_exactly_one_of_paper_id_or_workspace_id():
 def test_parse_citations_reads_passage_and_note_labels_separately():
     text = "[N2] backs [C1]; see [N1][N2] and [C3], not [N9] or [X1]."
 
-    assert chat.parse_citations(text, 3) == [1, 3]
-    assert chat.parse_citations(text, 2, "N") == [2, 1]
+    assert chat_answers.parse_citations(text, 3) == [1, 3]
+    assert chat_answers.parse_citations(text, 2, "N") == [2, 1]
 
 
 async def test_workspace_answers_are_saved_and_listed_per_workspace(session, embedder):
@@ -283,12 +287,12 @@ async def test_workspace_answers_are_saved_and_listed_per_workspace(session, emb
     prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "why?", embedder)
     content = "Both [C2][C1], as [N2] and [N1] say. Not [N7]."
 
-    output_id = await chat.save_answer(
+    output_id = await chat_answers.save_answer(
         session, chat.Scope(workspace_id=workspace.id), "why?", prepared, content, "m", "Conn"
     )
-    await chat.save_answer(session, chat.Scope(workspace_id=other.id), "elsewhere", prepared, "x", "m", "Conn")
+    await chat_answers.save_answer(session, chat.Scope(workspace_id=other.id), "elsewhere", prepared, "x", "m", "Conn")
     single = chat.Prepared(sources=[], system="", prompt="", whole_paper=True)
-    await chat.save_answer(session, dpr.id, "single paper", single, "y", "m", "Conn")
+    await chat_answers.save_answer(session, dpr.id, "single paper", single, "y", "m", "Conn")
     await session.execute(delete(Note).where(Note.id == deleted.id))
 
     row = await session.get(LLMOutput, output_id)
@@ -297,13 +301,13 @@ async def test_workspace_answers_are_saved_and_listed_per_workspace(session, emb
     assert (row.source_chunks, row.cited_chunks) == (chunk_ids, [chunk_ids[1], chunk_ids[0]])
     assert (row.source_notes, row.notes_used, row.notes_total) == ([kept.id, deleted.id], 2, 2)
 
-    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=workspace.id))
+    [answer] = await chat_answers.list_answers(session, chat.Scope(workspace_id=workspace.id))
     assert answer.output.id == output_id
-    assert answer.notes == [chat.NoteSource(id=kept.id, paper_id=bert.id, page=1, provenance="human"), None]
-    assert [a.output.question for a in await chat.list_answers(session, dpr.id)] == ["single paper"]
-    assert (await chat.list_answers(session, dpr.id))[0].notes == []
+    assert answer.notes == [chat_context.NoteSource(id=kept.id, paper_id=bert.id, page=1, provenance="human"), None]
+    assert [a.output.question for a in await chat_answers.list_answers(session, dpr.id)] == ["single paper"]
+    assert (await chat_answers.list_answers(session, dpr.id))[0].notes == []
     with pytest.raises(NotFound):
-        await chat.list_answers(session, chat.Scope(workspace_id=uuid.uuid4()))
+        await chat_answers.list_answers(session, chat.Scope(workspace_id=uuid.uuid4()))
 
 
 async def test_listed_answers_name_a_whole_paper_note_by_its_paper_and_drop_one_taken_off_the_scope(session, embedder):
@@ -315,13 +319,13 @@ async def test_listed_answers_name_a_whole_paper_note_by_its_paper_and_drop_one_
     moved = await paper_only_note(session, dpr, body="Moved away.", created=naive - timedelta(days=1))
     scope = chat.Scope(workspace_id=workspace.id)
     prepared = await chat.prepare(session, scope, "why?", embedder)
-    await chat.save_answer(session, scope, "why?", prepared, "Both [N1][N2].", "m", "Conn")
+    await chat_answers.save_answer(session, scope, "why?", prepared, "Both [N1][N2].", "m", "Conn")
     await session.execute(delete(note_papers).where(note_papers.c.note_id == moved.id))
 
-    [answer] = await chat.list_answers(session, scope)
+    [answer] = await chat_answers.list_answers(session, scope)
 
     assert "[N1] (You · DPR) — On the whole of DPR.\n[N2] (You · DPR) — Moved away." in prepared.prompt
-    assert answer.notes == [chat.NoteSource(id=kept.id, paper_id=dpr.id, page=None, provenance="human"), None]
+    assert answer.notes == [chat_context.NoteSource(id=kept.id, paper_id=dpr.id, page=None, provenance="human"), None]
 
 
 async def test_workspace_prepare_searches_only_the_likeliest_papers(session, embedder, monkeypatch):

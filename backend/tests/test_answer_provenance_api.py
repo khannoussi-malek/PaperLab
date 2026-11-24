@@ -6,7 +6,7 @@ import pytest
 from test_answer_provenance import drafts
 from test_chat import make_paper
 
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers
 from app.core.papers import papers
 from app.models import LLMOutput, Note, Provenance
 
@@ -15,7 +15,7 @@ pytestmark = pytest.mark.anyio
 
 async def answered(session, paper_id, content="Because [C2].") -> uuid.UUID:
     prepared = await chat.prepare(session, paper_id, "why?")
-    return await chat.save_answer(session, paper_id, "why?", prepared, content, "qwen3:8b", "Ollama")
+    return await chat_answers.save_answer(session, paper_id, "why?", prepared, content, "qwen3:8b", "Ollama")
 
 
 async def test_an_answers_provenance_names_the_model_and_its_cited_passages(client, session):

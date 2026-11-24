@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import delete, select, text
 
-from app.core.citations import references
+from app.core.citations import reference_listing, references
 from app.core.workspaces import graph
 from app.domain.errors import NotFound
 from app.models import ExternalRef, Paper, Workspace, paper_references, workspace_papers
@@ -97,8 +97,8 @@ async def test_an_unknown_reference_can_be_neither_queued_nor_unqueued(library):
 
 
 async def test_the_tab_and_the_graph_compose_the_one_match():
-    assert references.IN_LIBRARY in references._LISTING.text
-    assert references.IN_LIBRARY in graph._EDGES
+    assert reference_listing.IN_LIBRARY in reference_listing._LISTING.text
+    assert reference_listing.IN_LIBRARY in graph._EDGES
 
 
 IDENTIFIERS = ["imported_as", "openalex_id", "doi_upper_cased", "arxiv_doi"]
@@ -128,7 +128,7 @@ async def matched_reference(session, identifier: str) -> tuple[Paper, Paper, Ext
 
 
 async def tab_matches(session, citing: Paper, paper: Paper, ref: ExternalRef) -> bool:
-    [row] = (await references.listing(session, citing.id, "cites")).rows
+    [row] = (await reference_listing.listing(session, citing.id, "cites")).rows
     return row.paper_id == paper.id
 
 
@@ -140,7 +140,7 @@ async def graph_matches(session, citing: Paper, paper: Paper, ref: ExternalRef) 
 async def page_matches(session, citing: Paper, paper: Paper, ref: ExternalRef) -> bool:
     """The page (unlike the tab) never lists a matched reference at all — `_PAGE`'s own `NOT EXISTS` over the
     same `in_library` CTE drops it from every section, since it's already in the library under `paper`."""
-    page = await references.library_listing(session)
+    page = await reference_listing.library_listing(session)
     listed = {row.id for row in page.to_read + page.cited_by_several + page.citing_several}
     return ref.id not in listed
 
@@ -172,7 +172,7 @@ async def test_two_library_papers_matching_one_reference_show_as_the_lower_id(li
     )
     await link(library, ref, citing)
 
-    [row] = (await references.listing(library, citing.id, "cites")).rows
+    [row] = (await reference_listing.listing(library, citing.id, "cites")).rows
 
     assert row.paper_id == low
 
@@ -187,9 +187,9 @@ async def test_each_listing_returns_a_references_identifiers_from_external_ids(l
     await link(library, ref, citing)
 
     if caller == "tab":
-        [row] = (await references.listing(library, citing.id, "cites")).rows
+        [row] = (await reference_listing.listing(library, citing.id, "cites")).rows
     else:
-        [row] = (await references.library_listing(library)).to_read
+        [row] = (await reference_listing.library_listing(library)).to_read
 
     assert (row.arxiv_id, row.openalex_id, row.s2_id) == (ids["arxiv"], ids["openalex"], ids["semantic_scholar"])
 
@@ -210,7 +210,7 @@ async def test_cited_by_several_ranks_by_cocitation_and_leaves_a_singly_cited_re
     await link(library, tied_bare, p1, p2)
     await link(library, tied_pdf, p1, p2)
 
-    page = await references.library_listing(library)
+    page = await reference_listing.library_listing(library)
 
     # A note-similarity tie (both null here) falls to a PDF tie, then to cited_by_count, as the tab ranks (D80, RANK).
     assert [(row.title, row.cocitation) for row in page.cited_by_several] == [
@@ -232,7 +232,7 @@ async def test_citing_several_lists_recent_works_first_even_over_a_higher_count(
     await link(library, w4, p1, p3, direction="cited_by")
     await link(library, c, p1, p2)  # direction="cites": C is a reference the papers cite, not a work citing them
 
-    page = await references.library_listing(library)
+    page = await reference_listing.library_listing(library)
 
     # Newest first, not D80's cocitation order (W2 cites 3, W1 only 2, but 2024 still comes first); a same-year tie
     # (W2, W4, both 2021) breaks on the citing count, replaced into `cocitation` for these rows (spec §3.5).
@@ -250,14 +250,14 @@ async def test_the_workspace_scope_counts_only_its_own_papers_and_an_unknown_one
     await link(library, r, p1, p2)
     await link(library, s, p1, p2, p3)
 
-    page = await references.library_listing(library, workspace_id=workspace)
+    page = await reference_listing.library_listing(library, workspace_id=workspace)
 
     assert titles(page.cited_by_several) == ["S"]
     # P1 and P3 each have a stored paper_references row of their own here (their "cites" edges to R/S above), which is
     # the exact signal the coverage test next door relies on ("stored rows" -> fetched, D166): both count as fetched.
     assert (page.coverage.fetched, page.coverage.total) == (2, 2)
     with pytest.raises(NotFound):
-        await references.library_listing(library, workspace_id=uuid.uuid4())
+        await reference_listing.library_listing(library, workspace_id=uuid.uuid4())
 
 
 async def test_a_reference_matched_to_a_library_paper_by_doi_is_left_out_of_every_section(library):
@@ -267,7 +267,7 @@ async def test_a_reference_matched_to_a_library_paper_by_doi_is_left_out_of_ever
     ref = await add_ref(library, "Matched by DOI", doi=doi.upper(), cited_by_count=5, queued_at=T0)
     await link(library, ref, p1, p2)  # co-cited...
 
-    page = await references.library_listing(library)
+    page = await reference_listing.library_listing(library)
 
     assert "Matched by DOI" not in titles(page.cited_by_several) and "Matched by DOI" not in titles(page.to_read)
 
@@ -287,7 +287,7 @@ async def test_to_read_lists_every_queued_reference_across_both_directions_newes
     await link(library, orphaned, doomed)
     await library.execute(delete(Paper).where(Paper.id == doomed.id))  # its one paper_references row cascades away
 
-    page = await references.library_listing(library)
+    page = await reference_listing.library_listing(library)
 
     assert titles(page.to_read) == [
         "A citing work", "One paper cites it", "Co-cited and queued", "Its citing paper is gone",
@@ -296,7 +296,7 @@ async def test_to_read_lists_every_queued_reference_across_both_directions_newes
     assert set(titles(page.cited_by_several)) == {"Co-cited and queued", "Co-cited, not queued"}
 
     workspace = await add_workspace(library, p1, p2)
-    scoped = await references.library_listing(library, workspace_id=workspace)
+    scoped = await reference_listing.library_listing(library, workspace_id=workspace)
     assert "Its citing paper is gone" not in titles(scoped.to_read)  # D166: whole library only
 
 
@@ -312,7 +312,7 @@ async def test_coverage_counts_ready_or_with_stored_rows_and_lists_the_rest_by_t
     )
     await add_papers(library, "P5 fetching now", references_state="fetching", references_requested_at=now)
 
-    page = await references.library_listing(library)
+    page = await reference_listing.library_listing(library)
 
     assert (page.coverage.fetched, page.coverage.total) == (2, 5)
     assert [(u.title, u.state) for u in page.coverage.unfetched] == [

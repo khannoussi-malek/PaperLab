@@ -16,7 +16,8 @@ from dataclasses import asdict, dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat.chat import SMALL_PAPER_CHARS, Prepared, _size, chunk_sources, cut_to_budget, format_context
+from app.core.chat.chat import SMALL_PAPER_CHARS, Prepared, _size, chunk_sources, cut_to_budget
+from app.core.chat.chat_context import format_context
 from app.core.chat.retrieval import RetrievedChunk, retrieve, searchable
 from app.core.notes.finding_lines import Kind, bare, clean_line, grams, reads_as_wording, split_label
 from app.core.notes.notes import _get_note, papers_of

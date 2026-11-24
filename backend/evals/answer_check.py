@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core.chat import chat
+from app.core.chat import chat, chat_context
 from app.core.platform import llm_connections
 from app.domain.errors import DomainError
 from app.models import Paper, Workspace
@@ -36,7 +36,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def citation_problems(content: str, prepared: chat.Prepared) -> list[str]:
-    labels = list(dict.fromkeys(chat._CITATION.findall(content)))
+    labels = list(dict.fromkeys(chat_context._CITATION.findall(content)))
     limits = {"C": len(prepared.sources), "N": len(prepared.notes)}
     problems = [f"[{kind}{n}] is not one of the sources" for kind, n in labels if not 1 <= int(n) <= limits[kind]]
     return problems if any(kind == "C" for kind, _ in labels) else ["cites no passage", *problems]

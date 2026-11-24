@@ -8,7 +8,7 @@ from app.domain.sections import LensId
 from app.schemas.papers import Rect
 
 if TYPE_CHECKING:  # core must not import api, and schemas needn't import core at runtime
-    from app.core.chat import answer_provenance, chat
+    from app.core.chat import answer_provenance, chat_answers, chat_context
     from app.core.chat.retrieval import RetrievedChunk
 
 
@@ -180,7 +180,7 @@ class McpNoteOut(BaseModel):
 
 
 def to_sources(
-    chunks: "list[RetrievedChunk | None]", replaced: "list[chat.SnapshotPassage | None]" = ()
+    chunks: "list[RetrievedChunk | None]", replaced: "list[chat_answers.SnapshotPassage | None]" = ()
 ) -> list[ChatSource | None]:
     """A missing chunk is a replaced source when the snapshot kept its passage (M33): page and paper, no box."""
     fallbacks = list(replaced) or [None] * len(chunks)
@@ -241,7 +241,7 @@ def to_provenance(view: "answer_provenance.AnswerProvenance") -> AnswerProvenanc
     )
 
 
-def to_notes(notes: "list[chat.NoteSource | None]") -> list[NoteSource | None]:
+def to_notes(notes: "list[chat_context.NoteSource | None]") -> list[NoteSource | None]:
     return [
         None
         if n is None

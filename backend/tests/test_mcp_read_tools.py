@@ -10,7 +10,7 @@ from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
 from sqlalchemy import delete
 
-from app.core.chat import chat
+from app.core.chat import chat, chat_answers
 from app.core.chat.retrieval import RetrievedChunk
 from app.core.citations import references
 from app.core.notes import datasets
@@ -74,7 +74,7 @@ async def test_references_answer_with_their_state_summary_and_library_marks(libr
     assert (answer["state"], answer["error"], answer["direction"]) == ("ready", None, "references")
     assert answer["summary"] == {"cited_by_3plus": 0, "with_pdf": 1}
     assert (answer["total"], answer["truncated"]) == (2, False)
-    # ranked as references.RANK: the free PDF first, the held one (equal co-citation) after
+    # ranked as reference_listing.RANK: the free PDF first, the held one (equal co-citation) after
     assert [row["title"] for row in answer["rows"]] == ["Free reference", "Held reference"]
     assert answer["rows"][1] == {
         "title": "Held reference", "authors": ["A. Writer"], "year": 2019, "venue": "Journal X",
@@ -239,7 +239,7 @@ async def answer_on(session, scope: chat.Scope | uuid.UUID, question: str, sourc
     prepared = chat.Prepared(
         sources=list(sources), system="", prompt="", whole_paper=True, skill_label=skill_label
     )  # fmt: skip
-    output_id = await chat.save_answer(
+    output_id = await chat_answers.save_answer(
         session, scope, question, prepared, f"Answer to {question} [C1].", "qwen3:8b", "Ollama"
     )
     output = await session.get(LLMOutput, output_id)

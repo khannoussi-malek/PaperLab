@@ -16,7 +16,7 @@ from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.api import chat as chat_api
+from app.api import chat_stream
 from app.api.deps import get_transport, resolve_check_llm, resolve_llm, resolve_llm_by_model_id
 from app.config import settings
 from app.core.chat import voice_turn
@@ -28,7 +28,7 @@ from app.models import Author, LLMConnection, LLMModel, Paper, PaperEvent, Paper
 from app.providers import arxiv, core_ac, crossref, embedding, openalex, semantic_scholar, unpaywall
 from app.providers.base import LLMUnavailable
 from app.providers.llm_fake import FakeLLM
-from app.workers import ingest
+from app.workers import header_jobs, ingest
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
 # rolled back afterwards, so tests can share the dev database without leaving rows behind.
@@ -216,6 +216,7 @@ async def worker_session(session, monkeypatch):
         yield session
 
     monkeypatch.setattr(ingest, "SessionLocal", shared_session)
+    monkeypatch.setattr(header_jobs, "SessionLocal", shared_session)
     return session
 
 
@@ -342,7 +343,7 @@ def answers_in_test_transaction(session, monkeypatch):
     async def test_session():
         yield session
 
-    monkeypatch.setattr(chat_api, "SessionLocal", test_session)
+    monkeypatch.setattr(chat_stream, "SessionLocal", test_session)
     monkeypatch.setattr(voice_turn, "SessionLocal", test_session)
 
 

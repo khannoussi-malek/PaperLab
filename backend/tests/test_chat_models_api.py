@@ -161,7 +161,7 @@ async def test_an_unexpected_exception_mid_answer_is_an_error_event_and_logged(c
     events = parse_sse(response.text)
     assert [name for name, _ in events] == ["sources", "token", "error"]
     assert events[-1][1] == {"message": "The answer stopped because of an unexpected error", "retryable": True}
-    [record] = [r for r in caplog.records if r.name == "app.api.chat"]
+    [record] = [r for r in caplog.records if r.name == "app.api.chat_stream"]
     assert (record.levelno, record.getMessage(), record.exc_info[0]) == (
         logging.ERROR, "chat answer on Fake (fake) failed unexpectedly", RuntimeError
     )

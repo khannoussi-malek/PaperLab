@@ -1,6 +1,6 @@
 import logging
 import uuid
-from collections.abc import AsyncIterable, Awaitable, Callable
+from collections.abc import AsyncIterable
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -8,14 +8,13 @@ from fastapi import APIRouter, Depends
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.chat_stream import answer_events, each_paper_events, stream_output
 from app.api.deps import LLMDep, SessionDep
-from app.core.chat import answer_check_run, answer_provenance, chat, chat_charts, each_paper
+from app.core.chat import answer_check_run, answer_provenance, chat, chat_answers, chat_charts, each_paper
 from app.core.notes import ai_notes
 from app.core.platform import queue, skills
 from app.core.search import hit_chat
-from app.db import SessionLocal
 from app.domain.errors import Conflict, InvalidInput, NotFound
-from app.providers.base import LLM, LLMError, LLMUnavailable
 from app.schemas.answer_check import AnswerCheckOut, AnswerCheckRequest
 from app.schemas.chat import (
     AnswerProvenanceOut,
@@ -93,87 +92,9 @@ WorkspacePreparedDep = Annotated[chat.Prepared | None, Depends(prepare_workspace
 EachPaperPlanDep = Annotated[each_paper.Plan | None, Depends(plan_each_paper)]
 
 
-def error_event(message: str) -> ServerSentEvent:
-    return ServerSentEvent(event="error", data=ErrorEvent(message=message, retryable=True))
-
-
 # The route yields ServerSentEvent, so FastAPI can't see the payload models; listing them here puts
 # them in OpenAPI components, where openapi-typescript generates their types.
 STREAM_RESPONSES = {200: {"model": ReadingEvent | SourcesEvent | TokenEvent | DoneEvent | ErrorEvent}}
-NO_TEXT_TO_READ = "None of these papers has text to read"
-NOTHING_READ = "The model couldn't read any of these papers"
-
-
-Save = Callable[[AsyncSession, str], Awaitable[uuid.UUID]]
-
-
-async def stream_output(
-    prepared: chat.Prepared, llm: LLM, save: Save, noun: str, log_as: str, log_for: object
-) -> AsyncIterable[ServerSentEvent]:
-    """Events: sources, token (repeated), then done. error replaces done, and then nothing is saved.
-
-    `save` stores the finished text in a fresh session and returns its id; `noun` names the output in the error texts
-    ("answer", "brief") and `log_as` in the logs ("chat answer", "brief"), because chat's tests assert its log text;
-    `log_for` names what a failed save was for (chat's scope, a brief's paper and lens).
-    Shared by chat and M16's briefs (and M22's check, D175)."""
-    sources = SourcesEvent(
-        whole_paper=prepared.whole_paper,
-        sources=to_sources(prepared.sources),
-        notes=to_notes(prepared.notes),
-        notes_used=prepared.notes_used,
-        notes_total=prepared.notes_total,
-    )
-    yield ServerSentEvent(event="sources", data=sources)
-    parts: list[str] = []
-    try:
-        async for text in llm.stream(prepared.system, prepared.prompt):
-            parts.append(text)
-            yield ServerSentEvent(event="token", data=TokenEvent(text=text))
-    except (LLMUnavailable, LLMError) as exc:
-        # The message names the connection and host, never the key (providers mask it).
-        logger.warning("%s on %s (%s) failed: %s", log_as, llm.connection_name, llm.host, exc)
-        yield error_event(str(exc))
-        return
-    except Exception:
-        logger.exception("%s on %s (%s) failed unexpectedly", log_as, llm.connection_name, llm.host)
-        yield error_event(f"The {noun} stopped because of an unexpected error")
-        return
-
-    content = "".join(parts)
-    try:
-        async with SessionLocal() as session:
-            output_id = await save(session, content)
-    except Exception:
-        logger.exception("saving a %s for %s failed", log_as, log_for)
-        yield error_event(f"The {noun} couldn't be saved")
-        return
-
-    cited = [f"C{i}" for i in chat.parse_citations(content, len(prepared.sources))]
-    cited += [f"N{i}" for i in chat.parse_citations(content, len(prepared.notes), "N")]
-    done = DoneEvent(
-        output_id=output_id,
-        model=llm.model,
-        connection_name=llm.connection_name,
-        prompt_version=prepared.prompt_version,
-        cited=cited,
-        skill_label=prepared.skill_label,
-        lens=prepared.lens,
-    )
-    yield ServerSentEvent(event="done", data=done)
-
-
-async def answer_events(
-    scope: chat.Scope, question: str, prepared: chat.Prepared, llm: LLM, parent_id: uuid.UUID | None = None
-) -> AsyncIterable[ServerSentEvent]:
-    """A chat answer's stream (stream_output), saved as a chat answer."""
-
-    async def save(session: AsyncSession, content: str) -> uuid.UUID:
-        return await chat.save_answer(
-            session, scope, question, prepared, content, llm.model, llm.connection_name, parent_id
-        )
-
-    async for event in stream_output(prepared, llm, save, "answer", "chat answer", scope):
-        yield event
 
 
 @router.post("/api/papers/{paper_id}/chat", response_class=EventSourceResponse, responses=STREAM_RESPONSES)
@@ -183,30 +104,6 @@ async def ask(
     """Checked before streaming, in parameter order: 404/409 for the model (llm), then 404 for the paper, 404
     parent_not_found or 409 parent_scope for a follow-up, then 409/422 for the paper."""
     async for event in answer_events(chat.Scope(paper_id=paper_id), payload.question, prepared, llm, payload.parent_id):
-        yield event
-
-
-async def each_paper_events(
-    scope: chat.Scope, question: str, plan: each_paper.Plan, llm: LLM
-) -> AsyncIterable[ServerSentEvent]:
-    """M8.5: a reading event per paper as its record lands, then the answer from the records as chat streams one.
-    No paper read (all without text, or the model failing on every one): an error, nothing saved."""
-    readings: list[each_paper.Reading] = []
-    async for reading in each_paper.read_all(question, plan.tasks, llm):
-        readings.append(reading)
-        yield ServerSentEvent(
-            event="reading",
-            data=ReadingEvent(
-                paper_id=reading.paper_id, label=reading.label, status=reading.status, answer=reading.answer,
-                cited=[c.id for c in reading.cited], low_confidence=reading.low_confidence, cached=reading.cached,
-                done=len(readings), total=len(plan.tasks),
-            ),
-        )
-    if not any(r.status in ("found", "absent") for r in readings):
-        textless = all(r.status == "no_text" for r in readings)
-        yield error_event(NO_TEXT_TO_READ if textless else NOTHING_READ)
-        return
-    async for event in answer_events(scope, question, each_paper.reduce_prepared(plan, readings), llm):
         yield event
 
 
@@ -239,7 +136,7 @@ def to_reading(reading: each_paper.Reading) -> ReadingOut:
 
 
 def to_answer(
-    answer: chat.Answer,
+    answer: chat_answers.Answer,
     checked: set[uuid.UUID] = frozenset(),
     readings: dict[uuid.UUID, each_paper.Reading] | None = None,
 ) -> ChatAnswer:
@@ -287,15 +184,15 @@ async def workspace_chart(
 
 @router.get("/api/papers/{paper_id}/chat")
 async def history(paper_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
-    return await _with_checks(session, await chat.list_answers(session, paper_id))
+    return await _with_checks(session, await chat_answers.list_answers(session, paper_id))
 
 
 @router.get("/api/workspaces/{workspace_id}/chat")
 async def workspace_history(workspace_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
-    return await _with_checks(session, await chat.list_answers(session, chat.Scope(workspace_id=workspace_id)))
+    return await _with_checks(session, await chat_answers.list_answers(session, chat.Scope(workspace_id=workspace_id)))
 
 
-async def _with_checks(session: AsyncSession, answers: list[chat.Answer]) -> list[ChatAnswer]:
+async def _with_checks(session: AsyncSession, answers: list[chat_answers.Answer]) -> list[ChatAnswer]:
     checked = await answer_check_run.checked_answers(session, [answer.output.id for answer in answers])
     readings = await each_paper.views_of(session, [r for answer in answers for r in answer.readings])
     return [to_answer(answer, checked, readings) for answer in answers]
@@ -415,5 +312,5 @@ async def hit_history(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: Sessi
     context = await hit_chat.load(session, workspace_id, hit_id)
     answers = list(hit_chat.HISTORY.get(hit_id, []))
     if context.source == "full_text":
-        answers += [to_answer(a) for a in await chat.list_answers(session, context.paper.id)]
+        answers += [to_answer(a) for a in await chat_answers.list_answers(session, context.paper.id)]
     return sorted(answers, key=lambda a: a.created_at)

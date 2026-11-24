@@ -8,7 +8,7 @@ from sqlalchemy import insert
 from test_evidence_cards import FULL, INTRO, Scripted, card_reply
 
 from app.core.chat import retrieval
-from app.core.notes import evidence_cards
+from app.core.notes import evidence_card_views, evidence_cards
 from app.core.platform import queue
 from app.models import Workspace, workspace_papers
 
@@ -54,7 +54,7 @@ async def test_post_queues_generation_and_returns_202_with_the_view(client, sess
 
 async def test_post_regenerating_an_edited_card_needs_confirm(client, session, arq, tmp_path):
     paper, _ = await setup(session, tmp_path)
-    await evidence_cards.edit_card(session, paper.id, [{"field": "design", "values": {"value": "mine"}}])
+    await evidence_card_views.edit_card(session, paper.id, [{"field": "design", "values": {"value": "mine"}}])
     url = f"/api/papers/{paper.id}/evidence-card"
     refused = await client.post(url, json={"regenerate": True})
     assert refused.status_code == 409 and arq.jobs == []

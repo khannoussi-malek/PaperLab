@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import pytest
 from mcp import Client
 
-from app.core.platform import skill_prompts, skills
+from app.core.platform import skill_edits, skill_prompts, skills
 from app.core.workspaces import workspaces
 from app.models import Paper
 from mcp_server import server
@@ -118,7 +118,7 @@ async def test_the_bundled_skills_are_listed_by_slug_with_their_label_and_argume
 
 
 async def test_a_custom_skill_is_listed_as_custom_and_its_label_stands_in_for_an_empty_description(session):
-    made = await skills.create(session, label=f"Probe {RUN}", description="", scope="paper", instructions="Probe.")
+    made = await skill_edits.create(session, label=f"Probe {RUN}", description="", scope="paper", instructions="Probe.")
 
     prompt = (await listed())[f"custom-{made.id.split(':', 1)[1]}"]
 
@@ -126,13 +126,13 @@ async def test_a_custom_skill_is_listed_as_custom_and_its_label_stands_in_for_an
 
 
 async def test_a_hidden_skill_leaves_the_list(session):
-    await skills.update(session, f"builtin:{PAPER_SKILL.slug}", is_listed=False)
+    await skill_edits.update(session, f"builtin:{PAPER_SKILL.slug}", is_listed=False)
 
     assert PAPER_SKILL.slug not in await listed()
 
 
 async def test_an_edit_shows_on_the_next_list(session):
-    await skills.update(session, f"builtin:{PAPER_SKILL.slug}", label=f"Renamed {RUN}", description="")
+    await skill_edits.update(session, f"builtin:{PAPER_SKILL.slug}", label=f"Renamed {RUN}", description="")
 
     prompt = (await listed())[PAPER_SKILL.slug]
 
@@ -140,16 +140,16 @@ async def test_an_edit_shows_on_the_next_list(session):
 
 
 async def test_a_reset_brings_the_shipped_skill_back_into_the_list(session):
-    await skills.update(session, f"builtin:{PAPER_SKILL.slug}", label=f"Renamed {RUN}")
-    await skills.reset(session, f"builtin:{PAPER_SKILL.slug}")
+    await skill_edits.update(session, f"builtin:{PAPER_SKILL.slug}", label=f"Renamed {RUN}")
+    await skill_edits.reset(session, f"builtin:{PAPER_SKILL.slug}")
 
     assert (await listed())[PAPER_SKILL.slug].title == PAPER_SKILL.label
 
 
 async def test_a_deleted_custom_skill_leaves_the_list(session):
-    made = await skills.create(session, label=f"Gone {RUN}", description="d", scope="paper", instructions="Gone.")
+    made = await skill_edits.create(session, label=f"Gone {RUN}", description="d", scope="paper", instructions="Gone.")
 
-    await skills.delete(session, made.id)
+    await skill_edits.delete(session, made.id)
 
     assert f"custom-{made.id.split(':', 1)[1]}" not in await listed()
 
@@ -176,7 +176,7 @@ async def test_a_paper_skill_gives_its_instructions_and_the_paper(session):
 
 async def test_an_edited_instruction_is_what_the_prompt_gives(session):
     paper = await make_paper(session, f"Edited paper {RUN}")
-    await skills.update(session, f"builtin:{PAPER_SKILL.slug}", instructions="Use the new wording.")
+    await skill_edits.update(session, f"builtin:{PAPER_SKILL.slug}", instructions="Use the new wording.")
 
     [message] = (await fetch(PAPER_SKILL.slug, {"paper_id": str(paper.id)})).messages
 
@@ -186,7 +186,7 @@ async def test_an_edited_instruction_is_what_the_prompt_gives(session):
 async def test_a_workspace_skill_gives_the_workspace_text(session):
     name = f"Prompt workspace {RUN}"
     await workspaces.create(session, name)
-    made = await skills.create(
+    made = await skill_edits.create(
         session, label=f"Ws check {RUN}", description="d", scope="workspace", instructions="Check the workspace."
     )
     slug = f"custom-{made.id.split(':', 1)[1]}"
@@ -243,7 +243,7 @@ async def test_an_unknown_workspace_is_refused(session):
 
 
 async def test_a_hidden_skill_is_refused_by_name_although_chat_still_runs_it(session):
-    await skills.update(session, f"builtin:{PAPER_SKILL.slug}", is_listed=False)
+    await skill_edits.update(session, f"builtin:{PAPER_SKILL.slug}", is_listed=False)
     paper = await make_paper(session, f"Hidden paper {RUN}")
 
     assert await refused(PAPER_SKILL.slug, {"paper_id": str(paper.id)}) == f"Unknown prompt: {PAPER_SKILL.slug}"

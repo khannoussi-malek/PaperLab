@@ -10,6 +10,7 @@ from app.core.platform.queue import INGEST_QUEUE
 from app.core.search import (
     branches,
     hit_import,
+    hit_ranking,
     hit_suggest,
     screening,
     search_hits,
@@ -17,16 +18,26 @@ from app.core.search import (
     snowball_run,
     workspace_search,
 )
-from app.core.search.hit_links import paths_to, provenance
+from app.core.search.hit_provenance import paths_to, provenance
+from app.core.search.hit_ranking import RANKED_LIMIT_MAX
 from app.core.search.prisma_export import prisma_export
-from app.core.search.screening import RANKED_LIMIT_MAX
 from app.domain.errors import InvalidInput
+from app.schemas.search_tree import (
+    BranchIn,
+    BranchOut,
+    NextItem,
+    PrismaExportOut,
+    ProvenanceOut,
+    ProvLink,
+    SnowballNextOut,
+    SnowballOut,
+    SnowballRequest,
+    SuggestHitRequest,
+)
 from app.schemas.workspace_search import (
     AcceptSuggestions,
     AcceptSuggestionsOut,
     AcquisitionStatus,
-    BranchIn,
-    BranchOut,
     BulkHitReviewUpdate,
     BulkUpdateOut,
     ClearHitsOut,
@@ -35,21 +46,13 @@ from app.schemas.workspace_search import (
     HitReviewUpdate,
     ImportHitsOut,
     ImportHitsRequest,
-    NextItem,
-    PrismaExportOut,
-    ProvenanceOut,
-    ProvLink,
     RankedHitsOut,
     ScreeningCriteriaUpdate,
     ScreeningStateOut,
     SearchRunCreate,
     SearchRunOut,
     SearchRunSummary,
-    SnowballNextOut,
-    SnowballOut,
-    SnowballRequest,
     Stage1Status,
-    SuggestHitRequest,
     SuggestStart,
 )
 
@@ -124,7 +127,7 @@ async def ranked_hits(
     workspace_id: uuid.UUID, session: SessionDep, limit: Annotated[int, Query(gt=0, le=RANKED_LIMIT_MAX)] = 200,
     saved_search_id: uuid.UUID | None = None, found_after: AwareDatetime | None = None,
 ) -> RankedHitsOut:
-    return await screening.ranked_hits(session, workspace_id, limit, saved_search_id, found_after)
+    return await hit_ranking.ranked_hits(session, workspace_id, limit, saved_search_id, found_after)
 
 
 @router.get("/screening")
@@ -265,7 +268,9 @@ async def snowball_next_route(workspace_id: uuid.UUID, session: SessionDep) -> l
 
 
 @router.post("/snowball-next/run")
-async def run_snowball_next_route(workspace_id: uuid.UUID, session: SessionDep, providers: DiscoveryDep) -> SnowballNextOut:
+async def run_snowball_next_route(
+    workspace_id: uuid.UUID, session: SessionDep, providers: DiscoveryDep
+) -> SnowballNextOut:
     return await snowball_next.run_snowball_next(session, providers, workspace_id)
 
 

@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.core.citations import citations_bundle_read
 from app.core.citations.citations_import import CitationsImportError
-from app.core.workspaces import workspace_package_screening
+from app.core.workspaces import package_screening_import
 from app.core.workspaces.workspace_package import (
     FORMAT,
     FORMAT_VERSION,
@@ -151,7 +151,7 @@ def _check_screening_v2(screening: dict, prisma: dict, paper_keys: set[str]) -> 
     _shaped(ScreeningV2, screening)
     _shaped(PrismaTotals, prisma)
     try:
-        workspace_package_screening.check_references(screening, paper_keys)
+        package_screening_import.check_references(screening, paper_keys)
     except ValueError:
         raise InvalidInput(INVALID) from None
 
@@ -176,7 +176,7 @@ def _read(zf: zipfile.ZipFile) -> _Package:
     screening, prisma = _json(zf, "screening.json"), _json(zf, "prisma.json")
     if not isinstance(screening, dict) or not isinstance(prisma, dict):
         raise InvalidInput(INVALID)
-    if workspace_package_screening.is_v2(screening):
+    if package_screening_import.is_v2(screening):
         _check_screening_v2(screening, prisma, {row["key"] for row in papers_rows})
     _made_on(manifest)
     return _Package(zf, manifest, papers_rows, notes_rows, tag_rows, screening, prisma, _answer_rows(zf))

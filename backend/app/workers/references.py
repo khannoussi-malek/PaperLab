@@ -2,7 +2,7 @@ import logging
 import uuid
 
 from app.config import settings
-from app.core.citations import references
+from app.core.citations import reference_embed, references
 from app.core.papers import paper_sources, papers
 from app.core.search import source_clients
 from app.db import SessionLocal
@@ -28,7 +28,7 @@ async def embed_note(ctx: dict, note_ids: list[str] | str) -> None:
             if embedder is None:
                 logger.info("%d note(s) weren't embedded on save: no search model", len(ids))
                 return
-            await references.embed_notes(session, embedder, ids)
+            await reference_embed.embed_notes(session, embedder, ids)
         except (LLMUnavailable, LLMError) as exc:
             logger.info("%d note(s) weren't embedded on save, the next references fetch will: %s", len(ids), exc)
 
@@ -50,7 +50,7 @@ async def fetch_references(ctx: dict, paper_id: str) -> None:
             finally:
                 await providers.aclose()
             try:
-                await references.embed_new(session, await search_embedder(ctx, session))
+                await reference_embed.embed_new(session, await search_embedder(ctx, session))
             except (LLMUnavailable, LLMError) as exc:
                 # No paper lacks vectors because of it, so no source_error (D155): the tab ranks without note
                 # similarity until the next fetch embeds them.

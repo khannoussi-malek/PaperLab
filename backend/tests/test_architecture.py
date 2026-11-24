@@ -43,24 +43,8 @@ FAKE_MODEL_READS = (
 )
 ALLOWED_UPWARD |= {("app.providers.llm_fake", f"app.core.{name}"): "fake model" for name in FAKE_MODEL_READS}
 
-# Files allowed over MAX_LINES today (paths relative to backend/). Split one, then take it off.
-OVER_MAX: set[str] = {
-    "app/api/chat.py",
-    "app/core/chat/chat.py",
-    "app/core/chat/claims.py",
-    "app/core/citations/citations_export.py",
-    "app/core/citations/citations_import.py",
-    "app/core/citations/citations_import_apply.py",
-    "app/core/citations/references.py",
-    "app/core/manuscripts/manuscript_checks/number_provenance.py",
-    "app/core/notes/evidence_cards.py",
-    "app/core/platform/skills.py",
-    "app/core/search/hit_links.py",
-    "app/core/search/screening.py",
-    "app/core/workspaces/workspace_package_screening.py",
-    "app/schemas/workspace_search.py",
-    "app/workers/ingest.py",
-}
+# Files allowed over MAX_LINES (paths relative to backend/). Empty since the splits; keep it that way.
+OVER_MAX: set[str] = set()
 
 
 def module_name(path: Path) -> str:

@@ -17,6 +17,7 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import func, select
 
 from app.core.citations import citations_import_apply as cia
+from app.core.citations import citations_import_route
 from app.core.citations.citations_bundle_read import Bundle, read_bundle
 from app.core.citations.citations_import import CitationsImportError, ImportEntry
 from app.core.notes import notes
@@ -315,8 +316,8 @@ async def test_zotero_import_without_the_flag_is_unchanged(session, pdf_dir, job
 async def test_the_preview_counts_what_would_be_saved_without_a_pdf(session):
     entries = [entry("p1"), entry("p2", doi=doi("p2"))]
 
-    on = await cia.preview(session, entries, fetch_free_pdfs=False, save_without_pdf=True)
-    off = await cia.preview(session, entries, fetch_free_pdfs=False)
+    on = await citations_import_route.preview(session, entries, fetch_free_pdfs=False, save_without_pdf=True)
+    off = await citations_import_route.preview(session, entries, fetch_free_pdfs=False)
 
     assert (on.would_save_without_pdf, off.would_save_without_pdf) == (2, 0)
 
@@ -416,7 +417,7 @@ def bib_of(count: int) -> bytes:
 
 
 async def test_a_small_import_runs_inline(session, pdf_dir, jobs):
-    result = await cia.start(session, "refs.bib", bib_of(2), fetch_free_pdfs=False)
+    result = await citations_import_route.start(session, "refs.bib", bib_of(2), fetch_free_pdfs=False)
     assert isinstance(result, cia.ImportResult) and len(result.needs_pdf) == 2
     assert jobs.jobs == []
 
@@ -443,7 +444,7 @@ async def test_a_failed_progress_write_is_skipped_and_the_job_finishes(session, 
 
     monkeypatch.setattr(worker, "SessionLocal", shared_session)
     data = bib_of(cia.INLINE_MAX + 1)
-    job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False)
+    job_id = await citations_import_route.start(session, "refs.bib", data, fetch_free_pdfs=False)
     [(_, path, file_name, ws, fetch, save)] = jobs.jobs
     done = await worker.import_citations({"redis": BlipRedis(), "job_id": job_id}, path, file_name, ws, fetch, save)
     assert len(done["needs_pdf"]) == cia.INLINE_MAX + 1
@@ -457,7 +458,7 @@ async def test_the_job_carries_save_without_pdf_to_the_worker(session, pdf_dir, 
     monkeypatch.setattr(worker, "SessionLocal", shared_session)
     data = bib_of(cia.INLINE_MAX + 1)
 
-    job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False, save_without_pdf=True)
+    job_id = await citations_import_route.start(session, "refs.bib", data, fetch_free_pdfs=False, save_without_pdf=True)
 
     [(_, path, file_name, ws, fetch, save)] = jobs.jobs
     assert save is True
@@ -474,7 +475,7 @@ async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir
     await held(session, pdf_dir, "job0", year=2020)  # entry 0 is in the library (same title, no authors)
     data = bib_of(cia.INLINE_MAX + 1)
 
-    job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False)
+    job_id = await citations_import_route.start(session, "refs.bib", data, fetch_free_pdfs=False)
 
     [(name, path, file_name, ws, fetch, save)] = jobs.jobs
     assert (name, file_name, ws, fetch) == ("import_citations", "refs.bib", None, False)
@@ -489,7 +490,7 @@ async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir
 
     assert (done["already_in_library"], len(done["needs_pdf"])) == (1, cia.INLINE_MAX)
     keys = {key for key, _, _ in redis.writes}
-    assert keys == {cia.progress_key(job_id)}
+    assert keys == {citations_import_route.progress_key(job_id)}
     progress = [w for _, w, _ in redis.writes]
     assert len(progress) == cia.INLINE_MAX + 3  # one before the first entry, one per entry, then the finished result
     assert progress[0]["total"] == cia.INLINE_MAX + 1 and progress[0]["finished"] is False
@@ -540,7 +541,9 @@ async def test_apply_stops_at_its_deadline(session, pdf_dir, monkeypatch):
 async def test_an_import_that_would_fetch_goes_to_the_job_even_when_small(session, pdf_dir, jobs):
     data = f"@article{{a, title={{{title('jf')}}}, year={{2020}}, doi={{{doi('jf')}}}}}\n".encode()
 
-    job_id = await cia.start(session, "refs.bib", data)  # fetch on by default; nothing is contacted here
+    job_id = await citations_import_route.start(
+        session, "refs.bib", data
+    )  # fetch on by default; nothing is contacted here
 
     assert isinstance(job_id, str) and [j[0] for j in jobs.jobs] == ["import_citations"]
     assert await titled(session, "jf") == []
@@ -550,7 +553,7 @@ async def test_a_dedupe_only_import_stays_inline_with_fetch_on(session, pdf_dir,
     paper = await held(session, pdf_dir, "inl", doi=doi("inl"))
     data = f"@article{{a, title={{{title('inl')}}}, year={{2020}}, doi={{{doi('inl')}}}}}\n".encode()
 
-    result = await cia.start(session, "refs.bib", data)
+    result = await citations_import_route.start(session, "refs.bib", data)
 
     assert isinstance(result, cia.ImportResult) and result.already_in_library == 1 and jobs.jobs == []
     assert [p.id for p in await titled(session, "inl")] == [paper.id]
@@ -700,10 +703,10 @@ async def test_preview_counts_without_contacting_anyone(session, pdf_dir):
         f"@article{{d, title={{{title('pv-bare')}}}}}\n"
     )
     with read_bundle(zipped(bib, {"files/1/b.pdf": PDF})) as bundle:
-        on = await cia.preview(session, bundle.entries, bundle=bundle)
-        off = await cia.preview(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
+        on = await citations_import_route.preview(session, bundle.entries, bundle=bundle)
+        off = await citations_import_route.preview(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
 
-    assert on == cia.ImportPreview(
+    assert on == citations_import_route.ImportPreview(
         total=4, already_in_library=1, with_bundled_pdf=1, would_fetch=1, cannot_import_without_fetch=2
     )
     assert off.would_fetch == 0 and off.cannot_import_without_fetch == 2

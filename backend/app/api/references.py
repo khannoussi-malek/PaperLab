@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core.citations import references
+from app.core.citations import reference_listing, references
 from app.core.platform.queue import INGEST_QUEUE
 from app.core.workspaces import workspaces
 from app.schemas.papers import PaperOut
@@ -18,7 +18,7 @@ router = APIRouter(tags=["references"])
 @router.get("/api/papers/{paper_id}/references")
 async def list_references(paper_id: uuid.UUID, session: SessionDep, direction: Direction = "cites") -> ReferencesOut:
     """Ranked for this library. `state` is `none` until a fetch is asked for, `fetching` while the worker runs."""
-    return await references.listing(session, paper_id, direction)
+    return await reference_listing.listing(session, paper_id, direction)
 
 
 @router.post("/api/papers/{paper_id}/references/refresh", status_code=202)
@@ -48,7 +48,7 @@ async def import_reference(
 async def references_page(session: SessionDep, workspace: uuid.UUID | None = None) -> ReferencePageOut:
     """The whole library's, or one workspace's, To read list, the works several of its papers cite, and the recent
     works that cite several of them (D121, D166, D177). 404 an unknown workspace."""
-    return await references.library_listing(session, workspace)
+    return await reference_listing.library_listing(session, workspace)
 
 
 @router.put("/api/references/{ref_id}/queue")

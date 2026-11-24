@@ -15,8 +15,8 @@ from app.core.workspaces import package_import, tags, workspace_package, workspa
 from app.domain.errors import NotFound
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
+from app.schemas.search_tree import EligibilityOut, EligibilityUpdate
 from app.schemas.tags import TagApply, TagDeleted, TagOut, TagRename, TagRenamed, TagResultOut
-from app.schemas.workspace_search import EligibilityOut, EligibilityUpdate
 from app.schemas.workspaces import PackageRecordExists, WorkspaceCreate, WorkspaceOut, WorkspaceRename
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])

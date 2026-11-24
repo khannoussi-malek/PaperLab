@@ -23,7 +23,12 @@ from app.core.notes import ai_notes, notes
 from app.core.papers import papers, pipeline_upload
 from app.core.platform import queue
 from app.core.search import discovery, same_work, screening
-from app.core.workspaces import tags, workspace_package_answers, workspace_package_screening, workspaces
+from app.core.workspaces import (
+    package_screening_import,
+    tags,
+    workspace_package_answers,
+    workspaces,
+)
 from app.core.workspaces.package_read import _made_on, _open, _Package, _read, _vet
 from app.core.workspaces.workspace_package import INVALID, PAPER_FIELDS, _dump, record_path
 from app.domain.candidates import Candidate
@@ -333,11 +338,11 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
         note_count = await _notes_into(session, pkg.notes, ids)
         answer_count = await workspace_package_answers.write_rows(session, workspace.id, pkg.answers, ids)
         hit_count = 0
-        if workspace_package_screening.is_v2(pkg.screening):
-            hit_count = await workspace_package_screening.rebuild(session, pkg.screening, workspace, ids)
+        if package_screening_import.is_v2(pkg.screening):
+            hit_count = await package_screening_import.rebuild(session, pkg.screening, workspace, ids)
             await session.flush()
-            full_text = workspace_package_screening.full_text_in_package(pkg.screening, pkg.papers)
-            if not await workspace_package_screening.counts_match(session, workspace.id, pkg.prisma, full_text):
+            full_text = package_screening_import.full_text_in_package(pkg.screening, pkg.papers)
+            if not await package_screening_import.counts_match(session, workspace.id, pkg.prisma, full_text):
                 raise InvalidInput(INVALID, detail="screening counts don't match")
         else:
             await _record_into(pkg, workspace.id, written)
@@ -352,7 +357,7 @@ async def _write_package(session, pkg: _Package, name: str, held, alias) -> Impo
             await queue.enqueue(job, arg)
         except Exception:
             logger.exception("could not queue %s for paper %s; it stays uploaded until it is queued again", job, arg)
-    has_record = not workspace_package_screening.is_v2(pkg.screening)
+    has_record = not package_screening_import.is_v2(pkg.screening)
     return ImportReport(
         workspace.id, name, added, matched, note_count, skipped, has_record, answer_count, hit_count
     )

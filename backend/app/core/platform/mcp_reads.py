@@ -11,8 +11,8 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat import chat
-from app.core.citations import references
+from app.core.chat import chat, chat_answers
+from app.core.citations import reference_listing, references
 from app.core.notes import datasets
 from app.core.notes.datasets import CellView
 from app.core.workspaces import workspaces
@@ -133,7 +133,7 @@ async def _renamed_not_found(code: str, call: Awaitable):
 
 async def references_out(session: AsyncSession, paper_id: uuid.UUID, direction: str) -> ReferencesOut:
     listing = await _renamed_not_found(
-        "unknown_paper", references.listing(session, paper_id, DIRECTIONS[direction])
+        "unknown_paper", reference_listing.listing(session, paper_id, DIRECTIONS[direction])
     )  # fmt: skip
     return ReferencesOut(
         state=listing.state,
@@ -205,11 +205,11 @@ async def answers_out(
     target = (
         chat.Scope(workspace_id=await workspaces.by_name(session, workspace)) if workspace is not None else paper_id
     )
-    newest = list(reversed(await _renamed_not_found("unknown_paper", chat.list_answers(session, target))))
+    newest = list(reversed(await _renamed_not_found("unknown_paper", chat_answers.list_answers(session, target))))
     return AnswersOut(total=len(newest), answers=[_answer(a) for a in newest[offset : offset + ANSWERS_PER_CALL]])
 
 
-def _answer(answer: chat.Answer) -> AnswerOut:
+def _answer(answer: chat_answers.Answer) -> AnswerOut:
     output = answer.output
     return AnswerOut(
         id=output.id,

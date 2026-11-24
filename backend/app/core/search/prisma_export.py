@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.search import search_run_results
-from app.core.search.hit_links import provenance
+from app.core.search.hit_provenance import provenance
 from app.core.search.source_registry import NAMES
 from app.core.search.workspace_search import PER_SOURCE_PASS_LIMIT, get_run
 from app.domain.errors import NotFound

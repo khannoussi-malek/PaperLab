@@ -3,7 +3,7 @@ from datetime import timedelta
 
 import pytest
 
-from app.core.search import screening
+from app.core.search import hit_ranking
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchHit
 from tests.screening_pool import make_pool
@@ -120,8 +120,8 @@ async def test_a_new_decision_reuses_the_cached_features(client, session, monkey
         session, [(POSITIVE, "relevant"), (NEGATIVE, "not_relevant"), ("sleep in adults", None), ("graph", None)]
     )
     builds = []
-    real = screening.features
-    monkeypatch.setattr(screening, "features", lambda texts: builds.append(len(texts)) or real(texts))
+    real = hit_ranking.features
+    monkeypatch.setattr(hit_ranking, "features", lambda texts: builds.append(len(texts)) or real(texts))
     await client.get(_url(workspace))
     hits[2].stage1_status = "relevant"
     await session.flush()

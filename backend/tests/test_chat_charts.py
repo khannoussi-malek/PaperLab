@@ -5,7 +5,7 @@ import uuid
 
 import pytest
 
-from app.core.chat import chat, chat_charts
+from app.core.chat import chat, chat_answers, chat_charts
 from app.core.notes import datasets
 from app.core.workspaces import workspaces
 from app.domain.chart_spec import SeriesChart
@@ -100,7 +100,7 @@ async def test_asking_saves_a_chat_answer_carrying_the_chart(session):
     )
     scope = chat.Scope(paper_id=paper.id)
     output_id = await chat_charts.ask_chart(session, scope, "plot F1 by system", llm)
-    [answer] = await chat.list_answers(session, scope)
+    [answer] = await chat_answers.list_answers(session, scope)
     assert answer.output.id == output_id
     assert answer.output.content == "**F1 by system**\n\nOurs scores higher than the baseline."
     assert answer.output.chart_spec["series"][0]["y"] == str(view.columns[1].id)
@@ -119,7 +119,7 @@ async def test_a_workspace_chart_can_use_any_member_papers_dataset(session):
         {"chart": True, "type": "bar", "dataset": "D2", "x": "System", "y": ["F1"], "title": "t", "caption": "c"}
     )
     await chat_charts.ask_chart(session, chat.Scope(workspace_id=workspace.id), "compare", llm)
-    [answer] = await chat.list_answers(session, chat.Scope(workspace_id=workspace.id))
+    [answer] = await chat_answers.list_answers(session, chat.Scope(workspace_id=workspace.id))
     assert answer.output.chart_spec["series"][0]["dataset_id"] == str(other.id)
 
 

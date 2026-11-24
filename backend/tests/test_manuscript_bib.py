@@ -1,7 +1,8 @@
 import pytest
 from sqlalchemy import select
 
-from app.core.citations.citations_export import _bibtex, bibtex_keys, csl_item
+from app.core.citations.citations_export import _bibtex
+from app.core.citations.csl_items import bibtex_keys, csl_item
 from app.core.manuscripts import manuscripts
 from app.core.manuscripts.manuscript_bib import build_bib, cited_keys
 from app.core.workspaces import workspaces

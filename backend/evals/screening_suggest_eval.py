@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 
 from app.core.platform import llm_connections
-from app.core.search.screening import hit_text, load_pool
+from app.core.search.hit_ranking import hit_text, load_pool
 from app.core.search.screening_suggest import SYSTEM_PROMPT, build_prompt, parse_reply
 from app.core.workspaces import workspaces
 from app.db import SessionLocal
