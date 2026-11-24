@@ -2,11 +2,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 import { LibraryPage } from './LibraryPage'
 
 const state = vi.hoisted(() => ({ papers: [] as { id: string; title: string }[] }))
-vi.mock('@/api/queries', () => ({
+vi.mock('@/services/queries', () => ({
   usePapers: () => ({ data: state.papers, isError: false }),
   useUploadPapers: () => ({ isPending: false, error: null, mutate: vi.fn() }),
   useEmbeddingStatus: () => ({ data: undefined }),

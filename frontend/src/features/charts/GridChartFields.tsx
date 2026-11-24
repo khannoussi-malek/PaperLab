@@ -1,4 +1,4 @@
-import type { ChartSpec, Dataset } from '@/api/client'
+import type { ChartSpec, Dataset } from '@/entities'
 import { delayedIn } from '@/components/motion'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'

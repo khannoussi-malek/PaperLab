@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { GraphPanel } from './GraphPanel'
 
 const node = (id: string, title: string) => ({ id, title, year: null, workspaces: [], has_notes: false, status: 'ready' }) as unknown as GraphNode

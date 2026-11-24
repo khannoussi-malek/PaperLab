@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Dataset, TablePreview } from '@/api/client'
+import type { Dataset, TablePreview } from '@/entities'
 import {
   chartsLosingColumns,
   deleteColumn,

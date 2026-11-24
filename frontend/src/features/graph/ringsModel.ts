@@ -1,4 +1,4 @@
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { byFirstWorkspace, degrees, hopDistances, MAX_HOPS } from './graphModel'
 
 export const RINGS_HINT = 'Centred on the most connected paper. Choose a paper to centre on it.'

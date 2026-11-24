@@ -1,4 +1,4 @@
-import type { CitablePaper, EvidenceRow, Note, Paper } from '@/api/client'
+import type { CitablePaper, EvidenceRow, Note, Paper } from '@/entities'
 import { latexEscape } from './latex'
 
 /** The papers route's row, as the API returns it. */

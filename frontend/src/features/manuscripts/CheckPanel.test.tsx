@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { sileo } from 'sileo'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, ApiError, type CheckFinding, type CheckRunResult } from '@/api/client'
+import type { CheckFinding, CheckRunResult } from '@/entities'
+import { api, ApiError } from '@/services/api'
 import { CheckPanel } from './CheckPanel'
 
 const f = (i: number, over: Partial<CheckFinding> = {}): CheckFinding => ({

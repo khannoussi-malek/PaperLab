@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { ApiError } from '@/api/client'
+import { ApiError } from '@/services/api'
 import { manuscriptErrorMessage, manuscriptFailure } from './errors'
 
 test('names the path, limit and cause where there is one', () => {

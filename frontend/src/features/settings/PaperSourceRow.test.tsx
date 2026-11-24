@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, test } from 'vitest'
 import { PaperSourceRow } from './PaperSourceRow'
-import type { PaperSource } from '@/api/client'
+import type { PaperSource } from '@/entities'
 
 function renderRow(source: PaperSource, hasEmail: boolean) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

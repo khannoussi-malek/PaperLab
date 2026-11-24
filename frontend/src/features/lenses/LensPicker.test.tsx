@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react'
 import { expect, it } from 'vitest'
-import type { Lens } from '@/api/client'
+import type { Lens } from '@/entities'
 import { LensPicker } from './LensPicker'
 import type { LensReader } from './useLensReader'
 

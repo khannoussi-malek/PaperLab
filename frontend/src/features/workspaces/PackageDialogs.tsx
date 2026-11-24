@@ -1,13 +1,9 @@
 import { PackageOpen } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { sileo } from "sileo";
-import {
-  ApiError,
-  packageRecordUrl,
-  packageUrl,
-  type Workspace,
-} from "@/api/client";
-import { usePackageFits, usePackageRecord, useImportPackage } from "@/api/queries";
+import type { Workspace } from '@/entities'
+import { ApiError, packageRecordUrl, packageUrl } from '@/services/api'
+import { usePackageFits, usePackageRecord, useImportPackage } from '@/services/queries'
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -18,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { workspaceHref } from "@/lib/route";
+import { workspaceHref } from "@/router/route";
 import { importResultLine, packageErrorMessage, PDFS_TOO_LARGE, PACKAGE_TOO_LARGE } from "./packageCopy";
 
 /** "Export package…" from a workspace's row menu: one `.paperlab` file, with its PDFs only when ticked. */

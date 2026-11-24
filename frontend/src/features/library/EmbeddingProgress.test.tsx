@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 import { EmbeddingProgress, timeLeft } from './EmbeddingProgress'
 
 afterEach(() => {

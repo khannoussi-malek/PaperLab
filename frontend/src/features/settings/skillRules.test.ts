@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ApiError, type Skill } from '@/api/client'
+import type { Skill } from '@/entities'
+import { ApiError } from '@/services/api'
 import {
   allowsDefault,
   changedFields,

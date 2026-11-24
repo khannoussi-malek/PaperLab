@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ChatSource } from '@/api/client'
+import type { ChatSource } from '@/entities'
 import cases from './noteBlocks.cases.json'
 import {
   ALREADY_SAVED,

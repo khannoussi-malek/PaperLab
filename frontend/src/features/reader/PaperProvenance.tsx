@@ -1,5 +1,5 @@
-import type { Paper } from '@/api/client'
-import { usePaperEvents } from '@/api/queries'
+import type { Paper } from '@/entities'
+import { usePaperEvents } from '@/services/queries'
 import { provenanceLines } from './detailsSource'
 
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' })

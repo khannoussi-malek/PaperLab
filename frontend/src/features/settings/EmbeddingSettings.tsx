@@ -1,6 +1,6 @@
 import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
-import { useEmbeddingStatus, useReindexLibrary } from '@/api/queries'
+import { useEmbeddingStatus, useReindexLibrary } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { delayedIn } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'

@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 import { CHAT_MODEL_KEY } from '@/features/chat/chatModel'
 import { useCheckStream } from './useCheckStream'
 
 const invalidate = vi.fn()
 vi.mock('./queries', () => ({ useInvalidateChecks: () => invalidate }))
-vi.mock('@/api/queries', () => ({
+vi.mock('@/services/queries', () => ({
   useChatModels: () => ({ data: [{ id: 'm1', is_default: true }, { id: 'm2', is_default: false }] }),
 }))
 

@@ -1,6 +1,6 @@
 import { Download } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { useSwitchSearchSource } from '@/api/queries'
+import { useSwitchSearchSource } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

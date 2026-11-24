@@ -1,4 +1,4 @@
-import type { Note } from '@/api/client'
+import type { Note } from '@/entities'
 
 export type ColorChoice = { name: string; hex: string }
 export type ColorStorage = Pick<Storage, 'getItem' | 'setItem'>

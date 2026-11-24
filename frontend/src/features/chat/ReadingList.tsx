@@ -1,4 +1,4 @@
-import type { ReadingPassage } from '@/api/client'
+import type { ReadingPassage } from '@/entities'
 import { cn } from '@/lib/utils'
 
 /** One paper's record (M8.5 Ask each paper): from the stream (`cited`: chunk ids) or from history (`cited`: passages). */

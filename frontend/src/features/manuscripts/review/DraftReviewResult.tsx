@@ -1,4 +1,4 @@
-import type { DraftReview } from '@/api/client'
+import type { DraftReview } from '@/entities'
 import { discardedCount, reasonText, runSummary, severityLabel } from './draftReviewModel'
 
 const SEVERITY_CLASS: Record<DraftReview['issues'][number]['severity'], string> = {

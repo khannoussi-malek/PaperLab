@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type Hit } from '@/api/client'
+import type { Hit } from '@/entities'
+import { api } from '@/services/api'
 import { HitPreview } from './HitPreview'
 
 const hit = { id: 'h1', title: 'Paper', normalized_title: 'paper', sources: [], acquisition_status: 'imported' } as unknown as Hit

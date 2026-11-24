@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { CHART_INK, type ChartTheme } from '@/features/charts/palette'

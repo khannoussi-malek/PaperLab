@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ApiError, type Diagram } from '@/api/client'
+import type { Diagram } from '@/entities'
+import { ApiError } from '@/services/api'
 import { AI_COMMENT, canInsert, diagramBlock, diagramLabel, diagramPackages, diagramProblem, diagramStartError, editableCode } from './diagramModel'
 
 const row = (o: Partial<Diagram> = {}): Diagram => ({

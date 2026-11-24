@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { usePaperSources, useUpdatePaperSources, useUpdatePdfRecheck } from '@/api/queries'
+import { usePaperSources, useUpdatePaperSources, useUpdatePdfRecheck } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { LoadingState } from '@/components/LoadingState'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'

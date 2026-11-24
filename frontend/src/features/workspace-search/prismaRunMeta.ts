@@ -1,4 +1,4 @@
-import type { PrismaExportOut } from '@/api/client'
+import type { PrismaExportOut } from '@/entities'
 
 /** `PrismaExportOut.runs` comes back as `Record<string, unknown>[]` — the backend returns `list[dict]` (see
  * `prisma_export` in `backend/app/core/prisma_export.py`), so openapi-typescript can't infer a precise shape.

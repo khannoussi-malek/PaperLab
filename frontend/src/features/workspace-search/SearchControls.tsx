@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { usePaperSources } from '@/api/queries'
+import { usePaperSources } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { errorText } from './schedule'
-import type { SearchRunCreate, SearchRunSource } from '@/api/client'
+import type { SearchRunCreate, SearchRunSource } from '@/entities'
 import { READ_ONLY_TEXT } from '@/lib/errorWords'
 import { useReadOnlyWorkspace } from '../workspaces/readOnlyContext'
 

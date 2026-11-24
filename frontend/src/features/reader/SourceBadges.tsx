@@ -1,4 +1,4 @@
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { Badge } from '@/components/ui/badge'
 import { SOURCE_TYPES } from './paperForm'
 import { isPublishedCopy, venueShort } from './publishedChip'

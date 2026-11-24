@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AnswerCheckSentence } from '@/api/client'
+import type { AnswerCheckSentence } from '@/entities'
 import { chip } from './answerCheckMarks'
 
 const sentence = (over: Partial<AnswerCheckSentence>): AnswerCheckSentence => ({

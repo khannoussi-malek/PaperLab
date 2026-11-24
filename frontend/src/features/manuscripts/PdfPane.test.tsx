@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
-import type { ManuscriptDetail } from '@/api/client'
+import type { ManuscriptDetail } from '@/entities'
 import { PdfPane } from './PdfPane'
 
 vi.mock('../reader/usePdfDocument', () => ({ usePdfDocument: () => ({ doc: { numPages: 3 }, error: null }) }))

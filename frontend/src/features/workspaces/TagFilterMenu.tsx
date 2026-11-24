@@ -1,6 +1,6 @@
 import { Check, Tags } from 'lucide-react'
 import { useId } from 'react'
-import { useTags } from '@/api/queries'
+import { useTags } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Label } from '@/components/ui/label'

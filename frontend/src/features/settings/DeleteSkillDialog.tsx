@@ -1,5 +1,5 @@
-import type { Skill } from '@/api/client'
-import { useDeleteSkill } from '@/api/queries'
+import type { Skill } from '@/entities'
+import { useDeleteSkill } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'

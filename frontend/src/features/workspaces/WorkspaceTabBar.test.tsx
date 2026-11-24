@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LiquidGlassProvider } from '@/components/liquid-glass/LiquidGlass'
 import { Tabs } from '@/components/ui/tabs'
-import type { WorkspaceTab } from '@/lib/route'
+import type { WorkspaceTab } from '@/router/route'
 import { WorkspaceTabBar } from './WorkspaceTabBar'
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} }

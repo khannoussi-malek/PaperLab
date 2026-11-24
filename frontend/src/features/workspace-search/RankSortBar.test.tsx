@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { RankedHits } from '@/api/client'
+import type { RankedHits } from '@/entities'
 import { RankSortBar } from './RankSortBar'
 
 const ranked = (over = {}) => ({

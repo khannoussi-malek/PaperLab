@@ -1,4 +1,4 @@
-import type { ProvNode } from '@/api/client'
+import type { ProvNode } from '@/entities'
 
 export const YEAR_W = 60
 export const LEVEL_H = 160

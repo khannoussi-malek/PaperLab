@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { ChatSource } from '@/api/client'
+import type { ChatSource } from '@/entities'
 import { ChatAnswer } from './ChatAnswer'
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} }
@@ -158,7 +158,7 @@ describe('Answer check', () => {
 
   it('a checkable saved answer offers "Check this answer"', async () => {
     const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query')
-    const { api } = await import('@/api/client')
+    const { api } = await import('@/services/api')
     vi.spyOn(api, 'answerCheck').mockResolvedValue(null)
     render(
       <QueryClientProvider client={new QueryClient()}>

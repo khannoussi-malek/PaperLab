@@ -1,4 +1,4 @@
-import { ApiError } from '@/api/client'
+import { ApiError } from '@/services/api'
 
 const GENERIC = 'Something went wrong. Please try again.'
 type Details = Record<string, unknown>

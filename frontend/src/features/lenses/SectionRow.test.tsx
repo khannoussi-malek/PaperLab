@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { Role, Section } from '@/api/client'
+import type { Role, Section } from '@/entities'
 import { SectionRow } from './SectionRow'
 
 const section = (over: Partial<Section> = {}): Section =>

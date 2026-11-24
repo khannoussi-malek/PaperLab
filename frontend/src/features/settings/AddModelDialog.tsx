@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { LLMConnection, LLMModel } from '@/api/client'
-import { useAvailableModels, useConnectionMutations } from '@/api/queries'
+import type { LLMConnection, LLMModel } from '@/entities'
+import { useAvailableModels, useConnectionMutations } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'

@@ -1,4 +1,4 @@
-import type { DatasetSummary } from '@/api/client'
+import type { DatasetSummary } from '@/entities'
 
 const counted = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 

@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { api, type Paper } from '@/api/client'
+import type { Paper } from '@/entities'
+import { api } from '@/services/api'
 import { PaperMenu } from './PaperMenu'
 
 const paper = { id: 'p1', title: 'Alpha', workspace_ids: [], reading_pass: 0, triage: null } as unknown as Paper

@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, type Manuscript } from '@/api/client'
+import type { Manuscript } from '@/entities'
+import { api } from '@/services/api'
 import { ManuscriptList } from './ManuscriptList'
 
 const ms = (over: Partial<Manuscript>): Manuscript => ({

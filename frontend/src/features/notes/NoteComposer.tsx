@@ -1,6 +1,6 @@
 import { Hash } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { NoteKind } from '@/api/client'
+import type { NoteKind } from '@/entities'
 import { popIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'

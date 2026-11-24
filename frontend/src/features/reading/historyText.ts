@@ -1,4 +1,4 @@
-import type { TriageEvent } from '@/api/client'
+import type { TriageEvent } from '@/entities'
 import { readingChip, type Triage } from './passes'
 
 const PILES: Record<string, string> = {

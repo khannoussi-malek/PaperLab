@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError } from '@/services/api'
 import { citeThis } from './citeThis'
 
 afterEach(() => vi.restoreAllMocks())

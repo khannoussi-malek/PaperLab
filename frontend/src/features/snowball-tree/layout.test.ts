@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { ProvLink, ProvNode, ProvRoot } from '@/api/client'
+import type { ProvLink, ProvNode, ProvRoot } from '@/entities'
 import { COL, primaryParent, tidyLayout } from './layout'
 
 const node = (id: string, level: number): ProvNode => ({ id, title: id, level, snowballed: [], paths: 1 })

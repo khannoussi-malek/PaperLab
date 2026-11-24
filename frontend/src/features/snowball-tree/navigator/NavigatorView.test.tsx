@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { sileo } from 'sileo'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, ApiError, type Hit, type ProvenanceOut } from '@/api/client'
+import type { Hit, ProvenanceOut } from '@/entities'
+import { api, ApiError } from '@/services/api'
 import { NavigatorView } from './NavigatorView'
 
 const node = (id: string, level: number, extra: object = {}) => ({ id, title: `Paper ${id}`, level, snowballed: [], paths: 1, decision: null, ...extra })

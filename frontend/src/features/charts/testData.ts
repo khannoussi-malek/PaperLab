@@ -1,4 +1,4 @@
-import type { ResolvedCell, ResolvedData, ResolvedDataset, SeriesChartSpec, SeriesSpec } from '@/api/client'
+import type { ResolvedCell, ResolvedData, ResolvedDataset, SeriesChartSpec, SeriesSpec } from '@/entities'
 
 /** A readable fake uuid: id(3) → 00000000-0000-4000-8000-000000000003. */
 export const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`

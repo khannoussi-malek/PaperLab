@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import type { Lens, Section } from '@/api/client'
+import type { Lens, Section } from '@/entities'
 import { LensPanel } from './LensPanel'
 import type { LensReader } from './useLensReader'
 

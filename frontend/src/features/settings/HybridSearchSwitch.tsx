@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { useSetHybridSearch } from '@/api/queries'
+import { useSetHybridSearch } from '@/services/queries'
 
 /** Settings → Search: also rank chunks by the question's exact words when a search covers several papers. */
 export function HybridSearchSwitch({ enabled }: { enabled: boolean }) {

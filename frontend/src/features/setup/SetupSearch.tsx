@@ -1,4 +1,4 @@
-import { useEmbeddingStatus } from '@/api/queries'
+import { useEmbeddingStatus } from '@/services/queries'
 import { delayedIn } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Dataset, DatasetSummary } from '@/api/client'
+import type { Dataset, DatasetSummary } from '@/entities'
 import { dragRegion, MARKER_PT, numberMarks, tableMarkerAt, tableMarks } from './pageMarks'
 
 const summary = (overrides: Partial<DatasetSummary>): DatasetSummary => ({

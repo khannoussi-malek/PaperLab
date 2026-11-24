@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import type { ManuscriptTemplate } from '@/api/client'
-import { useCreateManuscript, useManuscriptTemplates } from '@/api/queries'
+import type { ManuscriptTemplate } from '@/entities'
+import { useCreateManuscript, useManuscriptTemplates } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { manuscriptHref } from '@/lib/route'
+import { manuscriptHref } from '@/router/route'
 import { manuscriptFailure } from './errors'
 
 type Props = { workspaceId: string | null; open: boolean; onOpenChange: (open: boolean) => void }

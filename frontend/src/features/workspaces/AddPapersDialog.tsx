@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { usePapers, useWorkspaceMembership } from '@/api/queries'
+import { usePapers, useWorkspaceMembership } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

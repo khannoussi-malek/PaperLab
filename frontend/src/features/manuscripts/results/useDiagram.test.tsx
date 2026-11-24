@@ -3,7 +3,8 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type Diagram } from '@/api/client'
+import type { Diagram } from '@/entities'
+import { api } from '@/services/api'
 import { useDiagram } from './useDiagram'
 
 const wrapper = ({ children }: { children: ReactNode }) => (

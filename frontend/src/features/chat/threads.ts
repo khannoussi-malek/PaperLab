@@ -1,4 +1,4 @@
-import type { ChatAnswer } from '@/api/client'
+import type { ChatAnswer } from '@/entities'
 
 type Threaded = Pick<ChatAnswer, 'id' | 'parent_id'>
 

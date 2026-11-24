@@ -1,4 +1,4 @@
-import type { ChartSpec, ResolvedData } from '@/api/client'
+import type { ChartSpec, ResolvedData } from '@/entities'
 import { compileGridChart } from './compileGrid'
 import { compileSeriesChart, type Compiled } from './compileSeries'
 import type { ChartTheme } from './palette'

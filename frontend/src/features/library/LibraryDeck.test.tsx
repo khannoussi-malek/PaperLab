@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { api, type Paper } from '@/api/client'
+import type { Paper } from '@/entities'
+import { api } from '@/services/api'
 
 const hm = vi.hoisted(() => ({ props: null as null | Record<string, (...a: never[]) => void> }))
 vi.mock('../graph/hands/HandsMode', () => ({ default: (p: never) => { hm.props = p; return null } }))

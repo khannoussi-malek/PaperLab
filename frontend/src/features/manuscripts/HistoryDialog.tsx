@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useManuscriptSnapshots, useRestoreSnapshot } from '@/api/queries'
+import { useManuscriptSnapshots, useRestoreSnapshot } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'

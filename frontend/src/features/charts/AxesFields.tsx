@@ -1,4 +1,4 @@
-import type { ChartSpec } from '@/api/client'
+import type { ChartSpec } from '@/entities'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

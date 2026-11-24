@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
-import { api, type Chart, type ChartSpec } from '@/api/client'
+import type { Chart, ChartSpec } from '@/entities'
+import { api } from '@/services/api'
 
 vi.mock('@/features/charts/ChartView', () => ({ ChartView: ({ spec }: { spec: ChartSpec }) => <div>drawn {spec.type}</div> }))
 import { ChatChart } from './ChatChart'

@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { api, type Paper } from '@/api/client'
+import type { Paper } from '@/entities'
+import { api } from '@/services/api'
 import { PaperProvenance } from './PaperProvenance'
 
 afterEach(() => vi.restoreAllMocks())

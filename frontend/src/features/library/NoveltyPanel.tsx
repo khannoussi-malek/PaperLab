@@ -1,11 +1,11 @@
 import { useId, useState } from 'react'
-import { useNovelty } from '@/api/queries'
+import { useNovelty } from '@/services/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { codeInWords } from '@/lib/errorWords'
-import { readerHref } from '@/lib/route'
+import { readerHref } from '@/router/route'
 import { ErrorAlert } from './ErrorAlert'
 
 const MAX_CHARS = 6000

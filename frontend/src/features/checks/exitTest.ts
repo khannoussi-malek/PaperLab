@@ -1,4 +1,4 @@
-import type { Check, Note, NoteKind } from '@/api/client'
+import type { Check, Note, NoteKind } from '@/entities'
 import { refusal, type ChatProblem } from '@/features/chat/refusals'
 import type { ExitKind } from '@/features/notes/noteKinds'
 

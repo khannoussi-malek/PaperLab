@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useEditEvidenceCard } from '@/api/queries'
-import type { EvidenceCard } from '@/api/client'
+import { useEditEvidenceCard } from '@/services/queries'
+import type { EvidenceCard } from '@/entities'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Term } from '@/features/workspaces/Term'

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, cleanup } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
+import * as queries from '@/services/queries'
 import { PaperTagChips } from './PaperTagChips'
 
 const groups = (data: unknown) => vi.spyOn(queries, 'usePaperTagGroups').mockReturnValue({ data } as any)

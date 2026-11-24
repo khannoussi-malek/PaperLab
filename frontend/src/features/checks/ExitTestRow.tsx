@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { useNotes } from '@/api/queries'
+import { useNotes } from '@/services/queries'
 import type { Pass } from '@/features/reading/passes'
 import { exitTestLabel, exitTestLine, exitTestNote, exitTestStatus } from './exitTest'
 import { usePaperChecks } from './queries'

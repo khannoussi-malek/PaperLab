@@ -1,6 +1,6 @@
 import { CircleAlert, CircleCheck, CircleDashed, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { ChatSource } from '@/api/client'
+import type { ChatSource } from '@/entities'
 import { slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

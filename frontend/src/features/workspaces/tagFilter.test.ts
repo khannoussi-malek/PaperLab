@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Paper } from '../../api/client'
+import type { Paper } from '@/entities'
 import { filterByTags } from './tagFilter'
 
 const p = (id: string) => ({ id }) as Paper

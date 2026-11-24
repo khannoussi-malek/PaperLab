@@ -1,6 +1,6 @@
 import { CornerDownRight, Sparkles } from 'lucide-react'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import type { ChatScope, ChatSource, LensId, NoteSource, SavedNote } from '@/api/client'
+import type { ChatScope, ChatSource, LensId, NoteSource, SavedNote } from '@/entities'
 import { pressable, slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

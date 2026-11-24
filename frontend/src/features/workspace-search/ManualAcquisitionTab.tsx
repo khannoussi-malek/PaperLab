@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { sileo } from 'sileo'
 import { codeInWords } from '@/lib/errorWords'
-import { useSearchHits, useUploadHitPdf } from '@/api/queries'
+import { useSearchHits, useUploadHitPdf } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { pageLink } from '@/features/discovery/candidateMeta'
 import { copyText } from '@/lib/clipboard'

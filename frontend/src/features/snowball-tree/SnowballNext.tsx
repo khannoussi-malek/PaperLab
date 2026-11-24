@@ -1,4 +1,4 @@
-import { useRunSnowballNext, useSnowballNext } from '@/api/queries'
+import { useRunSnowballNext, useSnowballNext } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
 

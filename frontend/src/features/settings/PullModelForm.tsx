@@ -1,6 +1,6 @@
 import { Download } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import type { LLMConnection, PullProgressEvent } from '@/api/client'
+import type { LLMConnection, PullProgressEvent } from '@/entities'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

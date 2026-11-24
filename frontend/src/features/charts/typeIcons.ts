@@ -1,5 +1,5 @@
 import { Box, ChartCandlestick, ChartColumn, ChartLine, ChartNoAxesColumn, ChartScatter, Grid3x3, Waves } from 'lucide-react'
-import type { ChartSpec } from '@/api/client'
+import type { ChartSpec } from '@/entities'
 
 /** Each chart type's icon, in the Charts list and the builder's type picker. */
 export const TYPE_ICON: Record<ChartSpec['type'], typeof ChartColumn> = {

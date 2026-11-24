@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
-import type { Reference, References } from '@/api/client'
+import type { Reference, References } from '@/entities'
 import { CitationCard } from './CitationCard'
 import type { Citation } from './citations'
 

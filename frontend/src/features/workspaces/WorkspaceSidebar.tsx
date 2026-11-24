@@ -1,7 +1,7 @@
 import { EllipsisVertical, PackageOpen, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { Workspace } from '@/api/client'
-import { useWorkspaceMutations, useWorkspaces } from '@/api/queries'
+import type { Workspace } from '@/entities'
+import { useWorkspaceMutations, useWorkspaces } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { railItem } from '@/components/nav'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 import { READ_ONLY_TEXT } from '@/lib/errorWords'
 import { ImportPackageButton, PackageExportDialog } from './PackageDialogs'

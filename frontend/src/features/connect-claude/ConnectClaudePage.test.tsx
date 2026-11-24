@@ -7,7 +7,7 @@ import { ConnectClaudePage } from './ConnectClaudePage'
 const tools = Array.from({ length: 60 }, (_, i) => `tool_${i}`)
 const mutate = vi.fn()
 
-vi.mock('@/api/queries', () => ({
+vi.mock('@/services/queries', () => ({
   useMcpSetup: () => ({ data: { folder: '/x' }, isError: false }),
   useCheckMcpServer: () => ({
     data: { ok: true, tools, detail: null },

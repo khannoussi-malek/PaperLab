@@ -4,7 +4,7 @@ import { PILL_LIST, PILL_TAB, useTabPill } from '@/components/liquid-glass/useTa
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { WorkspaceTab } from '@/lib/route'
+import type { WorkspaceTab } from '@/router/route'
 import { Term } from './Term'
 import { GROUP_LABELS, WORKSPACE_TABS, tabAriaLabel } from './workspaceTabs'
 

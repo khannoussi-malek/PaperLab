@@ -1,6 +1,6 @@
-import { useSnowball } from '@/api/queries'
+import { useSnowball } from '@/services/queries'
 import { Button } from '@/components/ui/button'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { snowballMessage } from './ScreeningTab'
 import { friendlySnowballError } from './snowballText'
 

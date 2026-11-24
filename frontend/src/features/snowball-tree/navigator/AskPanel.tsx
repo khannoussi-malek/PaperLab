@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { sileo } from 'sileo'
-import type { ChatScope, ProvNode } from '@/api/client'
-import { useSearchHit, useWorkspacePapers } from '@/api/queries'
+import type { ChatScope, ProvNode } from '@/entities'
+import { useSearchHit, useWorkspacePapers } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { ChatPanel } from '@/features/chat/ChatPanel'
-import { noteHref } from '@/lib/route'
+import { noteHref } from '@/router/route'
 import { sourceReaderHref } from '@/features/chat/citations'
 
 const NARROW = '(max-width: 900px)'

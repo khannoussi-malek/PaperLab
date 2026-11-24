@@ -1,4 +1,4 @@
-import type { ProvenanceOut } from '@/api/client'
+import type { ProvenanceOut } from '@/entities'
 import { primaryParent } from './layout'
 
 export type Filters = { decision: string; level: string; direction: string; run: string }

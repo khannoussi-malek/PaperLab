@@ -1,4 +1,4 @@
-import type { Note, Paper } from '@/api/client'
+import type { Note, Paper } from '@/entities'
 
 export const counted = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 

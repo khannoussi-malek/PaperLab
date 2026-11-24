@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { Skill } from '@/api/client'
+import type { Skill } from '@/entities'
 import { SkillPicker } from './SkillPicker'
 
 beforeAll(() => {

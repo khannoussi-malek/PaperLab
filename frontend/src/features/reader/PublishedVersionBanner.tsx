@@ -1,11 +1,11 @@
 import { Info } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Paper } from '@/api/client'
-import { AlreadyInLibraryError, api } from '@/api/client'
-import { keys } from '@/api/queries'
+import type { Paper } from '@/entities'
+import { AlreadyInLibraryError, api } from '@/services/api'
+import { keys } from '@/services/queries'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { readerHref } from '@/lib/route'
+import { readerHref } from '@/router/route'
 
 type Outcome = { kind: 'added' } | { kind: 'owned'; paperId: string } | { kind: 'no-pdf' } | { kind: 'not-found' }
 

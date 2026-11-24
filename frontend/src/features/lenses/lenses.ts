@@ -1,4 +1,4 @@
-import type { Chunk, Lens, LensId, Role, Section } from '@/api/client'
+import type { Chunk, Lens, LensId, Role, Section } from '@/entities'
 import { refusal, type ChatProblem } from '@/features/chat/refusals'
 import type { PdfRect } from '@/features/reader/coords'
 

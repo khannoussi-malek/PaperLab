@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
+import * as queries from '@/services/queries'
 import { READ_ONLY_TEXT } from '@/lib/errorWords'
 import { ReadOnlyContext } from './readOnlyContext'
 import { TagPicker } from './TagPicker'

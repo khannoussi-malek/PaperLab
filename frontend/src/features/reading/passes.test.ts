@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { emptyListText, matchesReading, nextPass, PASSES, readingChip, type Triage } from './passes'
 
 describe('PASSES exit-test kinds', () => {

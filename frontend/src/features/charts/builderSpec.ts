@@ -1,4 +1,4 @@
-import type { ChartSpec, Dataset, SeriesChartSpec, SeriesSpec } from '@/api/client'
+import type { ChartSpec, Dataset, SeriesChartSpec, SeriesSpec } from '@/entities'
 
 export type ChartType = ChartSpec['type']
 type SeriesType = SeriesChartSpec['type']

@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { api, type TriageEvent } from '@/api/client'
+import type { TriageEvent } from '@/entities'
+import { api } from '@/services/api'
 import { ReadingHistory } from './ReadingHistory'
 
 const ev = (id: string, h: number, over: Partial<TriageEvent> = {}): TriageEvent => ({

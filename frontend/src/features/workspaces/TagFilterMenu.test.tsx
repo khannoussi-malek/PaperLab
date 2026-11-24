@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
+import * as queries from '@/services/queries'
 import { TagFilterMenu } from './TagFilterMenu'
 import { tagSummary } from './tagFixtures'
 

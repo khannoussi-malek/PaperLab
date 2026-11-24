@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { useChart, useCharts, useResolvedChart, useUploadManuscriptFile } from '@/api/queries'
+import { useChart, useCharts, useResolvedChart, useUploadManuscriptFile } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { ProvLink, ProvNode, ProvRoot } from '@/api/client'
+import type { ProvLink, ProvNode, ProvRoot } from '@/entities'
 import { tidyLayout } from './layout'
 import { MIN_SECTOR, RING, ROOT_RING, toRadial } from './radial'
 

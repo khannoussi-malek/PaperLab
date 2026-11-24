@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ChartSpec } from '@/api/client'
+import type { ChartSpec } from '@/entities'
 import { F1, MINE, RUN, SCORE, STD, bertTable, cell, data, id, ownData, series, seriesChart } from '@/features/charts/testData'
 import { pgfplotsSupport, toPgfplots } from './pgfplots'
 

@@ -1,4 +1,4 @@
-import type { NoteKind } from '@/api/client'
+import type { NoteKind } from '@/entities'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { KIND_LABEL } from './noteKinds'
 

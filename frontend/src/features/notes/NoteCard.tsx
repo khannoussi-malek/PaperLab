@@ -1,7 +1,7 @@
 import { Check, ChartColumn, Copy, EllipsisVertical, Files, Palette, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
-import type { Note, NoteKind } from '@/api/client'
-import { usePapers } from '@/api/queries'
+import type { Note, NoteKind } from '@/entities'
+import { usePapers } from '@/services/queries'
 import { isFresh, slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
-import { noteHref } from '@/lib/route'
+import { noteHref } from '@/router/route'
 import { cn } from '@/lib/utils'
 import { AttachChartDialog } from './AttachChartDialog'
 import { EditPapersDialog } from './EditPapersDialog'

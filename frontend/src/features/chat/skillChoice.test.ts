@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Skill } from '@/api/client'
+import type { Skill } from '@/entities'
 import { resolveSkill } from './skillChoice'
 
 const skill = (id: string, flags: Partial<Skill> = {}) => ({ id, label: id, ...flags }) as Skill

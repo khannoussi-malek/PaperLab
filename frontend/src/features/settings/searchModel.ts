@@ -1,4 +1,4 @@
-import type { EmbeddingStatus, SearchSource } from '@/api/client'
+import type { EmbeddingStatus, SearchSource } from '@/entities'
 import { describePull } from './pullProgress'
 
 /** Where this tab's download of the built-in search model stands. */

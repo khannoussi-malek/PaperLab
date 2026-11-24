@@ -1,6 +1,6 @@
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import type { Reference } from '@/api/client'
+import type { Reference } from '@/entities'
 import { matchEntry, titleScore } from './citationMatch'
 import { citationsByPage, readCitations, type Citation } from './citations'
 

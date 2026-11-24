@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
-import type { SearchRunSummary } from '@/api/client'
-import { api } from '@/api/client'
+import * as queries from '@/services/queries'
+import type { SearchRunSummary } from '@/entities'
+import { api } from '@/services/api'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RunsList } from './RunsList'
 

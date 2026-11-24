@@ -1,4 +1,4 @@
-import type { ProvenanceOut } from '@/api/client'
+import type { ProvenanceOut } from '@/entities'
 
 const n = (id: string, level: number) => ({ id, title: `Paper ${id}`, level, snowballed: [], paths: 1 })
 const l = (parent: string, child: string, kind: string, at = '2026-01-01T00:00:00Z') => ({ parent, child, kind, run_id: 'r1', created_at: at })

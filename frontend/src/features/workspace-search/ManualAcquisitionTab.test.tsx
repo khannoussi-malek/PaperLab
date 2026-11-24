@@ -3,10 +3,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ManualAcquisitionTab } from './ManualAcquisitionTab'
-import * as queries from '@/api/queries'
-import { api } from '@/api/client'
+import * as queries from '@/services/queries'
+import { api } from '@/services/api'
 import { copyText } from '@/lib/clipboard'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { sileo } from 'sileo'
 
 vi.mock('@/lib/clipboard', () => ({ copyText: vi.fn() }))

@@ -1,6 +1,6 @@
 import { Database } from 'lucide-react'
-import type { DatasetSummary } from '@/api/client'
-import { useAllDatasets } from '@/api/queries'
+import type { DatasetSummary } from '@/entities'
+import { useAllDatasets } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'

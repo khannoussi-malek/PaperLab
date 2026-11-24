@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ImportResult } from '@/api/client'
+import type { ImportResult } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
 

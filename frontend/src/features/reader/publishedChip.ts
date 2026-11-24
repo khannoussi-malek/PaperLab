@@ -1,4 +1,4 @@
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 
 const ACRONYM = /\(([A-Z][A-Z0-9&-]{1,11}(?:\s?'?\d{2,4})?)\)\s*$/
 const BOILERPLATE = /^(?:Proceedings of the (?:\d+(?:st|nd|rd|th) )?(?:Annual )?|\d{4} )/i

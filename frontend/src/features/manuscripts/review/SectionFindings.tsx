@@ -1,6 +1,6 @@
-import type { SectionRef, SectionReview } from '@/api/client'
+import type { SectionRef, SectionReview } from '@/entities'
 import { Button } from '@/components/ui/button'
-import { noteHref } from '@/lib/route'
+import { noteHref } from '@/router/route'
 import { failedReason, FINDING_ICON, LOST_REVIEW, FINDING_LABEL, findingTone, groupFindings, refChip, ROLE_LABEL } from './sectionReviewModel'
 
 const AI = <span className="rounded bg-provenance-llm-surface px-1.5 py-px text-xs text-provenance-llm">AI</span>

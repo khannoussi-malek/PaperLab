@@ -1,4 +1,4 @@
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 
 const SHORT_AUTHOR_COUNT = 2
 const LABEL_CHARS = 24

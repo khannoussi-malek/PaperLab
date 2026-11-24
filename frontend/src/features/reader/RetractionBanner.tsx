@@ -1,5 +1,5 @@
 import { TriangleAlert } from 'lucide-react'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 /** Full width under the toolbar, opaque, never dismissible: reading a retracted paper unknowingly is the failure. */

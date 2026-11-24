@@ -1,4 +1,4 @@
-import type { Skill } from '@/api/client'
+import type { Skill } from '@/entities'
 
 export type SkillKind = 'paper' | 'workspace'
 

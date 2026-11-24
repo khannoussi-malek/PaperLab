@@ -3,9 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ScreeningTab } from './ScreeningTab'
-import * as queries from '@/api/queries'
-import { api } from '@/api/client'
-import { readerHref, workspaceHref } from '@/lib/route'
+import * as queries from '@/services/queries'
+import { api } from '@/services/api'
+import { readerHref, workspaceHref } from '@/router/route'
 
 // jsdom lacks these; Radix Select needs them.
 Element.prototype.scrollIntoView ??= () => {}

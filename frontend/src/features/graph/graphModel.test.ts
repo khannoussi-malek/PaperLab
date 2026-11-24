@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GraphLink, GraphNode } from '@/api/client'
+import type { GraphLink, GraphNode } from '@/entities'
 import {
   carryPositions,
   connectionKey,

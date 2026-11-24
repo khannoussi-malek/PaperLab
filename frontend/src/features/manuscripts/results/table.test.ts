@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Dataset } from '@/api/client'
+import type { Dataset } from '@/entities'
 import { datasetToTable, parsePasted, toBooktabs } from './table'
 
 const opts = { decimals: null, best: 'none' as const, caption: 'Results.', label: 'tab:r' }

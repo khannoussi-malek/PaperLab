@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import type { LensId, Skill } from '@/api/client'
-import { useCreateSkill, useUpdateSkill } from '@/api/queries'
+import type { LensId, Skill } from '@/entities'
+import { useCreateSkill, useUpdateSkill } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'

@@ -1,11 +1,11 @@
 import { Copy, EllipsisVertical, NotebookPen, Pencil, SquarePen, Trash2 } from 'lucide-react'
 import { useRef } from 'react'
-import type { Note } from '@/api/client'
-import { useChartMutations } from '@/api/queries'
+import type { Note } from '@/entities'
+import { useChartMutations } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { chartHref, chartsHref, editChartHref, useRoute } from '@/lib/route'
+import { chartHref, chartsHref, editChartHref, useRoute } from '@/router/route'
 import { cn } from '@/lib/utils'
 
 type Props = {

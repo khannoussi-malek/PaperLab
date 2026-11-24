@@ -2,8 +2,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { Paper } from '@/api/client'
-import { AlreadyInLibraryError, api } from '@/api/client'
+import type { Paper } from '@/entities'
+import { AlreadyInLibraryError, api } from '@/services/api'
 import { PublishedVersionBanner } from './PublishedVersionBanner'
 
 const paper = { id: 'p1', published_doi: '10.1/pub' } as Paper

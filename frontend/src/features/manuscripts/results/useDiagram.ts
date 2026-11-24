@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { api, type Diagram } from '@/api/client'
+import type { Diagram } from '@/entities'
+import { api } from '@/services/api'
 import { isLive } from './diagramModel'
 
 const POLL_MS = 2000

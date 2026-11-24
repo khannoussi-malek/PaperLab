@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type VoiceLatency, type VoiceStatus } from '@/api/client'
+import type { VoiceLatency, VoiceStatus } from '@/entities'
+import { api } from '@/services/api'
 import { VoiceSettings } from './VoiceSettings'
 import type { VoiceBridge } from './desktop'
 

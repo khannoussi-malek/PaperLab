@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { ProvNode } from '@/api/client'
+import type { ProvNode } from '@/entities'
 import { keyPaperIds, mapOrigin, mapPositions, NO_YEAR_X, tickX, YEAR_W, yearTicks } from './mapModel'
 
 const n = (id: string, level: number, year: number | null, paths = 1): ProvNode => ({ id, title: id, level, year, decision: null, snowballed: [], paths })

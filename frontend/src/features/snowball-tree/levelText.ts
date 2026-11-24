@@ -1,4 +1,4 @@
-import type { LevelStats } from '@/api/client'
+import type { LevelStats } from '@/entities'
 
 /** "Level 1 · 30 found · 4 already known · 6 included · 3 to go further · 1 stopped", plus " · saturated" (the deepest level ran dry) or " · done". */
 export function levelHeader(s: LevelStats): string {

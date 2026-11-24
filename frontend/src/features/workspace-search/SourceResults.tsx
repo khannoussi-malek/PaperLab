@@ -1,5 +1,5 @@
 import { SOURCE_NAMES } from '@/features/discovery/candidateMeta'
-import type { SearchRun } from '@/api/client'
+import type { SearchRun } from '@/entities'
 import { plural } from '@/features/charts/chartMeta'
 
 const STATE_WORDS: Record<string, string> = {

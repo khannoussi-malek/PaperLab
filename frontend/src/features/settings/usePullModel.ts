@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, errorDetail, type LLMModel, type PullDoneEvent, type PullErrorEvent, type PullProgressEvent } from '@/api/client'
-import { useInvalidateModels } from '@/api/queries'
+import type { LLMModel, PullDoneEvent, PullErrorEvent, PullProgressEvent } from '@/entities'
+import { api, errorDetail } from '@/services/api'
+import { useInvalidateModels } from '@/services/queries'
 import { readSse } from '@/features/chat/sse'
 
 export type PullState =

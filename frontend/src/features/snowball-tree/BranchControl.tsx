@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BranchIn, ProvBranch } from '@/api/client'
-import { useSetBranch } from '@/api/queries'
+import type { BranchIn, ProvBranch } from '@/entities'
+import { useSetBranch } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 
 export type BranchTarget = { hit_id: string } | { paper_id: string }

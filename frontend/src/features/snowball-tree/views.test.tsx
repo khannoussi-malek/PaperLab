@@ -2,8 +2,9 @@
 import { act, render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import * as queries from '@/api/queries'
-import { api, type ProvenanceOut } from '@/api/client'
+import * as queries from '@/services/queries'
+import type { ProvenanceOut } from '@/entities'
+import { api } from '@/services/api'
 import { SnowballTreeTab } from './SnowballTreeTab'
 
 // The canvas library cannot draw in jsdom: stand in with one button per node.

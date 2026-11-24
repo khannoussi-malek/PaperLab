@@ -1,4 +1,5 @@
-import { ApiError, type LensId, type Skill, type SkillCreate, type SkillUpdate } from '@/api/client'
+import type { LensId, Skill, SkillCreate, SkillUpdate } from '@/entities'
+import { ApiError } from '@/services/api'
 
 export type Scope = Skill['scope']
 export type ChatKind = 'paper' | 'workspace'

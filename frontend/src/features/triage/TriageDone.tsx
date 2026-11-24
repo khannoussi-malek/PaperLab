@@ -1,4 +1,4 @@
-import { useTriageSummary } from '@/api/queries'
+import { useTriageSummary } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { SAVING } from './TriageBar'
 import { UndoButton } from './TriageControls'

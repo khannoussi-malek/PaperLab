@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
-import type { LevelStats, ProvenanceOut, ProvNode } from '@/api/client'
+import type { LevelStats, ProvenanceOut, ProvNode } from '@/entities'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
 import { cn } from '@/lib/utils'
 import { BOX_H, BOX_W, COL, ROOT_W, PARENT_NOT_RECORDED, isUnknown, tidyLayout, type Box, type Layout } from './layout'

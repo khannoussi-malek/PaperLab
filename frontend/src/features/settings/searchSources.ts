@@ -1,4 +1,4 @@
-import type { EmbeddingStatus, LLMConnection, Rebuild, SearchSource, SearchSourceIn } from '@/api/client'
+import type { EmbeddingStatus, LLMConnection, Rebuild, SearchSource, SearchSourceIn } from '@/entities'
 import { hostOf } from './connectionForm'
 
 /** A search source's kind (D131), as the API types it: the picker's list is checked against it. */

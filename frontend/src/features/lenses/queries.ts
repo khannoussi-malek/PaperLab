@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { api, type SectionRoleIn } from '@/api/client'
+import type { SectionRoleIn } from '@/entities'
+import { api } from '@/services/api'
 
-// Every key starts with ['papers', paperId], like api/queries.ts's, so Re-index (`keys.paper(paperId)`) refreshes them.
+// Every key starts with ['papers', paperId], like services/queries/core.ts's keys, so Re-index (`keys.paper(paperId)`) refreshes them.
 const keys = {
   allChunks: (paperId: string) => ['papers', paperId, 'chunks', 'all'] as const,
   sections: (paperId: string) => ['papers', paperId, 'sections'] as const,

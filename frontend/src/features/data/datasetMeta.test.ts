@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DatasetSummary } from '@/api/client'
+import type { DatasetSummary } from '@/entities'
 import { datasetMeta, datasetSource } from './datasetMeta'
 
 const summary = (fields: Partial<DatasetSummary>): DatasetSummary => ({

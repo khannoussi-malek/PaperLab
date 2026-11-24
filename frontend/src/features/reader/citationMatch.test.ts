@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Reference, References } from '@/api/client'
+import type { Reference, References } from '@/entities'
 import { joinLines, type Entry } from './citationEntry'
 import { cardView, doiIn, matchEntry, titleScore, UNMATCHED_LINES } from './citationMatch'
 

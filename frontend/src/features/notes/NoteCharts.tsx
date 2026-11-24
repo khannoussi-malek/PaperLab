@@ -1,9 +1,9 @@
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { ChartRef, Note } from '@/api/client'
-import { useChart, useChartMutations } from '@/api/queries'
+import type { ChartRef, Note } from '@/entities'
+import { useChart, useChartMutations } from '@/services/queries'
 import { Button } from '@/components/ui/button'
-import { chartHref } from '@/lib/route'
+import { chartHref } from '@/router/route'
 import { ChartView } from '../charts/ChartView'
 
 const HEIGHT = 160

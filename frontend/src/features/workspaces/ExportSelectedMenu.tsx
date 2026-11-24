@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 

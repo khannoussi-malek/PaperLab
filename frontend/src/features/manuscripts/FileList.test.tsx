@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError } from '@/services/api'
 import { FileList, pathProblem } from './FileList'
 
 const T = '2026-10-02T00:00:00Z'

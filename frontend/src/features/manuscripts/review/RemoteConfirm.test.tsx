@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError } from '@/services/api'
 import { RemoteConfirmDialog } from './RemoteConfirm'
 import { useReview } from './useReview'
 import { useReviewInEditor } from './useReviewInEditor'

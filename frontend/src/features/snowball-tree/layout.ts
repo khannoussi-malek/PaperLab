@@ -1,4 +1,4 @@
-import type { ProvLink, ProvNode, ProvRoot } from '@/api/client'
+import type { ProvLink, ProvNode, ProvRoot } from '@/entities'
 
 export const COL = 300
 export const ROW = 54

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { usePrismaExport, useReadingQueue, useWorkspacePapers } from '@/api/queries'
+import { usePrismaExport, useReadingQueue, useWorkspacePapers } from '@/services/queries'
 import { Badge } from '@/components/ui/badge'
 import { NoPdfBadge } from '@/features/reader/SourceBadges'
 import { readingChip } from '@/features/reading/passes'
@@ -8,7 +8,7 @@ import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces
 import { counted } from '@/features/workspaces/workspaceMeta'
 import { Button } from '@/components/ui/button'
 import { useStepCounts } from '@/features/workspaces/useStepCounts'
-import { readerHref, workspaceHref } from '@/lib/route'
+import { readerHref, workspaceHref } from '@/router/route'
 import { asPrismaRunMeta } from './prismaRunMeta'
 
 const ALL_RUNS = 'all'

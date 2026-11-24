@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { Paper } from '@/api/client'
+import type { Paper } from '@/entities'
 import { detailsSourceLine, provenanceLines, sourceLabel } from './detailsSource'
 
 const paper = (over: Partial<Paper>) => ({ field_sources: {}, manual_fields: [], ...over }) as unknown as Paper

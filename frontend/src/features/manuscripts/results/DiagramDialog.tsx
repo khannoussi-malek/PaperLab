@@ -1,6 +1,7 @@
 import { Loader2, TriangleAlert } from 'lucide-react'
 import { lazy, Suspense, useRef, useState } from 'react'
-import { api, type Diagram } from '@/api/client'
+import type { Diagram } from '@/entities'
+import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'

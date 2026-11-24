@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, isConflict } from './client'
-import { useTriageSummary } from './queries'
+import { api, isConflict } from '@/services/api'
+import { useTriageSummary } from '@/services/queries'
 
 afterEach(() => vi.unstubAllGlobals())
 const stub = (status: number, body: unknown) => {

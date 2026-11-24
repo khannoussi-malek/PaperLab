@@ -1,4 +1,4 @@
-import type { ProvenanceOut } from '@/api/client'
+import type { ProvenanceOut } from '@/entities'
 import { isUnknown, primaryParent } from '../layout'
 
 export type NavEntry = { id: string; via: 'search' | 'cites' | 'cited_by' | 'hand' }

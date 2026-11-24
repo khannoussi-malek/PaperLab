@@ -1,4 +1,4 @@
-import type { PaperSourceId } from '@/api/client'
+import type { PaperSourceId } from '@/entities'
 
 /** What each source is for, under its switch in Settings → Paper sources. */
 export const DESCRIPTIONS: Record<PaperSourceId, string> = {

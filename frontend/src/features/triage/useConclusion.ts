@@ -1,4 +1,4 @@
-import { useChunksOnPage } from '@/api/queries'
+import { useChunksOnPage } from '@/services/queries'
 import { usePaperSections } from '@/features/lenses/queries'
 
 const MAX_CHARS = 900

@@ -4,8 +4,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { SearchTab } from './SearchTab'
-import { api } from '@/api/client'
-import type { PaperSources } from '@/api/client'
+import { api } from '@/services/api'
+import type { PaperSources } from '@/entities'
 
 /** `runId` is a prop from the URL in real life (WorkspacePage owns it) — this tiny stand-in plays that role for
  * tests that need to see a run actually start, so `onRunIdChange` has somewhere real to land. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GraphLink } from '@/api/client'
+import type { GraphLink } from '@/entities'
 import { emphasis, labelledIds, LABEL_CAP, linkState, shortTitle } from './paperModel'
 
 const link = (source: string, target: string): GraphLink => ({ source, target, kind: 'cites' })

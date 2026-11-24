@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-import type { NoteKind } from '@/api/client'
+import type { NoteKind, Paper } from '@/entities'
 import { Frame, Table2, ZoomIn, ZoomOut } from 'lucide-react'
-import type { Paper } from '@/api/client'
 import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
 import { delayedIn } from '@/components/motion'

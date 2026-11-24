@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useLoadingHint } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { WORKSPACE_TABS } from './workspaceTabs'
 
 /** Placeholder bars while a tab's data loads, so a loading tab never reads as an empty one. */

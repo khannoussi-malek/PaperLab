@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import { api, errorDetail, type DownloadDoneEvent, type DownloadErrorEvent, type DownloadProgressEvent } from '@/api/client'
-import { useInvalidateEmbedding } from '@/api/queries'
+import type { DownloadDoneEvent, DownloadErrorEvent, DownloadProgressEvent } from '@/entities'
+import { api, errorDetail } from '@/services/api'
+import { useInvalidateEmbedding } from '@/services/queries'
 import { readSse } from '@/features/chat/sse'
 import { refusedDownload, type DownloadState } from './searchModel'
 

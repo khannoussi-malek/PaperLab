@@ -2,8 +2,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type NoveltyResult } from '@/api/client'
-import { readerHref } from '@/lib/route'
+import type { NoveltyResult } from '@/entities'
+import { api } from '@/services/api'
+import { readerHref } from '@/router/route'
 import { LibraryPage } from './LibraryPage'
 import { NoveltyPanel } from './NoveltyPanel'
 
@@ -13,8 +14,8 @@ vi.mock('./PaperList', () => ({ PaperList: () => null }))
 vi.mock('./FoundPdfsNotice', () => ({ FoundPdfsNotice: () => null }))
 vi.mock('../discovery/FindPapersButton', () => ({ FindPapersButton: () => null }))
 vi.mock('@/features/graph/viewModel', () => ({ hasWebGL: () => false }))
-vi.mock('@/api/queries', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/api/queries')>()),
+vi.mock('@/services/queries', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/queries')>()),
   usePapers: () => ({ data: [], isError: false }),
   useUploadPapers: () => ({ isPending: false, error: null, mutate: vi.fn() }),
   useManuscripts: () => ({ data: undefined }),

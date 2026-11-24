@@ -1,4 +1,4 @@
-import type { CheckFinding } from '@/api/client'
+import type { CheckFinding } from '@/entities'
 import { cn } from '@/lib/utils'
 import type { Severity } from './model'
 

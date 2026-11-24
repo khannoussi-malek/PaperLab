@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useRef } from 'react'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError } from '@/services/api'
 import { MAIN_CHANGED, ensurePackages, preambleEdit, type PreambleEdit } from './insertBlock'
 
 export type InsertResult = { ok: true } | { ok: false; message: string }

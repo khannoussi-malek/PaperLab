@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRef } from 'react'
-import { api } from '@/api/client'
-import { keys, PAPERS_POLL_MS } from '@/api/queries'
+import { api } from '@/services/api'
+import { keys, PAPERS_POLL_MS } from '@/services/queries'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 

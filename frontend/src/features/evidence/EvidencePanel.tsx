@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useChunksOnPage, useEvidenceCard, useGenerateEvidenceCard } from '@/api/queries'
+import { useChunksOnPage, useEvidenceCard, useGenerateEvidenceCard } from '@/services/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Term } from '@/features/workspaces/Term'

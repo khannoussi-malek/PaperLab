@@ -1,5 +1,5 @@
-import type { ReportingGuideline, ReportingGuidelineItem } from '@/api/client'
-import { useReportingGuidelines } from '@/api/queries'
+import type { ReportingGuideline, ReportingGuidelineItem } from '@/entities'
+import { useReportingGuidelines } from '@/services/queries'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { useChecklist, type Ticks } from './useChecklist'

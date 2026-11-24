@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Chunk, LensId } from '@/api/client'
+import type { Chunk, LensId } from '@/entities'
 import { usePaperChunks, usePaperSections } from './queries'
 import type { PdfRect } from '@/features/reader/coords'
-import type { ReaderTab } from '@/lib/route'
+import type { ReaderTab } from '@/router/route'
 import { fadeRects, hasHeadings, lensRuns, stepRun } from './lenses'
 
 /**

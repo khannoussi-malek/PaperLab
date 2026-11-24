@@ -1,6 +1,6 @@
 import { StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
-import type { ReviewSentence } from '@/api/client'
+import type { ReviewSentence } from '@/entities'
 import { citeThisEdit, itemTone, VERDICT_LABEL, type Mark, type Tone } from './reviewModel'
 
 export const setReviewMarks = StateEffect.define<Mark[]>()

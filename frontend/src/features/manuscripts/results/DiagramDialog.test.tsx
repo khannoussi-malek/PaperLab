@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, ApiError, type Diagram } from '@/api/client'
+import type { Diagram } from '@/entities'
+import { api, ApiError } from '@/services/api'
 import { DiagramDialog } from './DiagramDialog'
 import type { InsertResult } from './useInsertBlock'
 

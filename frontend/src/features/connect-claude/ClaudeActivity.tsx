@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useClearMcpActivity, useMcpActivity, useMcpSettings, useSetMcpWrites } from '@/api/queries'
+import { useClearMcpActivity, useMcpActivity, useMcpSettings, useSetMcpWrites } from '@/services/queries'
 import {
   AlertDialog,
   AlertDialogAction,

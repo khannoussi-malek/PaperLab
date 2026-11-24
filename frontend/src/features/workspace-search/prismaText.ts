@@ -1,4 +1,4 @@
-import type { PrismaExportOut } from '@/api/client'
+import type { PrismaExportOut } from '@/entities'
 import type { GlossaryKey } from '@/features/workspaces/glossary'
 import { reasonLabel } from './hitReview'
 

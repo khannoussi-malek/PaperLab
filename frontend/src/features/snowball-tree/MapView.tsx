@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ProvenanceOut } from '@/api/client'
+import type { ProvenanceOut } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { endId, withAlpha } from '@/features/graph/graphModel'
 import { GraphLoadError } from '@/features/graph/GraphCanvas'

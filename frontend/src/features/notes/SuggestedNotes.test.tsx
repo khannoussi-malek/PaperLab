@@ -3,7 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { SuggestedNotes } from './SuggestedNotes'
-import { api, type Note, type NoteSuggestionsOut } from '@/api/client'
+import type { Note, NoteSuggestionsOut } from '@/entities'
+import { api } from '@/services/api'
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

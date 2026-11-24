@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { sileo } from 'sileo'
-import type { ProvenanceOut, ProvNode } from '@/api/client'
-import { useWorkspacePapers } from '@/api/queries'
+import type { ProvenanceOut, ProvNode } from '@/entities'
+import { useWorkspacePapers } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { AskPanel } from './AskPanel'
 import { Breadcrumb } from './Breadcrumb'
@@ -10,7 +10,7 @@ import { parseNav, primaryPath, viaOf, type NavEntry } from './navPath'
 import { readNav, readNavPaper, writeNav } from './navUrl'
 import { PaperCard } from './PaperCard'
 import { StartFromPaper } from './StartFromPaper'
-import { workspaceHref } from '@/lib/route'
+import { workspaceHref } from '@/router/route'
 import { useGrab } from './useGrab'
 
 /** The walk to a library paper: its tree node's primary path, else the hand-added root. */

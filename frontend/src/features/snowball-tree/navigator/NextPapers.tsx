@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import type { ProvenanceOut, ProvNode } from '@/api/client'
+import type { ProvenanceOut, ProvNode } from '@/entities'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { branchTarget } from '../viewShared'

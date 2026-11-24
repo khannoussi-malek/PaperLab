@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type ProvenanceOut } from '@/api/client'
+import type { ProvenanceOut } from '@/entities'
+import { api } from '@/services/api'
 import { SnowballTreeTab } from './SnowballTreeTab'
 
 const data = {

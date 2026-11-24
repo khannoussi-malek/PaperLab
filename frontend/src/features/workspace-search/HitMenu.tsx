@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import type { Hit, HitReviewUpdate } from '@/api/client'
+import type { Hit, HitReviewUpdate } from '@/entities'
 import { EXCLUDE_REASONS, reasonLabel } from './hitReview'
 
 const menuSurface = cn(glass, 'w-56 bg-glass-strong ring-glass-border')

@@ -2,7 +2,8 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
-import { api, type EvidenceCard } from '@/api/client'
+import type { EvidenceCard } from '@/entities'
+import { api } from '@/services/api'
 import { EvidencePanel } from './EvidencePanel'
 
 const card = {

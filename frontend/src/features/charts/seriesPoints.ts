@@ -1,4 +1,4 @@
-import type { ResolvedCell, ResolvedDataset, SeriesSpec } from '@/api/client'
+import type { ResolvedCell, ResolvedDataset, SeriesSpec } from '@/entities'
 
 const format = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 })
 const hasColumn = (dataset: ResolvedDataset, id: string | null | undefined) =>

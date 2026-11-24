@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 import { isLive, type DraftStart } from './draftReviewModel'
 
 const POLL_MS = 2000

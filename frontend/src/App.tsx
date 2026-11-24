@@ -1,24 +1,9 @@
 import { PersistentRail } from './components/PersistentRail'
-import { ChartBuilderPage } from './features/charts/ChartBuilderPage'
-import { ChartPage } from './features/charts/ChartPage'
-import { ChartsPage } from './features/charts/ChartsPage'
-import { ConnectClaudePage } from './features/connect-claude/ConnectClaudePage'
-import { DatasetPage } from './features/data/DatasetPage'
-import { GraphPage } from './features/graph/GraphPage'
-import { LibraryPage } from './features/library/LibraryPage'
 import { useKeptCount } from './features/manuscripts/keptTexts'
 import { useLeaveWarning } from './features/manuscripts/useLeaveWarning'
-import { ManuscriptRoute } from './features/manuscripts/ManuscriptRoute'
-import { NotesPage } from './features/notes/NotesPage.tsx'
-import { ReaderPage } from './features/reader/ReaderPage'
-import { ReferencesPage } from './features/references/ReferencesPage'
 import { downloadAnnouncement } from './features/settings/searchModel'
-import { SettingsPage } from './features/settings/SettingsPage'
 import { useSearchModelDownload } from './features/settings/useSearchModelDownload'
-import { SetupPage } from './features/setup/SetupPage'
-import { useOpenSetupOnStart } from './features/setup/useOpenSetupOnStart'
-import { WorkspacePage } from './features/workspaces/WorkspacePage'
-import { useRoute } from './lib/route'
+import { RouterView } from './router/RouterView'
 
 export default function App() {
   const { state } = useSearchModelDownload()
@@ -31,58 +16,9 @@ export default function App() {
       <p role="status" className="sr-only">
         {downloadAnnouncement(state)}
       </p>
-      <Page />
+      <RouterView />
       {/* After the page, so a new page's sidebar slot is in place before the sidebar measures (PersistentRail). */}
       <PersistentRail />
     </>
   )
-}
-
-function Page() {
-  const route = useRoute()
-  useOpenSetupOnStart()
-  if (route.name === 'workspace') {
-    // Keyed by workspace only: switching tabs must not remount the page.
-    return <WorkspacePage key={route.workspaceId} workspaceId={route.workspaceId} tab={route.tab} runId={route.runId} tags={route.tags} match={route.match} />
-  }
-  if (route.name === 'reader') {
-    // Keyed by paper only: switching tabs must not remount the reader.
-    return <ReaderPage key={route.paperId} paperId={route.paperId} tab={route.tab} target={route.target} />
-  }
-  if (route.name === 'manuscript') {
-    return <ManuscriptRoute key={route.manuscriptId} manuscriptId={route.manuscriptId} file={route.file} line={route.line} />
-  }
-  if (route.name === 'charts') {
-    return <ChartsPage />
-  }
-  if (route.name === 'chart-builder') {
-    return (
-      <ChartBuilderPage key={route.chartId ?? `new-${route.datasetId ?? ''}`} chartId={route.chartId} datasetId={route.datasetId} />
-    )
-  }
-  if (route.name === 'chart') {
-    return <ChartPage key={route.chartId} chartId={route.chartId} />
-  }
-  if (route.name === 'dataset') {
-    return <DatasetPage key={route.datasetId} datasetId={route.datasetId} focus={route.focus} />
-  }
-  if (route.name === 'settings') {
-    return <SettingsPage />
-  }
-  if (route.name === 'connect-claude') {
-    return <ConnectClaudePage />
-  }
-  if (route.name === 'setup') {
-    return <SetupPage />
-  }
-  if (route.name === 'notes') {
-    return <NotesPage paper={route.paper} />
-  }
-  if (route.name === 'references') {
-    return <ReferencesPage workspaceId={route.workspaceId} />
-  }
-  if (route.name === 'graph') {
-    return <GraphPage />
-  }
-  return <LibraryPage />
 }

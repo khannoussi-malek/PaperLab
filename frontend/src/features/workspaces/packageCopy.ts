@@ -1,4 +1,4 @@
-import type { PackageImportResult } from "@/api/client";
+import type { PackageImportResult } from '@/entities'
 
 const REFUSALS: Record<string, string> = {
   package_unknown_format:

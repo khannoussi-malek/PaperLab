@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Skill } from '@/api/client'
+import type { Skill } from '@/entities'
 import { SkillsSettings } from './SkillsSettings'
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   useResetSkill: vi.fn(),
   useSetSkillDefault: vi.fn(),
 }))
-vi.mock('@/api/queries', () => mocks)
+vi.mock('@/services/queries', () => mocks)
 
 function mutation(overrides: Record<string, unknown> = {}) {
   return { mutate: vi.fn(), isPending: false, error: null, reset: vi.fn(), ...overrides }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { ProvenanceOut } from '@/api/client'
-import { useWorkspacePapers } from '@/api/queries'
+import type { ProvenanceOut } from '@/entities'
+import { useWorkspacePapers } from '@/services/queries'
 import { primaryPath, type NavEntry } from './navPath'
 
 const MAX = 10

@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
-import { useSkills } from '@/api/queries'
+import { useSkills } from '@/services/queries'
 import { LoadingState } from '@/components/LoadingState'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

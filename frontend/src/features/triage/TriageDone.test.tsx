@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 import { TriageDone } from './TriageDone'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })

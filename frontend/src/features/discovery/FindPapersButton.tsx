@@ -1,6 +1,6 @@
 import { Info, Search } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
-import { useSearchPapers } from '@/api/queries'
+import { useSearchPapers } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

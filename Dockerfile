@@ -1,7 +1,7 @@
 # The release image: the API, the worker and the built frontend in one, for the desktop app and the two-command install.
 # Build context: the repository root (see .dockerignore). Development keeps backend/Dockerfile and frontend/Dockerfile.
 
-# Stage 1: the frontend, from the committed src/api/schema.d.ts. Not npm's own build script: its prebuild regenerates
+# Stage 1: the frontend, from the committed src/entities/schema.d.ts. Not npm's own build script: its prebuild regenerates
 # the types from a running API, which a build doesn't have. It copies the speech detector's assets itself.
 FROM node:24-alpine AS web
 WORKDIR /web

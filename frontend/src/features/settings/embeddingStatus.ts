@@ -1,4 +1,4 @@
-import type { EmbeddingStatus } from '@/api/client'
+import type { EmbeddingStatus } from '@/entities'
 
 /** What these lines read: the index, not the search model's download fields. */
 type Index = Pick<EmbeddingStatus, 'model' | 'chunks' | 'indexed_with'>

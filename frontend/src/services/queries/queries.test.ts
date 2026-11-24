@@ -3,40 +3,9 @@ import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-q
 import { renderHook, waitFor } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError, PaperMergedError, type Hit, type Paper, type ReferencePage, type SearchRun } from './client'
-import {
-  PAPERS_POLL_MS,
-  embeddingPollInterval,
-  isNotesList,
-  matchesEligibleHit,
-  papersPollInterval,
-  queryClient,
-  referencePagePollInterval,
-  searchRunPollInterval,
-  useApplyTag,
-  useBulkPatchSearchHits,
-  useSetEligibility,
-  keys,
-  useSetReading,
-  useTriageEvents,
-  manuscriptPollInterval,
-  useSaveManuscriptFile,
-  useAddSection,
-  useManuscriptPapers,
-  useMissingKeys,
-  useNoteCounts,
-  usePapersFollowCompile,
-  useWorkspaceMutations,
-  useSnowball,
-  usePatchSearchHit,
-  useUploadHitPdf,
-  useCreateSkill,
-  useUpdateSkill,
-  useDeleteSkill,
-  useResetSkill,
-  useSetSkillDefault,
-  useMcpActivity,
-} from './queries'
+import type { Hit, Paper, ReferencePage, SearchRun } from '@/entities'
+import { api, ApiError, PaperMergedError } from '@/services/api'
+import { PAPERS_POLL_MS, embeddingPollInterval, isNotesList, matchesEligibleHit, papersPollInterval, queryClient, referencePagePollInterval, searchRunPollInterval, useApplyTag, useBulkPatchSearchHits, useSetEligibility, keys, useSetReading, useTriageEvents, manuscriptPollInterval, useSaveManuscriptFile, useAddSection, useManuscriptPapers, useMissingKeys, useNoteCounts, usePapersFollowCompile, useWorkspaceMutations, useSnowball, usePatchSearchHit, useUploadHitPdf, useCreateSkill, useUpdateSkill, useDeleteSkill, useResetSkill, useSetSkillDefault, useMcpActivity } from '@/services/queries'
 
 const prismaRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma']
 const readingQueueRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'reading-queue']
@@ -298,7 +267,7 @@ describe('useReadingContext', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
     // Import the hook inside the test to fail if it's not defined
-    const { useReadingContext } = await import('./queries')
+    const { useReadingContext } = await import('@/services/queries')
 
     const { result } = renderHook(() => useReadingContext('paper-1'), { wrapper: withQueryClient(client) })
 
@@ -314,7 +283,7 @@ describe('useReadingQueue', () => {
     vi.spyOn(api, 'readingQueue').mockResolvedValue({ rows: [] })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
-    const { useReadingQueue } = await import('./queries')
+    const { useReadingQueue } = await import('@/services/queries')
 
     const { result } = renderHook(() => useReadingQueue('ws-1', 'run-1'), { wrapper: withQueryClient(client) })
 
@@ -326,7 +295,7 @@ describe('useReadingQueue', () => {
     vi.spyOn(api, 'readingQueue').mockResolvedValue({ rows: [] })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
-    const { useReadingQueue } = await import('./queries')
+    const { useReadingQueue } = await import('@/services/queries')
 
     const { result } = renderHook(() => useReadingQueue('ws-1', null), { wrapper: withQueryClient(client) })
 

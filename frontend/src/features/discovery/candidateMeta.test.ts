@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Candidate } from '@/api/client'
+import type { Candidate } from '@/entities'
 import { candidateKey, citationsLabel, pageLink, sameCandidate } from './candidateMeta'
 
 const ids = { doi: null, external_ids: {} }

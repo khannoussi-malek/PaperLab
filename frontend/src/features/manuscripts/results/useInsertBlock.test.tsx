@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError } from '@/services/api'
 import { useInsertBlock } from './useInsertBlock'
 
 const MAIN = '\\documentclass{article}\n\\begin{document}\nHi\n\\end{document}'

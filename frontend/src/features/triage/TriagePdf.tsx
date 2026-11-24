@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ChevronLeft, ChevronRight, Minus, Plus, Scan } from 'lucide-react'
-import { api } from '@/api/client'
+import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { PdfPage } from '../reader/PdfPage'
 import { ZOOM_STEPS } from '../reader/zoom'

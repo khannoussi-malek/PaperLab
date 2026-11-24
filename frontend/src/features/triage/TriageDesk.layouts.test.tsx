@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
-import { api, type Paper } from '@/api/client'
+import type { Paper } from '@/entities'
+import { api } from '@/services/api'
 
 vi.mock('../reader/PdfPage', () => ({ PdfPage: ({ pageNumber }: { pageNumber: number }) => <i>{pageNumber}</i> }))
 vi.mock('../library/GetPdfActions', () => ({ GetPdfActions: () => <button>Get PDF actions</button> }))
