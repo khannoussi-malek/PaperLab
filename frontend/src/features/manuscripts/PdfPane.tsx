@@ -3,7 +3,7 @@ import { Download } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import type { ManuscriptDetail } from '@/entities'
-import { api } from '@/services/api'
+import { manuscriptPdfUrl } from '@/services/api'
 import { PdfPage } from '../reader/PdfPage'
 import { usePdfDocument } from '../reader/usePdfDocument'
 import { parseCompileErrors } from './compileErrors'
@@ -35,7 +35,7 @@ export function PdfPane({ manuscript: m, width, target, stillStamp, onSourceAt, 
   const goodAt = useRef<string | null>(null)
   if (m.compile_status === 'ok' && m.compiled_at) goodAt.current = m.compiled_at
   const stamp = goodAt.current ?? m.compiled_at
-  const { doc, error } = usePdfDocument(stamp ? api.manuscriptPdfUrl(m.id, stamp) : null)
+  const { doc, error } = usePdfDocument(stamp ? manuscriptPdfUrl(m.id, stamp) : null)
   const friendly = m.compile_status === 'failed' ? m.compile_friendly : null
   const parsed = parseCompileErrors(m.compile_errors)
   const errors = parsed.filter((e) => e.kind === 'error' || e.kind === 'engine')
@@ -132,7 +132,7 @@ export function PdfPane({ manuscript: m, width, target, stillStamp, onSourceAt, 
       )}
       {doc && stamp && (
         <Button variant="secondary" size="icon" asChild className="absolute top-2 right-4 z-10 shadow-sm">
-          <a href={api.manuscriptPdfUrl(m.id, stamp)} download={`${m.title}.pdf`} aria-label="Download PDF" title="Download PDF"><Download aria-hidden /></a>
+          <a href={manuscriptPdfUrl(m.id, stamp)} download={`${m.title}.pdf`} aria-label="Download PDF" title="Download PDF"><Download aria-hidden /></a>
         </Button>
       )}
       <div className="min-h-0 flex-1 overflow-auto bg-muted/40 p-3" tabIndex={0} aria-label="PDF pages" ref={scroller} onKeyDown={keyDown} onWheel={() => { pending.current = false }} onPointerDown={() => { pending.current = false }}>

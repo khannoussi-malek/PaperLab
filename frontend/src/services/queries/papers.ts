@@ -124,3 +124,7 @@ export function useMarkFoundPdfsSeen() {
     onSuccess: () => client.invalidateQueries({ queryKey: keys.foundPdfs }),
   })
 }
+
+/** How far a paper's search index has got, polled while something shows it. */
+export const useEmbeddingProgress = (paperId: string) =>
+  useQuery({ queryKey: keys.embeddingProgress(paperId), queryFn: () => api.embeddingProgress(paperId), refetchInterval: PAPERS_POLL_MS })

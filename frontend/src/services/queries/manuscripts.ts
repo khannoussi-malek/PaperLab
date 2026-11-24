@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef } from 'react'
 import { api, ApiError } from '@/services/api'
 import type { ManuscriptCreate, ManuscriptPatch, SaveResult } from '@/entities'
 import { keys } from './core'
@@ -76,12 +76,13 @@ export function usePinPaper() {
   })
 }
 
-export const useManuscriptFile = (id: string, path: string | null) =>
+export const useManuscriptFile = (id: string, path: string | null, { refetchOnWindowFocus = false } = {}) =>
   useQuery({
     queryKey: keys.manuscriptFile(id, path ?? ''),
     queryFn: () => api.getManuscriptFile(id, path!),
     enabled: path !== null,
-    refetchOnWindowFocus: false, // the editor re-reads on focus itself, and only while its buffer is clean
+    // the editor re-reads on focus itself, and only while its buffer is clean; a read-only view can refetch
+    refetchOnWindowFocus,
   })
 
 /** Saves a text file. A stale save (409 file_changed) resolves to `{ conflict: true, updatedAt }`; other errors throw. */
@@ -155,3 +156,52 @@ export const useDeleteSection = () =>
   useManuscriptMutation((v: { id: string; path: string }) => api.deleteSection(v.id, v.path))
 export const useDeleteManuscriptFile = () =>
   useManuscriptMutation((v: { id: string; path: string }) => api.deleteManuscriptFile(v.id, v.path))
+
+/** Every given file's text, under the editor's own keys, so the open file is fetched once. */
+export const useManuscriptFiles = (id: string, paths: string[]) =>
+  useQueries({ queries: paths.map((path) => ({ queryKey: keys.manuscriptFile(id, path), queryFn: () => api.getManuscriptFile(id, path) })) })
+
+/** How many sentences and model calls Review all would make; counted once per opening, since every GET splits every file. */
+export const useReviewEstimate = (id: string) =>
+  useQuery({
+    queryKey: ['reviewEstimate', id],
+    queryFn: () => api.reviewEstimate(id),
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  })
+
+/** The library rows behind one claim's evidence, polled while any is queued or running. A failed poll is tried again on
+ * the next beat; three failures in a row stop it. */
+export const useEvidenceRows = (id: string, hash: string | undefined, enabled: boolean, pollMs: number, retries: number) =>
+  useQuery({
+    queryKey: ['manuscriptEvidence', id, hash],
+    queryFn: () => api.evidenceRows(id, hash!),
+    enabled: !!hash && enabled,
+    gcTime: 0,
+    retry: retries,
+    retryDelay: pollMs,
+    refetchInterval: (q) => {
+      if (q.state.status === 'error') return false
+      const rows = q.state.data
+      return !rows || rows.some((r) => r.status === 'queued' || r.status === 'running') ? pollMs : false
+    },
+  })
+
+/** Calls the editor makes from its handlers (PDF sync, lookups, a one-line save): bound to the manuscript, so a
+ * component asks this hook instead of reaching for the api object. */
+export function useManuscriptRequests(id: string) {
+  return useMemo(
+    () => ({
+      getFile: (path: string) => api.getManuscriptFile(id, path),
+      saveFile: (path: string, text: string, base: string | null) => api.saveManuscriptFile(id, path, text, base),
+      syncForward: (file: string, line: number) => api.syncForward(id, file, line),
+      syncInverse: (page: number, x: number, y: number) => api.syncInverse(id, page, x, y),
+      snapshots: () => api.listManuscriptSnapshots(id),
+      locateSections: (path: string, text: string) => api.locateSections(id, path, text),
+      locateSentences: (text: string) => api.locateSentences(id, text),
+      rankPapers: (text: string) => api.rankPapers(id, text),
+      findEvidence: (sentence: string, confirmRemote: boolean) => api.findEvidence(id, sentence, confirmRemote),
+    }),
+    [id],
+  )
+}

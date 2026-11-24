@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import type { EvidenceFound, EvidenceRow } from '@/entities'
-import { api, ApiError } from '@/services/api'
-import { useManuscriptPapers, useNotes, usePinPaper } from '@/services/queries'
+import type { EvidenceFound } from '@/entities'
+import { ApiError } from '@/services/api'
+import { useEvidenceRows, useManuscriptPapers, useManuscriptRequests, useNotes, usePinPaper } from '@/services/queries'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { chunkHref, noteHref, readerHref } from '@/router/route'
 import { manuscriptFailure } from '../errors'
@@ -129,6 +128,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
     column.current?.querySelector<HTMLElement>('[aria-roledescription="paper deck"]')?.focus()
   }, [openId])
 
+  const requests = useManuscriptRequests(manuscriptId)
   // Once per section opened (after a pause), never per keystroke; no ranking is fine, so a failure is silent.
   const text = useRef(sectionText)
   text.current = sectionText
@@ -136,10 +136,10 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
     let live = true
     const timer = setTimeout(() => {
       if (!text.current.trim()) return setRanked([])
-      api.rankPapers(manuscriptId, text.current.slice(0, RANK_MAX_CHARS)).then((r) => live && setRanked(r.paper_ids), () => {})
+      requests.rankPapers(text.current.slice(0, RANK_MAX_CHARS)).then((r) => live && setRanked(r.paper_ids), () => {})
     }, RANK_DELAY_MS)
     return () => { live = false; clearTimeout(timer) }
-  }, [manuscriptId, sectionKey])
+  }, [requests, sectionKey])
 
   const clearEvidence = () => { lastAsk.current += 1; setEvidence(null); setEvidenceMsg(null); setFinding(false); onClearEvidence?.() }
   useEffect(() => () => { lastAsk.current = -1 }, [])
@@ -150,7 +150,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
     setEvidenceMsg(null)
     setFinding(true)
     setConfirm(null)
-    api.findEvidence(manuscriptId, plain, confirmRemote).then(
+    requests.findEvidence(plain, confirmRemote).then(
       (found) => { if (lastAsk.current === ask) { setEvidence({ sentence: plain, found }); setFinding(false) } },
       (e) => {
         if (lastAsk.current !== ask) return
@@ -160,7 +160,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
         setFinding(false)
       },
     )
-  }, [manuscriptId])
+  }, [requests])
   useEffect(() => {
     if (!evidenceAsk || evidenceAsk.n === handledAsk.current) return
     handledAsk.current = evidenceAsk.n
@@ -171,20 +171,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
 
   const hash = evidence?.found.sentence_hash
   const unavailable = evidence?.found.verdicts === 'unavailable'
-  const rows = useQuery({
-    queryKey: ['manuscriptEvidence', manuscriptId, hash],
-    queryFn: () => api.evidenceRows(manuscriptId, hash!),
-    enabled: !!hash && !unavailable,
-    gcTime: 0,
-    // A poll that fails is tried again on the next beat; only three failures in a row stop the polling (and say so).
-    retry: POLL_RETRIES,
-    retryDelay: EVIDENCE_POLL_MS,
-    refetchInterval: (q) => {
-      if (q.state.status === 'error') return false
-      const d = q.state.data as EvidenceRow[] | undefined
-      return !d || d.some((r) => r.status === 'queued' || r.status === 'running') ? EVIDENCE_POLL_MS : false
-    },
-  })
+  const rows = useEvidenceRows(manuscriptId, hash, !unavailable, EVIDENCE_POLL_MS, POLL_RETRIES)
   const findFromDeck = () => {
     if (!onFindEvidence) return
     if (onFindEvidence()) return

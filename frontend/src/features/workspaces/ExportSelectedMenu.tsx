@@ -1,5 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
-import { api } from '@/services/api'
+import { useExportSelection } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
@@ -20,12 +19,7 @@ function plainError(error: Error): string {
 /** "Export selected…" on a selection bar: the chosen papers as a BibTeX or RIS download. From a workspace, its
  * keywords come along; from the library there is none. */
 export function ExportSelectedMenu({ workspaceId, paperIds }: { workspaceId?: string; paperIds: string[] }) {
-  const exportIt = useMutation({
-    mutationFn: async (format: 'bibtex' | 'ris') => {
-      const { blob, filename } = await api.exportSelection(paperIds, format, workspaceId)
-      save(blob, filename)
-    },
-  })
+  const exportIt = useExportSelection(paperIds, workspaceId, save)
   return (
     <>
       <DropdownMenu>

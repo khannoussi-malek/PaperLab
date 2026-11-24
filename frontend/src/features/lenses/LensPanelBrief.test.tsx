@@ -8,7 +8,7 @@ import { LensPanel } from './LensPanel'
 import type { LensReader } from './useLensReader'
 
 let briefs: { data?: unknown[]; isPending: boolean; error: Error | null; refetch: () => void }
-vi.mock('./queries', () => ({
+vi.mock('@/services/queries/lenses', () => ({
   useSetSectionRole: () => ({ error: null, isPending: false, mutate: vi.fn() }),
   usePaperBriefs: () => briefs,
   useInvalidateBriefs: () => vi.fn(),

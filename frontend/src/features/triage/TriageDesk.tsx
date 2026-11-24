@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Paper } from '@/entities'
-import { api } from '@/services/api'
+import { paperFileUrl } from '@/services/api'
 import { useTriageSummary } from '@/services/queries'
 import { Button } from '@/components/ui/button'
-import { prefetchPaperSections } from '@/features/lenses/queries'
+import { prefetchPaperSections } from '@/services/queries/lenses'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { paperLabel } from '@/features/library/paperMeta'
 import { useReducedMotion } from '@/features/manuscripts/deck/useReducedMotion'
@@ -98,11 +98,11 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const nextTwo = state.unseen.slice(1, 3).filter((id) => library.find((p) => p.id === id)?.has_pdf).join(',')
   // The documents worth keeping: this card, the next two and the one just decided; the rest are let go.
   const lastDone = state.done.at(-1)?.id
-  const keep = [top?.id, ...nextTwo.split(','), lastDone].filter((id): id is string => Boolean(id) && Boolean(library.find((p) => p.id === id)?.has_pdf)).map(api.paperFileUrl)
+  const keep = [top?.id, ...nextTwo.split(','), lastDone].filter((id): id is string => Boolean(id) && Boolean(library.find((p) => p.id === id)?.has_pdf)).map(paperFileUrl)
   const keepKey = keep.join('|')
   useEffect(() => {
     retainOnly(keepKey ? keepKey.split('|') : [])
-    if (pdf.mounted) for (const url of nextTwo.split(',').filter(Boolean).map(api.paperFileUrl)) prefetchPdf(url)
+    if (pdf.mounted) for (const url of nextTwo.split(',').filter(Boolean).map(paperFileUrl)) prefetchPdf(url)
   }, [keepKey, nextTwo, pdf.mounted])
   useEffect(() => {
     for (const id of nextTwo.split(',').filter(Boolean)) void prefetchPaperSections(client, id)

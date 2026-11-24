@@ -1,7 +1,7 @@
 import { Table2, Undo2 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { Note, NoteKind } from '@/entities'
-import { api, PaperMergedError } from '@/services/api'
+import { paperFileUrl, PaperMergedError } from '@/services/api'
 import { useChunksOnPage, useDataset, useNoteMutations, useNotes, usePaper, usePaperDatasets, useReferences } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { fadeIn, popIn } from '@/components/motion'
@@ -135,7 +135,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     window.location.replace(query ? `${readerHref(mergedInto)}?${query}` : readerHref(mergedInto))
   }, [mergedInto])
   const noPdf = paper.data?.has_pdf === false
-  const { doc, error: pdfError } = usePdfDocument(paper.data?.has_pdf || (paper.isError && !mergedInto) ? api.paperFileUrl(paperId) : null)
+  const { doc, error: pdfError } = usePdfDocument(paper.data?.has_pdf || (paper.isError && !mergedInto) ? paperFileUrl(paperId) : null)
   const notesQuery = useNotes(paperId)
   const mutations = useNoteMutations()
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)

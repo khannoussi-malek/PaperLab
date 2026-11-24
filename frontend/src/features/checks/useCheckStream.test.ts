@@ -6,7 +6,7 @@ import { CHAT_MODEL_KEY } from '@/features/chat/chatModel'
 import { useCheckStream } from './useCheckStream'
 
 const invalidate = vi.fn()
-vi.mock('./queries', () => ({ useInvalidateChecks: () => invalidate }))
+vi.mock('@/services/queries/noteChecks', () => ({ useInvalidateChecks: () => invalidate }))
 vi.mock('@/services/queries', () => ({
   useChatModels: () => ({ data: [{ id: 'm1', is_default: true }, { id: 'm2', is_default: false }] }),
 }))

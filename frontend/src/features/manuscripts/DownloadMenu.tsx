@@ -1,6 +1,6 @@
 import { ChevronDown, Download } from 'lucide-react'
 import type { ManuscriptDetail } from '@/entities'
-import { api } from '@/services/api'
+import { manuscriptExportUrl, manuscriptPdfUrl } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
@@ -16,16 +16,16 @@ export function DownloadMenu({ manuscript: m }: Props) {
       <DropdownMenuContent align="end">
         {m.has_pdf ? (
           <DropdownMenuItem asChild>
-            <a href={api.manuscriptPdfUrl(m.id, m.compiled_at)} download={`${m.title}.pdf`}>PDF</a>
+            <a href={manuscriptPdfUrl(m.id, m.compiled_at)} download={`${m.title}.pdf`}>PDF</a>
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem disabled>PDF — compile first</DropdownMenuItem>
         )}
         <DropdownMenuItem asChild>
-          <a href={api.manuscriptExportUrl(m.id, { pdf: false })} download>LaTeX source (.zip)</a>
+          <a href={manuscriptExportUrl(m.id, { pdf: false })} download>LaTeX source (.zip)</a>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <a href={api.manuscriptExportUrl(m.id)} download>Source and PDF (.zip)</a>
+          <a href={manuscriptExportUrl(m.id)} download>Source and PDF (.zip)</a>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

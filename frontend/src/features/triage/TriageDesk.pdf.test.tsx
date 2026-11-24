@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import type { Paper } from '@/entities'
-import { api } from '@/services/api'
+import { api, paperFileUrl } from '@/services/api'
 
 vi.mock('../reader/PdfPage', () => ({ PdfPage: ({ pageNumber }: { pageNumber: number }) => <i>{pageNumber}</i> }))
 vi.mock('../library/GetPdfActions', () => ({ GetPdfActions: () => <button>Get PDF actions</button> }))
@@ -109,7 +109,7 @@ it('keeps exactly the current, the next two and the one just decided', async () 
   const papers = [mk('1'), mk('2'), mk('3'), mk('4'), mk('5')]
   const root = setup(papers)
   const kept = () => [...(vi.mocked(retainOnly).mock.calls.at(-1)?.[0] ?? [])].sort()
-  const url = (...ids: string[]) => ids.map((i) => api.paperFileUrl(i)).sort()
+  const url = (...ids: string[]) => ids.map((i) => paperFileUrl(i)).sort()
   await waitFor(() => expect(kept()).toEqual(url('1', '2', '3')))
   fireEvent.keyDown(root, { key: '2' })
   await waitFor(() => expect(kept()).toEqual(url('1', '2', '3', '4')))

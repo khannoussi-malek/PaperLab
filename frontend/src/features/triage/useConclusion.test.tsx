@@ -5,7 +5,7 @@ import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Chunk, Section } from '@/entities'
 import { api } from '@/services/api'
-import { prefetchPaperSections } from '@/features/lenses/queries'
+import { prefetchPaperSections } from '@/services/queries/lenses'
 import { useConclusion } from './useConclusion'
 
 afterEach(() => vi.restoreAllMocks())

@@ -1,8 +1,7 @@
 import { Check } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import type { NumberCandidate } from '@/entities'
-import { api } from '@/services/api'
-import { useDatasetMutations } from '@/services/queries'
+import { useDataRequests, useDatasetMutations } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { pressable } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -48,6 +47,7 @@ const fieldsOf = (candidate: NumberCandidate) => ({
 /** Opens on a text selection with the numbers found in it, and saves the chosen one as a row in the paper's numbers dataset. */
 export function AddNumberDialog({ paperId, anchor, onClose }: Props) {
   const { addNumber } = useDatasetMutations()
+  const { numberCandidates } = useDataRequests()
   const [candidates, setCandidates] = useState<NumberCandidate[] | null>(null)
   const [candidatesError, setCandidatesError] = useState<string | null>(null)
   const [chosen, setChosen] = useState(0)
@@ -58,7 +58,7 @@ export function AddNumberDialog({ paperId, anchor, onClose }: Props) {
 
   useEffect(() => {
     let active = true
-    api.numberCandidates(anchor.quotedText).then(
+    numberCandidates(anchor.quotedText).then(
       (found) => {
         if (!active) return
         setCandidates(found)
@@ -69,7 +69,7 @@ export function AddNumberDialog({ paperId, anchor, onClose }: Props) {
     return () => {
       active = false
     }
-  }, [anchor.quotedText])
+  }, [anchor.quotedText, numberCandidates])
 
   function choose(index: number, candidate: NumberCandidate) {
     const fields = fieldsOf(candidate)

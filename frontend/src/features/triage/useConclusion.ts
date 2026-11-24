@@ -1,5 +1,5 @@
 import { useChunksOnPage } from '@/services/queries'
-import { usePaperSections } from '@/features/lenses/queries'
+import { usePaperSections } from '@/services/queries/lenses'
 
 const MAX_CHARS = 900
 const WANTED = [

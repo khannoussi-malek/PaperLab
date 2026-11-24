@@ -7,7 +7,7 @@ import type { ChatProblem } from '@/features/chat/refusals'
 import { readSse } from '@/features/chat/sse'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { checkProblem, streamedLine, type CheckLine } from './exitTest'
-import { useInvalidateChecks } from './queries'
+import { useInvalidateChecks } from '@/services/queries/noteChecks'
 
 /** One check being run: idle → (confirm →) sources → streaming → done | error. `host`: where a remote model would send the note. */
 export type CheckStream = {

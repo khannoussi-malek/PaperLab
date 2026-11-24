@@ -58,6 +58,17 @@
           "message": "layout sits under pages: a page puts the shell around itself."
         }] }]
       }
-    }
+    },
+    // .tsx files draw the UI: they get data from hooks, never from the api object itself. A later override replaces
+    // an earlier one's options for the same rule, so each repeats its folder's layer pattern. Tests stub endpoints
+    // with vi.spyOn(api, …), so they may import it.
+    {"files": ["src/features/**/*.tsx"], "rules": {"no-restricted-imports": ["error", {"paths": [{"name": "@/services/api", "importNames": ["api"], "message": "UI reads and writes data through a hook from @/services/queries; URL builders are named exports."}], "patterns": [{"group": ["@/layout/**", "@/pages/**", "@/router/RouterView", "@/router/lazyPage"], "message": "features sit under layout and pages; only pages put them on screen."}]}]}},
+    {"files": ["src/components/**/*.tsx"], "rules": {"no-restricted-imports": ["error", {"paths": [{"name": "@/services/api", "importNames": ["api"], "message": "UI reads and writes data through a hook from @/services/queries; URL builders are named exports."}], "patterns": [{"group": ["@/features/**", "@/layout/**", "@/pages/**", "@/router/RouterView", "@/router/lazyPage"], "message": "shared code must not know about features, layout or pages: pass what it needs in as props."}]}]}},
+    {"files": ["src/layout/**/*.tsx"], "rules": {"no-restricted-imports": ["error", {"paths": [{"name": "@/services/api", "importNames": ["api"], "message": "UI reads and writes data through a hook from @/services/queries; URL builders are named exports."}], "patterns": [{"group": ["@/pages/**", "@/router/RouterView", "@/router/lazyPage"], "message": "layout sits under pages: a page puts the shell around itself."}]}]}},
+    {"files": ["src/pages/**/*.tsx"], "rules": {"no-restricted-imports": ["error", {"paths": [{"name": "@/services/api", "importNames": ["api"], "message": "UI reads and writes data through a hook from @/services/queries; URL builders are named exports."}]}]}},
+    {"files": ["src/features/**/*.test.tsx"], "rules": {"no-restricted-imports": ["error", {"patterns": [{"group": ["@/layout/**", "@/pages/**", "@/router/RouterView", "@/router/lazyPage"], "message": "features sit under layout and pages; only pages put them on screen."}]}]}},
+    {"files": ["src/components/**/*.test.tsx"], "rules": {"no-restricted-imports": ["error", {"patterns": [{"group": ["@/features/**", "@/layout/**", "@/pages/**", "@/router/RouterView", "@/router/lazyPage"], "message": "shared code must not know about features, layout or pages: pass what it needs in as props."}]}]}},
+    {"files": ["src/layout/**/*.test.tsx"], "rules": {"no-restricted-imports": ["error", {"patterns": [{"group": ["@/pages/**", "@/router/RouterView", "@/router/lazyPage"], "message": "layout sits under pages: a page puts the shell around itself."}]}]}},
+    {"files": ["src/pages/**/*.test.tsx"], "rules": {"no-restricted-imports": "off"}}
   ]
 }

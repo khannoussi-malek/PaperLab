@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Dataset } from '@/entities'
-import { api } from '@/services/api'
-import { useDatasetMutations } from '@/services/queries'
+import { useDataRequests, useDatasetMutations } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -72,6 +71,7 @@ function CaptureCrop({ doc, page, region }: Pick<Props, 'doc' | 'page' | 'region
 /** Reads the table in a dragged region, lets the owner fix its name and grid next to the crop, and saves it. */
 export function CaptureTableDialog({ paperId, doc, page, region, onClose, onSaved }: Props) {
   const { create } = useDatasetMutations()
+  const { previewTable } = useDataRequests()
   const [attempt, setAttempt] = useState(0)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -79,7 +79,7 @@ export function CaptureTableDialog({ paperId, doc, page, region, onClose, onSave
 
   useEffect(() => {
     let active = true
-    api.previewTable(paperId, page, region).then(
+    previewTable(paperId, page, region).then(
       (preview) => {
         if (!active) return
         setName(preview.name ?? '')
@@ -90,7 +90,7 @@ export function CaptureTableDialog({ paperId, doc, page, region, onClose, onSave
     return () => {
       active = false
     }
-  }, [paperId, page, region, attempt])
+  }, [paperId, page, region, attempt, previewTable])
 
   async function save(event: FormEvent) {
     event.preventDefault()

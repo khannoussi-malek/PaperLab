@@ -1,8 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
 import { Check } from 'lucide-react'
 import { useState } from 'react'
-import { api } from '@/services/api'
-import { useDatasetMutations } from '@/services/queries'
+import { useDatasetMutations, useNumberSuggestions } from '@/services/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -14,14 +12,7 @@ type Props = { paperId: string; sectionTitle: string | null; onClose: () => void
 /** A section's numbers as the model found them (D33), each with its quote; Add puts one in the paper's numbers, with
  * the label marked as the model's. Asked once per opening: the model costs time, so nothing refetches by itself. */
 export function NumberSuggestionsDialog({ paperId, sectionTitle, onClose }: Props) {
-  const found = useQuery({
-    queryKey: ['papers', paperId, 'number-suggestions', sectionTitle],
-    queryFn: () => api.suggestNumbers(paperId, sectionTitle),
-    staleTime: Infinity,
-    gcTime: 0,
-    refetchOnWindowFocus: false,
-    retry: false,
-  })
+  const found = useNumberSuggestions(paperId, sectionTitle)
   const { addNumber } = useDatasetMutations()
   const [added, setAdded] = useState<Set<number>>(new Set())
   const suggestions = found.data?.suggestions ?? []

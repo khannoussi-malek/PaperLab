@@ -6,7 +6,9 @@ import { api } from '@/services/api'
 import { LibraryPage } from '@/pages/LibraryPage'
 
 const state = vi.hoisted(() => ({ papers: [] as { id: string; title: string }[] }))
-vi.mock('@/services/queries', () => ({
+vi.mock('@/services/queries', async (importOriginal) => ({
+  // the real one: the selection bar's export goes through it to api.exportSelection, which the tests stub
+  useExportSelection: (await importOriginal<typeof import('@/services/queries')>()).useExportSelection,
   usePapers: () => ({ data: state.papers, isError: false }),
   useUploadPapers: () => ({ isPending: false, error: null, mutate: vi.fn() }),
   useEmbeddingStatus: () => ({ data: undefined }),

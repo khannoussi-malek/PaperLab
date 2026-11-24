@@ -92,3 +92,24 @@ export function useChartMutations() {
     }),
   }
 }
+
+/** A section's numbers as the model found them (D33). Asked once per opening: the model costs time, so nothing
+ * refetches by itself. */
+export const useNumberSuggestions = (paperId: string, sectionTitle: string | null) =>
+  useQuery({
+    queryKey: ['papers', paperId, 'number-suggestions', sectionTitle],
+    queryFn: () => api.suggestNumbers(paperId, sectionTitle),
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+
+const dataRequests = {
+  numberCandidates: (text: string) => api.numberCandidates(text),
+  previewTable: (paperId: string, page: number, region: [number, number, number, number]) => api.previewTable(paperId, page, region),
+}
+
+/** One-off reads the capture dialogs make while they open; the dialogs keep what comes back as editable state. The
+ * same object every render, so an effect that lists one of these runs only when its own inputs change. */
+export const useDataRequests = () => dataRequests

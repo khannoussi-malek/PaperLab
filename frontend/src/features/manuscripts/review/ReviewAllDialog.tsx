@@ -1,6 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { api } from '@/services/api'
+import { useReviewEstimate } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { RemoteConfirm } from './RemoteConfirm'
@@ -27,12 +26,7 @@ export function ReviewAllDialog({ open, onClose, manuscriptId }: Props) {
 
 /** Mounted only while the dialog is open, so the estimate is counted again on every open. */
 function Body({ manuscriptId, onClose }: { manuscriptId: string; onClose: () => void }) {
-  const estimate = useQuery({
-    queryKey: ['reviewEstimate', manuscriptId],
-    queryFn: () => api.reviewEstimate(manuscriptId),
-    staleTime: 0,
-    refetchOnWindowFocus: false, // every GET splits every file: count once per open
-  })
+  const estimate = useReviewEstimate(manuscriptId)
   const { startAll, startAllError, confirmHost } = useStartReviewAll(manuscriptId)
   const [busy, setBusy] = useState(false)
   const est = estimate.data

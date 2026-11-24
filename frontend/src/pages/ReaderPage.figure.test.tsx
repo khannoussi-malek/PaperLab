@@ -55,7 +55,7 @@ vi.mock('@/features/notes/NotesPanel', () => ({
   },
 }))
 vi.mock('@/features/data/DataPanel', () => ({ DataPanel: () => null }))
-vi.mock('@/features/lenses/queries', () => ({
+vi.mock('@/services/queries/lenses', () => ({
   usePaperSections: () => ({ data: undefined }),
   usePaperChunks: () => ({ data: undefined }),
 }))

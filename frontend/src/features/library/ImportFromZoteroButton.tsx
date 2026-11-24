@@ -1,9 +1,8 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { FileUp } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ImportProgress } from '@/entities'
-import { api } from '@/services/api'
-import { keys, refreshNotes } from '@/services/queries'
+import { keys, refreshNotes, useImportPreview, useImportProgress, useStartImport } from '@/services/queries'
 import { Hint } from '@/components/Hint'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -63,31 +62,23 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
   const [tooBig, setTooBig] = useState<string | null>(null)
   const started = useRef(false)
 
-  const preview = useQuery({
-    // Once per file: the fetch switch and the target don't change what the preview counts (the switch only hides the
-    // disclosure); the save switch does, so flipping it asks once more. ponytail: the file still goes up twice (preview, then Import); upload once by id if that hurts.
-    queryKey: ['citation-import-preview', file?.name, file?.size, file?.lastModified, saveWithoutPdf],
-    queryFn: () => api.previewImport(file!, saveWithoutPdf),
-    enabled: file !== null,
-    placeholderData: keepPreviousData,
-    retry: false,
-    gcTime: 0,
-  })
+  // The fetch switch and the target don't change what the preview counts (the switch only hides the disclosure).
+  const preview = useImportPreview(file, saveWithoutPdf)
 
-  const start = useMutation({
-    // `into`: a retry goes into the workspace the first attempt already made, never under the new name again.
-    mutationFn: (into?: string) => {
-      started.current = true
-      const where = into
-        ? { workspaceId: into }
-        : target === 'workspace'
-          ? { workspaceId }
-          : target === 'new'
-            ? { newWorkspaceName: name.trim() }
-            : {}
-      return api.startImport(file!, where, fetchPdfs, saveWithoutPdf)
-    },
+  const start = useStartImport(() => {
+    started.current = true
   })
+  // `into`: a retry goes into the workspace the first attempt already made, never under the new name again.
+  const startInto = (into?: string) => {
+    const where = into
+      ? { workspaceId: into }
+      : target === 'workspace'
+        ? { workspaceId }
+        : target === 'new'
+          ? { newWorkspaceName: name.trim() }
+          : {}
+    start.mutate({ file: file!, target: where, fetchPdfs, saveWithoutPdf })
+  }
   // A closed dialog forgets the job but not the import: refresh the lists so its papers show up.
   useEffect(
     () => () => {
@@ -99,12 +90,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
     [client],
   )
   const jobId = tracking(start.data) ? start.data?.job_id : undefined
-  const poll = useQuery({
-    queryKey: ['citation-import', jobId],
-    queryFn: () => api.importProgress(jobId!),
-    enabled: !!jobId,
-    refetchInterval: (q) => (tracking(q.state.data) || q.state.data === undefined ? POLL_MS : false),
-  })
+  const poll = useImportProgress(jobId, POLL_MS, tracking)
   const progress = poll.data ?? start.data
 
   useEffect(() => {
@@ -116,7 +102,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
 
   if (progress && !start.isPending) {
     const into = progress.workspace_id ?? start.data?.workspace_id ?? undefined
-    return <Outcome progress={progress} pollError={poll.error} onRetry={() => start.mutate(into)} />
+    return <Outcome progress={progress} pollError={poll.error} onRetry={() => startInto(into)} />
   }
 
   const updating = preview.isFetching
@@ -140,7 +126,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault()
-        if (ready) start.mutate()
+        if (ready) startInto()
       }}
     >
       <div className="flex flex-col gap-1.5">
