@@ -11,6 +11,7 @@ on:
     paths:
       - .github/workflows/release.yml
       - desktop/**
+      - capture/**
       - Dockerfile
       - .dockerignore
       - voice/**
