@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { useLensReader } from './useLensReader'
 
 let chunks: { data?: unknown[]; isError: boolean }
-vi.mock('./queries', () => ({
+vi.mock('@/services/queries/lenses', () => ({
   usePaperSections: () => ({ data: { sections: [], lenses: [] } }),
   usePaperChunks: () => chunks,
 }))

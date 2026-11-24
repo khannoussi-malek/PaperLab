@@ -9,7 +9,7 @@ let notes: Note[] = []
 let checks: Check[] = []
 let loading: 'notes' | 'checks' | null = null
 vi.mock('@/services/queries', () => ({ useNotes: () => ({ data: loading === 'notes' ? undefined : notes, isSuccess: loading !== 'notes' }) }))
-vi.mock('./queries', () => ({ usePaperChecks: () => ({ data: loading === 'checks' ? undefined : checks, isSuccess: loading !== 'checks' }) }))
+vi.mock('@/services/queries/noteChecks', () => ({ usePaperChecks: () => ({ data: loading === 'checks' ? undefined : checks, isSuccess: loading !== 'checks' }) }))
 
 const note = (over: Partial<Note> = {}) => ({ id: 'n1', kind: 'summary', provenance: 'human', created_at: '2026-10-01T00:00:00Z', ...over }) as Note
 const check = (over: Partial<Check> = {}) => ({ note_id: 'n1', stale: false, created_at: '2026-10-05T12:00:00Z', lines: [], ...over }) as Check

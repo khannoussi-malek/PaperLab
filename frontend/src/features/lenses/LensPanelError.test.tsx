@@ -6,7 +6,7 @@ import type { Lens, Section } from '@/entities'
 import { LensPanel } from './LensPanel'
 import type { LensReader } from './useLensReader'
 
-vi.mock('./queries', () => ({
+vi.mock('@/services/queries/lenses', () => ({
   usePaperBriefs: () => ({ data: [] }),
   useInvalidateBriefs: () => vi.fn(),
   useSetSectionRole: () => ({ error: new Error('Could not save the role'), isPending: false, mutate: vi.fn() }),

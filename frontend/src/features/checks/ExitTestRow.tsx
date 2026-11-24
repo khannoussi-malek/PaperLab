@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { useNotes } from '@/services/queries'
 import type { Pass } from '@/features/reading/passes'
 import { exitTestLabel, exitTestLine, exitTestNote, exitTestStatus } from './exitTest'
-import { usePaperChecks } from './queries'
+import { usePaperChecks } from '@/services/queries/noteChecks'
 
 type Props = { paperId: string; pass: Pass; onWrite: (kind: Pass['noteKind']) => void; onOpen: (noteId: string) => void }
 

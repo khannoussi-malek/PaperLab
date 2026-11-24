@@ -9,7 +9,7 @@ const cancelConfirm = vi.fn()
 let stream: Record<string, unknown>
 let checks: Check[] = []
 vi.mock('./useCheckStream', () => ({ useCheckStream: () => ({ stream, run, cancelConfirm }) }))
-vi.mock('./queries', () => ({ usePaperChecks: () => ({ data: checks }) }))
+vi.mock('@/services/queries/noteChecks', () => ({ usePaperChecks: () => ({ data: checks }) }))
 vi.mock('@/features/settings/DownloadSearchModel', () => ({ DownloadSearchModel: () => <div>download-model</div> }))
 vi.mock('@/services/queries', () => ({ useReindexPaper: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, error: null }), useEmbeddingStatus: () => ({ data: undefined }) }))
 

@@ -7,7 +7,7 @@ import { NoteCheck } from './NoteCheck'
 
 // The real useCheckStream: NoteCheck.test.tsx mocks it, which hid a refusal that left no way to check again.
 let checks: Check[] = []
-vi.mock('./queries', () => ({ usePaperChecks: () => ({ data: checks }), useInvalidateChecks: () => vi.fn() }))
+vi.mock('@/services/queries/noteChecks', () => ({ usePaperChecks: () => ({ data: checks }), useInvalidateChecks: () => vi.fn() }))
 vi.mock('@/features/settings/DownloadSearchModel', () => ({ DownloadSearchModel: () => <div>download-model</div> }))
 vi.mock('@/services/queries', () => ({
   useChatModels: () => ({ data: [{ id: 'm1', is_default: true }] }),

@@ -8,7 +8,7 @@ import { RemoteConfirmDialog } from '@/features/manuscripts/review/RemoteConfirm
 import { CheckResult } from './CheckResult'
 import { isExitTest } from '@/features/notes/noteKinds'
 import { exitTestLabel } from './exitTest'
-import { usePaperChecks } from './queries'
+import { usePaperChecks } from '@/services/queries/noteChecks'
 import { useCheckStream } from './useCheckStream'
 
 const NOT_YOURS = 'Only text you wrote can be checked. This note came from AI.'

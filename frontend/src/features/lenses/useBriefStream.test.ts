@@ -5,7 +5,7 @@ import { api } from '@/services/api'
 import { useBriefStream } from './useBriefStream'
 
 const invalidate = vi.fn()
-vi.mock('./queries', () => ({ useInvalidateBriefs: () => invalidate }))
+vi.mock('@/services/queries/lenses', () => ({ useInvalidateBriefs: () => invalidate }))
 
 const source = { label: 'C1', page: 1, bbox: [[0, 0, 1, 1]] }
 const sse = (...events: [string, unknown][]) =>
