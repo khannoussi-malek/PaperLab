@@ -87,7 +87,15 @@ def is_type_checking(node: ast.If) -> bool:
     )
 
 
-def runtime_imports(tree: ast.AST):
+def absolute(node: ast.ImportFrom, importer: str, is_package: bool) -> str | None:
+    """The module an ImportFrom names, with `from . import x` / `from ..y import z` resolved against the importer."""
+    if node.level == 0:
+        return node.module
+    base = importer.split(".")[: len(importer.split(".")) - node.level + (1 if is_package else 0)]
+    return ".".join(base + ([node.module] if node.module else []))
+
+
+def runtime_imports(tree: ast.AST, importer: str = "", is_package: bool = False):
     """Every app.* module imported at runtime (inside functions too), skipping `if TYPE_CHECKING:` blocks."""
     stack = [tree]
     while stack:
@@ -97,11 +105,11 @@ def runtime_imports(tree: ast.AST):
             continue
         if isinstance(node, ast.Import):
             yield from (a.name for a in node.names if a.name.startswith("app."))
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            if node.module == "app" or node.module.startswith("app."):
+        elif isinstance(node, ast.ImportFrom) and (module := absolute(node, importer, is_package)):
+            if module == "app" or module.startswith("app."):
                 for alias in node.names:
-                    sub = f"{node.module}.{alias.name}"
-                    yield sub if is_module(sub) else node.module
+                    sub = f"{module}.{alias.name}"
+                    yield sub if is_module(sub) else module
         stack.extend(ast.iter_child_nodes(node))
 
 
@@ -121,7 +129,8 @@ def layer_breaks() -> set[tuple[str, str]]:
         if importer == "app":
             continue
         src = layer(importer)
-        for imported in runtime_imports(ast.parse(text, feature_version=(3, 12))):
+        tree = ast.parse(text, feature_version=(3, 12))
+        for imported in runtime_imports(tree, importer, path.name == "__init__.py"):
             if imported == "app":
                 continue
             dst = layer(imported)
@@ -133,9 +142,16 @@ def layer_breaks() -> set[tuple[str, str]]:
 
 
 def test_every_app_package_has_a_rank():
-    packages = {p.name for p in APP.iterdir() if p.is_dir() and (p / "__init__.py").exists()}
+    packages = {p.name for p in APP.iterdir() if p.is_dir() and any(p.rglob("*.py"))}
     packages |= {p.stem for p in APP.glob("*.py") if p.stem != "__init__"}
     assert packages - RANK.keys() == set(), "add the new package to RANK in tests/test_architecture.py"
+
+
+def test_relative_imports_resolve_against_the_importer():
+    up = ast.parse("from ..workers import x").body[0]
+    assert absolute(up, "app.api.chat", is_package=False) == "app.workers"
+    here = ast.parse("from .base import Check").body[0]
+    assert absolute(here, "app.core.manuscript_checks", is_package=True) == "app.core.manuscript_checks.base"
 
 
 def test_imports_point_down():
