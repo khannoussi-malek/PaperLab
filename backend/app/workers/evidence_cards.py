@@ -62,6 +62,33 @@ async def _build_one(session, paper_id: uuid.UUID, llm) -> None:
         )
 
 
+async def _mark_busy(ids: list[uuid.UUID]) -> None:
+    """The last try found another job building these cards: say so instead of leaving them "generating"."""
+    async with SessionLocal() as session:
+        await session.execute(update(EvidenceCard).where(
+            EvidenceCard.paper_id.in_(ids), EvidenceCard.status == "generating"
+        ).values(status="failed", error="busy"))
+        await session.commit()
+
+
+async def _build_all(ctx: dict, workspace_id: str | None, ids: list[uuid.UUID]) -> None:
+    """Builds each card in turn; past the deadline the rest go to a fresh job."""
+    wid = uuid.UUID(workspace_id) if workspace_id else None
+    async with SessionLocal() as session:
+        await _fail_interrupted(session, wid, ids)
+        deadline = time.monotonic() + JOB_TIMEOUT - SAFETY_MARGIN
+        for n, paper_id in enumerate(ids):
+            if time.monotonic() >= deadline:
+                # Fresh timestamps, so no other job takes the waiting cards for interrupted ones.
+                await session.execute(update(EvidenceCard).where(
+                    EvidenceCard.paper_id.in_(ids[n:]), EvidenceCard.status == "generating"
+                ).values(updated_at=datetime.now(UTC)))
+                await session.commit()
+                await queue.enqueue("generate_evidence_cards", workspace_id, [str(i) for i in ids[n:]])
+                return
+            await _build_one(session, paper_id, ctx.get("llm"))
+
+
 async def generate_evidence_cards(ctx: dict, workspace_id: str | None, paper_ids: list[str]) -> None:
     wid = uuid.UUID(workspace_id) if workspace_id else None
     ids = [uuid.UUID(i) for i in paper_ids]
@@ -72,27 +99,11 @@ async def generate_evidence_cards(ctx: dict, workspace_id: str | None, paper_ids
         if not await lock_conn.scalar(_LOCK, {"key": key}):
             if ctx.get("job_try", 1) < MAX_TRIES:
                 raise Retry(defer=RETRY_DEFER)  # another job is building these cards; try again shortly
-            async with SessionLocal() as session:  # last try: say so instead of leaving them "generating"
-                await session.execute(update(EvidenceCard).where(
-                    EvidenceCard.paper_id.in_(ids), EvidenceCard.status == "generating"
-                ).values(status="failed", error="busy"))
-                await session.commit()
+            await _mark_busy(ids)
             return
         try:
             await lock_conn.commit()
-            async with SessionLocal() as session:
-                await _fail_interrupted(session, wid, ids)
-                deadline = time.monotonic() + JOB_TIMEOUT - SAFETY_MARGIN
-                for n, paper_id in enumerate(ids):
-                    if time.monotonic() >= deadline:
-                        # Fresh timestamps, so no other job takes the waiting cards for interrupted ones.
-                        await session.execute(update(EvidenceCard).where(
-                            EvidenceCard.paper_id.in_(ids[n:]), EvidenceCard.status == "generating"
-                        ).values(updated_at=datetime.now(UTC)))
-                        await session.commit()
-                        await queue.enqueue("generate_evidence_cards", workspace_id, [str(i) for i in ids[n:]])
-                        break
-                    await _build_one(session, paper_id, ctx.get("llm"))
+            await _build_all(ctx, workspace_id, ids)
         finally:
             await lock_conn.execute(_UNLOCK, {"key": key})
             await lock_conn.commit()

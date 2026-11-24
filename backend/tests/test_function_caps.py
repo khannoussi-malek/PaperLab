@@ -20,20 +20,14 @@ BLOCKS = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast
 FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 LONG: dict[str, int] = {
-    "app/main.py::create_app": 67,
+    # A declarative table: one prompt import and one reply line per AI feature.
     "app/providers/llm_fake.py::_replies": 51,
-    "app/scripts/tectonic_sandbox_check.py::main": 53,
 }
 WIDE: dict[str, int] = {
     # The search core: ten callers and nine test fakes pass these keyword options by name.
     "app/core/chat/retrieval.py::retrieve": 9,
-    "app/scripts/backfill_biblio.py::run": 7,
 }
 DEEP: dict[str, int] = {
-    "app/core/manuscripts/manuscript_checks/wording.py::_overclaim": 5,
-    "app/providers/llm.py::OpenAICompatibleLLM.stream": 5,
-    "app/providers/search_model.py::_fetch": 5,
-    "app/workers/evidence_cards.py::generate_evidence_cards": 5,
 }
 
 

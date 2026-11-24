@@ -69,20 +69,20 @@ async def test_backfill_fills_nulls_only_and_is_idempotent(session):
     fresh = await add_paper(session, doi="10.9999/m40.fresh")
     ids = [kept.id, locked.id, fresh.id]
     client, _ = fake_crossref(CROSSREF)
-    first = await backfill_biblio.run(session, client, None, delay=0, only=ids)
+    first = await backfill_biblio.run(session, (client, None), delay=0, only=ids)
     for paper in (kept, locked, fresh):
         await session.refresh(paper)
     assert (kept.volume, kept.issue, kept.pages) == ("1", "2", "45-67")
     assert locked.pages == "x" and locked.volume == "12"
     assert (fresh.volume, fresh.editors) == ("12", ["Ada Lovelace", "The Committee"])
-    second = await backfill_biblio.run(session, client, None, delay=0, only=ids)
+    second = await backfill_biblio.run(session, (client, None), delay=0, only=ids)
     assert first["updated"] == 3 and second["updated"] == 0
 
 
 async def test_backfill_survives_a_crossref_error(session):
     paper = await add_paper(session, doi=DOI)
     client, _ = fake_crossref(None, 500)
-    summary = await backfill_biblio.run(session, client, None, delay=0, only=[paper.id])
+    summary = await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id])
     assert summary["updated"] == 0
 
 
@@ -124,7 +124,7 @@ async def test_nothing_left_to_learn_asks_nobody(session):
 async def test_backfill_ignores_papers_missing_only_editors(session):
     paper = await add_paper(session, doi=DOI, volume="1", issue="2", pages="3", pmid="4", pmcid="PMC5")
     client, seen = fake_crossref(CROSSREF)
-    summary = await backfill_biblio.run(session, client, None, delay=0, only=[paper.id])
+    summary = await backfill_biblio.run(session, (client, None), delay=0, only=[paper.id])
     assert summary["checked"] == 0 and seen == []
 
 
@@ -154,7 +154,7 @@ async def test_the_backfill_sends_openalex_its_api_key(monkeypatch):
     async def fake_session():
         yield None
 
-    async def run(_session, _cr, _oa, **_):
+    async def run(_session, _clients, **_):
         return {}
 
     monkeypatch.setattr(backfill_biblio, "SessionLocal", fake_session)

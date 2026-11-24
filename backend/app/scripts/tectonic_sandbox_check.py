@@ -85,6 +85,50 @@ def _cached_package() -> Path | None:
     return next(root.rglob("natbib.sty"), None) if root else None
 
 
+async def _read_probes(work: Path, secret: Path, pdf_secret: Path) -> bool:
+    """Reads past the workdir (and one control read inside it). True when one leaked or the control broke."""
+    leaked = False
+    probes = [
+        ("control", "own.txt", CANARY),  # readable, so it must show up, or the rest prove nothing
+        ("absolute", str(secret), CANARY),
+        ("relative-root-file", os.path.relpath(secret, work), CANARY),
+        ("relative-app-code", os.path.relpath(CODE, work), CODE_MARKER),
+        ("relative-pdf-dir", os.path.relpath(pdf_secret, work), CANARY),
+    ]
+    for name, target, marker in probes:
+        hit, detail = await _probe(work, target, marker)
+        if name == "control":
+            print(f"probe control: {'ok' if hit else 'BROKEN'} ({detail})")
+            leaked = leaked or not hit
+        else:
+            print(f"probe {name}: {'LEAKED' if hit else 'blocked'} ({detail})")
+            leaked = leaked or hit
+    return leaked
+
+
+async def _write_probes(work: Path) -> bool:
+    """Writes outside the workdir. True when one got through or the cache isn't configured."""
+    leaked = False
+    cache = settings.tectonic_cache_dir
+    package = _cached_package()
+    writes = [
+        ("write-cache-new", f"{cache}/sandbox-probe.sty" if cache else None, False),
+        ("write-cache-package", str(package) if package else None, False),
+        ("write-app-code", "/src/sandbox-probe.txt", False),
+        ("write-pdf-dir", str(settings.pdf_dir / "sandbox-probe.txt"), False),
+        ("write-parent", "../sandbox-probe.txt", True),
+    ]
+    for name, target, must_fail in writes:
+        if target is None:
+            print(f"probe {name}: BROKEN (no Tectonic cache configured)")
+            leaked = True
+            continue
+        hit, detail = await _write_probe(work, target, must_fail=must_fail)
+        print(f"probe {name}: {'LEAKED' if hit else 'blocked'} ({detail})")
+        leaked = leaked or hit
+    return leaked
+
+
 async def main() -> int:
     leaked = False
     secret_dir = pdf_secret = None
@@ -100,38 +144,8 @@ async def main() -> int:
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
             (work / "own.txt").write_text(CANARY)
-            probes = [
-                ("control", "own.txt", CANARY),  # readable, so it must show up, or the rest prove nothing
-                ("absolute", str(secret), CANARY),
-                ("relative-root-file", os.path.relpath(secret, work), CANARY),
-                ("relative-app-code", os.path.relpath(CODE, work), CODE_MARKER),
-                ("relative-pdf-dir", os.path.relpath(pdf_secret, work), CANARY),
-            ]
-            for name, target, marker in probes:
-                hit, detail = await _probe(work, target, marker)
-                if name == "control":
-                    print(f"probe control: {'ok' if hit else 'BROKEN'} ({detail})")
-                    leaked = leaked or not hit
-                else:
-                    print(f"probe {name}: {'LEAKED' if hit else 'blocked'} ({detail})")
-                    leaked = leaked or hit
-            cache = settings.tectonic_cache_dir
-            package = _cached_package()
-            writes = [
-                ("write-cache-new", f"{cache}/sandbox-probe.sty" if cache else None, False),
-                ("write-cache-package", str(package) if package else None, False),
-                ("write-app-code", "/src/sandbox-probe.txt", False),
-                ("write-pdf-dir", str(settings.pdf_dir / "sandbox-probe.txt"), False),
-                ("write-parent", "../sandbox-probe.txt", True),
-            ]
-            for name, target, must_fail in writes:
-                if target is None:
-                    print(f"probe {name}: BROKEN (no Tectonic cache configured)")
-                    leaked = True
-                    continue
-                hit, detail = await _write_probe(work, target, must_fail=must_fail)
-                print(f"probe {name}: {'LEAKED' if hit else 'blocked'} ({detail})")
-                leaked = leaked or hit
+            leaked = await _read_probes(work, secret, pdf_secret)
+            leaked = await _write_probes(work) or leaked
     finally:
         if pdf_secret is not None:
             pdf_secret.unlink(missing_ok=True)
