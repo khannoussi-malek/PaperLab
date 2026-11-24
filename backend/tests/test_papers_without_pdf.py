@@ -538,7 +538,7 @@ async def test_a_failed_index_abstract_enqueue_on_edit_leaves_the_paper_ready(cl
 
 async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, monkeypatch):
     """upload_hit_pdf only needs a holder found by identifier; held_version can write a DOI onto an arXiv copy."""
-    from app.core.search import discovery, hit_import
+    from app.core.search import free_copy, hit_import
     from app.models import Workspace
     from app.models.references import ExternalRef
     from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
@@ -546,7 +546,7 @@ async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, mo
     async def never(*_a, **_k):
         raise AssertionError("upload_hit_pdf asked for the other version")
 
-    monkeypatch.setattr(discovery, "held_version", never)
+    monkeypatch.setattr(free_copy, "held_version", never)
     workspace = Workspace(name=f"Upload {uuid.uuid4().hex[:8]}")
     ref = ExternalRef(title="Upload Probe Paper", pdf_urls=[])
     session.add_all([workspace, ref])

@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.core.papers.paper_sources import SOURCES, SourceSettings
-from app.core.search import batch_fetch, discovery
+from app.core.search import batch_fetch, source_clients
 from app.core.search.batch_fetch import _find_or_create_external_ref, _insert_hit, search_batch
 from app.core.search.candidates import normal_title
 from app.core.search.prisma_export import PrismaExport, prisma_export
@@ -33,7 +33,7 @@ async def fake_providers():
     `fake_providers` fixture. search_batch's merge/dedup then runs against the real fake provider (Task 11's
     PAGE_PAPERS fixture), not a hand-rolled mock of provider responses."""
     every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
-    providers = discovery.build_providers(every_source, discovery_fake.transport())
+    providers = source_clients.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
 
@@ -576,7 +576,7 @@ async def test_search_batch_marks_a_disabled_source_cursor_exhausted(session):
     fresh-database default) has nothing to fetch. Its cursor must still flip to exhausted immediately, or the
     worker's `all(c.exhausted for c in cursors)` check can never become true (M30a Task 17 E2E bug: a source
     stuck at exhausted=False forever turns the worker's paging loop into a busy-loop)."""
-    providers = discovery.Providers(pdf=httpx.AsyncClient())  # every source left off (clients defaults to {})
+    providers = source_clients.Providers(pdf=httpx.AsyncClient())  # every source left off (clients defaults to {})
     try:
         run = await _new_run(session, ["unpaywall"])
         result = await search_batch(session, providers, run)

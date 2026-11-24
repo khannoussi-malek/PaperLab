@@ -10,7 +10,7 @@ from mcp import Client
 from app.core.papers import pdf_links
 from app.core.papers.paper_sources import SourceSettings
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import source_clients
 from app.core.search.source_registry import SOURCE_IDS
 from app.providers import discovery_fake
 from mcp_server import server
@@ -39,13 +39,13 @@ def fake_providers(monkeypatch):
 
     @asynccontextmanager
     async def offline(_session):
-        providers = discovery.build_providers(every_source, discovery_fake.transport())
+        providers = source_clients.build_providers(every_source, discovery_fake.transport())
         try:
             yield providers
         finally:
             await providers.aclose()
 
-    monkeypatch.setattr(discovery, "open_providers", offline)
+    monkeypatch.setattr(source_clients, "open_providers", offline)
 
 
 @pytest.fixture(autouse=True)

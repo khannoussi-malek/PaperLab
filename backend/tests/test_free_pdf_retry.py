@@ -10,7 +10,7 @@ from sqlalchemy import delete
 
 from app.core.papers import papers, pdf_recheck, pipeline_add, pipeline_search
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import free_copy, source_clients
 from app.models import Paper, PaperSources
 from app.models.workspace import Workspace
 from app.workers import pdf_recheck as worker
@@ -29,12 +29,12 @@ PDF = b"%PDF-1.7 a paper"
     ],
 )
 def test_which_outcomes_may_succeed_later(outcome, temporary):
-    assert discovery.is_temporary(outcome) is temporary
+    assert free_copy.is_temporary(outcome) is temporary
 
 
 def test_temporary_failures_picks_only_those():
     tried = [{"url": "a", "outcome": "no_match"}, {"url": "b", "outcome": "http_429"}]
-    assert discovery.temporary_failures(tried) == [{"url": "b", "outcome": "http_429"}]
+    assert free_copy.temporary_failures(tried) == [{"url": "b", "outcome": "http_429"}]
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ async def test_a_paper_that_failed_only_for_temporary_reasons_gets_its_pdf_on_th
     async def attach_pdf(_session, paper_id, data, how):
         attached.append((paper_id, data, how))
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     monkeypatch.setattr(papers, "attach_pdf", attach_pdf)
 
     assert await pdf_recheck.recheck(session, object(), paper.id) == "temporary"
@@ -82,7 +82,7 @@ async def test_no_copy_is_not_retried_soon(session, arq, monkeypatch):
     async def find_pdf(*_args):
         return None, [{"url": "arxiv.org (title search)", "outcome": "no_match"}], []
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     assert await pdf_recheck.recheck(session, object(), paper.id) == "none"
     assert arq.jobs == []
 
@@ -116,7 +116,7 @@ def job_session(session, monkeypatch):
         yield object()
 
     monkeypatch.setattr(worker, "SessionLocal", shared)
-    monkeypatch.setattr(discovery, "open_providers", no_providers)
+    monkeypatch.setattr(source_clients, "open_providers", no_providers)
 
 
 async def test_the_retry_job_chains_while_sources_stay_busy_and_ends_on_an_answer(
@@ -248,11 +248,11 @@ async def test_tried_lists_the_unpaywall_lookup_whatever_it_said():
 
     async def lookup(handler):
         async with _unpaywall(handler) as http:
-            found, entry = await discovery._unpaywall_lookup(Providers(http), paper)
+            found, entry = await free_copy._unpaywall_lookup(Providers(http), paper)
         return found.pdf_urls, entry
 
     urls, entry = await lookup(lambda r: httpx.Response(200, json={"oa_locations": []}))
-    assert urls == [] and entry == [{"url": discovery.UNPAYWALL_LOOKUP, "outcome": "no_copy"}]
+    assert urls == [] and entry == [{"url": free_copy.UNPAYWALL_LOOKUP, "outcome": "no_copy"}]
 
     urls, entry = await lookup(lambda r: httpx.Response(404))
     assert entry[0]["outcome"] == "no_copy"
@@ -262,7 +262,7 @@ async def test_tried_lists_the_unpaywall_lookup_whatever_it_said():
     assert urls == ["https://x.org/a.pdf"] and entry[0]["outcome"] == "links_found"
 
     urls, entry = await lookup(lambda r: httpx.Response(429))
-    assert entry[0]["outcome"] == "busy" and discovery.is_temporary(entry[0]["outcome"])
+    assert entry[0]["outcome"] == "busy" and free_copy.is_temporary(entry[0]["outcome"])
 
     def down(request):
         raise httpx.ConnectError("no route")
@@ -274,9 +274,9 @@ async def test_tried_lists_the_unpaywall_lookup_whatever_it_said():
 async def test_tried_says_why_unpaywall_was_skipped():
     from app.domain.candidates import Candidate
 
-    _, entry = await discovery._unpaywall_lookup(Providers(None), Candidate(title="t", doi="10.1/x"))
-    assert entry == [{"url": discovery.UNPAYWALL_LOOKUP, "outcome": "skipped: off or no contact email"}]
-    _, entry = await discovery._unpaywall_lookup(Providers(None), Candidate(title="t"))
+    _, entry = await free_copy._unpaywall_lookup(Providers(None), Candidate(title="t", doi="10.1/x"))
+    assert entry == [{"url": free_copy.UNPAYWALL_LOOKUP, "outcome": "skipped: off or no contact email"}]
+    _, entry = await free_copy._unpaywall_lookup(Providers(None), Candidate(title="t"))
     assert entry == []  # no DOI: nothing to look up
 
 
@@ -324,7 +324,7 @@ async def test_a_retry_look_updates_when_the_paper_was_last_checked(session, arq
     async def find_pdf(*_args):
         return None, [{"url": "a", "outcome": "busy"}], []
 
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     await pdf_recheck.recheck(session, object(), paper.id)
     await session.refresh(paper)
     assert paper.pdf_checked_at > before

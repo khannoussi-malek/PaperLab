@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.papers import paper_events, paper_sources, papers
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import discovery, free_copy, source_clients
 from app.domain.errors import Conflict
 from app.models import Paper
 
@@ -59,7 +59,7 @@ async def _mark(session: AsyncSession, paper_id: uuid.UUID, outcome: Outcome, cl
 
 
 async def recheck(
-    session: AsyncSession, providers: discovery.Providers, paper_id: uuid.UUID, claimed: bool = False
+    session: AsyncSession, providers: source_clients.Providers, paper_id: uuid.UUID, claimed: bool = False
 ) -> Outcome:
     """One paper: finds a free copy and upgrades it in place (ingest queued, then a pdf_found event). One paper's
     failure is logged and recorded as "error"; it never raises."""
@@ -69,9 +69,9 @@ async def recheck(
         if paper is None or paper.has_pdf:
             outcome = "skipped"
         else:
-            data, tried, _ = await discovery.find_pdf(session, providers, discovery.candidate_of(paper))
+            data, tried, _ = await free_copy.find_pdf(session, providers, discovery.candidate_of(paper))
             if data is None:
-                outcome = "temporary" if discovery.temporary_failures(tried) else "none"
+                outcome = "temporary" if free_copy.temporary_failures(tried) else "none"
             else:
                 await papers.attach_pdf(session, paper_id, data, how="imported")
                 outcome = "found"  # kept even if the queueing or the event fails: the PDF is attached
@@ -82,7 +82,7 @@ async def recheck(
     except Conflict as exc:
         # a held arXiv copy can't be resolved by looking again: "none", so it waits the normal week. already_has_pdf
         # is a race: skipped.
-        outcome = "none" if str(exc) == discovery.ALREADY_IN_LIBRARY else "skipped"
+        outcome = "none" if str(exc) == free_copy.ALREADY_IN_LIBRARY else "skipped"
     except Exception:
         logger.exception("the free-copy re-check of paper %s failed", paper_id)
         await session.rollback()
@@ -106,7 +106,7 @@ async def schedule_retry(session: AsyncSession, paper_id: uuid.UUID, attempt: in
     return True
 
 
-async def run(session: AsyncSession, providers: discovery.Providers, now: datetime) -> dict[str, int]:
+async def run(session: AsyncSession, providers: source_clients.Providers, now: datetime) -> dict[str, int]:
     """Re-checks every due paper, PAUSE apart, until Settings turns the re-check off. Counts by outcome."""
     counts = _no_counts()
     for index, paper_id in enumerate(await due(session, now)):
@@ -121,7 +121,7 @@ async def run(session: AsyncSession, providers: discovery.Providers, now: dateti
     return counts
 
 
-async def run_for(session: AsyncSession, providers: discovery.Providers, paper_ids: list[uuid.UUID]) -> dict[str, int]:
+async def run_for(session: AsyncSession, providers: source_clients.Providers, paper_ids: list[uuid.UUID]) -> dict[str, int]:
     """Re-checks the papers someone asked about, whatever Settings says about the weekly look. Counts by outcome."""
     counts = _no_counts()
     for index, paper_id in enumerate(paper_ids):

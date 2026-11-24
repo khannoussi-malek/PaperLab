@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.search import snowball_run
 from app.core.search.branches import DIRECTIONS
-from app.core.search.discovery import Providers
 from app.core.search.hit_links import _runs, _seeds
+from app.core.search.source_clients import Providers
 from app.core.workspaces import workspaces
 from app.models import Paper, workspace_papers
 from app.models.provenance import WorkspaceBranchState

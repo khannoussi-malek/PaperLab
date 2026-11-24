@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.api.deps import get_discovery
 from app.core.papers.paper_sources import SOURCES, SourceSettings
-from app.core.search import discovery
+from app.core.search import source_clients
 from app.core.search.batch_fetch import search_batch
 from app.core.search.candidates import normal_title
 from app.core.search.hit_links import level_of
@@ -28,7 +28,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 @pytest.fixture
 async def fake_providers():
     every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
-    providers = discovery.build_providers(every_source, discovery_fake.transport())
+    providers = source_clients.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
 

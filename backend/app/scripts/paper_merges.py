@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.papers import merges
-from app.core.search import discovery
+from app.core.search import same_work
 from app.core.search.candidates import normal_title
 from app.db import SessionLocal
 from app.domain.candidates import Candidate
@@ -76,7 +76,7 @@ async def _pairs(session: AsyncSession) -> list[tuple[Paper, Paper]]:
         for m_id in by_title.get(normal_title(k.title), []):
             m = found[m_id]
             theirs = {"title": m.title, "authors": m.authors, "year": m.year}
-            if discovery.same_work(Candidate(k.title, k.authors, k.year), theirs):
+            if same_work.same_work(Candidate(k.title, k.authors, k.year), theirs):
                 pairs.append((k, m))
     return pairs
 

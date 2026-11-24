@@ -4,7 +4,7 @@ from sqlalchemy import delete, text
 from app.core.citations import references
 from app.core.papers import pdf_links
 from app.core.papers.paper_sources import SOURCES, SourceSettings
-from app.core.search import discovery
+from app.core.search import discovery, source_clients
 from app.domain.errors import Conflict
 from app.models import Paper
 from app.providers import (
@@ -40,7 +40,7 @@ async def fake_providers(session, monkeypatch):
     # An E2E run killed mid-test can leave the fake's papers in the shared dev database (D15); hide them here.
     await session.execute(delete(Paper).where(Paper.doi.like(f"{discovery_fake.DOI_PREFIX}%")))
     every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
-    providers = discovery.build_providers(every_source, discovery_fake.transport())
+    providers = source_clients.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
 
@@ -71,7 +71,7 @@ async def test_the_e2e_fake_finds_three_papers_and_suggests_the_same_three(sessi
 
 async def test_with_openalex_off_as_on_the_e2e_stack_the_badges_are_m19s(session):
     defaults = SourceSettings(contact_email=discovery_fake.MAILTO)
-    providers = discovery.build_providers(defaults, discovery_fake.transport())
+    providers = source_clients.build_providers(defaults, discovery_fake.transport())
 
     found = await discovery.search(session, providers, "anything")
     await providers.aclose()

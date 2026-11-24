@@ -12,7 +12,7 @@ from sqlalchemy.pool import NullPool
 from app.core.papers import pdf_links
 from app.core.papers.paper_sources import SourceSettings
 from app.core.platform import queue
-from app.core.search import discovery, screening, snowball_run
+from app.core.search import screening, snowball_run, source_clients
 from app.core.search.screening_suggest import SYSTEM_PROMPT_V2
 from app.core.search.source_registry import SOURCE_IDS
 from app.models.references import ExternalRef
@@ -379,16 +379,16 @@ async def test_a_multi_run_job_only_touches_the_listed_runs_hits(session, worker
 @pytest.fixture
 async def free_and_closed(session, monkeypatch, pdf_dir):
     """A workspace whose pool holds the offline `free` and `closed` papers (a snowball hop lands them), with
-    discovery.open_providers answering from the same fake and a FakeArq behind queue.enqueue."""
+    source_clients.open_providers answering from the same fake and a FakeArq behind queue.enqueue."""
     workspace, hits = await make_pool(session, [("seed", None)])
     every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
-    providers = discovery.build_providers(every, discovery_fake.transport())
+    providers = source_clients.build_providers(every, discovery_fake.transport())
 
     @asynccontextmanager
     async def open_providers(_session):
         yield providers
 
-    monkeypatch.setattr(discovery, "open_providers", open_providers)
+    monkeypatch.setattr(source_clients, "open_providers", open_providers)
     async def resolve(host):
         return ["93.184.216.34"]  # one public address, as tests/mcp_fixtures.py does
 

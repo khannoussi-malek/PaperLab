@@ -10,9 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.citations.references import _same_reference
 from app.core.papers import papers
-from app.core.search import discovery, retrieved_hits
-from app.core.search.discovery import Providers, _add_unpaywall_links, download_pdf
+from app.core.search import discovery, free_copy, retrieved_hits
+from app.core.search.discovery import _add_unpaywall_links
+from app.core.search.pdf_download import download_pdf
 from app.core.search.search_hits import _hit_out_dict
+from app.core.search.source_clients import Providers
 from app.core.workspaces import tags, workspaces
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict, InvalidInput, NotFound
@@ -81,7 +83,7 @@ async def _attach_free_copy(session: AsyncSession, providers: Providers, holder:
     candidate = discovery.candidate_of(holder)
     candidate = replace(candidate, pdf_urls=[*(ref.pdf_urls or []), *candidate.pdf_urls])
     try:
-        data, _tried, _copies = await discovery.find_pdf(session, providers, candidate)
+        data, _tried, _copies = await free_copy.find_pdf(session, providers, candidate)
     except Conflict:
         return False
     if data is None:
@@ -164,7 +166,7 @@ async def import_hits(
                 ref.pdf_urls = enriched.pdf_urls
         data = (await download_pdf(providers.pdf, ref.pdf_urls))[0] if ref and ref.pdf_urls else None
         if data is None and ref is not None:  # M76: the PMC Open Access bucket, for a hit with a PMCID
-            data = (await discovery.pmc_copy(providers, ref.external_ids, ref.doi, [], []))[0]
+            data = (await free_copy.pmc_copy(providers, ref.external_ids, ref.doi, [], []))[0]
         if data is None:
             hit.acquisition_status = "failed"
             failed += 1
@@ -200,7 +202,7 @@ async def _held(session: AsyncSession, ref: ExternalRef) -> tuple[uuid.UUID | No
     # Its other version may be held (M73): the arXiv copy by arXiv id (which learns this published version),
     # or the published version by title. Only when no identifier matched: an identifier match wins, and a
     # held duplicate of the other version must not learn a DOI another paper already answers to.
-    held = await discovery.held_version(session, _ref_candidate(ref))
+    held = await free_copy.held_version(session, _ref_candidate(ref))
     return held if held is not None else (None, True)
 
 

@@ -197,7 +197,7 @@ async def test_a_found_copy_racing_another_pdf_answers_from_the_paper(session, j
     async def find_pdf(*_):
         return PDF, [], []
 
-    monkeypatch.setattr(pipeline_add.discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(pipeline_add.free_copy, "find_pdf", find_pdf)
     a_pdf_lands_first(monkeypatch, session, PaperStatus.UPLOADED)
 
     out = await pipeline_add._attach_found(session, None, held)

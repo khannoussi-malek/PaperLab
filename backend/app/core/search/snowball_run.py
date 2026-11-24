@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.search import discovery, hit_links
 from app.core.search.batch_fetch import _store_candidates_as_hits
 from app.core.search.candidates import from_s2
-from app.core.search.discovery import Providers
+from app.core.search.source_clients import Providers
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict, NotFound

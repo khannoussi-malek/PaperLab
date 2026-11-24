@@ -14,7 +14,7 @@ from app.core.chat import answer_provenance, chat
 from app.core.citations import citations_bundle_read
 from app.core.papers import papers, pipeline_upload
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import free_copy
 from app.core.workspaces import tags, workspace_package, workspaces  # fmt: skip
 from app.domain.errors import InvalidInput
 from app.models import LLMOutput, Paper, PaperStatus, Workspace, note_papers
@@ -414,9 +414,9 @@ async def test_a_failing_write_removes_the_pdfs_it_wrote(session, pdf_dir, monke
 
 async def test_an_import_never_calls_held_version_or_writes_a_matched_paper(session, pdf_dir, monkeypatch):
     async def refuse(*_args, **_kwargs):
-        raise AssertionError("an import called discovery.held_version")
+        raise AssertionError("an import called free_copy.held_version")
 
-    monkeypatch.setattr(discovery, "held_version", refuse)
+    monkeypatch.setattr(free_copy, "held_version", refuse)
     lib = await papers.create_metadata_paper(session, {"title": f"Held {RUN}", "doi": f"10.9/held.{RUN}"}, "crossref")
     await session.commit()
     package = _package(

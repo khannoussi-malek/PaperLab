@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.core.notes import notes as notes_core
 from app.core.papers import paper_sources
 from app.core.papers.paper_sources import SourceSettings
-from app.core.search import batch_fetch, discovery, snowball_run, workspace_search
+from app.core.search import batch_fetch, snowball_run, source_clients, workspace_search
 from app.core.search.source_registry import SOURCE_IDS
 from app.core.workspaces import workspaces
 from app.models import Note, Paper
@@ -125,7 +125,7 @@ async def run_with_hits(session, label: str, query: str = "bert"):
     ws = await new_workspace(session, label)
     run = await workspace_search.start_run(session, ws.id, query, {}, ["arxiv", "semantic_scholar"])
     every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
-    providers = discovery.build_providers(every, discovery_fake.transport())
+    providers = source_clients.build_providers(every, discovery_fake.transport())
     try:
         await batch_fetch.search_batch(session, providers, run)
     finally:
@@ -200,7 +200,7 @@ async def test_import_hit_queues_ingest_for_a_free_pdf_and_not_for_a_failure(ses
     # (Semantic Scholar's references route), which lands them in the same hit pool.
     seed = result(await call("list_hits", workspace=f"Import {RUN}"))["hits"][0]["id"]
     every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
-    providers = discovery.build_providers(every, discovery_fake.transport())
+    providers = source_clients.build_providers(every, discovery_fake.transport())
     try:
         await snowball_run.snowball(session, providers, ws.id, [], [uuid.UUID(seed)], backward=True, forward=False)
     finally:

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_discovery
 from app.core.papers import paper_events, papers, pdf_recheck
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import discovery, free_copy
 from app.models import Paper, PaperEvent, PaperSources
 from app.workers import pdf_recheck as worker
 from app.workers.settings import WorkerSettings
@@ -59,14 +59,14 @@ async def test_no_copy_records_none_and_a_failure_records_error_and_the_run_goes
     lost = await held(session, "Lost", oa_url=f"{HOST}/gone.pdf")
     broken = await held(session, "Broken")
     found = await held(session, "Found", oa_url=f"{HOST}/copy.pdf")
-    real, broken_id, found_id = discovery.find_pdf, broken.id, found.id  # a rollback expires the objects
+    real, broken_id, found_id = free_copy.find_pdf, broken.id, found.id  # a rollback expires the objects
 
     async def flaky(session_, providers, candidate):
         if candidate.paper_id == broken_id:
             raise RuntimeError("boom")
         return await real(session_, providers, candidate)
 
-    monkeypatch.setattr(discovery, "find_pdf", flaky)
+    monkeypatch.setattr(free_copy, "find_pdf", flaky)
     # the run order is the checked-at order: never-checked first, then by created_at
     counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)
 
@@ -86,9 +86,9 @@ async def test_a_held_arxiv_copy_records_none_and_waits_the_normal_week(session,
 
     async def in_library(_session, _providers, candidate):
         lookups.append(candidate.paper_id)
-        raise discovery.Conflict(discovery.ALREADY_IN_LIBRARY, paper_id="x")
+        raise discovery.Conflict(free_copy.ALREADY_IN_LIBRARY, paper_id="x")
 
-    monkeypatch.setattr(discovery, "find_pdf", in_library)
+    monkeypatch.setattr(free_copy, "find_pdf", in_library)
     counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)
     again = await pdf_recheck.run(session, discovery_fakes.providers, NOW + timedelta(days=6))
 
@@ -226,7 +226,7 @@ async def test_switching_off_mid_run_stops_the_rest(session, discovery_fakes, mo
     await session.execute(delete(Paper))
     for title in ("A", "B", "C"):
         await held(session, title)
-    real, looked = discovery.find_pdf, []
+    real, looked = free_copy.find_pdf, []
 
     async def then_switch_off(session_, providers, candidate):
         looked.append(candidate.paper_id)
@@ -235,7 +235,7 @@ async def test_switching_off_mid_run_stops_the_rest(session, discovery_fakes, mo
 
     session.add(PaperSources(id=True, pdf_recheck_enabled=True))
     await session.commit()
-    monkeypatch.setattr(discovery, "find_pdf", then_switch_off)
+    monkeypatch.setattr(free_copy, "find_pdf", then_switch_off)
     counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)
 
     assert (len(looked), sum(counts.values())) == (1, 1)

@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.core.papers import enrichment, pdf_links
 from app.core.papers.paper_sources import SourceSettings
-from app.core.search import discovery
+from app.core.search import discovery, free_copy, pdf_download, source_clients
 from app.core.search.discovery import Candidate
 from app.domain.errors import Conflict
 from app.models import Paper, PaperStatus
@@ -73,7 +73,7 @@ async def test_a_paper_found_without_openalex_locks_its_doi_so_enrichment_trusts
 
 
 async def test_no_free_pdf_stores_nothing(session, discovery_fakes, pdf_dir, monkeypatch):
-    monkeypatch.setattr(discovery, "MAX_PDF_BYTES", len(PDF) - 1)
+    monkeypatch.setattr(pdf_download, "MAX_PDF_BYTES", len(PDF) - 1)
     discovery_fakes.pdf_host.reply("/landing", 200, text="<html>a landing page</html>")
     discovery_fakes.pdf_host.reply("/gone.pdf", 404, text="not found")
     discovery_fakes.pdf_host.refuse("/down.pdf")
@@ -155,14 +155,14 @@ async def test_a_found_papers_title_survives_ingest_and_still_takes_a_hand_corre
     ],
 )
 async def test_download_pdf_says_why_each_url_failed(discovery_fakes, monkeypatch, path, reply, outcome):
-    monkeypatch.setattr(discovery, "MAX_PDF_BYTES", len(PDF) - 1)
+    monkeypatch.setattr(pdf_download, "MAX_PDF_BYTES", len(PDF) - 1)
     if reply is None:
         discovery_fakes.pdf_host.refuse(path)
     else:
         status = reply.pop("status")
         discovery_fakes.pdf_host.reply(path, status, **reply)
 
-    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}{path}"])
+    data, tried = await pdf_download.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}{path}"])
 
     assert data is None and tried == [{"url": f"{HOST}{path}", "outcome": outcome}]
 
@@ -171,7 +171,7 @@ async def test_download_pdf_lists_the_failures_before_the_pdf_and_hides_secrets(
     discovery_fakes.pdf_host.reply("/closed", 403, text="no")
     discovery_fakes.pdf_host.reply("/copy.pdf", 200, content=PDF)
 
-    data, tried = await discovery.download_pdf(
+    data, tried = await pdf_download.download_pdf(
         discovery_fakes.providers.pdf, [f"{HOST}/closed?api_key=SECRET1", f"{HOST}/copy.pdf?key=SECRET2&x=1"]
     )
 
@@ -207,7 +207,7 @@ async def test_no_free_pdf_carries_what_was_tried_and_the_repository_copies(sess
         )
 
     details = caught.value.details
-    assert details["tried"][0]["url"] == discovery.UNPAYWALL_LOOKUP  # what it said is listed too
+    assert details["tried"][0]["url"] == free_copy.UNPAYWALL_LOOKUP  # what it said is listed too
     assert no_lookups(details["tried"]) == [{"url": f"{HOST}/closed?key=***", "outcome": "bot_check"}]
     assert details["free_copies"] == ["https://repo.example/handle/1?api_key=***", f"{HOST}/closed"]
 
@@ -238,7 +238,7 @@ async def test_a_landing_pages_declared_pdf_is_followed_once(discovery_fakes):
     discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url="/article/pdf?k=SECRET&email=a@b.org"))
     discovery_fakes.pdf_host.reply("/article/pdf", 200, content=PDF)
 
-    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
+    data, tried = await pdf_download.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
 
     assert data == PDF
     assert tried == [
@@ -251,7 +251,7 @@ async def test_the_followed_pdf_that_is_refused_is_recorded(discovery_fakes):
     discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url=f"{HOST}/article/pdf"))
     discovery_fakes.pdf_host.reply("/article/pdf", 503, text="unavailable")
 
-    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
+    data, tried = await pdf_download.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
 
     assert data is None and [t["outcome"] for t in no_lookups(tried)] == ["not_a_pdf → followed citation_pdf_url", "http_503"]
 
@@ -259,7 +259,7 @@ async def test_the_followed_pdf_that_is_refused_is_recorded(discovery_fakes):
 async def test_a_page_without_the_tag_makes_no_second_request(discovery_fakes):
     discovery_fakes.pdf_host.reply("/article", 200, text="<html><meta name='citation_title' content='x'></html>")
 
-    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
+    data, tried = await pdf_download.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
 
     assert data is None and tried == [{"url": f"{HOST}/article", "outcome": "not_a_pdf"}]
     assert len(discovery_fakes.pdf_host.requests) == 1
@@ -269,7 +269,7 @@ async def test_a_followed_page_is_never_followed_again(discovery_fakes):
     discovery_fakes.pdf_host.reply("/a", 200, text=PAGE.format(url="/b"))
     discovery_fakes.pdf_host.reply("/b", 200, text=PAGE.format(url="/c"))
 
-    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/a"])
+    data, tried = await pdf_download.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/a"])
 
     assert data is None and [t["outcome"] for t in no_lookups(tried)] == ["not_a_pdf → followed citation_pdf_url", "not_a_pdf"]
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/a", "/b"]
@@ -284,7 +284,7 @@ async def test_a_followed_url_the_guard_refuses_is_unsafe(discovery_fakes, monke
     http.event_hooks["request"].append(pdf_links.guard)
     discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url="http://internal.example/secret.pdf"))
 
-    data, tried = await discovery.download_pdf(http, [f"{HOST}/article"])
+    data, tried = await pdf_download.download_pdf(http, [f"{HOST}/article"])
 
     assert data is None and [t["outcome"] for t in no_lookups(tried)] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/article"]
@@ -298,7 +298,7 @@ async def test_a_declared_private_pdf_is_unsafe_on_a_client_without_the_guard(di
     discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url="http://127.0.0.1/x.pdf"))
     discovery_fakes.pdf_host.reply("/x.pdf", 200, content=PDF)
 
-    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
+    data, tried = await pdf_download.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
 
     assert data is None and [t["outcome"] for t in no_lookups(tried)] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/article"]
@@ -311,8 +311,8 @@ async def test_the_pdf_client_names_the_tool_and_never_imitates_a_browser():
         seen.append(request.headers["user-agent"])
         return httpx.Response(200, content=PDF)
 
-    providers = discovery.build_providers(SourceSettings(), httpx.MockTransport(handle))
-    await discovery.download_pdf(providers.pdf, [f"{HOST}/a.pdf"])
+    providers = source_clients.build_providers(SourceSettings(), httpx.MockTransport(handle))
+    await pdf_download.download_pdf(providers.pdf, [f"{HOST}/a.pdf"])
     await providers.aclose()
 
     assert seen == ["PaperLab (+https://github.com/khannoussi-malek/PaperLab)"]
@@ -329,8 +329,8 @@ async def test_a_declared_pdf_that_redirects_to_a_private_address_is_never_reque
             return httpx.Response(302, headers={"location": "http://127.0.0.1/x.pdf"})
         return httpx.Response(200, content=PDF)
 
-    providers = discovery.build_providers(SourceSettings(), httpx.MockTransport(handle))
-    data, tried = await discovery.download_pdf(providers.pdf, [f"{HOST}/article"])
+    providers = source_clients.build_providers(SourceSettings(), httpx.MockTransport(handle))
+    data, tried = await pdf_download.download_pdf(providers.pdf, [f"{HOST}/article"])
     await providers.aclose()
 
     assert data is None and tried[-1]["outcome"] == "unsafe_url"
@@ -468,8 +468,8 @@ def repositories(fakes, doi, *urls):
 
 
 def test_diva_record_url_becomes_fulltext_pdf():
-    assert discovery.diva_pdf_url(DIVA_RECORD) == DIVA_PDF
-    assert discovery.diva_pdf_url("http://uu.diva-portal.org/smash/record.jsf?pid=diva2:55") == (
+    assert free_copy.diva_pdf_url(DIVA_RECORD) == DIVA_PDF
+    assert free_copy.diva_pdf_url("http://uu.diva-portal.org/smash/record.jsf?pid=diva2:55") == (
         "https://uu.diva-portal.org/smash/get/diva2:55/FULLTEXT01.pdf"
     )
 
@@ -486,7 +486,7 @@ def test_diva_record_url_becomes_fulltext_pdf():
     ],
 )
 def test_non_diva_url_is_not_rewritten(url):
-    assert discovery.diva_pdf_url(url) is None
+    assert free_copy.diva_pdf_url(url) is None
 
 
 async def test_a_diva_copy_is_tried_as_its_fulltext_pdf(session, discovery_fakes, pdf_dir):
@@ -562,8 +562,8 @@ def fake_clock(monkeypatch):
     async def sleep(seconds):
         sleeps.append(seconds)
 
-    monkeypatch.setattr(discovery, "_sleep", sleep)
-    monkeypatch.setattr(discovery, "_now", lambda: 100.0)
+    monkeypatch.setattr(free_copy, "_sleep", sleep)
+    monkeypatch.setattr(free_copy, "_now", lambda: 100.0)
     return sleeps
 
 
@@ -598,8 +598,8 @@ async def test_arxiv_title_searches_on_one_providers_are_spaced_three_seconds(
         with pytest.raises(Conflict):
             await discovery.add(session, providers, tacl_like(), pdf_dir)
 
-    assert fake_clock == [discovery.ARXIV_SPACING]  # the first search did not wait; the second waited the 3 s out
-    assert discovery.ARXIV_SPACING == 3
+    assert fake_clock == [free_copy.ARXIV_SPACING]  # the first search did not wait; the second waited the 3 s out
+    assert free_copy.ARXIV_SPACING == 3
 
 
 async def test_a_search_on_a_fresh_providers_does_not_wait(session, discovery_fakes, pdf_dir, fake_clock):
@@ -682,13 +682,13 @@ async def test_the_session_is_not_in_a_transaction_when_the_arxiv_pdf_is_downloa
     providers = arxiv_world(discovery_fakes, arxiv_entry())
     discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
     in_transaction = []
-    real = discovery.download_pdf
+    real = pdf_download.download_pdf
 
     async def watching(*args, **kwargs):
         in_transaction.append(session.in_transaction())
         return await real(*args, **kwargs)
 
-    monkeypatch.setattr(discovery, "download_pdf", watching)
+    monkeypatch.setattr(pdf_download, "download_pdf", watching)
 
     await discovery.add(session, providers, tacl_like(), pdf_dir)
 
@@ -703,7 +703,7 @@ async def test_a_pdf_link_to_a_held_arxiv_copy_is_reused_without_any_download(se
         candidate = tacl_like(pdf_urls=[f"{HOST}/closed", link])
         await discovery.add(session, arxiv_world(discovery_fakes), candidate, pdf_dir)
 
-    assert str(raised.value) == discovery.ALREADY_IN_LIBRARY and raised.value.details["paper_id"] == copy.id
+    assert str(raised.value) == free_copy.ALREADY_IN_LIBRARY and raised.value.details["paper_id"] == copy.id
     assert discovery_fakes.pdf_host.requests == [] and discovery_fakes.arxiv.requests == []
     await session.refresh(copy)
     assert copy.published_doi == "10.1162/tacl_a_00757"
@@ -748,7 +748,7 @@ async def test_a_renamed_paper_reuses_the_held_arxiv_copy_as_its_published_versi
     assert copy.published_doi == "10.1162/tacl_a_00757"
     searches = [r.url.params["search_query"] for r in discovery_fakes.arxiv.requests]
     assert searches[1] == "ti:real AND ti:sampling AND au:chang"
-    assert fake_clock == [discovery.ARXIV_SPACING]  # the second search waits its 3 s
+    assert fake_clock == [free_copy.ARXIV_SPACING]  # the second search waits its 3 s
 
 
 async def test_a_renamed_paper_downloads_its_arxiv_copy(session, discovery_fakes, pdf_dir, fake_clock):
@@ -853,7 +853,7 @@ async def test_an_arxiv_copy_reuses_the_held_published_version(session, discover
     with pytest.raises(Conflict) as raised:
         await discovery.add(session, discovery_fakes.providers, arxiv_copy(), pdf_dir)
 
-    assert str(raised.value) == discovery.ALREADY_IN_LIBRARY and raised.value.details["paper_id"] == held.id
+    assert str(raised.value) == free_copy.ALREADY_IN_LIBRARY and raised.value.details["paper_id"] == held.id
     assert no_lookups(raised.value.details["tried"]) == [{"url": "https://arxiv.org/abs/2406.07735", "outcome": "in_library"}]
     assert discovery_fakes.pdf_host.requests == []  # nothing downloaded
     await session.refresh(held)

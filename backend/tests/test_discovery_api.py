@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from app.api.deps import get_discovery
 from app.config import settings
 from app.core.papers import paper_sources
-from app.core.search import discovery
+from app.core.search import discovery, free_copy
 from app.models import Paper, PaperSources
 from app.providers import discovery_fake
 
@@ -253,7 +253,7 @@ async def test_add_of_a_paper_whose_arxiv_copy_is_held_is_409_naming_the_paper(c
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"] == discovery.ALREADY_IN_LIBRARY
+    assert response.json()["detail"] == free_copy.ALREADY_IN_LIBRARY
     assert response.json()["paper_id"] == str(paper.id)
     assert arq.jobs == []
 

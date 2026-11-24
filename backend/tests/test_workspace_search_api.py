@@ -6,7 +6,7 @@ import pytest
 
 from app.api.deps import get_discovery
 from app.core.papers.paper_sources import SOURCES, SourceSettings
-from app.core.search import discovery
+from app.core.search import source_clients
 from app.providers import discovery_fake
 
 pytestmark = pytest.mark.anyio
@@ -24,7 +24,7 @@ def discovery_api(app, discovery_fakes):
 async def fake_providers_all(app):
     """Every source on, routed to discovery_fake's MockTransport — for snowball and search_batch tests."""
     every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
-    providers = discovery.build_providers(every_source, discovery_fake.transport())
+    providers = source_clients.build_providers(every_source, discovery_fake.transport())
     app.dependency_overrides[get_discovery] = lambda: providers
     yield providers
     await providers.aclose()

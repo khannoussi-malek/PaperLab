@@ -4,7 +4,7 @@ import uuid
 from app.config import settings
 from app.core.citations import references
 from app.core.papers import paper_sources, papers
-from app.core.search import discovery
+from app.core.search import source_clients
 from app.db import SessionLocal
 from app.domain.errors import Conflict
 from app.providers import discovery_fake
@@ -44,7 +44,7 @@ async def fetch_references(ctx: dict, paper_id: str) -> None:
             transport = ctx.get("transport")
             if transport is None and settings.discovery_provider == "fake":
                 transport = discovery_fake.transport()
-            providers = discovery.build_providers(sources, transport)
+            providers = source_clients.build_providers(sources, transport)
             try:
                 notices = await references.fetch(session, providers, paper)
             finally:

@@ -13,7 +13,7 @@ from app.config import settings
 from app.core.papers import enrichment, papers, pdf_links, pdf_recheck
 from app.core.papers.pipeline import workspace_id
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import discovery, free_copy, pdf_download, source_clients
 from app.core.workspaces import workspaces
 from app.domain.errors import Conflict, DomainError, InvalidInput, NotFound, error_code
 from app.models import Paper, PaperStatus
@@ -128,7 +128,7 @@ async def _add_found(
         try:
             return await _in_library(session, match.paper_id, workspace_uuid, providers)
         except Conflict as exc:  # find_pdf: this PDF-less paper's arXiv copy is held, which answers for it
-            if str(exc) != discovery.ALREADY_IN_LIBRARY or "paper_id" not in exc.details:
+            if str(exc) != free_copy.ALREADY_IN_LIBRARY or "paper_id" not in exc.details:
                 raise
             held = await _in_library(session, exc.details["paper_id"], workspace_uuid)
             return replace(held, tried=exc.details.get("tried", []))
@@ -137,7 +137,7 @@ async def _add_found(
         tried_out = [] if tried_out is None else tried_out
         paper = await discovery.add(session, providers, match, settings.pdf_dir, tried_out, save_without_pdf, copies)
     except Conflict as exc:
-        if str(exc) == discovery.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # its arXiv copy is held
+        if str(exc) == free_copy.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # its arXiv copy is held
             held = await _in_library(session, exc.details["paper_id"], workspace_uuid)  # no second search
             return replace(held, tried=exc.details.get("tried", []))
         if str(exc) != discovery.NO_FREE_PDF:
@@ -177,7 +177,7 @@ async def _in_library(session, paper_id, workspace_uuid, providers=None) -> AddP
 async def _attach_found(session, providers, paper) -> AddPaperResult:
     """find_pdf for a paper saved without one: found, it is attached and ingest queued; else already_in_library with
     what was tried. A held arXiv copy of the same work (Conflict already_in_library) is the caller's to answer."""
-    data, tried, copies = await discovery.find_pdf(session, providers, discovery.candidate_of(paper))
+    data, tried, copies = await free_copy.find_pdf(session, providers, discovery.candidate_of(paper))
     if data is None:
         return AddPaperResult(
             status="already_in_library", paper_id=paper.id, title=paper.title, tried=tried, free_copies=copies,
@@ -213,7 +213,7 @@ async def _link_by_doi(session, providers, link, tried, workspace_uuid, save_wit
 
 async def _add_link(session, providers, link, workspace_uuid, save_without_pdf=False) -> AddPaperResult:
     await pdf_links.check_url(link)
-    data, tried = await discovery.download_pdf(providers.pdf, [link])
+    data, tried = await pdf_download.download_pdf(providers.pdf, [link])
     if data is None:
         if tried[0]["outcome"] == "unsafe_url":  # a redirect to a private address is refused, as the link itself is
             raise InvalidInput("unsafe_url", url=link)
@@ -231,7 +231,7 @@ logger = logging.getLogger(__name__)
 async def _note_temporary_failures(session: AsyncSession, result: AddPaperResult) -> AddPaperResult:
     """Separates "a source was busy" from "no free copy" on an answer without a PDF, and queues the next look at a paper
     the library now holds."""
-    failures = discovery.temporary_failures(result.tried)
+    failures = free_copy.temporary_failures(result.tried)
     if not failures or result.status in ("queued", "ingested"):
         return result
     if result.status == "no_free_pdf" or result.paper_id is None:
@@ -267,7 +267,7 @@ async def add_paper(
     workspace_uuid = await workspace_id(session, workspace) if workspace is not None else None  # before any download
     if workspace_uuid is not None:
         await workspaces.require_writable(session, workspace_uuid)
-    async with discovery.open_providers(session) as providers:
+    async with source_clients.open_providers(session) as providers:
         return await _add(session, providers, kind, value, workspace_uuid, save_without_pdf)
 
 
@@ -312,7 +312,7 @@ async def add_papers(
     if workspace_uuid is not None:
         await workspaces.require_writable(session, workspace_uuid)
     items = []
-    async with discovery.open_providers(session) as providers:
+    async with source_clients.open_providers(session) as providers:
         for text, parsed, error in _distinct(identifiers):
             if parsed is not None:
                 try:

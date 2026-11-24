@@ -22,7 +22,7 @@ from app.core.citations.citations_import import CitationsImportError, ImportEntr
 from app.core.notes import notes
 from app.core.papers import papers
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import discovery, source_clients
 from app.core.workspaces import tags, workspaces
 from app.domain.candidates import Candidate
 from app.models import Note, Paper, Provenance, note_papers
@@ -66,7 +66,7 @@ def no_network(monkeypatch):
     def refuse(*_):
         pytest.fail("a paper source was contacted")
 
-    monkeypatch.setattr(discovery, "open_providers", refuse)
+    monkeypatch.setattr(source_clients, "open_providers", refuse)
     monkeypatch.setattr(discovery, "search", refuse)
 
 
@@ -82,7 +82,7 @@ def fetching(discovery_fakes, monkeypatch):
     async def search(_session, _providers, query):
         return discovery.SearchResult([found[query]] if query in found else [], [])
 
-    monkeypatch.setattr(discovery, "open_providers", open_providers)
+    monkeypatch.setattr(source_clients, "open_providers", open_providers)
     monkeypatch.setattr(discovery, "search", search)
     return found, discovery_fakes.pdf_host
 

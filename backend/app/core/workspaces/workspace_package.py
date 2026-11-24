@@ -34,7 +34,7 @@ from app.core.citations.citations_import import CitationsImportError
 from app.core.notes import notes
 from app.core.papers import papers, pipeline_upload
 from app.core.platform import queue
-from app.core.search import discovery, prisma_export, screening, search_run_results
+from app.core.search import discovery, prisma_export, same_work, screening, search_run_results
 from app.core.workspaces import tags, workspace_package_answers, workspace_package_screening, workspaces  # fmt: skip
 from app.core.workspaces.workspace_package_shapes import (
     AnswersDoc,
@@ -232,7 +232,7 @@ async def check_export(session: AsyncSession, workspace_id: uuid.UUID, *, pdfs: 
 
 # ---- import (M35a Task 2) ----
 #
-# Two phases. Phase 1 finds each package paper's match in the library (discovery.held_version may commit on its own, so
+# Two phases. Phase 1 finds each package paper's match in the library (free_copy.held_version may commit on its own, so
 # nothing is written yet). Phase 2 writes the workspace, papers, tags and notes in one transaction; PDFs and the record
 # file are written before its commit and removed if anything fails.
 
@@ -442,7 +442,7 @@ async def _title_match(session: AsyncSession, rec: dict, candidate: Candidate) -
     )
     ours = {"title": rec["title"], "authors": candidate.authors, "year": candidate.year}
     for row in rows:
-        if not discovery.same_work(Candidate(row.title, row.authors, row.year), ours):
+        if not same_work.same_work(Candidate(row.title, row.authors, row.year), ours):
             continue
         if _dois_differ(rec.get("doi"), row.doi):
             continue

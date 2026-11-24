@@ -886,10 +886,10 @@ async def test_an_error_with_no_message_still_names_itself(session, worker):
     await session.flush()
     await session.refresh(run)
     from app.core.papers import paper_sources
-    from app.core.search import discovery
+    from app.core.search import source_clients
     from app.core.search.batch_fetch import search_batch
 
-    providers = discovery.build_providers(await paper_sources.get(session), TimingOut())
+    providers = source_clients.build_providers(await paper_sources.get(session), TimingOut())
     result = await search_batch(session, providers, run)
     await providers.aclose()
     assert result.errors == {"arxiv": "ReadTimeout"}

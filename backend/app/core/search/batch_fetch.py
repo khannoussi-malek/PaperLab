@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.search import hit_links, search_run_results, year_range
 from app.core.search.candidates import merge, normal_title
-from app.core.search.discovery import Providers
+from app.core.search.source_clients import Providers
 from app.core.search.source_registry import MAPPERS as _MAPPERS
 from app.core.search.source_registry import PAGE_FUNCS as _PAGE_FUNCS
 from app.core.search.source_registry import PAGE_SIZE_BY_SOURCE

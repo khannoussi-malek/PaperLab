@@ -12,7 +12,7 @@ from pdf_papers import chunked_paper
 from sqlalchemy import func, select
 
 from app.core.papers import papers, pdf_links, pipeline_add
-from app.core.search import discovery
+from app.core.search import discovery, free_copy, source_clients
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.domain.errors import Conflict
@@ -221,10 +221,10 @@ async def test_add_paper_on_a_pdfless_paper_with_a_held_arxiv_copy_files_only_th
         return discovery.SearchResult([Candidate(title="Bare", doi=doi, paper_id=bare.id)], [])
 
     async def find_pdf(_session, _providers, _candidate):
-        raise Conflict(discovery.ALREADY_IN_LIBRARY, paper_id=copy.id, tried=[])
+        raise Conflict(free_copy.ALREADY_IN_LIBRARY, paper_id=copy.id, tried=[])
 
     monkeypatch.setattr(discovery, "search", search)
-    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    monkeypatch.setattr(free_copy, "find_pdf", find_pdf)
     added = result(await call("add_paper", identifier=doi, workspace=f"Arxiv {RUN}"))
 
     assert (added["status"], added["paper_id"]) == ("ingested", str(copy.id))
@@ -352,13 +352,13 @@ async def test_a_redirect_to_a_private_address_is_refused_and_never_requested(mo
         client = httpx.AsyncClient(
             transport=httpx.MockTransport(handle), follow_redirects=True, event_hooks={"request": [pdf_links.guard]}
         )
-        providers = discovery.Providers(pdf=client)
+        providers = source_clients.Providers(pdf=client)
         try:
             yield providers
         finally:
             await providers.aclose()
 
-    monkeypatch.setattr(discovery, "open_providers", redirecting)
+    monkeypatch.setattr(source_clients, "open_providers", redirecting)
     response = await call("add_paper", identifier="https://pdfs.example.org/a.pdf")
 
     assert response.is_error and response.structured_content["error"] == "unsafe_url"
@@ -445,8 +445,8 @@ async def test_an_empty_workspace_name_is_refused_not_ignored(jobs):
 
 async def test_add_papers_reports_each_item(session, jobs, monkeypatch):
     opened = []
-    real = discovery.open_providers
-    monkeypatch.setattr(discovery, "open_providers", lambda s: (opened.append(1), real(s))[1])
+    real = source_clients.open_providers
+    monkeypatch.setattr(source_clients, "open_providers", lambda s: (opened.append(1), real(s))[1])
     ws = await workspaces.create(session, f"Bulk {RUN}")
 
     nope = f"{discovery_fake.DOI_PREFIX}nope"
@@ -522,13 +522,13 @@ def serve(monkeypatch, handle):
         client = httpx.AsyncClient(
             transport=httpx.MockTransport(handle), follow_redirects=True, event_hooks={"request": [pdf_links.guard]}
         )
-        providers = discovery.Providers(pdf=client)
+        providers = source_clients.Providers(pdf=client)
         try:
             yield providers
         finally:
             await providers.aclose()
 
-    monkeypatch.setattr(discovery, "open_providers", served)
+    monkeypatch.setattr(source_clients, "open_providers", served)
 
 
 TACL_LINK = "https://direct.mit.edu/tacl/article-pdf/doi/10.1162/tacl_a_00632/2325685/tacl_a_00632.pdf"
@@ -655,7 +655,7 @@ def real_world(discovery_fakes, monkeypatch):
     async def search(_session, _providers, _query):
         return discovery.SearchResult([tacl_candidate()], [])
 
-    monkeypatch.setattr(discovery, "open_providers", open_providers)
+    monkeypatch.setattr(source_clients, "open_providers", open_providers)
     monkeypatch.setattr(discovery, "search", search)
     return discovery_fakes
 

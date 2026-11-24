@@ -10,7 +10,7 @@ from screening_pool import make_pool
 from sqlalchemy import select
 
 from app.core.papers.paper_sources import SourceSettings
-from app.core.search import discovery, snowball_run
+from app.core.search import snowball_run, source_clients
 from app.core.search.source_registry import SOURCE_IDS
 from app.core.workspaces import tags, workspaces
 from app.models import Paper, hit_tags
@@ -131,7 +131,7 @@ async def _free_hit(session, label):
     await session.commit()
     await workspaces.add_paper(session, ws.id, paper.id)
     every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
-    providers = discovery.build_providers(every, discovery_fake.transport())
+    providers = source_clients.build_providers(every, discovery_fake.transport())
     try:
         await snowball_run.snowball(session, providers, ws.id, [paper.id], [], backward=True, forward=False)
     finally:

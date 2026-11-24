@@ -178,7 +178,7 @@ async def test_mapping_metadata_and_safe_pdf_resolution():
 
 async def test_opt_in_persists_and_discovery_survives_another_source_failure(session):
     from app.core.papers import paper_sources
-    from app.core.search import discovery
+    from app.core.search import discovery, source_clients
     from app.core.search.source_registry import SOURCE_IDS
     from app.schemas.discovery import CandidateIn
 
@@ -190,7 +190,7 @@ async def test_opt_in_persists_and_discovery_survives_another_source_failure(ses
             return httpx.Response(200, json=body([{"key": "conf/test/1", "title": "Test", "year": "2026"}]))
         return httpx.Response(503)
 
-    providers = discovery.build_providers(settings, httpx.MockTransport(handle))
+    providers = source_clients.build_providers(settings, httpx.MockTransport(handle))
     try:
         result = await discovery.search(session, providers, "test")
         assert result.results[0].sources == ("dblp",)
@@ -202,7 +202,7 @@ async def test_opt_in_persists_and_discovery_survives_another_source_failure(ses
 
 async def test_dblp_failure_is_a_notice_or_conflict_when_all_fail(session):
     from app.core.papers.paper_sources import SourceSettings
-    from app.core.search import discovery
+    from app.core.search import discovery, source_clients
     from app.core.search.source_registry import SOURCE_IDS
     from app.domain.errors import Conflict
 
@@ -212,7 +212,7 @@ async def test_dblp_failure_is_a_notice_or_conflict_when_all_fail(session):
         return httpx.Response(200, json={"message": {"items": []}})
 
     settings = SourceSettings(enabled={s: s in {"dblp", "crossref"} for s in SOURCE_IDS})
-    providers = discovery.build_providers(settings, httpx.MockTransport(handle))
+    providers = source_clients.build_providers(settings, httpx.MockTransport(handle))
     try:
         result = await discovery.search(session, providers, "test")
         assert result.results == []
@@ -225,7 +225,7 @@ async def test_dblp_failure_is_a_notice_or_conflict_when_all_fail(session):
 
 async def test_default_settings_never_contact_dblp():
     from app.core.papers.paper_sources import SourceSettings
-    from app.core.search.discovery import build_providers
+    from app.core.search.source_clients import build_providers
 
     providers = build_providers(SourceSettings())
     try:

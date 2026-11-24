@@ -11,13 +11,13 @@ from app.core.papers import paper_enrichment, paper_sources
 from app.core.papers.pipeline import _refuse_remote, workspace_id
 from app.core.platform import queue
 from app.core.search import (
-    discovery,
     hit_enrichment,
     hit_import,
     prisma_export,
     screening,
     search_hits,
     snowball_run,
+    source_clients,
     workspace_search,
 )
 from app.core.search.source_registry import DISCOVERY_SOURCE_IDS
@@ -308,7 +308,7 @@ async def import_hit(
         raise NotFound("hit_not_found", hit_id=str(hit_id))
     if tags_:
         await tags.tag_hits(session, ws, tags_, [hit_id])
-    async with discovery.open_providers(session) as providers:
+    async with source_clients.open_providers(session) as providers:
         imported = await hit_import.import_hits(session, providers, ws, [hit_id])
     for paper_id in imported.paper_ids:
         await queue.enqueue("ingest_paper", str(paper_id))
@@ -337,7 +337,7 @@ async def snowball(
         raise InvalidInput("Give at least one seed paper.")
     backward, forward = DIRECTIONS[direction]
     ws = await workspace_id(session, workspace)
-    async with discovery.open_providers(session) as providers:
+    async with source_clients.open_providers(session) as providers:
         return await snowball_run.snowball(session, providers, ws, seed_paper_ids, [], backward, forward)
 
 

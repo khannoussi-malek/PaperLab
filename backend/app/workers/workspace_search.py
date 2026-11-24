@@ -10,7 +10,7 @@ from app.config import settings
 from app.core.papers import paper_sources
 from app.core.platform import queue
 from app.core.platform.redact import redact
-from app.core.search import discovery, screening
+from app.core.search import screening, source_clients
 from app.core.search.batch_fetch import search_batch
 from app.core.search.workspace_search import PER_SOURCE_PASS_LIMIT, SEARCH_RUN_JOB_TIMEOUT, get_run, try_run_lock
 from app.db import SessionLocal
@@ -109,7 +109,7 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
             transport = ctx.get("transport")
             if transport is None and settings.discovery_provider == "fake":
                 transport = discovery_fake.transport()
-            providers = discovery.build_providers(sources, transport)
+            providers = source_clients.build_providers(sources, transport)
             try:
                 # Computed once, before the first iteration, so a slow first batch still counts against it — an
                 # iteration count alone doesn't bound wall-clock time (Important 1).

@@ -7,7 +7,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.platform import llm_connections
-from app.core.search import discovery
+from app.core.search import source_clients
 from app.db import get_session
 from app.providers.base import LLM, Speech
 from app.providers.llm import build_llm
@@ -67,10 +67,10 @@ async def resolve_check_llm(payload: CheckRequest, session: SessionDep, transpor
 CheckLLMDep = Annotated[LLM, Depends(resolve_check_llm)]
 
 
-async def get_discovery(session: SessionDep) -> AsyncIterator[discovery.Providers]:
-    """Find papers' and Similar's clients for one request (discovery.open_providers). Tests override this with fakes."""
-    async with discovery.open_providers(session) as providers:
+async def get_discovery(session: SessionDep) -> AsyncIterator[source_clients.Providers]:
+    """Find papers' and Similar's clients for one request (source_clients.open_providers). Tests override this with fakes."""
+    async with source_clients.open_providers(session) as providers:
         yield providers
 
 
-DiscoveryDep = Annotated[discovery.Providers, Depends(get_discovery)]
+DiscoveryDep = Annotated[source_clients.Providers, Depends(get_discovery)]

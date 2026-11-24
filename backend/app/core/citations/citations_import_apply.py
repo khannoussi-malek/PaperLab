@@ -4,7 +4,7 @@ listed in `needs_pdf` and nothing is created, unless `save_without_pdf` is on: i
 from its Zotero details (details_source "zotero"), filed like any other and counted in `saved_without_pdf`.
 
 - Dedupe comes first, with today's rules: discovery.mark_in_library (DOI, a preprint's published DOI, OpenAlex id),
-  discovery.held_version (the arXiv copy or the published version), then the exact title under same_work. A match
+  free_copy.held_version (the arXiv copy or the published version), then the exact title under same_work. A match
   is attached as it is: its fields are never written (held_version itself records a published version on a held
   arXiv copy, as everywhere else).
 - Zotero notes become unanchored notes by You. Into a workspace, tags become its tags on the paper; the collection
@@ -35,7 +35,7 @@ from app.core.citations.citations_import import CitationsImportError, ImportEntr
 from app.core.notes import notes
 from app.core.papers import papers, provenance
 from app.core.platform import queue
-from app.core.search import discovery
+from app.core.search import discovery, free_copy, same_work, source_clients
 from app.core.search.candidates import normal_title
 from app.core.workspaces import tags, workspaces
 from app.domain.candidates import Candidate
@@ -80,7 +80,7 @@ class ImportResult:
 
 
 Progress = Callable[[ImportResult], Awaitable[None]]
-GetProviders = Callable[[], Awaitable[discovery.Providers]]
+GetProviders = Callable[[], Awaitable[source_clients.Providers]]
 _now = time.monotonic  # patchable, so tests need not wait
 
 
@@ -102,7 +102,7 @@ async def _same_title(session: AsyncSession, entry: ImportEntry) -> uuid.UUID | 
     rows = await session.execute(select(*columns).where(func.lower(Paper.title).startswith(first, autoescape=True)))
     ours = {"title": entry.title, "authors": entry.authors, "year": entry.year}
     return next(
-        (row.id for row in rows if discovery.same_work(Candidate(row.title, row.authors, row.year), ours)), None
+        (row.id for row in rows if same_work.same_work(Candidate(row.title, row.authors, row.year), ours)), None
     )
 
 
@@ -111,7 +111,7 @@ async def _held(session: AsyncSession, entry: ImportEntry) -> uuid.UUID | None:
     [marked] = await discovery.mark_in_library(session, [candidate])
     if marked.paper_id is not None:
         return marked.paper_id
-    if (other := await discovery.held_version(session, candidate)) is not None:
+    if (other := await free_copy.held_version(session, candidate)) is not None:
         return other[0]
     return await _same_title(session, entry)
 
@@ -203,7 +203,7 @@ async def _fetch_by(
     try:
         return await discovery.add(session, providers, match, settings.pdf_dir), {}
     except Conflict as exc:
-        if str(exc) == discovery.ALREADY_IN_LIBRARY and "paper_id" in exc.details:
+        if str(exc) == free_copy.ALREADY_IN_LIBRARY and "paper_id" in exc.details:
             return exc.details["paper_id"], {}
         if str(exc) != discovery.NO_FREE_PDF:
             raise
@@ -361,12 +361,12 @@ async def apply(
         await workspaces.require_writable(session, workspace_id)
     result = ImportResult()
     async with contextlib.AsyncExitStack() as stack:
-        opened: list[discovery.Providers] = []
+        opened: list[source_clients.Providers] = []
 
-        async def providers() -> discovery.Providers:
+        async def providers() -> source_clients.Providers:
             """Opened on the first fetch, then shared, so arXiv title searches stay paced across the import."""
             if not opened:
-                opened.append(await stack.enter_async_context(discovery.open_providers(session)))
+                opened.append(await stack.enter_async_context(source_clients.open_providers(session)))
             return opened[0]
 
         for index, entry in enumerate(entries):

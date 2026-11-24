@@ -16,7 +16,7 @@ from app.api import workspace_search as workspace_search_api
 from app.api.deps import get_discovery
 from app.core.notes import notes
 from app.core.papers import papers
-from app.core.search import discovery, hit_import, retrieved_hits
+from app.core.search import discovery, free_copy, hit_import, retrieved_hits
 from app.core.search.prisma_export import prisma_export
 from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict
@@ -188,7 +188,7 @@ async def test_find_pdf_route_names_a_held_arxiv_copy_of_the_same_work(
     entry = arxiv_entry(title=ARXIV_TITLE, authors=["Ada Lovelace"], id="2401.00001", year=2024)
     discovery_fakes.arxiv.reply("/api/query", 200, text=atom(entry))
     app.dependency_overrides[get_discovery] = lambda: discovery_fakes.turned_on("arxiv")
-    monkeypatch.setattr(discovery, "_sleep", _no_wait)
+    monkeypatch.setattr(free_copy, "_sleep", _no_wait)
 
     answer = await client.post(f"/api/papers/{held.id}/find-pdf")
 
@@ -283,7 +283,7 @@ async def test_add_still_behaves_the_same_after_find_pdf_extraction(session, dis
     tried_by_add: list = []
 
     paper = await discovery.add(session, discovery_fakes.providers, candidate(pdf_urls=urls), pdf_dir, tried_by_add)
-    data, tried, copies = await discovery.find_pdf(session, discovery_fakes.providers, candidate(pdf_urls=urls))
+    data, tried, copies = await free_copy.find_pdf(session, discovery_fakes.providers, candidate(pdf_urls=urls))
 
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == data == PDF
     assert tried == tried_by_add == [
