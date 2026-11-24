@@ -21,7 +21,6 @@ FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 LONG: dict[str, int] = {
     "app/api/chat_stream.py::stream_output": 53,
-    "app/core/chat/chat.py::prepare": 71,
     "app/core/chat/claims.py::verify_claim": 63,
     "app/core/chat/claims_batch.py::verify_claims": 77,
     "app/core/citations/citations.py::find": 51,
