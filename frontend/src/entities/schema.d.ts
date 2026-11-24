@@ -48,6 +48,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Paper Briefs
+         * @description Every paper as a picker lists it, newest first (Quick Capture).
+         */
+        get: operations["list_paper_briefs_api_papers_brief_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/found-pdfs": {
         parameters: {
             query?: never;
@@ -6569,6 +6589,34 @@ export interface components {
             exists: boolean;
         };
         /**
+         * PaperBriefOut
+         * @description A paper as a picker lists it (Quick Capture, M65 N2): no abstract or citation fields.
+         */
+        PaperBriefOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Authors */
+            authors: string[];
+            /** Year */
+            year: number | null;
+            /** Doi */
+            doi: string | null;
+            /** Status */
+            status: string;
+            /** Status Error */
+            status_error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
          * PaperEventOut
          * @description One thing that happened to a paper (R21). `detail` is {"how"} for pdf_attached, {"url", "how"} for pdf_found.
          */
@@ -9059,6 +9107,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_paper_briefs_api_papers_brief_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperBriefOut"][];
                 };
             };
         };
