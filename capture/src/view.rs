@@ -1,13 +1,18 @@
 //! What the panel draws for a `Panel` state: the field, one line saying what's happening, and the rows Enter acts on.
 
 use rune::tok::{self, type_};
-use rune::{Color, Cx, El, Key, KeyEvent, Tx, col, el, row, text, text_input};
+use rune::{Color, Cx, El, Key, KeyEvent, SystemMaterial, Tx, col, el, row, text, text_input};
 
 use crate::App;
 use crate::library::{Paper, byline};
 use crate::panel::{Event, Phase, Row, UNREACHABLE};
 
 pub const WIDTH: f32 = 600.0;
+
+/// The blue of PaperLab's icon, for the light behind it in the header.
+fn logo_blue() -> Color {
+    rune::color::hex("#2664ee").expect("a valid colour")
+}
 
 pub fn view(app: &App, cx: &mut Cx<App>) -> El {
     let dark = cx.system_dark();
@@ -27,9 +32,14 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
             true
         })
         .on_submit(|s: &mut App, _| s.dispatch(Event::Submit));
+    // Liquid Glass over whatever is behind the window (the card colour where glass can't show: older macOS, headless).
+    let glow = logo_blue().alpha(if dark { 0.34 } else { 0.2 });
     let mut panel = col().key("panel").w(WIDTH).radius(14.0).clip_rounded(14.0).fill(t.card)
+        .system_material(SystemMaterial::Glass)
         .border(1.0, if dark { Color::WHITE.alpha(0.1) } else { t.separator })
         .child(row().h(56.0).px(18.0).gap(12.0).center_y()
+            // A soft light in the logo's blue, centred on the icon and fading out across the field.
+            .radial_gradient([31.0, 28.0], [220.0, 72.0], [(0.0, glow), (1.0, glow.alpha(0.0))])
             .child(el().size(26.0, 26.0).radius(6.0).pixels(&app.icon))
             .child(field));
     let status = status_line(p);
