@@ -41,8 +41,6 @@ LONG: dict[str, int] = {
     "app/core/search/batch_fetch.py::_find_or_create_external_ref": 88,
     "app/core/search/batch_fetch.py::_store_candidates_as_hits": 63,
     "app/core/search/batch_fetch.py::search_batch": 92,
-    "app/core/search/hit_import.py::import_hits": 97,
-    "app/core/search/hit_import.py::upload_hit_pdf": 67,
     "app/core/search/hit_provenance.py::provenance": 71,
     "app/core/search/search_hits.py::list_hits": 71,
     "app/core/workspaces/package_screening_import.py::rebuild": 71,

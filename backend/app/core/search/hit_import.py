@@ -94,6 +94,120 @@ async def _attach_free_copy(session: AsyncSession, providers: Providers, holder:
     return True
 
 
+_KEPT = ("imported", "manual")
+
+
+async def _target_hits(
+    session: AsyncSession, workspace_id: uuid.UUID, hit_ids: list[uuid.UUID] | None
+) -> list[WorkspaceSearchHit]:
+    """The given hits, or every `relevant` hit, of this workspace."""
+    query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
+    query = (
+        query.where(WorkspaceSearchHit.id.in_(hit_ids))
+        if hit_ids
+        else query.where(WorkspaceSearchHit.stage1_status == "relevant")
+    )
+    return list((await session.execute(query)).scalars().all())
+
+
+async def _link(
+    session: AsyncSession, hit: WorkspaceSearchHit, ref: ExternalRef | None, paper_id: uuid.UUID, status: str
+) -> None:
+    """The hit now stands for this library paper, with its acquisition status; a snowball hit's citation is recorded."""
+    hit.acquisition_status = status
+    hit.paper_id = paper_id
+    if ref is not None:
+        await _record_snowball_citation(session, hit, ref.id)
+
+
+async def _new_paper(
+    session: AsyncSession, workspace_id: uuid.UUID, ref: ExternalRef | None, filename: str, content: bytes
+) -> Paper:
+    """A new library paper from this PDF, in the workspace; every stored reference to the same work now points at it."""
+    paper = await papers.create_paper(
+        session, filename, content, settings.pdf_dir, prefill=await _ref_prefill(session, ref) if ref else None
+    )
+    await workspaces.add_paper(session, workspace_id, paper.id)
+    if ref is not None:
+        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.external_ids, ref.doi)]
+        await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
+    return paper
+
+
+async def _held_for(
+    session: AsyncSession, hit: WorkspaceSearchHit, ref: ExternalRef | None
+) -> tuple[uuid.UUID | None, bool]:
+    """(the library paper this hit already is, whether an identifier matched it)."""
+    if ref is not None and hit.acquisition_status == "awaiting_pdf" and hit.paper_id is not None:
+        # The paper it awaits, even one linked by title, which _held's identifiers can miss (C1).
+        return hit.paper_id, False
+    return await _held(session, ref) if ref is not None else (None, True)
+
+
+async def _attach_held(
+    session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, hit: WorkspaceSearchHit, ref: ExternalRef,
+    held: tuple[uuid.UUID, bool],
+) -> tuple[bool, uuid.UUID | None]:
+    """Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper holding
+    the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest. Returns (linked,
+    the paper id to ingest when it just got its PDF)."""
+    existing_id, by_identifier = held
+    try:
+        await workspaces.add_paper(session, workspace_id, existing_id)
+    except NotFound:  # deleted by another request since it was found (M78): this hit stays as it was
+        return False, None
+    if ref.imported_as is None and by_identifier:  # a title match never claims the shared reference (M67)
+        ref.imported_as = existing_id
+    # Saved without a PDF: linked so step 3 shows it, but not retrieved until its PDF arrives (R8).
+    try:
+        holder = await papers.get_paper(session, existing_id)
+        fresh = not holder.has_pdf and await _attach_free_copy(session, providers, holder, ref)
+    except NotFound:  # deleted during the search for its copy (M78): this hit stays as it was
+        return False, None
+    # Re-read: a PDF may have arrived meanwhile (attach_pdf re-read the row).
+    has_pdf = fresh or holder.has_pdf
+    await _link(session, hit, ref, existing_id, "imported" if has_pdf else "awaiting_pdf")
+    return True, existing_id if fresh else None  # its PDF is new: the route enqueues ingest
+
+
+async def _free_pdf(providers: Providers, ref: ExternalRef | None) -> bytes | None:
+    """A free copy of the reference's PDF: its stored links (after Unpaywall, for a DOI with none), then PMC."""
+    if ref is None:
+        return None
+    if not ref.pdf_urls and ref.doi:
+        # Unpaywall's real role (spec §6): DOI-only PDF enrichment for a candidate missing one, applied
+        # post-merge — never a discovery source. import_hits only ever looked at pdf_urls as already stored;
+        # try this once before giving up (I5). providers.client("unpaywall") may be None (source off) — the
+        # helper already treats that as a no-op, same as discovery.add()'s own callers do.
+        arxiv_only = {"arxiv": ref.external_ids["arxiv"]} if "arxiv" in ref.external_ids else {}
+        [enriched] = await _add_unpaywall_links(
+            providers.client("unpaywall"), [Candidate(title=ref.title, doi=ref.doi, external_ids=arxiv_only)]
+        )
+        if enriched.pdf_urls:
+            ref.pdf_urls = enriched.pdf_urls
+    data = (await pdf_download.download_pdf(providers.pdf, ref.pdf_urls))[0] if ref.pdf_urls else None
+    if data is None:  # M76: the PMC Open Access bucket, for a hit with a PMCID
+        data = (await free_copy.pmc_copy(providers, ref.external_ids, ref.doi, [], []))[0]
+    return data
+
+
+async def _import_one(
+    session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, hit: WorkspaceSearchHit
+) -> tuple[bool, uuid.UUID | None]:
+    """One hit's import: (linked to a library paper now, the paper id to ingest when it is new or just got its PDF)."""
+    ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+    held = await _held_for(session, hit, ref)
+    if held[0] is not None:
+        return await _attach_held(session, providers, workspace_id, hit, ref, held)
+    data = await _free_pdf(providers, ref)
+    if data is None:
+        hit.acquisition_status = "failed"
+        return False, None
+    paper = await _new_paper(session, workspace_id, ref, f"{hit.normalized_title}.pdf", data)
+    await _link(session, hit, ref, paper.id, "imported")
+    return True, paper.id
+
+
 async def import_hits(
     session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, hit_ids: list[uuid.UUID] | None
 ) -> ImportResult:
@@ -105,84 +219,17 @@ async def import_hits(
     bookkeeping, same as ours below) is attached to that existing paper without downloading again, and its
     paper_id is left out of paper_ids so ingest isn't re-enqueued for a paper that already went through it."""
     await workspaces.require_writable(session, workspace_id)
-    query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
-    query = (
-        query.where(WorkspaceSearchHit.id.in_(hit_ids))
-        if hit_ids
-        else query.where(WorkspaceSearchHit.stage1_status == "relevant")
-    )
-    hits = (await session.execute(query)).scalars().all()
-    targeted = [h for h in hits if h.acquisition_status not in ("imported", "manual")]
-
-    imported, failed, paper_ids, done = 0, 0, [], []
+    hits = await _target_hits(session, workspace_id, hit_ids)
+    targeted = [h for h in hits if h.acquisition_status not in _KEPT]
+    paper_ids, done = [], []
     for hit in hits:
-        if hit.acquisition_status in ("imported", "manual"):
+        if hit.acquisition_status in _KEPT:
             # "manual" is its own provenance (spec §4.4/M30b's PRISMA export need it distinguished from an
             # automatic import) — re-running Import all must never quietly relabel it "imported" (I8).
             continue
-        ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
-        if ref is not None and hit.acquisition_status == "awaiting_pdf" and hit.paper_id is not None:
-            # The paper it awaits, even one linked by title, which _held's identifiers can miss (C1).
-            existing_id, by_identifier = hit.paper_id, False
-        else:
-            existing_id, by_identifier = await _held(session, ref) if ref is not None else (None, True)
-        if existing_id is not None:
-            # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
-            # holding the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest.
-            try:
-                await workspaces.add_paper(session, workspace_id, existing_id)
-            except NotFound:  # deleted by another request since it was found (M78): this hit stays as it was
-                continue
-            if ref.imported_as is None and by_identifier:  # a title match never claims the shared reference (M67)
-                ref.imported_as = existing_id
-            # Saved without a PDF: linked so step 3 shows it, but not retrieved until its PDF arrives (R8).
-            try:
-                holder = await papers.get_paper(session, existing_id)
-                has_pdf = holder.has_pdf
-                if not has_pdf and await _attach_free_copy(session, providers, holder, ref):
-                    has_pdf = True
-                    paper_ids.append(existing_id)  # its PDF is new: the route enqueues ingest
-                elif not has_pdf:
-                    has_pdf = holder.has_pdf  # a PDF may have arrived meanwhile (attach_pdf re-read the row)
-            except NotFound:  # deleted during the search for its copy (M78): this hit stays as it was
-                continue
-            hit.acquisition_status = "imported" if has_pdf else "awaiting_pdf"
-            hit.paper_id = existing_id
-            await _record_snowball_citation(session, hit, ref.id)
-            imported += 1
-            done.append(hit)
-            continue
-        if ref is not None and not ref.pdf_urls and ref.doi:
-            # Unpaywall's real role (spec §6): DOI-only PDF enrichment for a candidate missing one, applied
-            # post-merge — never a discovery source. import_hits only ever looked at pdf_urls as already stored;
-            # try this once before giving up (I5). providers.client("unpaywall") may be None (source off) — the
-            # helper already treats that as a no-op, same as discovery.add()'s own callers do.
-            arxiv_only = {"arxiv": ref.external_ids["arxiv"]} if "arxiv" in ref.external_ids else {}
-            [enriched] = await _add_unpaywall_links(
-                providers.client("unpaywall"), [Candidate(title=ref.title, doi=ref.doi, external_ids=arxiv_only)]
-            )
-            if enriched.pdf_urls:
-                ref.pdf_urls = enriched.pdf_urls
-        data = (await pdf_download.download_pdf(providers.pdf, ref.pdf_urls))[0] if ref and ref.pdf_urls else None
-        if data is None and ref is not None:  # M76: the PMC Open Access bucket, for a hit with a PMCID
-            data = (await free_copy.pmc_copy(providers, ref.external_ids, ref.doi, [], []))[0]
-        if data is None:
-            hit.acquisition_status = "failed"
-            failed += 1
-            continue
-        paper = await papers.create_paper(
-            session, f"{hit.normalized_title}.pdf", data, settings.pdf_dir,
-            prefill=await _ref_prefill(session, ref),
-        )
-        await workspaces.add_paper(session, workspace_id, paper.id)
-        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.external_ids, ref.doi)]
-        await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
-        hit.acquisition_status = "imported"
-        hit.paper_id = paper.id
-        await _record_snowball_citation(session, hit, ref.id)
-        imported += 1
-        paper_ids.append(paper.id)
-        done.append(hit)
+        linked, ingest_id = await _import_one(session, providers, workspace_id, hit)
+        done += [hit] if linked else []
+        paper_ids += [ingest_id] if ingest_id else []
 
     # A hit whose download failed but whose paper the workspace holds by another key (a title) is retrieved too, here
     # or by an add_paper above, so the counts come from where the targeted hits ended up, not from the loop.
@@ -203,6 +250,14 @@ async def _held(session: AsyncSession, ref: ExternalRef) -> tuple[uuid.UUID | No
     # held duplicate of the other version must not learn a DOI another paper already answers to.
     held = await free_copy.held_version(session, _ref_candidate(ref))
     return held if held is not None else (None, True)
+
+
+async def _uploaded(
+    session: AsyncSession, workspace_id: uuid.UUID, hit: WorkspaceSearchHit, ref: ExternalRef | None, created: bool
+) -> tuple[dict, bool]:
+    await tags.apply_hit_tags(session, workspace_id, [hit])
+    await session.commit()
+    return _hit_out_dict(hit, ref), created
 
 
 async def upload_hit_pdf(
@@ -239,36 +294,14 @@ async def upload_hit_pdf(
         await workspaces.add_paper(session, workspace_id, held_id)
         if ref is not None and ref.imported_as is None and by_identifier == held_id:  # as import_hits records it
             ref.imported_as = held_id
-        hit.acquisition_status = "manual"
-        hit.paper_id = held_id
-        if ref is not None:
-            await _record_snowball_citation(session, hit, ref.id)
-        await tags.apply_hit_tags(session, workspace_id, [hit])
-        await session.commit()
-        return _hit_out_dict(hit, ref), True
+        await _link(session, hit, ref, held_id, "manual")
+        return await _uploaded(session, workspace_id, hit, ref, created=True)
     if awaited is not None and held is not None:  # its PDF arrived meanwhile, by another request
         raise Conflict("already_has_pdf")
     if ref is not None and ref.imported_as is not None:
         await workspaces.add_paper(session, workspace_id, ref.imported_as)
-        hit.acquisition_status = "manual"
-        hit.paper_id = ref.imported_as
-        await _record_snowball_citation(session, hit, ref.id)
-        await tags.apply_hit_tags(session, workspace_id, [hit])
-        await session.commit()
-        return _hit_out_dict(hit, ref), False
-
-    paper = await papers.create_paper(
-        session, filename or f"{hit.normalized_title}.pdf", content, settings.pdf_dir,
-        prefill=await _ref_prefill(session, ref) if ref else None,
-    )
-    await workspaces.add_paper(session, workspace_id, paper.id)
-    if ref is not None:
-        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.external_ids, ref.doi)]
-        await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
-    hit.acquisition_status = "manual"
-    hit.paper_id = paper.id
-    if ref is not None:
-        await _record_snowball_citation(session, hit, ref.id)
-    await tags.apply_hit_tags(session, workspace_id, [hit])
-    await session.commit()
-    return _hit_out_dict(hit, ref), True
+        await _link(session, hit, ref, ref.imported_as, "manual")
+        return await _uploaded(session, workspace_id, hit, ref, created=False)
+    paper = await _new_paper(session, workspace_id, ref, filename or f"{hit.normalized_title}.pdf", content)
+    await _link(session, hit, ref, paper.id, "manual")
+    return await _uploaded(session, workspace_id, hit, ref, created=True)
