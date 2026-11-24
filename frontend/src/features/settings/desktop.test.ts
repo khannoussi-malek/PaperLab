@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { captureBridge, desktopBridge, voiceBridge, type PaperlabDesktop, type VoiceBridge } from './desktop'
+import { captureAnimationBridge, captureBridge, desktopBridge, voiceBridge, type PaperlabDesktop, type VoiceBridge } from './desktop'
 
 const bridge: PaperlabDesktop = {
   getKeepRunning: async () => false,
@@ -61,5 +61,14 @@ describe('captureBridge', () => {
     expect(captureBridge({ paperlabDesktop: both })).toBe(both)
     expect(captureBridge({ paperlabDesktop: { getCaptureEnabled: both.getCaptureEnabled } })).toBeNull()
     expect(captureBridge({})).toBeNull()
+  })
+})
+
+describe('captureAnimationBridge', () => {
+  it('is the Animation switch when the desktop app has both methods, else null', () => {
+    const both = { getCaptureAnimation: async () => true, setCaptureAnimation: async () => undefined }
+    expect(captureAnimationBridge({ paperlabDesktop: both })).toBe(both)
+    expect(captureAnimationBridge({ paperlabDesktop: { getCaptureAnimation: both.getCaptureAnimation } })).toBeNull()
+    expect(captureAnimationBridge({})).toBeNull()
   })
 })

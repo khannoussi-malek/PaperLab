@@ -18,11 +18,13 @@ describe('settings.json', () => {
       voiceEnabled: false,
       captureEnabled: true,
       captureShortcut: 'ctrl+alt+p',
+      captureAnimation: true,
     })
   })
 
   it('keeps a Quick Capture shortcut only when it is a short non-empty string', () => {
-    expect(parseSettings('{"captureEnabled": false, "captureShortcut": "cmd+shift+k"}')).toMatchObject({
+    expect(parseSettings('{"captureEnabled": false, "captureShortcut": "cmd+shift+k", "captureAnimation": false}')).toMatchObject({
+      captureAnimation: false,
       captureEnabled: false,
       captureShortcut: 'cmd+shift+k',
     })

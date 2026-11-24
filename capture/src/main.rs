@@ -148,11 +148,13 @@ struct Args {
     shortcut: String,
     stdin: bool,
     browser: bool,
+    /// `--no-galaxy`: the panel alone, no stars or papers behind it (Settings → Desktop app → Animation).
+    galaxy: bool,
 }
 
 /// Our own flags; Rune's headless flags (`--snap`, `--scene`, …) pass through to Rune.
 fn args() -> Result<Args, String> {
-    let mut out = Args { port: DEFAULT_PORT, shortcut: DEFAULT_SHORTCUT.into(), stdin: false, browser: false };
+    let mut out = Args { port: DEFAULT_PORT, shortcut: DEFAULT_SHORTCUT.into(), stdin: false, browser: false, galaxy: true };
     let mut argv = std::env::args().skip(1);
     while let Some(arg) = argv.next() {
         match arg.as_str() {
@@ -160,6 +162,7 @@ fn args() -> Result<Args, String> {
             "--shortcut" => out.shortcut = argv.next().ok_or("--shortcut needs a chord like ctrl+alt+p")?,
             "--stdin" => out.stdin = true,
             "--browser" => out.browser = true,
+            "--no-galaxy" => out.galaxy = false,
             _ => {}
         }
     }
@@ -200,7 +203,8 @@ fn main() {
             // Warm the library before the first show: listing a big library takes seconds.
             background(me.clone(), { let api = api.clone(); move || Event::Papers(api.papers()) });
         }
-        let galaxy = (!rune::is_headless()).then(|| app.overlay(galaxy::spec(screen), galaxy::Galaxy::new(screen)));
+        let galaxy = (args.galaxy && !rune::is_headless())
+            .then(|| app.overlay(galaxy::spec(screen), galaxy::Galaxy::new(screen)));
         let ctx = Ctx { me, api, browser: args.browser.then_some(args.port), galaxy };
         let app = app
             .init(move || App::new(Some(ctx)))
