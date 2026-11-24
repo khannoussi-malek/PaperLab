@@ -114,9 +114,8 @@ async def _saved_without_pdf(session, paper, workspace_uuid, tried, copies) -> A
     )
 
 
-async def _add_found(
-    session, providers, kind, value, workspace_uuid, tried_out=None, save_without_pdf=False
-) -> AddPaperResult:
+async def _match(session, providers, kind: str, value: str):
+    """The search result that is this identifier."""
     found = await discovery.search(session, providers, value)
     match = next(
         (c for c in found.results if (c.doi or "").lower() == value or c.external_ids.get("arxiv") == value), None
@@ -125,34 +124,50 @@ async def _add_found(
         match = next((c for c in found.results if "crossref" in c.sources), None)
     if match is None:
         raise NotFound("no_matching_paper", identifier=value)
-    if match.paper_id is not None:
-        try:
-            return await _in_library(session, match.paper_id, workspace_uuid, providers)
-        except Conflict as exc:  # find_pdf: this PDF-less paper's arXiv copy is held, which answers for it
-            if str(exc) != free_copy.ALREADY_IN_LIBRARY or "paper_id" not in exc.details:
-                raise
-            held = await _in_library(session, exc.details["paper_id"], workspace_uuid)
-            return replace(held, tried=exc.details.get("tried", []))
+    return match
+
+
+async def _held_match(session, providers, paper_id, workspace_uuid) -> AddPaperResult:
     try:
-        copies: list[str] = []
-        tried_out = [] if tried_out is None else tried_out
-        paper = await discovery.add(session, providers, match, settings.pdf_dir, tried_out, save_without_pdf, copies)
-    except Conflict as exc:
-        if str(exc) == free_copy.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # its arXiv copy is held
-            held = await _in_library(session, exc.details["paper_id"], workspace_uuid)  # no second search
-            return replace(held, tried=exc.details.get("tried", []))
-        if str(exc) != discovery.NO_FREE_PDF:
+        return await _in_library(session, paper_id, workspace_uuid, providers)
+    except Conflict as exc:  # find_pdf: this PDF-less paper's arXiv copy is held, which answers for it
+        if str(exc) != free_copy.ALREADY_IN_LIBRARY or "paper_id" not in exc.details:
             raise
-        return AddPaperResult(
-            status="no_free_pdf",
-            landing_url=_landing_url(kind, value),
-            title=match.title,
-            tried=exc.details.get("tried", []),
-            free_copies=exc.details.get("free_copies", []),
-        )
-    if not paper.has_pdf:
-        return await _saved_without_pdf(session, paper, workspace_uuid, tried_out, copies)
-    return await _queued(session, paper, workspace_uuid)
+        held = await _in_library(session, exc.details["paper_id"], workspace_uuid)
+        return replace(held, tried=exc.details.get("tried", []))
+
+
+async def _refused(session, exc: Conflict, kind: str, value: str, title: str, workspace_uuid) -> AddPaperResult:
+    """discovery.add's refusal as an answer: its held arXiv copy, or no free PDF; any other refusal is raised."""
+    if str(exc) == free_copy.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # its arXiv copy is held
+        held = await _in_library(session, exc.details["paper_id"], workspace_uuid)  # no second search
+        return replace(held, tried=exc.details.get("tried", []))
+    if str(exc) != discovery.NO_FREE_PDF:
+        raise exc
+    return AddPaperResult(
+        status="no_free_pdf",
+        landing_url=_landing_url(kind, value),
+        title=title,
+        tried=exc.details.get("tried", []),
+        free_copies=exc.details.get("free_copies", []),
+    )
+
+
+async def _add_found(
+    session, providers, kind, value, workspace_uuid, save_without_pdf=False
+) -> tuple[AddPaperResult, list[dict]]:
+    """The answer, and what the download tried (also when the answer doesn't carry it, e.g. a queued paper)."""
+    match = await _match(session, providers, kind, value)
+    if match.paper_id is not None:
+        return await _held_match(session, providers, match.paper_id, workspace_uuid), []
+    try:
+        added = await discovery.add_traced(session, providers, match, settings.pdf_dir, save_without_pdf)
+    except Conflict as exc:
+        return await _refused(session, exc, kind, value, match.title, workspace_uuid), exc.details.get("tried", [])
+    if not added.paper.has_pdf:
+        answer = await _saved_without_pdf(session, added.paper, workspace_uuid, added.tried, added.copies)
+        return answer, added.tried
+    return await _queued(session, added.paper, workspace_uuid), added.tried
 
 
 async def _in_library(session, paper_id, workspace_uuid, providers=None) -> AddPaperResult:
@@ -201,9 +216,8 @@ def _link_dois(link: str) -> list[str]:
 async def _link_by_doi(session, providers, link, tried, workspace_uuid, save_without_pdf=False) -> AddPaperResult:
     """A link that gave no PDF: its DOI's other free copies (arXiv, a repository) are tried, else the link's answer."""
     for doi in _link_dois(link):
-        downloaded: list[dict[str, str]] = []
         try:
-            found = await _add_found(session, providers, "doi", doi, workspace_uuid, downloaded, save_without_pdf)
+            found, downloaded = await _add_found(session, providers, "doi", doi, workspace_uuid, save_without_pdf)
         except NotFound:
             continue
         except Conflict:  # every source busy or off: the link's own answer stands
@@ -254,7 +268,7 @@ async def _add(session, providers, kind, value, workspace_uuid, save_without_pdf
     if kind == "link":
         result = await _add_link(session, providers, value, workspace_uuid, save_without_pdf)
     else:
-        result = await _add_found(session, providers, kind, value, workspace_uuid, save_without_pdf=save_without_pdf)
+        result, _ = await _add_found(session, providers, kind, value, workspace_uuid, save_without_pdf)
     return await _note_temporary_failures(session, result)
 
 

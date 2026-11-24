@@ -280,9 +280,9 @@ async def test_add_still_behaves_the_same_after_find_pdf_extraction(session, dis
     discovery_fakes.pdf_host.reply("/landing", 200, text="<html>a landing page</html>")
     discovery_fakes.pdf_host.reply("/copy.pdf", 200, content=PDF)
     urls = [f"{HOST}/landing", f"{HOST}/copy.pdf"]
-    tried_by_add: list = []
 
-    paper = await discovery.add(session, discovery_fakes.providers, candidate(pdf_urls=urls), pdf_dir, tried_by_add)
+    added = await discovery.add_traced(session, discovery_fakes.providers, candidate(pdf_urls=urls), pdf_dir)
+    paper, tried_by_add = added.paper, added.tried
     data, tried, copies = await free_copy.find_pdf(session, discovery_fakes.providers, candidate(pdf_urls=urls))
 
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == data == PDF
