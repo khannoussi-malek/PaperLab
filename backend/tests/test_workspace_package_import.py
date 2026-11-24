@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 
 from app.core.chat import answer_provenance, chat
 from app.core.citations import citations_bundle_read
-from app.core.papers import papers, pipeline
+from app.core.papers import papers, pipeline_upload
 from app.core.platform import queue
 from app.core.search import discovery
 from app.core.workspaces import tags, workspace_package, workspaces  # fmt: skip
@@ -346,7 +346,7 @@ async def test_a_fake_pdf_is_skipped_and_counted_and_the_paper_is_kept(session, 
 
 
 async def test_a_pdf_over_the_upload_cap_is_skipped(session, pdf_dir, monkeypatch):
-    monkeypatch.setattr(pipeline, "MAX_UPLOAD_PDF_BYTES", 10)
+    monkeypatch.setattr(pipeline_upload, "MAX_UPLOAD_PDF_BYTES", 10)
     package = _package(papers=[_paper("p1", "Too big", has_pdf=True, pdf="pdfs/p1.pdf")], pdfs={"p1": PDF})
     report = await _import(session, package)
     assert (report.added, report.pdfs_skipped) == (1, 1)

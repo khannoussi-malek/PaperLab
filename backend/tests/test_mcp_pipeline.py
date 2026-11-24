@@ -11,7 +11,7 @@ from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
 from sqlalchemy import func, select
 
-from app.core.papers import papers, pdf_links, pipeline
+from app.core.papers import papers, pdf_links, pipeline_add
 from app.core.search import discovery
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
@@ -177,7 +177,7 @@ async def test_re_adding_a_paper_saved_without_a_pdf_is_already_in_library(sessi
 
     assert (again["status"], again["paper_id"]) == ("already_in_library", first["paper_id"])
     assert (plain["status"], plain["paper_id"]) == ("already_in_library", first["paper_id"])
-    assert plain["note"] == pipeline.NO_COPY_NOTE
+    assert plain["note"] == pipeline_add.NO_COPY_NOTE
     assert [j[0] for j in jobs.jobs] == ["fill_paper_biblio", "index_abstract"]  # only the first save's jobs
     assert await session.scalar(select(func.count()).select_from(Paper).where(Paper.doi == doi.lower())) == 1
 
@@ -205,7 +205,7 @@ async def test_add_papers_on_a_pdfless_held_paper_with_no_copy_says_so(session, 
     [item] = result(await call("add_papers", identifiers=[doi]))
 
     assert (item["status"], item["paper_id"]) == ("already_in_library", str(held.id))
-    assert item["note"] == pipeline.NO_COPY_NOTE
+    assert item["note"] == pipeline_add.NO_COPY_NOTE
     assert jobs.jobs == [] and not (pdf_dir / f"{held.id}.pdf").exists()
 
 
@@ -496,14 +496,14 @@ async def test_add_papers_over_the_cap(jobs):
 
 
 async def test_add_papers_carries_on_after_an_unexpected_failure(session, jobs, monkeypatch):
-    real = pipeline._add
+    real = pipeline_add._add
 
     async def flaky(session, providers, kind, value, workspace_uuid, *rest):
         if kind == "arxiv":
             raise RuntimeError("provider blew up")
         return await real(session, providers, kind, value, workspace_uuid, *rest)
 
-    monkeypatch.setattr(pipeline, "_add", flaky)
+    monkeypatch.setattr(pipeline_add, "_add", flaky)
     ids = [FREE_DOI, discovery_fake.FREE_ARXIV_ID, f"{discovery_fake.DOI_PREFIX}nope"]
 
     items = result(await call("add_papers", identifiers=ids))
@@ -676,7 +676,7 @@ async def test_adding_a_publisher_doi_reuses_the_arxiv_copy_in_the_library(sessi
     copy = await library_copy(session, tmp_path, f"10.48550/arxiv.{REAL_ARXIV}", openalex_id="W4399694541")
     ws = await workspaces.create(session, f"Reuse {RUN}")
 
-    added = await pipeline.add_paper(session, REAL_TACL_DOI, workspace=f"Reuse {RUN}")
+    added = await pipeline_add.add_paper(session, REAL_TACL_DOI, workspace=f"Reuse {RUN}")
 
     await session.refresh(copy)
     assert [p.id for p in await with_title(session)] == [copy.id]
@@ -693,7 +693,7 @@ async def test_adding_a_publisher_doi_reuses_the_arxiv_copy_in_the_library(sessi
 async def test_a_failed_arxiv_copy_is_requeued_when_the_publisher_doi_is_added(session, tmp_path, jobs, real_world):
     copy = await library_copy(session, tmp_path, f"10.48550/arxiv.{REAL_ARXIV}", status=PaperStatus.FAILED)
 
-    added = await pipeline.add_paper(session, REAL_TACL_DOI)
+    added = await pipeline_add.add_paper(session, REAL_TACL_DOI)
 
     await session.refresh(copy)
     assert (added.status, added.paper_id) == ("queued", copy.id)
@@ -706,7 +706,7 @@ async def test_a_locked_published_doi_on_the_copy_is_kept(session, tmp_path, job
         manual_fields=["published_doi", "published_venue"], peer_reviewed="false",
     )  # fmt: skip
 
-    added = await pipeline.add_paper(session, REAL_TACL_DOI)
+    added = await pipeline_add.add_paper(session, REAL_TACL_DOI)
 
     await session.refresh(copy)
     assert added.paper_id == copy.id and len(await with_title(session)) == 1
@@ -731,7 +731,7 @@ async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_reuses_it
 
     real_world.pdf_host.reply(f"/pdf/{REAL_ARXIV}", 200, content=b"%PDF-1.7\n%real\n")
     monkeypatch.setattr(discovery, "search", search)
-    added = await pipeline.add_paper(session, REAL_ARXIV)
+    added = await pipeline_add.add_paper(session, REAL_ARXIV)
 
     assert [p.id for p in await with_title(session)] == [held.id] and added.paper_id == held.id
     await session.refresh(held)

@@ -8,9 +8,9 @@ import httpx
 import pytest
 from sqlalchemy import delete
 
-from app.core.papers import paper_sources, pipeline
+from app.core.papers import paper_sources, pipeline_search
 from app.core.platform import queue
-from app.core.search import prisma_export, search_run_results, workspace_search
+from app.core.search import batch_fetch, prisma_export, search_run_results
 from app.models import PaperSources
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -152,8 +152,8 @@ async def test_both_tools_return_the_same_report(session, stored_run):
     await session.flush()
     workspace = await session.get(Workspace, stored_run.workspace_id)
 
-    one = await pipeline.get_search_run(session, stored_run.id)
-    [listed] = await pipeline.list_search_runs(session, workspace.name)
+    one = await pipeline_search.get_search_run(session, stored_run.id)
+    [listed] = await pipeline_search.list_search_runs(session, workspace.name)
 
     fields = ("hit_count", "per_source_raw_count", "failed_sources", "source_results", "outcome", "prescreen")
     assert {f: getattr(one, f) for f in fields} == {f: getattr(listed, f) for f in fields}
@@ -183,11 +183,11 @@ async def test_starting_a_run_warns_before_the_wait_about_a_source_that_will_giv
     session.add(workspace)
     await session.flush()
     sources = ["semantic_scholar", "arxiv", "openalex"]
-    out = await pipeline.start_search_run(session, workspace.name, "creativity", sources)
+    out = await pipeline_search.start_search_run(session, workspace.name, "creativity", sources)
     # Defaults: Semantic Scholar on with no key, arXiv fine, OpenAlex off.
     assert [w.source for w in out.warnings] == ["openalex", "semantic_scholar"]
     assert "API key" in [w.message for w in out.warnings if w.source == "semantic_scholar"][0]
-    assert (await pipeline.get_search_run(session, out.id)).warnings == out.warnings  # still there while it runs
+    assert (await pipeline_search.get_search_run(session, out.id)).warnings == out.warnings  # still there while it runs
 
 
 async def test_a_key_clears_the_warning_and_settings_shows_the_same_notice(session):
@@ -206,8 +206,8 @@ async def test_workspace_search_counts_new_hits_for_every_source_that_found_them
     from app.domain.candidates import Candidate
 
     found = {"arxiv": [Candidate(title="Shared paper", doi="10.1/shared", sources=("arxiv", "openalex"))]}
-    counted = workspace_search.Counter()
-    added, child_ids = await workspace_search._store_candidates_as_hits(
+    counted = batch_fetch.Counter()
+    added, child_ids = await batch_fetch._store_candidates_as_hits(
         session, stored_run, "database_search", found, new_by_source=counted
     )
     assert added == 1 and len(child_ids) == 1 and counted["arxiv"] == 1

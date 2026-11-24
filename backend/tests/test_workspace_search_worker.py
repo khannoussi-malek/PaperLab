@@ -9,7 +9,8 @@ import httpx
 import pytest
 from sqlalchemy import delete, func, select, update
 
-from app.core.search.workspace_search import PAGE_SIZE_BY_SOURCE, SOURCE_ERROR_CAP
+from app.core.search import batch_fetch
+from app.core.search.batch_fetch import PAGE_SIZE_BY_SOURCE, SOURCE_ERROR_CAP
 from app.models import PaperSources
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -212,10 +213,9 @@ async def test_worker_bounds_retries_on_a_source_that_always_errors(session, wor
     (real wall-clock minutes, not iterations) so a brief/transient error gets a real chance to clear — the fake
     clock here jumps far enough each call that every cooldown is already over by the next attempt, so this test
     still runs in milliseconds despite that real-world spacing."""
-    from app.core.search import workspace_search as core_module
 
     fake_clock = itertools.count(0, step=10_000)
-    monkeypatch.setattr(core_module, "_now", lambda: datetime.fromtimestamp(next(fake_clock), tz=timezone.utc))
+    monkeypatch.setattr(batch_fetch, "_now", lambda: datetime.fromtimestamp(next(fake_clock), tz=timezone.utc))
 
     always_429 = {"transport": httpx.MockTransport(lambda request: httpx.Response(429))}
     run = await _new_run(session, "running")
@@ -239,12 +239,11 @@ async def test_worker_marks_exhausted_when_the_iteration_cap_is_hit(session, wor
     state — exhausted, not failed — since a bounded scan that found what it found isn't an error."""
     monkeypatch.setattr(worker_module, "MAX_BATCH_ITERATIONS", 3)
 
-    from app.core.search import workspace_search as core_module
 
     async def never_ending_page(client, query, page_size, cursor):
         return [], cursor + page_size  # a "full" page every time — next_cursor is never None, never exhausts
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", never_ending_page)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", never_ending_page)
     real_search_batch = worker_module.search_batch
     calls = 0
 
@@ -269,7 +268,6 @@ async def test_worker_marks_exhausted_when_the_iteration_cap_is_hit(session, wor
 def _fake_pages(monkeypatch, per_source_total: dict[str, int | None], page_size: int = 50) -> dict[str, list[int]]:
     """Every source serves `page_size` unmapped items per page; one with a total ends after that many (a short
     page gives next_cursor None), one with None never ends. Returns the cursors each source was asked for."""
-    from app.core.search import workspace_search as core_module
 
     asked: dict[str, list[int]] = {source: [] for source in per_source_total}
 
@@ -284,9 +282,9 @@ def _fake_pages(monkeypatch, per_source_total: dict[str, int | None], page_size:
         return page
 
     for source in per_source_total:
-        monkeypatch.setitem(core_module._PAGE_FUNCS, source, make(source))
-        monkeypatch.setitem(core_module._MAPPERS, source, lambda raw: None)
-        monkeypatch.setitem(core_module.PAGE_SIZE_BY_SOURCE, source, page_size)
+        monkeypatch.setitem(batch_fetch._PAGE_FUNCS, source, make(source))
+        monkeypatch.setitem(batch_fetch._MAPPERS, source, lambda raw: None)
+        monkeypatch.setitem(batch_fetch.PAGE_SIZE_BY_SOURCE, source, page_size)
     return asked
 
 
@@ -565,14 +563,13 @@ async def test_a_run_hitting_the_wall_clock_deadline_is_cut_short_and_names_unfi
 
 
 async def test_a_run_hitting_the_iteration_cap_is_cut_short_too(session, worker, monkeypatch):
-    from app.core.search import workspace_search as core_module  # noqa: PLC0415
 
     monkeypatch.setattr(worker_module, "MAX_BATCH_ITERATIONS", 2)
 
     async def never_ending_page(client, query, page_size, cursor):
         return [], cursor + page_size
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", never_ending_page)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", never_ending_page)
     run = await _new_run(session, "running")
     session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
     await session.commit()
@@ -592,10 +589,9 @@ async def test_a_run_that_exhausts_every_source_is_not_cut_short(session, worker
 
 
 async def _run_with_clock_jumping_past_cooldowns(session, monkeypatch, sources, transport):
-    from app.core.search import workspace_search as core_module
 
     fake_clock = itertools.count(0, step=10_000)
-    monkeypatch.setattr(core_module, "_now", lambda: datetime.fromtimestamp(next(fake_clock), tz=timezone.utc))
+    monkeypatch.setattr(batch_fetch, "_now", lambda: datetime.fromtimestamp(next(fake_clock), tz=timezone.utc))
     run = await _new_run(session, "running", sources)
     for source in sources:
         session.add(WorkspaceSearchCursor(run_id=run.id, source=source, cursor_json={"value": 0}))
@@ -605,14 +601,13 @@ async def _run_with_clock_jumping_past_cooldowns(session, monkeypatch, sources, 
 
 
 async def test_a_source_that_errors_to_the_cap_is_recorded_as_failed(session, worker, monkeypatch, caplog):
-    from app.core.search import workspace_search as core_module
 
     async def broken_page(*_args, **_kwargs):
         raise httpx.HTTPStatusError("Client error '429' for url", request=httpx.Request("GET", "https://x"),
                                     response=httpx.Response(429))
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "crossref", broken_page)
-    monkeypatch.setattr(core_module, "_ERROR_BACKOFF_SECONDS", (0,))
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "crossref", broken_page)
+    monkeypatch.setattr(batch_fetch, "_ERROR_BACKOFF_SECONDS", (0,))
     caplog.set_level("WARNING")
     reloaded = await _run_with_clock_jumping_past_cooldowns(
         session, monkeypatch, ["arxiv", "crossref"], discovery_fake.transport()
@@ -625,9 +620,8 @@ async def test_a_source_that_errors_to_the_cap_is_recorded_as_failed(session, wo
 
 
 async def test_a_source_that_errors_once_then_succeeds_is_not_failed(session, worker, monkeypatch):
-    from app.core.search import workspace_search as core_module
 
-    real = core_module._PAGE_FUNCS["arxiv"]
+    real = batch_fetch._PAGE_FUNCS["arxiv"]
     calls = itertools.count()
 
     async def flaky(*args, **kwargs):
@@ -635,7 +629,7 @@ async def test_a_source_that_errors_once_then_succeeds_is_not_failed(session, wo
             raise httpx.ConnectError("boom")
         return await real(*args, **kwargs)
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", flaky)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", flaky)
     reloaded = await _run_with_clock_jumping_past_cooldowns(session, monkeypatch, ["arxiv"],
                                                             discovery_fake.transport())
     assert reloaded.stats_json.get("failed_sources", []) == []
@@ -644,12 +638,11 @@ async def test_a_source_that_errors_once_then_succeeds_is_not_failed(session, wo
 
 
 async def test_a_stored_source_error_is_short_and_has_no_api_key(session, worker, monkeypatch):
-    from app.core.search import workspace_search as core_module
 
     async def broken_page(*_args, **_kwargs):
         raise httpx.ConnectError("Client error '429' for url 'https://x/api?key=SECRET&q=a'" + "x" * 300)
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", broken_page)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", broken_page)
     reloaded = await _run_with_clock_jumping_past_cooldowns(session, monkeypatch, ["arxiv"],
                                                             discovery_fake.transport())
     stored = reloaded.stats_json["per_source_error"]["arxiv"]
@@ -662,7 +655,6 @@ async def test_a_stored_source_error_is_short_and_has_no_api_key(session, worker
 def _endless_titled_pages(monkeypatch, source: str = "arxiv", page_size: int = 50) -> list[int]:
     """An endless source whose items map to distinct papers (title = its offset), so hits really get stored.
     Returns the cursors the source was asked for."""
-    from app.core.search import workspace_search as core_module
     from app.domain.candidates import Candidate
 
     asked: list[int] = []
@@ -671,10 +663,10 @@ def _endless_titled_pages(monkeypatch, source: str = "arxiv", page_size: int = 5
         asked.append(cursor)
         return list(range(cursor, cursor + size)), cursor + size
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, source, page)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, source, page)
     monkeypatch.setitem(
-        core_module._MAPPERS, source, lambda raw: Candidate(title=f"Continue paper {raw}", sources=(source,)))
-    monkeypatch.setitem(core_module.PAGE_SIZE_BY_SOURCE, source, page_size)
+        batch_fetch._MAPPERS, source, lambda raw: Candidate(title=f"Continue paper {raw}", sources=(source,)))
+    monkeypatch.setitem(batch_fetch.PAGE_SIZE_BY_SOURCE, source, page_size)
     return asked
 
 
@@ -843,7 +835,7 @@ async def test_passes_spent_waiting_out_a_cooldown_do_not_use_up_the_run(session
 
 
 def worker_module_result(asked: bool):
-    from app.core.search.workspace_search import BatchResult
+    from app.core.search.batch_fetch import BatchResult
 
     return BatchResult(new_hits=0, asked=asked)
 
@@ -865,14 +857,14 @@ async def test_a_source_that_fails_then_recovers_finishes_complete(session, work
     run = await _new_run(session, "running", ["arxiv"])
     session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
     await session.flush()
-    import app.core.search.workspace_search as core
+    from app.core.search import batch_fetch
 
-    original = core._ERROR_BACKOFF_SECONDS
-    core._ERROR_BACKOFF_SECONDS = (0, 0, 0, 0, 0)
+    original = batch_fetch._ERROR_BACKOFF_SECONDS
+    batch_fetch._ERROR_BACKOFF_SECONDS = (0, 0, 0, 0, 0)
     try:
         await worker_module.run_workspace_search({"transport": Flaky()}, str(run.id))
     finally:
-        core._ERROR_BACKOFF_SECONDS = original
+        batch_fetch._ERROR_BACKOFF_SECONDS = original
     await session.refresh(run)
     query = select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id)
     [cursor] = (await session.scalars(query)).all()
@@ -895,7 +887,7 @@ async def test_an_error_with_no_message_still_names_itself(session, worker):
     await session.refresh(run)
     from app.core.papers import paper_sources
     from app.core.search import discovery
-    from app.core.search.workspace_search import search_batch
+    from app.core.search.batch_fetch import search_batch
 
     providers = discovery.build_providers(await paper_sources.get(session), TimingOut())
     result = await search_batch(session, providers, run)

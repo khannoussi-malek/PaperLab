@@ -5,7 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from app.core.search import branches, screening, workspace_search
+from app.core.search import branches, screening, search_hits, snowball_run
 from app.domain.errors import InvalidInput, NotFound
 from app.models.provenance import WorkspaceBranchState
 from app.schemas.workspace_search import HitReviewUpdate
@@ -64,14 +64,14 @@ async def test_set_branch_rejects_bad_input(session):
 
 async def test_including_a_hit_defaults_to_go_further_both_ways(session):
     workspace, (hit,) = await make_pool(session, [("a", None)])
-    await workspace_search.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
+    await search_hits.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
     row = await _row(session, hit)
     assert (row.state, row.directions) == ("go_further", BOTH)
 
 
 async def test_excluding_defaults_to_stopped(session):
     workspace, (a, b) = await make_pool(session, [("a", None)] * 2)
-    await workspace_search.bulk_review_hits(session, workspace.id, [a.id, b.id], "not_relevant", "wrong_topic", None)
+    await search_hits.bulk_review_hits(session, workspace.id, [a.id, b.id], "not_relevant", "wrong_topic", None)
     assert (await _row(session, a)).state == "stopped" and (await _row(session, b)).state == "stopped"
 
 
@@ -88,7 +88,7 @@ async def test_accepted_suggestion_sets_default(session):
 async def test_screening_default_never_overwrites_a_hand_choice(session):
     workspace, (hit,) = await make_pool(session, [("a", None)])
     await branches.set_branch(session, workspace.id, hit_id=hit.id, state="stopped", directions=[], reason=None)
-    await workspace_search.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
+    await search_hits.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
     assert (await _row(session, hit)).state == "stopped"
 
 
@@ -111,8 +111,8 @@ async def test_branch_route_round_trip(client, session):
 
 async def test_flipped_decision_updates_a_screening_default(session):
     workspace, (hit,) = await make_pool(session, [("a", None)])
-    await workspace_search.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
-    await workspace_search.review_hit(
+    await search_hits.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
+    await search_hits.review_hit(
         session, hit.id, workspace.id,
         HitReviewUpdate(stage1_status="not_relevant", stage1_exclude_reason="wrong_topic"),
     )
@@ -124,12 +124,12 @@ async def test_flipped_decision_updates_a_screening_default(session):
 async def test_undone_decision_clears_a_screening_default(session):
     workspace, (hit, owned) = await make_pool(session, [("a", None)] * 2)
     for h in (hit, owned):
-        await workspace_search.review_hit(session, h.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
+        await search_hits.review_hit(session, h.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
     await branches.set_branch(
         session, workspace.id, hit_id=owned.id, state="go_further", directions=["cites"], reason=None
     )
     for h in (hit, owned):
-        await workspace_search.review_hit(session, h.id, workspace.id, HitReviewUpdate(stage1_status=None))
+        await search_hits.review_hit(session, h.id, workspace.id, HitReviewUpdate(stage1_status=None))
     assert await _row(session, hit) is None
     assert (await _row(session, owned)).set_by == "owner"
 
@@ -143,9 +143,9 @@ async def test_default_skips_hits_from_another_workspace(session):
 
 async def test_maybe_clears_a_screening_default(session):
     workspace, (hit,) = await make_pool(session, [("a", None)])
-    await workspace_search.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
+    await search_hits.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
     assert (await _row(session, hit)).state == "go_further"
-    await workspace_search.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="maybe"))
+    await search_hits.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="maybe"))
     assert await _row(session, hit) is None
 
 
@@ -190,7 +190,7 @@ async def test_snowball_next_lists_unrun_directions(session, edge_providers):
     for hit in (seed, fresh):
         await branches.set_branch(session, workspace.id, hit_id=hit.id, state="go_further", directions=BOTH, reason=None)
     await branches.set_branch(session, workspace.id, hit_id=stopped.id, state="stopped", directions=[], reason=None)
-    await workspace_search.snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
+    await snowball_run.snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
 
     items = {i.hit_id: i for i in await snowball_next.snowball_next(session, workspace.id)}
     assert set(items) == {seed.id, fresh.id}
@@ -214,7 +214,7 @@ async def test_snowball_next_leaves_out_a_seed_not_found_in_semantic_scholar(ses
     workspace, run = await _workspace_and_run(session)
     seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
     await branches.set_branch(session, workspace.id, hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
-    entry = workspace_search._seed_entry(seed.id, "hit", "Seed Alpha", skipped=workspace_search.NOT_IN_S2, hit_id=seed.id)
+    entry = snowball_run._seed_entry(seed.id, "hit", "Seed Alpha", skipped=snowball_run.NOT_IN_S2, hit_id=seed.id)
     run.stats_json = {"snowball": {"seeds": [entry], "directions": BOTH}}
     await session.commit()
     assert await snowball_next.snowball_next(session, workspace.id) == []

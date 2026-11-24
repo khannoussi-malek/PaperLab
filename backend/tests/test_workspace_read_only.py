@@ -18,7 +18,7 @@ from test_chat_workspace_api import make_paper, make_workspace, query_model  # n
 from app.api.deps import get_discovery
 from app.core.papers import papers
 from app.core.platform import queue
-from app.core.search import saved_searches, schedules, workspace_search
+from app.core.search import saved_searches, schedules, search_hits
 from app.core.workspaces import tags, workspace_package, workspaces
 from app.domain.errors import Conflict, NotFound
 from app.models import Workspace
@@ -90,7 +90,7 @@ async def test_a_core_write_on_a_read_only_workspace_is_refused(session, pdf_dir
     with pytest.raises(Conflict):
         await tags.rename_by_id(session, locked["ws"], locked["tag"], "Other")
     with pytest.raises(Conflict):
-        await workspace_search.clear_hits(session, locked["ws"])
+        await search_hits.clear_hits(session, locked["ws"])
 
 
 async def test_make_editable_clears_the_flag_for_good(session, pdf_dir):

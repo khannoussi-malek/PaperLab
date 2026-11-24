@@ -8,7 +8,7 @@ from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core.notes.note_counts import MAX_PAPERS, note_counts
 from app.core.papers import enrichment, paper_events, papers
-from app.core.papers.pipeline import MAX_UPLOAD_PDF_BYTES
+from app.core.papers.pipeline_upload import MAX_UPLOAD_PDF_BYTES
 from app.core.platform.queue import INGEST_QUEUE
 from app.core.search import discovery
 from app.core.workspaces import tags, workspaces

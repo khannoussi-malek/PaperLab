@@ -9,9 +9,10 @@ from sqlalchemy import select
 from app.api.deps import get_discovery
 from app.core.papers.paper_sources import SOURCES, SourceSettings
 from app.core.search import discovery
+from app.core.search.batch_fetch import search_batch
 from app.core.search.candidates import normal_title
 from app.core.search.hit_links import level_of
-from app.core.search.workspace_search import search_batch, snowball
+from app.core.search.snowball_run import snowball
 from app.core.workspaces import workspaces
 from app.models import Paper
 from app.models.provenance import WorkspaceHitLink

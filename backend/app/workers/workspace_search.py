@@ -11,13 +11,8 @@ from app.core.papers import paper_sources
 from app.core.platform import queue
 from app.core.platform.redact import redact
 from app.core.search import discovery, screening
-from app.core.search.workspace_search import (
-    PER_SOURCE_PASS_LIMIT,
-    SEARCH_RUN_JOB_TIMEOUT,
-    get_run,
-    search_batch,
-    try_run_lock,
-)
+from app.core.search.batch_fetch import search_batch
+from app.core.search.workspace_search import PER_SOURCE_PASS_LIMIT, SEARCH_RUN_JOB_TIMEOUT, get_run, try_run_lock
 from app.db import SessionLocal
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchRun

@@ -19,8 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.platform.redact import redact
 from app.core.search import prisma_export, search_run_results
+from app.core.search.batch_fetch import _find_or_create_external_ref
 from app.core.search.candidates import normal_title
-from app.core.search.workspace_search import _find_or_create_external_ref
 from app.core.workspaces.workspace_package_shapes import CursorState, StatsRow
 from app.domain.candidates import Candidate
 from app.models import Paper

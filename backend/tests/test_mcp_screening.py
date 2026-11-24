@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.core.notes import notes as notes_core
 from app.core.papers import paper_sources
 from app.core.papers.paper_sources import SourceSettings
-from app.core.search import discovery, workspace_search
+from app.core.search import batch_fetch, discovery, snowball_run, workspace_search
 from app.core.search.source_registry import SOURCE_IDS
 from app.core.workspaces import workspaces
 from app.models import Note, Paper
@@ -127,7 +127,7 @@ async def run_with_hits(session, label: str, query: str = "bert"):
     every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
     providers = discovery.build_providers(every, discovery_fake.transport())
     try:
-        await workspace_search.search_batch(session, providers, run)
+        await batch_fetch.search_batch(session, providers, run)
     finally:
         await providers.aclose()
     return ws, run
@@ -202,7 +202,7 @@ async def test_import_hit_queues_ingest_for_a_free_pdf_and_not_for_a_failure(ses
     every = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCE_IDS, True))
     providers = discovery.build_providers(every, discovery_fake.transport())
     try:
-        await workspace_search.snowball(session, providers, ws.id, [], [uuid.UUID(seed)], backward=True, forward=False)
+        await snowball_run.snowball(session, providers, ws.id, [], [uuid.UUID(seed)], backward=True, forward=False)
     finally:
         await providers.aclose()
     hits = result(await call("list_hits", workspace=f"Import {RUN}"))["hits"]
@@ -419,7 +419,7 @@ async def test_pausing_an_unknown_saved_search_says_so(session):
 
 from screening_pool import make_pool  # noqa: E402
 
-from app.core.papers import pipeline  # noqa: E402
+from app.core.papers import pipeline_search  # noqa: E402
 from app.core.search import screening  # noqa: E402
 from app.models.workspace_search import WorkspaceSearchRun  # noqa: E402
 
@@ -487,7 +487,7 @@ async def test_run_prescreen_with_allow_remote_starts_on_a_remote_model(session,
 
 async def test_allow_remote_does_not_lift_the_size_check(session, jobs, monkeypatch):
     _model(monkeypatch, False)
-    monkeypatch.setattr(pipeline, "PRESCREEN_CONFIRM_ABOVE", 2)
+    monkeypatch.setattr(pipeline_search, "PRESCREEN_CONFIRM_ABOVE", 2)
     workspace, _ = await _pool(session)
     response = await call("run_prescreen", workspace=workspace.name, allow_remote=True)
     assert response.is_error and response.structured_content["error"] == "prescreen_needs_confirm"
@@ -660,7 +660,7 @@ async def test_list_search_runs_clamps_the_limit(session, jobs):
 
 async def test_run_prescreen_without_a_run_refuses_a_big_queue_unless_confirmed(session, jobs, monkeypatch):
     _model(monkeypatch, True)
-    monkeypatch.setattr(pipeline, "PRESCREEN_CONFIRM_ABOVE", 2)
+    monkeypatch.setattr(pipeline_search, "PRESCREEN_CONFIRM_ABOVE", 2)
     workspace, _ = await _pool(session)  # 3 hits queued
     refused = await call("run_prescreen", workspace=workspace.name)
     assert refused.is_error and refused.structured_content["error"] == "prescreen_needs_confirm"
@@ -671,14 +671,14 @@ async def test_run_prescreen_without_a_run_refuses_a_big_queue_unless_confirmed(
 
 async def test_run_prescreen_at_the_limit_starts_without_confirm(session, jobs, monkeypatch):
     _model(monkeypatch, True)
-    monkeypatch.setattr(pipeline, "PRESCREEN_CONFIRM_ABOVE", 3)
+    monkeypatch.setattr(pipeline_search, "PRESCREEN_CONFIRM_ABOVE", 3)
     workspace, _ = await _pool(session)
     assert result(await call("run_prescreen", workspace=workspace.name))["suggest_status"] == "running"
 
 
 async def test_run_prescreen_for_one_run_never_needs_confirm(session, jobs, monkeypatch):
     _model(monkeypatch, True)
-    monkeypatch.setattr(pipeline, "PRESCREEN_CONFIRM_ABOVE", 0)
+    monkeypatch.setattr(pipeline_search, "PRESCREEN_CONFIRM_ABOVE", 0)
     workspace, (hit, *_) = await _pool(session)
     state = result(await call("run_prescreen", workspace=workspace.name, run_id=str(hit.run_id)))
     assert state["suggest_status"] == "running"
@@ -760,7 +760,7 @@ async def test_run_id_and_run_ids_together_are_refused(session, jobs, monkeypatc
 
 async def test_run_ids_over_the_limit_need_confirm(session, jobs, monkeypatch):
     _model(monkeypatch, True)
-    monkeypatch.setattr(pipeline, "PRESCREEN_CONFIRM_ABOVE", 1)
+    monkeypatch.setattr(pipeline_search, "PRESCREEN_CONFIRM_ABOVE", 1)
     workspace, (r1, r2, _) = await _runs(session)
     refused = await call("run_prescreen", workspace=workspace.name, run_ids=[str(r1), str(r2)])
     assert refused.is_error and refused.structured_content["error"] == "prescreen_needs_confirm"

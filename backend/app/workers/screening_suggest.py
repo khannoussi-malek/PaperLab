@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, text
 
 from app.core.platform import llm_connections, queue
-from app.core.search import discovery, workspace_search
+from app.core.search import discovery, hit_import
 from app.core.search.screening import hit_text, load_pool, suggestion_queue
 from app.core.search.screening_suggest import SCREENING_PROMPT_VERSION, SuggestionV2, suggest
 from app.db import SessionLocal, engine
@@ -65,7 +65,7 @@ async def _auto_import(session, workspace: Workspace, run_ids: Collection[uuid.U
     if not ids:
         return
     async with discovery.open_providers(session) as providers:
-        result = await workspace_search.import_hits(session, providers, workspace.id, ids)
+        result = await hit_import.import_hits(session, providers, workspace.id, ids)
     for paper_id in result.paper_ids:
         await queue.enqueue("ingest_paper", str(paper_id))
 

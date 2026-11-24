@@ -7,16 +7,12 @@ import pytest
 from sqlalchemy import func, select
 
 from app.core.papers.paper_sources import SOURCES, SourceSettings
-from app.core.search import discovery
+from app.core.search import batch_fetch, discovery
+from app.core.search.batch_fetch import _find_or_create_external_ref, _insert_hit, search_batch
 from app.core.search.candidates import normal_title
 from app.core.search.prisma_export import PrismaExport, prisma_export
-from app.core.search.workspace_search import (
-    _find_or_create_external_ref,
-    _insert_hit,
-    search_batch,
-    set_eligibility,
-    snowball,
-)
+from app.core.search.snowball_run import snowball
+from app.core.search.workspace_search import set_eligibility
 from app.core.workspaces import workspaces
 from app.domain.candidates import Candidate
 from app.models.references import ExternalRef
@@ -507,7 +503,6 @@ async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_e
     consecutive-iteration retries land within a couple of pacing intervals of each other (a few seconds), which
     doesn't give a brief/transient error (arXiv's API has answered a plain 406 to an otherwise-valid, identical
     request that then succeeded seconds later) any real chance to clear before the source is abandoned."""
-    from app.core.search import workspace_search as core_module
 
     fails_once = [True]
 
@@ -517,9 +512,9 @@ async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_e
             raise httpx.HTTPError("transient 406")
         return [], None
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
     fake_clock = iter([datetime(2026, 1, 1, tzinfo=timezone.utc), datetime(2026, 1, 1, 0, 0, 1, tzinfo=timezone.utc)])
-    monkeypatch.setattr(core_module, "_now", lambda: next(fake_clock))
+    monkeypatch.setattr(batch_fetch, "_now", lambda: next(fake_clock))
 
     run = await _new_run(session, ["arxiv"])
     await search_batch(session, fake_providers, run)  # first call: errors, starts a 10s cooldown
@@ -545,7 +540,6 @@ async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_e
 async def test_search_batch_retries_a_cooled_down_source_and_a_success_clears_the_error_count(session, fake_providers, monkeypatch):
     """Once the cooldown has genuinely elapsed, the source is tried again — and a page that succeeds this time
     clears the error streak entirely (same as a fresh cursor), not just decrements it."""
-    from app.core.search import workspace_search as core_module
 
     fails_once = [True]
 
@@ -555,9 +549,9 @@ async def test_search_batch_retries_a_cooled_down_source_and_a_success_clears_th
             raise httpx.HTTPError("transient 406")
         return [], None  # succeeds and exhausts cleanly on the retry
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
     far_future = iter([datetime(2026, 1, 1, tzinfo=timezone.utc), datetime(2026, 1, 1, 1, tzinfo=timezone.utc)])
-    monkeypatch.setattr(core_module, "_now", lambda: next(far_future))
+    monkeypatch.setattr(batch_fetch, "_now", lambda: next(far_future))
 
     run = await _new_run(session, ["arxiv"])
     await search_batch(session, fake_providers, run)  # errors, starts a cooldown
@@ -840,7 +834,6 @@ async def test_stop_run_on_a_non_running_run_is_conflict(session):
 async def test_search_batch_uses_the_per_source_query_override(session, fake_providers, monkeypatch):
     """P11's per-source override (run.query_overrides_json) must actually reach that source's search_page call —
     before this fix it was accepted, stored, and silently ignored (I6 part 1)."""
-    import app.core.search.workspace_search as core_module
 
     seen_queries = []
     real_page = arxiv.search_page
@@ -849,7 +842,7 @@ async def test_search_batch_uses_the_per_source_query_override(session, fake_pro
         seen_queries.append(query)
         return await real_page(http, query, page_size, cursor)
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", recording_page)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", recording_page)
 
     run = await _new_run(session, ["arxiv"])
     run.query_overrides_json = {"arxiv": "transformer architectures"}
@@ -1330,7 +1323,7 @@ async def test_search_batch_drops_known_out_of_range_years_and_keeps_undated(ses
 
 
 async def test_search_batch_skips_a_paused_source(session, fake_providers, monkeypatch):
-    from app.core.search import workspace_search as core_module
+    from app.core.search import batch_fetch
 
     asked = []
 
@@ -1338,7 +1331,7 @@ async def test_search_batch_skips_a_paused_source(session, fake_providers, monke
         asked.append(cursor)
         return [], cursor + page_size
 
-    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", arxiv_search)
+    monkeypatch.setitem(batch_fetch._PAGE_FUNCS, "arxiv", arxiv_search)
     run = await _new_run(session, ["arxiv"])
     cursor = (
         await session.execute(select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id))

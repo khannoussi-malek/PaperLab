@@ -242,10 +242,10 @@ async def test_a_quote_on_a_paper_with_a_pdf_is_422_anchor_required(client, sess
 
 
 async def test_a_failed_paper_without_a_pdf_re_added_by_identifier_is_left_alone(session, jobs):
-    from app.core.papers import pipeline
+    from app.core.papers import pipeline_add
 
     paper = await pdf_less_paper(session, status="failed")
-    added = await pipeline._in_library(session, paper.id, None)
+    added = await pipeline_add._in_library(session, paper.id, None)
     await session.refresh(paper)
     assert (paper.status, jobs.jobs, added.paper_id) == ("failed", [], paper.id)
 
@@ -538,7 +538,7 @@ async def test_a_failed_index_abstract_enqueue_on_edit_leaves_the_paper_ready(cl
 
 async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, monkeypatch):
     """upload_hit_pdf only needs a holder found by identifier; held_version can write a DOI onto an arXiv copy."""
-    from app.core.search import discovery, workspace_search
+    from app.core.search import discovery, hit_import
     from app.models import Workspace
     from app.models.references import ExternalRef
     from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
@@ -564,6 +564,6 @@ async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, mo
     session.add(hit)
     await session.commit()
 
-    _, created = await workspace_search.upload_hit_pdf(session, workspace.id, hit.id, "p.pdf", b"%PDF-1.4 probe")
+    _, created = await hit_import.upload_hit_pdf(session, workspace.id, hit.id, "p.pdf", b"%PDF-1.4 probe")
 
     assert created

@@ -32,7 +32,7 @@ from app.core.citations import citations_bundle_read, citations_import_apply
 from app.core.citations.citations_bundle import SPOOL_BYTES
 from app.core.citations.citations_import import CitationsImportError
 from app.core.notes import notes
-from app.core.papers import papers, pipeline
+from app.core.papers import papers, pipeline_upload
 from app.core.platform import queue
 from app.core.search import discovery, prisma_export, screening, search_run_results
 from app.core.workspaces import tags, workspace_package_answers, workspace_package_screening, workspaces  # fmt: skip
@@ -528,7 +528,7 @@ def _pdf_member(zf: zipfile.ZipFile, rec: dict) -> zipfile.ZipInfo | None:
     if not name or name not in zf.NameToInfo:
         return None
     info = zf.getinfo(name)
-    if info.file_size > pipeline.MAX_UPLOAD_PDF_BYTES:
+    if info.file_size > pipeline_upload.MAX_UPLOAD_PDF_BYTES:
         return None
     with zf.open(info) as source:
         return info if source.read(len(papers.PDF_MAGIC)) == papers.PDF_MAGIC else None

@@ -12,7 +12,7 @@ from sqlalchemy.pool import NullPool
 from app.core.papers import pdf_links
 from app.core.papers.paper_sources import SourceSettings
 from app.core.platform import queue
-from app.core.search import discovery, screening, workspace_search
+from app.core.search import discovery, screening, snowball_run
 from app.core.search.screening_suggest import SYSTEM_PROMPT_V2
 from app.core.search.source_registry import SOURCE_IDS
 from app.models.references import ExternalRef
@@ -395,7 +395,7 @@ async def free_and_closed(session, monkeypatch, pdf_dir):
     monkeypatch.setattr(pdf_links, "resolve_host", resolve)
     arq = FakeArq()
     monkeypatch.setattr(queue, "_pool", arq)
-    await workspace_search.snowball(session, providers, workspace.id, [], [hits[0].id], backward=True, forward=False)
+    await snowball_run.snowball(session, providers, workspace.id, [], [hits[0].id], backward=True, forward=False)
     rows = (await session.execute(
         select(WorkspaceSearchHit, ExternalRef.doi)
         .join(ExternalRef, WorkspaceSearchHit.external_ref_id == ExternalRef.id)

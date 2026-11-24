@@ -8,7 +8,7 @@ import pytest
 from conftest import FakeArq
 from sqlalchemy import delete
 
-from app.core.papers import papers, pdf_recheck, pipeline
+from app.core.papers import papers, pdf_recheck, pipeline_add, pipeline_search
 from app.core.platform import queue
 from app.core.search import discovery
 from app.models import Paper, PaperSources
@@ -140,8 +140,8 @@ async def test_saved_without_pdf_after_a_busy_source_says_so_and_schedules_a_ret
     await session.execute(delete(PaperSources))
     paper = await saved_paper(session)
     tried = [{"url": "https://arxiv.org/pdf/2605.13776", "outcome": "http_429"}]
-    result = pipeline.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, title=paper.title, tried=tried)
-    finished = await pipeline._note_temporary_failures(session, result)
+    result = pipeline_add.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, title=paper.title, tried=tried)
+    finished = await pipeline_add._note_temporary_failures(session, result)
     assert finished.temporary_failures == tried and finished.retry_scheduled is True
     assert "tried again" in finished.note
     assert arq.jobs == [("retry_free_pdf", str(paper.id), 0)]
@@ -149,26 +149,26 @@ async def test_saved_without_pdf_after_a_busy_source_says_so_and_schedules_a_ret
 
 async def test_saved_without_pdf_with_no_copy_anywhere_schedules_nothing(session, arq):
     tried = [{"url": "arxiv.org (title search)", "outcome": "no_match"}]
-    result = pipeline.AddPaperResult(status="saved_without_pdf", paper_id=uuid.uuid4(), tried=tried)
-    finished = await pipeline._note_temporary_failures(session, result)
+    result = pipeline_add.AddPaperResult(status="saved_without_pdf", paper_id=uuid.uuid4(), tried=tried)
+    finished = await pipeline_add._note_temporary_failures(session, result)
     assert finished.temporary_failures == [] and finished.retry_scheduled is False and arq.jobs == []
 
 
 async def test_no_free_pdf_after_a_busy_source_tells_the_caller_what_to_do(session, arq):
     tried = [{"url": "https://x.org/a.pdf", "outcome": "error: ConnectError"}]
-    result = pipeline.AddPaperResult(status="no_free_pdf", tried=tried)
-    finished = await pipeline._note_temporary_failures(session, result)
+    result = pipeline_add.AddPaperResult(status="no_free_pdf", tried=tried)
+    finished = await pipeline_add._note_temporary_failures(session, result)
     assert finished.retry_scheduled is False and "save_without_pdf" in finished.note and arq.jobs == []
 
 
 async def test_a_paper_already_held_is_retried_too_when_its_new_look_met_a_busy_source(session, arq):
     await session.execute(delete(PaperSources))
     tried = [{"url": "https://x.org/a.pdf", "outcome": "busy"}]
-    result = pipeline.AddPaperResult(
-        status="already_in_library", paper_id=uuid.uuid4(), tried=tried, note=pipeline.NO_COPY_NOTE,
+    result = pipeline_add.AddPaperResult(
+        status="already_in_library", paper_id=uuid.uuid4(), tried=tried, note=pipeline_add.NO_COPY_NOTE,
     )
-    finished = await pipeline._note_temporary_failures(session, result)
-    assert finished.retry_scheduled is True and finished.note != pipeline.NO_COPY_NOTE
+    finished = await pipeline_add._note_temporary_failures(session, result)
+    assert finished.retry_scheduled is True and finished.note != pipeline_add.NO_COPY_NOTE
 
 
 async def workspace_with(session, papers_):
@@ -189,11 +189,11 @@ async def test_the_batch_tool_queues_a_workspaces_papers_without_a_pdf_once(sess
     await session.flush()
     workspace = await workspace_with(session, [missing, has_pdf])
 
-    first = await pipeline.recheck_free_copies(session, workspace.name)
+    first = await pipeline_search.recheck_free_copies(session, workspace.name)
     assert (first.queued, first.already_running) == (1, False)
     assert arq.jobs == [("recheck_papers", [str(missing.id)])]
 
-    again = await pipeline.recheck_free_copies(session, workspace.name)
+    again = await pipeline_search.recheck_free_copies(session, workspace.name)
     assert again.already_running is True and len(arq.jobs) == 1
 
 
@@ -203,7 +203,7 @@ async def test_the_batch_tool_scopes_to_a_tag(session, arq):
     tagged, other = await saved_paper(session), await saved_paper(session)
     workspace = await workspace_with(session, [tagged, other])
     await tags.tag_papers(session, workspace.id, "read me", [tagged.id], ())
-    out = await pipeline.recheck_free_copies(session, workspace.name, tags_=["read me"])
+    out = await pipeline_search.recheck_free_copies(session, workspace.name, tags_=["read me"])
     assert out.queued == 1 and arq.jobs == [("recheck_papers", [str(tagged.id)])]
 
 
@@ -286,8 +286,8 @@ async def test_a_paper_that_has_its_pdf_is_left_out_of_the_retry_and_the_note(se
     paper.file_path = "held.pdf"
     await session.flush()
     tried = [{"url": "https://x.org/a.pdf", "outcome": "http_429"}]
-    result = pipeline.AddPaperResult(status="already_in_library", paper_id=paper.id, tried=tried)
-    assert await pipeline._note_temporary_failures(session, result) == result
+    result = pipeline_add.AddPaperResult(status="already_in_library", paper_id=paper.id, tried=tried)
+    assert await pipeline_add._note_temporary_failures(session, result) == result
     assert arq.jobs == []
 
 
@@ -308,9 +308,9 @@ async def test_a_queue_outage_does_not_fail_an_add_that_already_saved_the_paper(
 
     monkeypatch.setattr(queue, "enqueue", down)
     tried = [{"url": "https://x.org/a.pdf", "outcome": "busy"}]
-    result = pipeline.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, tried=tried)
-    finished = await pipeline._note_temporary_failures(session, result)
-    assert finished.retry_scheduled is False and finished.note == pipeline.NO_RETRY_NOTE
+    result = pipeline_add.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, tried=tried)
+    finished = await pipeline_add._note_temporary_failures(session, result)
+    assert finished.retry_scheduled is False and finished.note == pipeline_add.NO_RETRY_NOTE
 
 
 async def test_a_retry_look_updates_when_the_paper_was_last_checked(session, arq, monkeypatch):

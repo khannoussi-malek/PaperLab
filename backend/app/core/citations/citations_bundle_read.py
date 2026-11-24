@@ -13,7 +13,7 @@ from typing import IO
 
 from app.core.citations.citations_bundle import EXPORT_NAME
 from app.core.citations.citations_import import MAX_BYTES, CitationsImportError, ImportEntry, parse
-from app.core.papers.pipeline import MAX_UPLOAD_PDF_BYTES
+from app.core.papers.pipeline_upload import MAX_UPLOAD_PDF_BYTES
 
 MAX_ZIP_BYTES = 200 * 1024 * 1024  # total uncompressed
 MAX_MEMBERS = 20_000

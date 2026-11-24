@@ -16,7 +16,7 @@ from app.api import workspace_search as workspace_search_api
 from app.api.deps import get_discovery
 from app.core.notes import notes
 from app.core.papers import papers
-from app.core.search import discovery, retrieved_hits, workspace_search
+from app.core.search import discovery, hit_import, retrieved_hits
 from app.core.search.prisma_export import prisma_export
 from app.core.workspaces import tags, workspaces
 from app.domain.errors import Conflict
@@ -383,7 +383,7 @@ async def assert_upgraded_in_place(session, ws, held, hit, note, status):
 async def test_a_hit_upload_upgrades_the_paper_it_is_linked_to_by_title(session, pdf_dir):
     ws, held, hit, note = await title_linked(session)
 
-    _, created = await workspace_search.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF)
+    _, created = await hit_import.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF)
 
     assert created
     await assert_upgraded_in_place(session, ws, held, hit, note, "manual")
@@ -393,7 +393,7 @@ async def test_import_all_upgrades_the_paper_a_hit_is_linked_to_by_title(session
     ws, held, hit, note = await title_linked(session)
     discovery_fakes.pdf_host.reply("/ok.pdf", 200, content=PDF)
 
-    result = await workspace_search.import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+    result = await hit_import.import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
 
     assert result.paper_ids == [held.id]
     await assert_upgraded_in_place(session, ws, held, hit, note, "imported")
@@ -427,7 +427,7 @@ async def test_the_hit_route_and_the_paper_route_lock_the_paper_before_its_hits(
     await awaiting(session, ws, other)
 
     for upgrade in (
-        lambda: workspace_search.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF),
+        lambda: hit_import.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF),
         lambda: papers.attach_pdf(session, other.id, PDF, how="manual"),
     ):
         with sent(session) as seen:
