@@ -18,7 +18,8 @@ from app.core.search import (
     snowball_run,
     workspace_search,
 )
-from app.core.search.hit_provenance import paths_to, provenance
+from app.core.search.hit_paths import paths_to
+from app.core.search.hit_provenance import provenance
 from app.core.search.hit_ranking import RANKED_LIMIT_MAX
 from app.core.search.prisma_export import prisma_export
 from app.domain.errors import InvalidInput
