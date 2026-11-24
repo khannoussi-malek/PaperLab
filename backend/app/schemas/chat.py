@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
-from app.core.lenses import LensId
+from app.domain.sections import LensId
 from app.schemas.papers import Rect
 
 if TYPE_CHECKING:  # core must not import api, and schemas needn't import core at runtime

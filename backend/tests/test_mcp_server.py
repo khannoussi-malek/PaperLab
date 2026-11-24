@@ -103,8 +103,8 @@ async def test_the_server_holds_no_sql_and_imports_only_core():
     imports = [line for line in source.splitlines() if line.startswith(("import ", "from "))]
     assert all(
         line.startswith((
-            "from app.core", "import functools", "import json", "import logging", "import re", "import time",
-            "import uuid", "from mcp", "from typing import Annotated", "from pydantic import Field",
+            "from app.core", "from app.domain", "import functools", "import json", "import logging", "import re",
+            "import time", "import uuid", "from mcp", "from typing import Annotated", "from pydantic import Field",
         ))
         or line == "from app.db import SessionLocal"
         for line in imports

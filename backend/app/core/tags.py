@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import workspaces
 from app.core.enrichment import normalize_doi
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, Workspace, WorkspaceTag, hit_tags, paper_tags, workspace_papers
 from app.models.workspace_search import WorkspaceSearchHit
 

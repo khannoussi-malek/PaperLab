@@ -12,7 +12,7 @@ from app.core import chat
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper
 from app.providers import embedding
-from app.providers.llm import FAKE_ANSWER, FAKE_NOTES_ANSWER, FAKE_TOKENS
+from app.providers.llm_fake import FAKE_ANSWER, FAKE_NOTES_ANSWER, FAKE_TOKENS
 
 pytestmark = pytest.mark.anyio
 

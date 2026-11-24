@@ -2,7 +2,7 @@ import pytest
 
 from app.core import manuscript_history, manuscripts
 from app.core import manuscript_section_ops as ops
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 
 pytestmark = pytest.mark.anyio
 

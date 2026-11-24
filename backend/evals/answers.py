@@ -41,9 +41,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 
 from app.config import settings
 from app.core import chat, checks, llm_connections, prompts, retrieval
-from app.core.errors import DomainError
 from app.core.notes import _CITATION, create_paper_note, normalize_quote, note_blocks
 from app.core.retrieval import RetrievedChunk
+from app.domain.errors import DomainError
 from app.models import (
     Chunk,
     LLMConnection,

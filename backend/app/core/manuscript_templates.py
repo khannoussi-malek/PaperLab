@@ -2,8 +2,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TypedDict
 
-from app.core.errors import InvalidInput
 from app.core.manuscript_template_spec import TemplateSpec
+from app.domain.errors import InvalidInput
 
 DIR = Path(__file__).resolve().parent.parent / "manuscript_templates"
 

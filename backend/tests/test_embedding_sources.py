@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.config import settings
 from app.core import embedding_sources, llm_connections
 from app.core.embedding_sources import Source
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import EmbeddingSource
 from app.providers import embedding
 

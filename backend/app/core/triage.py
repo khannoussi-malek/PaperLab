@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import papers
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, TriageEvent
 
 # pile -> (triage it sets, pass it raises to at least). None: leave it alone. The one place the mapping is written.

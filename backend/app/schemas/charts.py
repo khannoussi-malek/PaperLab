@@ -4,7 +4,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.core.chart_spec import ChartSpec
+from app.domain.chart_spec import ChartSpec
 from app.schemas.papers import Rect
 
 ChartType = Literal["bar", "line", "scatter", "box", "scatter3d", "heatmap", "surface", "contour", "parcoords"]

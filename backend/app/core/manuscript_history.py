@@ -7,8 +7,8 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import manuscripts
-from app.core.errors import Conflict, NotFound
 from app.core.manuscript_paths import is_text
+from app.domain.errors import Conflict, NotFound
 from app.models import ManuscriptFile, ManuscriptSnapshot
 
 KEEP = 50

@@ -31,11 +31,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core import discovery, notes, papers, provenance, queue, tags, workspaces
-from app.core.candidates import Candidate, normal_title
+from app.core.candidates import normal_title
 from app.core.citations_bundle_read import Bundle, read_bundle
 from app.core.citations_import import CitationsImportError, ImportEntry, parse
-from app.core.errors import Conflict, DomainError, InvalidInput
-from app.core.source_types import peer_reviewed_of
+from app.domain.candidates import Candidate
+from app.domain.errors import Conflict, DomainError, InvalidInput
+from app.domain.source_types import peer_reviewed_of
 from app.models import Note, Paper, Provenance, note_papers
 from app.providers import pmc_opendata
 

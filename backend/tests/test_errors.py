@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.core.errors import Conflict, DomainError, InvalidInput, NotFound
+from app.domain.errors import Conflict, DomainError, InvalidInput, NotFound
 
 
 def test_details_round_trip():

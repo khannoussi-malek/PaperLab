@@ -3,9 +3,6 @@ from conftest import recorded_discovery
 from pydantic import ValidationError
 
 from app.core.candidates import (
-    MAX_AUTHORS,
-    MAX_PDF_URLS,
-    Candidate,
     _ids,
     from_acm_dl,
     from_biorxiv,
@@ -29,6 +26,7 @@ from app.core.candidates import (
     with_s2,
 )
 from app.core.discovery import classify_query
+from app.domain.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
 from app.schemas.discovery import SOURCE_ID_PATTERNS, CandidateIn, CandidateOut
 
 

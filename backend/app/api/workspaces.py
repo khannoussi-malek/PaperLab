@@ -8,7 +8,7 @@ from app.api.citations import CappedBody, download
 from app.api.deps import SessionDep
 from app.core import citations_bundle, notes_markdown, pipeline, tags, workspace_package, workspace_search, workspaces
 from app.core.citations_export import filename_slug
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
 from app.schemas.tags import TagApply, TagDeleted, TagOut, TagRename, TagRenamed, TagResultOut

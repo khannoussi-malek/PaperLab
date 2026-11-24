@@ -51,7 +51,7 @@ class ManuscriptOut(BaseModel):
     @property
     def has_pdf(self) -> bool:
         """A compiled PDF is on disk (a first compile that failed stamps compiled_at but writes none)."""
-        from app.core.manuscripts import pdf_path  # ponytail: schemas stay import-light; one stat per manuscript
+        from app.models.manuscript import pdf_path  # ponytail: schemas stay import-light; one stat per manuscript
 
         return pdf_path(self.id).is_file()
 

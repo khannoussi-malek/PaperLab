@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.numbers import NumberCandidate, all_in, find_numbers, parse_number, tokens
+from app.domain.numbers import NumberCandidate, all_in, find_numbers, parse_number, tokens
 
 
 @pytest.mark.parametrize(

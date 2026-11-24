@@ -10,7 +10,7 @@ from app.core import chat, notes
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper, Workspace, workspace_papers
 from app.providers import embedding
-from app.providers.llm import FAKE_WORKSPACE_ANSWER, FAKE_WORKSPACE_TOKENS
+from app.providers.llm_fake import FAKE_WORKSPACE_ANSWER, FAKE_WORKSPACE_TOKENS
 
 pytestmark = pytest.mark.anyio
 

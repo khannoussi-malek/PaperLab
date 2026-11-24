@@ -18,8 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import workspaces
 from app.core.candidates import arxiv_from_doi
 from app.core.citations_keywords import workspace_keywords
-from app.core.errors import InvalidInput, NotFound
-from app.core.source_types import PREPRINT_SERVERS
+from app.domain.errors import InvalidInput, NotFound
+from app.domain.source_types import PREPRINT_SERVERS
 from app.models import Paper
 
 CSL_TYPES = {

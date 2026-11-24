@@ -15,10 +15,11 @@ from app.core import embedding_index, workspaces
 from app.core import tags as tag_store
 from app.core.candidates import normal_title
 from app.core.enrichment import normalize_doi
-from app.core.errors import InvalidInput, NotFound
 from app.core.notes import list_notes_for_paper
-from app.core.papers import ABSTRACT_PAGE, get_paper
+from app.core.papers import get_paper
 from app.core.retrieval import MAX_PER_PAPER, retrieve, searchable
+from app.domain.constants import ABSTRACT_PAGE
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Chunk, Paper, Workspace, workspace_papers
 
 SEARCH_K = 8

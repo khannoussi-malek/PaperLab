@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from app.core import retrieval
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import LLMOutput, Note
 from app.providers.base import LLMError
 from evals import claims_eval as ev

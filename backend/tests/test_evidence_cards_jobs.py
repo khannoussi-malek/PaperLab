@@ -13,7 +13,7 @@ from test_evidence_cards import FULL, Scripted, card_reply
 from test_screening_suggest_worker import _LockConnStub
 
 from app.core import evidence_cards, queue, retrieval
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import EvidenceCard, Workspace, workspace_papers
 from app.workers import evidence_cards as worker
 from tests.conftest import TEST_DATABASE_URL

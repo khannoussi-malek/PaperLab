@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core import notes_markdown as nm
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.models import Note, Paper, note_anchors, note_papers
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

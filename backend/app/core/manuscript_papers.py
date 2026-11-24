@@ -8,10 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import manuscripts
 from app.core.citations_export import _bibtex
-from app.core.errors import NotFound
 from app.core.manuscript_bib import key_state
 from app.core.note_counts import note_counts
 from app.core.retrieval import retrieve
+from app.domain.errors import NotFound
 from app.models import Manuscript, ManuscriptCiteKey, Paper
 
 

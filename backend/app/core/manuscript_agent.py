@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import manuscript_blueprint, manuscript_history, manuscript_templates, manuscripts, workspaces
 from app.core import manuscript_paths as paths
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 from app.models import ManuscriptSnapshot
 
 Base = AwareDatetime  # the tools' `base` type, so server.py imports nothing new

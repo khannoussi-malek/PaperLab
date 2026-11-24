@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core import embedding_index, embedding_sources
-from app.core.errors import Conflict
-from app.core.papers import ABSTRACT_PAGE
+from app.domain.constants import ABSTRACT_PAGE
+from app.domain.errors import Conflict
 from app.models import Chunk, EmbeddingSource, Paper, PaperStatus, workspace_papers
 from app.providers import embedding
 from app.providers.base import LLMError, LLMUnavailable, TextEmbedder

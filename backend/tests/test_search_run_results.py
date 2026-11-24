@@ -201,7 +201,7 @@ async def test_a_key_clears_the_warning_and_settings_shows_the_same_notice(sessi
 
 
 async def test_workspace_search_counts_new_hits_for_every_source_that_found_them(session, stored_run):
-    from app.core.candidates import Candidate
+    from app.domain.candidates import Candidate
 
     found = {"arxiv": [Candidate(title="Shared paper", doi="10.1/shared", sources=("arxiv", "openalex"))]}
     counted = workspace_search.Counter()

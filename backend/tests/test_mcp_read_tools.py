@@ -11,8 +11,8 @@ from pdf_papers import chunked_paper
 from sqlalchemy import delete
 
 from app.core import chat, datasets, references, workspaces
-from app.core.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.core.retrieval import RetrievedChunk
+from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
 from app.models import Chunk, ExternalRef, LLMOutput, Note, NoteEmbedding, Paper, PaperSources, paper_references
 
 pytestmark = pytest.mark.anyio

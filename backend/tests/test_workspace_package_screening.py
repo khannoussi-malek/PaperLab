@@ -10,7 +10,7 @@ from conftest import FakeArq
 from sqlalchemy import func, select
 
 from app.core import papers, prisma_export, queue, workspace_package, workspace_search, workspaces
-from app.core.errors import Conflict, InvalidInput
+from app.domain.errors import Conflict, InvalidInput
 from app.models import Paper, Workspace
 from app.models.references import ExternalRef
 from app.models.workspace_search import (

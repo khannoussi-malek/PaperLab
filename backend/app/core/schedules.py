@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cronsim import CronSim, CronSimError
 
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 _TIME = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 _SHAPE = re.compile(r"^(\d{1,2}) (\d{1,2}) \* \* (\*|[0-6])$")

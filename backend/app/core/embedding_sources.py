@@ -15,8 +15,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.errors import InvalidInput
 from app.core.llm_connections import get_connection_row, is_local
+from app.domain.errors import InvalidInput
 from app.models import EmbeddingSource, LLMConnection
 from app.providers.llm import host_of
 

@@ -12,9 +12,9 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.api import voice
 from app.api.deps import resolve_speech
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.main import create_app
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 from app.providers.speech import FakeSpeech
 
 TALK, SLOW, MUTE, FAIL, DROP = b"talk", b"slow", b"mute", b"fail", b"drop"  # 4 bytes each: one float32 sample

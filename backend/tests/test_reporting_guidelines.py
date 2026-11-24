@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core import reporting_guidelines as rg
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 ML_IDS = ("data.source data.size data.splits data.preprocessing data.leakage method.algorithm method.hyperparameters "
           "method.training eval.metrics eval.baselines eval.runs results.variance results.ablations repro.seeds "
@@ -94,8 +94,9 @@ def test_apply_errors_list_valid_ids_in_file_order():
 
 def test_apply_rejects_bare_string_tick():
     import pytest
-    from app.core.errors import InvalidInput
+
     from app.core.reporting_guidelines import apply
+    from app.domain.errors import InvalidInput
 
     with pytest.raises(InvalidInput):
         apply({"guideline": "prisma2020"}, tick="3")

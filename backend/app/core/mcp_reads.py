@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import chat, datasets, references, workspaces
 from app.core.datasets import CellView
-from app.core.errors import Gone, InvalidInput, NotFound
-from app.core.papers import ABSTRACT_PAGE
+from app.domain.constants import ABSTRACT_PAGE
+from app.domain.errors import Gone, InvalidInput, NotFound
 
 REFERENCE_ROWS = 100
 DATASET_ROWS = 200

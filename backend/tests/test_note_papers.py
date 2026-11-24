@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from test_chart_notes import bar, two_columns
 
 from app.core import charts, datasets, notes
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance, note_anchors, note_papers
 
 pytestmark = pytest.mark.anyio

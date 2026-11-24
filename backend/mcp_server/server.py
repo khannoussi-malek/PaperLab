@@ -51,10 +51,10 @@ from app.core import (
     skills,
     workspaces,
 )
-from app.core.errors import DomainError, error_code
 from app.core.manuscript_checks import doi_service
 from app.core.mcp_activity import WRITES_DISABLED
 from app.db import SessionLocal
+from app.domain.errors import DomainError, error_code
 
 logger = logging.getLogger(__name__)
 

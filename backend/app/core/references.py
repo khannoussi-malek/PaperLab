@@ -21,8 +21,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery, papers, workspaces
-from app.core.candidates import Candidate, from_s2, from_work, merge, ordered_pdf_urls
-from app.core.errors import Conflict, NotFound
+from app.core.candidates import from_s2, from_work, merge, ordered_pdf_urls
+from app.domain.candidates import Candidate
+from app.domain.errors import Conflict, NotFound
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
 from app.providers import embedding, openalex, semantic_scholar
 

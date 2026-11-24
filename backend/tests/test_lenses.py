@@ -6,8 +6,8 @@ import pytest
 from test_sections import paper_with_headings
 
 from app.core import lenses, sections
-from app.core.errors import InvalidInput, NotFound
 from app.core.lenses import LENSES, POSITION_CHUNKS, LensChunks, pick
+from app.domain.errors import InvalidInput, NotFound
 
 pytestmark = pytest.mark.anyio
 

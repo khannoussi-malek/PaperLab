@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from app.core import pipeline
-from app.core.errors import InvalidInput, NotFound
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Paper
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

@@ -9,8 +9,8 @@ from test_note_papers import paper_only_note
 from test_sections import SECTIONED, sectioned_paper
 
 from app.core import chat, retrieval, skills
-from app.core.errors import Conflict, NotFound
 from app.core.notes import Anchor, NoteView
+from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Workspace, note_anchors, note_papers, workspace_papers
 
 pytestmark = pytest.mark.anyio

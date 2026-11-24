@@ -240,7 +240,7 @@ class Providers:
 
 
 async def test_tried_lists_the_unpaywall_lookup_whatever_it_said():
-    from app.core.candidates import Candidate
+    from app.domain.candidates import Candidate
 
     paper = Candidate(title="t", doi="10.1/x")
 
@@ -270,7 +270,7 @@ async def test_tried_lists_the_unpaywall_lookup_whatever_it_said():
 
 
 async def test_tried_says_why_unpaywall_was_skipped():
-    from app.core.candidates import Candidate
+    from app.domain.candidates import Candidate
 
     _, entry = await discovery._unpaywall_lookup(Providers(None), Candidate(title="t", doi="10.1/x"))
     assert entry == [{"url": discovery.UNPAYWALL_LOOKUP, "outcome": "skipped: off or no contact email"}]

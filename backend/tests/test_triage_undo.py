@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.core import papers, triage
-from app.core.errors import Conflict, Gone, InvalidInput, NotFound
+from app.domain.errors import Conflict, Gone, InvalidInput, NotFound
 from app.models import Paper, PaperMerge, TriageEvent
 
 pytestmark = pytest.mark.anyio

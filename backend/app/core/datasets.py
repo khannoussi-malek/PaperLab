@@ -14,48 +14,14 @@ from datetime import datetime
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import Conflict, InvalidInput, NotFound
-from app.core.numbers import parse_number
 from app.core.papers import get_paper
+from app.domain.datasets import MAX_COLUMNS, MAX_ROWS, NAME_MAX_CHARS, CellIn, ColumnIn, GridIn, Rect, RowIn
+from app.domain.errors import Conflict, InvalidInput, NotFound
+from app.domain.numbers import parse_number
 from app.models import Chart, Dataset, DatasetColumn, DatasetRow, Paper, cell_table, chart_datasets
 
-Rect = tuple[float, float, float, float]
-
-NAME_MAX_CHARS = 200
-MAX_ROWS = 5_000
-MAX_COLUMNS = 100
 TABLE_EXTRACTOR = "words-grid-v1"
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-
-
-@dataclass(frozen=True)
-class CellIn:
-    raw: str
-    # The text extraction read, for a cell that came from the PDF. None for a cell the owner typed.
-    extracted: str | None = None
-    page: int | None = None
-    bbox: list[Rect] | None = None
-    # What a model wrote, for a cell it suggested (D33): marked as the model's, and as edited once raw differs.
-    suggested: str | None = None
-
-
-@dataclass(frozen=True)
-class ColumnIn:
-    id: uuid.UUID | None  # None for a new column
-    name: str
-    unit: str | None
-
-
-@dataclass(frozen=True)
-class RowIn:
-    id: uuid.UUID | None  # None for a new row
-    cells: list[CellIn]  # one per column, in column order
-
-
-@dataclass
-class GridIn:
-    columns: list[ColumnIn]
-    rows: list[RowIn]
 
 
 @dataclass(frozen=True)

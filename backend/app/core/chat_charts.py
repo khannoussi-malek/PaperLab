@@ -11,10 +11,10 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import chat, datasets, prompts, workspaces
-from app.core.chart_spec import MAX_COLORS, ChartSpecAdapter, SeriesChart
-from app.core.errors import InvalidInput
 from app.core.llm_json import ask_json
 from app.core.papers import get_paper
+from app.domain.chart_spec import MAX_COLORS, ChartSpecAdapter, SeriesChart
+from app.domain.errors import InvalidInput
 from app.models import LLMOutput
 
 PROMPT_VERSION = 1

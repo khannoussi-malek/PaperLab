@@ -12,8 +12,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections, manuscript_papers, manuscripts, queue
-from app.core.errors import Conflict, InvalidInput, error_code
 from app.core.retrieval import MAX_PER_PAPER, retrieve
+from app.domain.errors import Conflict, InvalidInput, error_code
 from app.models import ManuscriptEvidence
 
 MAX_SENTENCE = 2000

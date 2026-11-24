@@ -4,8 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
 
-from app.core.lenses import LensId
-from app.core.sections import Role, Source
+from app.domain.sections import LensId, Role, Source
 from app.schemas.chat import ChatSource
 
 

@@ -18,9 +18,9 @@ from app.core import (
     provenance,
     queue,
 )
-from app.core.candidates import Candidate
-from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
+from app.domain.candidates import Candidate
+from app.domain.chunking import chunk_blocks
 from app.models import Chunk, Paper, PaperStatus
 from app.providers import crossref, embedding, openalex
 from app.providers.base import LLMError, LLMUnavailable

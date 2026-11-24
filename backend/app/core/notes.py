@@ -31,16 +31,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import queue
-from app.core.chunking import join_lines
-from app.core.errors import Conflict, InvalidInput, NotFound
-from app.core.papers import ABSTRACT_PAGE, get_paper, get_paper_file, list_chunks
-from app.core.table_grid import caption_name
+from app.core.papers import get_paper, get_paper_file, list_chunks
+from app.domain.chunking import join_lines
+from app.domain.constants import ABSTRACT_PAGE, DEFAULT_COLOR
+from app.domain.errors import Conflict, InvalidInput, NotFound
+from app.domain.table_grid import caption_name
 from app.models import Chart, Chunk, LLMOutput, Note, Paper, Provenance, note_anchors, note_charts, note_papers
 from app.providers.extraction import quote_rects, read_region
 
 Rect = tuple[float, float, float, float]
 
-DEFAULT_COLOR = "#facc15"
 _HEX_COLOR = re.compile(r"#[0-9a-f]{6}")
 # What an MCP client's quote and a chunk's text are compared as: typographic quotes and dashes made plain, soft
 # hyphens dropped (then NFKC, collapsed whitespace, casefold).
@@ -571,7 +571,7 @@ def fold(text: str) -> str:
 def quote_hits(chunk_text: str, quote: str) -> list[list[int]]:
     """Every occurrence of a folded quote in a chunk, as the indexes of the blocks it touches.
 
-    A chunk's text is its blocks joined by a blank line and its bbox holds one rect per block (core/chunking.py), so
+    A chunk's text is its blocks joined by a blank line and its bbox holds one rect per block (domain/chunking.py), so
     block i of the text is rect i of the bbox.
     """
     blocks = [fold(block) for block in chunk_text.split("\n\n")]

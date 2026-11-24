@@ -9,7 +9,7 @@ from test_sections import paper_with_headings
 
 from app.core import checks, embedding_index, lenses, sections
 from app.core.chat import SMALL_PAPER_CHARS
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, Note, Provenance
 from app.providers import embedding
 
@@ -285,7 +285,7 @@ from datetime import datetime, timedelta, timezone  # noqa: E402
 from sqlalchemy import select, update  # noqa: E402
 
 from app.core import chat, notes  # noqa: E402
-from app.core.chunking import ChunkDraft  # noqa: E402
+from app.domain.chunking import ChunkDraft  # noqa: E402
 from app.models import LLMOutput  # noqa: E402
 
 CONTENT = "Missing: the memory cut [C1]\nSupported: it holds on every task [C2]\nUnsupported: the speed claim"

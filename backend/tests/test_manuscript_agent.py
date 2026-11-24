@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from app.core import manuscript_agent as agent
 from app.core import manuscript_history, manuscript_templates, manuscripts
 from app.core import manuscript_paths as paths
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Manuscript, ManuscriptSnapshot, Workspace
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]  # list_all reads every manuscript

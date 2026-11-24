@@ -8,7 +8,7 @@ from sqlalchemy import insert, select
 from test_evidence_cards import FULL, INTRO, Scripted, card_reply
 
 from app.core import evidence_cards, retrieval
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import EvidenceCard, Workspace, workspace_papers
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

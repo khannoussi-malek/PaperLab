@@ -1,8 +1,8 @@
 import pytest
 
-from app.core.errors import InvalidInput
 from app.core.section_rubrics import RUBRICS, rubric_for
 from app.core.sections import ROLES
+from app.domain.errors import InvalidInput
 
 FORBIDDEN = ("rewrite", "reword", "replace", "suggest", "replacement", "instead of")
 

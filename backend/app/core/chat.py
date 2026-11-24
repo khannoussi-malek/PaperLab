@@ -13,10 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import lenses, prompts, skills, workspaces
 from app.core.answer_provenance import snapshot
-from app.core.errors import Conflict, NotFound
 from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, likely_papers, retrieve, searchable
+from app.domain.errors import Conflict, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
 # v6: the note-block rule leads with its condition and names "never" explicitly, to stop it firing on an unasked

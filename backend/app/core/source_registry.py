@@ -16,7 +16,6 @@ from typing import Any
 import httpx
 
 from app.core.candidates import (
-    Candidate,
     from_acl_anthology,
     from_acm_dl,
     from_arxiv,
@@ -38,6 +37,7 @@ from app.core.candidates import (
     from_work,
     from_zenodo,
 )
+from app.domain.candidates import Candidate
 from app.providers import (
     acl_anthology,
     acm_dl,

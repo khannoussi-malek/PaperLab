@@ -12,9 +12,9 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFound
 from app.core.notes import MCP_OUTPUT_KIND
 from app.core.retrieval import RetrievedChunk
+from app.domain.errors import NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance
 
 CURRENT, CHANGED, NOT_RECORDED = "current", "changed", "not_recorded"

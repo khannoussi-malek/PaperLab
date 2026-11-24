@@ -14,7 +14,6 @@ from sqlalchemy import or_, select
 from app.api.deps import SessionDep, SpeechDep, TransportDep
 from app.config import LOCAL_HOSTS
 from app.core import chat, llm_connections
-from app.core.errors import DomainError, error_code
 from app.core.voice_latency import Percentiles, percentiles
 from app.core.voice_turn import (
     CANNOT_ANSWER,
@@ -26,6 +25,7 @@ from app.core.voice_turn import (
     save_heard,
 )
 from app.db import SessionLocal
+from app.domain.errors import DomainError, error_code
 from app.models.voice_turn import VoiceTurn
 from app.providers.base import LLM, Speech, SpeechUnavailable
 from app.providers.llm import build_llm

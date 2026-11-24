@@ -5,7 +5,7 @@ import pytest
 from app.core import answer_check, claims
 from app.core.answer_check import CheckPassage, check_sentence
 from app.providers.base import LLMError
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 

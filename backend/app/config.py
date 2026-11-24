@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
-from app.providers.search_model import SHIPPED
+from app.domain.search_model import SHIPPED
 
 # A compose project whose name ends in this is a test stack (scripts/e2e-stack.sh): the only place fakes run (D273).
 TEST_STACK_SUFFIX = "-e2e"

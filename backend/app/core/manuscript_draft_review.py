@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import draft_review, llm_connections, manuscripts, queue
 from app.core.draft_review_issues import MAX_TOTAL_CHARS, MIN_PAPER_CHARS, assemble, split_parts
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.manuscript_missing_keys import load_texts
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import ManuscriptDraftReview as Row
 from app.schemas.manuscript_draft_review import DraftReviewOut, DraftReviewState  # noqa: F401 (the MCP tools' types)
 

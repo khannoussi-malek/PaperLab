@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from app.core import retrieval
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import EvidenceCard, LLMOutput
 from evals import evidence_cards_eval as ev
 

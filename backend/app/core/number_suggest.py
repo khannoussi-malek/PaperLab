@@ -12,11 +12,11 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import notes, prompts, quotes
-from app.core.datasets import Rect
-from app.core.errors import DomainError, InvalidInput
 from app.core.llm_json import ask_json
-from app.core.numbers import find_numbers, parse_number
 from app.core.papers import list_chunks
+from app.domain.datasets import Rect
+from app.domain.errors import DomainError, InvalidInput
+from app.domain.numbers import find_numbers, parse_number
 
 PROMPT_VERSION = 1
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("number_suggest", PROMPT_VERSION).split("\n<!-- prompt -->\n")

@@ -5,8 +5,8 @@ The reader's checklist (D180, M16b) is not built yet; this file is the single ho
 
 from dataclasses import dataclass
 
-from app.core.errors import InvalidInput
-from app.core.sections import Role
+from app.domain.errors import InvalidInput
+from app.domain.sections import Role
 
 
 @dataclass(frozen=True)

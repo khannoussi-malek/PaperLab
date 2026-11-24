@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from test_enrichment import BERT_DOI, BERT_WORK, hints
 
 from app.core import enrichment, graph, papers, workspaces
-from app.core.errors import InvalidInput, NotFound
+from app.domain.errors import InvalidInput, NotFound
 from app.models import ExternalRef, Paper
 from app.workers import ingest
 

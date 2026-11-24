@@ -10,7 +10,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import diagram, diagram_tikz, llm_connections, manuscripts, queue
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import ManuscriptDiagram as Row
 
 LIVE = timedelta(minutes=20)  # one long local-model call has no heartbeat inside it

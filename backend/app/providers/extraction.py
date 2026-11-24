@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pymupdf
 
-from app.core.chunking import Block, join_lines
-from app.core.errors import InvalidInput
-from app.core.table_grid import CAPTION_GAP, Rect, Word
+from app.domain.chunking import Block, join_lines
+from app.domain.errors import InvalidInput
+from app.domain.table_grid import CAPTION_GAP, Rect, Word
 
 # No TEXT_PRESERVE_LIGATURES: "ﬁ" must become "fi" or full-text search misses the word.
 # (TEXT_DEHYPHENATE has no effect in "dict" mode; join_lines handles hyphenation.)

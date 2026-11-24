@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.core import saved_searches, workspaces
-from app.core.errors import DomainError, InvalidInput, NotFound
+from app.domain.errors import DomainError, InvalidInput, NotFound
 
 pytestmark = pytest.mark.anyio
 

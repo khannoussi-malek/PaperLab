@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core import datasets
+from app.domain import datasets
 from app.schemas.papers import Rect
 
 # Limits a request can't exceed; core/datasets.py checks the same row and column limits for every caller.

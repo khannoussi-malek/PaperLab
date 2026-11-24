@@ -8,7 +8,7 @@ from conftest import FakeEmbedder, unit_vector
 from sqlalchemy import delete, func, select, update
 
 from app.core import references
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
 
 # Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these

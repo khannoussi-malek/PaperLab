@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import embedding_index, library, workspaces
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 MAX_CHARS = 6000
 ABSTRACT_PREFIX = "(abstract only) "  # library.search adds it to abstract passages; the panel already says "abstract"

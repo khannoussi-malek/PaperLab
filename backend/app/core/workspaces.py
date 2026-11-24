@@ -14,9 +14,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import retrieved_hits
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.notes import NoteView, _with_anchors, reading_position
 from app.core.papers import get_paper
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Note, Paper, Workspace, note_papers, workspace_papers
 
 NAME_MAX_CHARS = 80

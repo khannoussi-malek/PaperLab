@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.core.errors import NotFound
 from app.core.hit_links import level_of, paths_to, provenance
+from app.domain.errors import NotFound
 from app.models import Paper
 from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
 from app.models.references import ExternalRef

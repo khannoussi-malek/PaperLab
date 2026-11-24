@@ -7,9 +7,9 @@ from conftest import FakeProvider
 from test_manuscript_papers import setup
 
 from app.core import manuscripts
-from app.core.errors import InvalidInput, NotFound
 from app.core.manuscript_checks import doi_service
 from app.core.manuscript_checks.references_doi import DoiEntry, check_dois, doi_entries
+from app.domain.errors import InvalidInput, NotFound
 from app.providers import crossref
 
 BIB = ("@article{a, doi={https://doi.org/10.1000/ABC}, title={T}}\n"

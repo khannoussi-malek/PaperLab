@@ -29,7 +29,6 @@ from app.config import settings
 from app.core import paper_sources, papers, pdf_links, source_registry
 from app.core.candidates import (
     ARXIV_ID,
-    Candidate,
     arxiv_from_doi,
     arxiv_from_url,
     from_s2,
@@ -40,13 +39,14 @@ from app.core.candidates import (
     with_s2,
 )
 from app.core.enrichment import ARXIV_DOI_PREFIX
-from app.core.errors import Conflict, InvalidInput
 from app.core.paper_enrichment import apply_published
 from app.core.paper_sources import KEYED, NAMES, SourceSettings
 from app.core.provenance import sources_of
 from app.core.redact import redact
 from app.core.source_registry import ASKS
-from app.core.source_types import DETAILS_SOURCES, is_preprint_copy
+from app.domain.candidates import Candidate
+from app.domain.errors import Conflict, InvalidInput
+from app.domain.source_types import DETAILS_SOURCES, is_preprint_copy
 from app.models import Paper
 from app.providers import arxiv, discovery_fake, europe_pmc, pmc_opendata, semantic_scholar, unpaywall
 

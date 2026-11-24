@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from sqlalchemy import DateTime, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import Chunk, Note, Paper
 
 

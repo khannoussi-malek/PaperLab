@@ -14,11 +14,11 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import InvalidInput
 from app.core.llm_connections import key_hint
 from app.core.source_registry import ENABLED_BY_DEFAULT, FAILS_WITHOUT_KEY_IDS, NAMES
 from app.core.source_registry import KEYED_IDS as KEYED
 from app.core.source_registry import SOURCE_IDS as SOURCES
+from app.domain.errors import InvalidInput
 from app.models import PaperSources
 
 logger = logging.getLogger(__name__)

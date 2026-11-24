@@ -5,7 +5,7 @@ import pytest
 
 from app.core import citations, claims, workspaces
 from app.core.claim_text import split_references
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 from app.models import Paper, PaperStatus
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]

@@ -10,7 +10,7 @@ from sqlalchemy import func, select, text
 from test_references_providers import PagedS2, recorded_references
 
 from app.core import references
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import ExternalRef, Paper, paper_references
 from app.providers import embedding, semantic_scholar
 

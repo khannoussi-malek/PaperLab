@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import search_run_results
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.models import Paper
 from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
 from app.models.references import ExternalRef

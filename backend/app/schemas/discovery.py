@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
-from app.core.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
+from app.domain.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
 from app.schemas.paper_sources import SourceId
 
 AuthorName = Annotated[str, Field(min_length=1, max_length=300)]

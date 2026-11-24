@@ -3,7 +3,7 @@ search_batch. A record with no year is kept — it can't be excluded honestly.""
 
 from dataclasses import dataclass
 
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 MIN_YEAR, MAX_YEAR = 1900, 2100
 KEYS = ("year_from", "year_to")

@@ -43,8 +43,8 @@ from app.core import (
     workspace_search,
     workspaces,
 )
-from app.core.errors import Conflict, DomainError, InvalidInput, NotFound, error_code
 from app.core.source_registry import DISCOVERY_SOURCE_IDS
+from app.domain.errors import Conflict, DomainError, InvalidInput, NotFound, error_code
 from app.models import Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable
 from app.schemas.papers import PaperOut

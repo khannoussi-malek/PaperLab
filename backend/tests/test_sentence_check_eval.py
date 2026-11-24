@@ -1,7 +1,7 @@
 import pytest
 import yaml
 
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 from evals import sentence_check_eval as ev
 
 pytestmark = pytest.mark.anyio

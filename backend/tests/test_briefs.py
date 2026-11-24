@@ -8,9 +8,9 @@ from sqlalchemy import update
 from test_sections import paper_with_headings
 
 from app.core import briefs, chat, papers, sections
-from app.core.chunking import ChunkDraft
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.retrieval import RetrievedChunk
+from app.domain.chunking import ChunkDraft
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMOutput
 
 pytestmark = pytest.mark.anyio

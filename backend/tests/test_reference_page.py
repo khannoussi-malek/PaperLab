@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import delete, select, text
 
 from app.core import graph, references
-from app.core.errors import NotFound
+from app.domain.errors import NotFound
 from app.models import ExternalRef, Paper, Workspace, paper_references, workspace_papers
 
 # Every test here hides the owner's rows (below), as the other references tests do: one worker for all of them.

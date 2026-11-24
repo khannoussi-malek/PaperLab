@@ -12,7 +12,7 @@ from test_manuscript_papers import setup
 
 from app.core import manuscript_papers, manuscripts, queue
 from app.core import manuscript_section_review as msr
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel, Note, note_anchors, note_papers
 from app.models import ManuscriptSectionReview as Row
 from app.providers.base import LLMError, LLMUnavailable

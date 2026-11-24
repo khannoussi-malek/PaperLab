@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.core import discovery, workspaces
-from app.core.candidates import Candidate, normal_title
+from app.core.candidates import normal_title
 from app.core.paper_sources import SOURCES, SourceSettings
 from app.core.prisma_export import PrismaExport, prisma_export
 from app.core.workspace_search import (
@@ -17,6 +17,7 @@ from app.core.workspace_search import (
     set_eligibility,
     snowball,
 )
+from app.domain.candidates import Candidate
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -369,7 +370,7 @@ async def test_snowball_hit_seed_with_no_external_ref_id_is_skipped(session, fak
 async def test_snowball_hit_seed_in_different_workspace_raises_not_found(session, fake_providers):
     """Same ownership scoping as a paper seed (ownership check lives right next to it in `snowball`): a hit_id
     from another workspace must 404, not silently hop from a seed this workspace doesn't own."""
-    from app.core.errors import NotFound
+    from app.domain.errors import NotFound
 
     workspace_a = Workspace(name=f"snowball-hit-ws-a-{uuid.uuid4().hex[:8]}")
     workspace_b = Workspace(name=f"snowball-hit-ws-b-{uuid.uuid4().hex[:8]}")
@@ -695,8 +696,8 @@ async def test_continue_counts_a_first_continue_as_the_second_pass(session):
 
 @pytest.mark.asyncio
 async def test_continue_refuses_when_nothing_is_left(session):
-    from app.core.errors import Conflict
     from app.core.workspace_search import continue_run
+    from app.domain.errors import Conflict
     workspace, run = await _stopped_run_with_cursors(
         session, {"arxiv": ({"value": 9}, True), "crossref": ({"value": 9}, True)}, status="exhausted")
 
@@ -707,8 +708,8 @@ async def test_continue_refuses_when_nothing_is_left(session):
 
 @pytest.mark.asyncio
 async def test_continue_refuses_a_running_run(session):
-    from app.core.errors import Conflict
     from app.core.workspace_search import continue_run
+    from app.domain.errors import Conflict
     workspace, run = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 5}, False)}, status="running")
 
     with pytest.raises(Conflict, match="search_run_already_running"):
@@ -717,8 +718,8 @@ async def test_continue_refuses_a_running_run(session):
 
 @pytest.mark.asyncio
 async def test_continue_refuses_a_run_of_another_workspace(session):
-    from app.core.errors import NotFound
     from app.core.workspace_search import continue_run
+    from app.domain.errors import NotFound
     _, run = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 5}, False)})
     other = Workspace(name=f"Other {uuid.uuid4().hex[:8]}")
     session.add(other)
@@ -807,8 +808,8 @@ async def test_start_run_orders_sources_by_paper_sources_trust_order(session):
 async def test_start_run_rejects_non_empty_filters(session):
     """Real per-source filter translation is out of scope for this fix wave; accepting and silently ignoring a
     filter would misreport the search strategy a PRISMA methods section later cites (I6 part 2)."""
-    from app.core.errors import InvalidInput
     from app.core.workspace_search import start_run
+    from app.domain.errors import InvalidInput
     workspace = Workspace(name=f"Filters rejected {uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
@@ -822,8 +823,8 @@ async def test_start_run_rejects_non_empty_filters(session):
 async def test_stop_run_on_a_non_running_run_is_conflict(session):
     """Stopping only applies to a run actually in flight — same "doesn't apply to the current state" convention
     as start_run's own Conflict on an already-running run (bundled minor)."""
-    from app.core.errors import Conflict
     from app.core.workspace_search import start_run, stop_run
+    from app.domain.errors import Conflict
     workspace = Workspace(name=f"Stop conflict {uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
@@ -1036,7 +1037,7 @@ async def test_set_eligibility_raises_not_found_for_a_paper_outside_the_workspac
     await session.commit()
     # paper deliberately never added to the workspace via workspaces.add_paper
 
-    from app.core.errors import NotFound
+    from app.domain.errors import NotFound
 
     with pytest.raises(NotFound):
         await set_eligibility(session, workspace.id, paper.id, run.id, "include", None)
@@ -1356,14 +1357,13 @@ async def test_continue_refuses_while_the_old_job_still_holds_the_run_lock(sessi
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
-    from app.core.errors import Conflict
-    from app.core.workspace_search import continue_run
-    from app.workers.workspace_search import _TRY_LOCK, _lock_key
+    from app.core.workspace_search import TRY_RUN_LOCK, continue_run, run_lock_key
+    from app.domain.errors import Conflict
     workspace, run = await _stopped_run_with_cursors(session, {"arxiv": ({"value": 5}, False)})
 
     engine = create_async_engine(database_url, poolclass=NullPool)
     async with engine.connect() as other:  # the stopping job, mid-batch, in its own transaction
-        assert await other.scalar(_TRY_LOCK, {"key": _lock_key(run.id)})
+        assert await other.scalar(TRY_RUN_LOCK, {"key": run_lock_key(run.id)})
         with pytest.raises(Conflict, match="search_run_still_stopping"):
             await continue_run(session, workspace.id, run.id)
     await engine.dispose()

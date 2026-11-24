@@ -12,16 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core import provenance, queue
-from app.core.chunking import STRATEGY_VERSION, ChunkDraft
-from app.core.errors import Conflict, Gone, InvalidInput, NotFound
-from app.core.source_types import DETAILS_SOURCES
+from app.domain.chunking import STRATEGY_VERSION, ChunkDraft
+from app.domain.constants import ABSTRACT_PAGE
+from app.domain.errors import Conflict, Gone, InvalidInput, NotFound
+from app.domain.source_types import DETAILS_SOURCES
 from app.models import Chunk, Paper, PaperEvent, PaperMerge, PaperStatus
 from app.models.workspace_search import WorkspaceSearchHit
 
 PDF_MAGIC = b"%PDF-"
-# A paper saved without a PDF keeps its abstract as one chunk on this page (R2): PDF pages count from 1, so every
-# consumer that shows or trusts a page says "abstract" for it, or leaves it out.
-ABSTRACT_PAGE = 0
 
 # What create_metadata_paper sets itself; a prefill naming one is refused rather than overriding it.
 OWNED_BY_CREATE = frozenset({"id", "file_path", "status", "details_source"})

@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
@@ -10,12 +9,12 @@ from sqlalchemy import update as update_rows
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
-from app.config import settings
 from app.core import manuscript_history, manuscript_templates, queue
 from app.core import manuscript_paths as paths
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.latex_compile import COMPILE_TIMEOUT
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Manuscript, ManuscriptFile, Workspace
+from app.models.manuscript import pdf_path, sync_path
 
 _UNSET = object()  # "leave this field as it is"; workspace_id=None moves the manuscript out of its workspace
 _NOW = func.clock_timestamp()  # not now(): that is the transaction's start, so two saves in one transaction tie
@@ -258,14 +257,6 @@ def read_state(manuscript: Manuscript, now: datetime) -> tuple[str, str | None, 
     if interrupted(manuscript, now):
         return "failed", "compile_interrupted", False
     return manuscript.compile_status, manuscript.compile_friendly, manuscript.compile_requested
-
-
-def pdf_path(manuscript_id: uuid.UUID) -> Path:
-    return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.pdf"
-
-
-def sync_path(manuscript_id: uuid.UUID) -> Path:
-    return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.sync.json"
 
 
 async def request_compile(session: AsyncSession, manuscript_id: uuid.UUID, *, now: datetime) -> str:

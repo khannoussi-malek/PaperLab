@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.chat import STREAM_RESPONSES, stream_output, to_sources
 from app.api.deps import LLMByModelIdDep, SessionDep
 from app.core import briefs, chat
-from app.core.lenses import LensId
+from app.domain.sections import LensId
 from app.schemas.lenses import BriefOut
 
 router = APIRouter(prefix="/api/papers", tags=["briefs"])

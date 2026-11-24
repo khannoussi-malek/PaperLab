@@ -1,4 +1,4 @@
-from app.core.chunking import BLOCK_CAP, Block, chunk_blocks, join_lines
+from app.domain.chunking import BLOCK_CAP, Block, chunk_blocks, join_lines
 
 BODY = 10.0
 

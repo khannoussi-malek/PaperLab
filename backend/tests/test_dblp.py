@@ -18,7 +18,7 @@ pytestmark = pytest.mark.anyio
     ],
 )
 async def test_publication_type_sets_source_type(publication_type, expected, peer_reviewed):
-    from app.core.source_types import peer_reviewed_of
+    from app.domain.source_types import peer_reviewed_of
 
     candidate = from_dblp({"type": publication_type})
     assert candidate.source_type == expected
@@ -26,7 +26,8 @@ async def test_publication_type_sets_source_type(publication_type, expected, pee
 
 
 async def test_author_homonym_suffix_is_removed_and_surname_merge_works():
-    from app.core.candidates import Candidate, surname
+    from app.core.candidates import surname
+    from app.domain.candidates import Candidate
 
     candidate = from_dblp({
         "title": "Shared title", "authors": {"author": [{"text": "Wei Wang 0001"}, "Ada Author 123"]},
@@ -200,9 +201,9 @@ async def test_opt_in_persists_and_discovery_survives_another_source_failure(ses
 
 async def test_dblp_failure_is_a_notice_or_conflict_when_all_fail(session):
     from app.core import discovery
-    from app.core.errors import Conflict
     from app.core.paper_sources import SourceSettings
     from app.core.source_registry import SOURCE_IDS
+    from app.domain.errors import Conflict
 
     def handle(request):
         if request.url.host == "dblp.org":

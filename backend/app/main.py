@@ -54,8 +54,8 @@ from app.api import skills as skills_api
 from app.api import workspace_search as workspace_search_api
 from app.config import LOCAL_HOSTS, settings
 from app.core import llm_connections, paper_sources
-from app.core.errors import Conflict, DomainError, Gone, InvalidInput, NotFound
 from app.db import SessionLocal
+from app.domain.errors import Conflict, DomainError, Gone, InvalidInput, NotFound
 
 STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422, Conflict: 409, Gone: 410}
 

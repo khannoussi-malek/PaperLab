@@ -13,7 +13,7 @@ from typing import IO
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import citations_export
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 # The references file's name: Zotero names the collection it imports into after it, and citations_bundle_read reads
 # it back as no collection.

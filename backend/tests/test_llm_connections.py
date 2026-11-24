@@ -6,8 +6,8 @@ from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.core import llm_connections as connections
-from app.core.errors import Conflict, InvalidInput, NotFound
 from app.db import engine
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel
 
 pytestmark = pytest.mark.anyio
@@ -336,7 +336,7 @@ def test_an_ollama_cloud_model_on_a_local_server_is_not_local(kind, model, local
 
 
 async def test_the_gate_and_the_picker_treat_a_cloud_tag_as_remote(session):
-    from app.core.errors import Conflict
+    from app.domain.errors import Conflict
 
     await session.execute(update(LLMModel).values(is_default=False))
     c = LLMConnection(kind="ollama", label=f"Loc {uuid.uuid4().hex[:6]}", base_url="http://localhost:11434")
@@ -352,7 +352,7 @@ async def test_the_gate_and_the_picker_treat_a_cloud_tag_as_remote(session):
 
 
 async def test_the_question_for_a_cloud_tag_names_ollama_not_localhost(session):
-    from app.core.errors import Conflict
+    from app.domain.errors import Conflict
 
     c = LLMConnection(kind="ollama", label=f"Loc {uuid.uuid4().hex[:6]}", base_url="http://localhost:11434")
     session.add(c)

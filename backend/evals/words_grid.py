@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
-from app.core.table_grid import words_to_grid
+from app.domain.table_grid import words_to_grid
 from app.models import Paper
 from app.providers.extraction import read_region
 

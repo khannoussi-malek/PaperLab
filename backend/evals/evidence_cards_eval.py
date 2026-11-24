@@ -19,9 +19,10 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import evidence_cards, llm_connections, numbers
-from app.core.errors import DomainError
+from app.core import evidence_cards, llm_connections
 from app.db import SessionLocal
+from app.domain import numbers
+from app.domain.errors import DomainError
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm import build_llm
 from evals.run import EvalError, resolve_papers

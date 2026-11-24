@@ -4,7 +4,7 @@ import pytest
 from conftest import TABLE_ROWS
 
 from app.core import capture, datasets
-from app.core.errors import InvalidInput, NotFound
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

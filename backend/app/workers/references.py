@@ -3,8 +3,8 @@ import uuid
 
 from app.config import settings
 from app.core import discovery, paper_sources, papers, references
-from app.core.errors import Conflict
 from app.db import SessionLocal
+from app.domain.errors import Conflict
 from app.providers import discovery_fake
 from app.providers.base import LLMError, LLMUnavailable
 from app.workers.ingest import search_embedder

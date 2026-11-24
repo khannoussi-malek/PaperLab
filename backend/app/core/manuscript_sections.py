@@ -4,7 +4,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 MAX_TITLE = 200
 SECTIONS_DIR = "sections"

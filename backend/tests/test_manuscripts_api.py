@@ -5,7 +5,7 @@ import zipfile
 import pytest
 
 from app.core import manuscripts, queue
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import Workspace
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]  # lists orphans, which are global

@@ -13,7 +13,7 @@ from test_manuscript_papers import setup
 
 from app.core import manuscript_papers, manuscripts, queue, retrieval
 from app.core import manuscript_review as mr
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import (
     Chunk,
     ManuscriptClaimCheck,

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-from app.core.sections import Role
+from app.domain.sections import Role
 
 Status = Literal["queued", "running", "done", "failed", "interrupted"]
 

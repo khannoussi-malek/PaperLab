@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import prompts
 from app.core.chat import chunk_sources, format_context
-from app.core.errors import Conflict
 from app.core.notes import list_notes_for_paper
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk
+from app.domain.errors import Conflict
 from app.models import Chunk, LLMOutput, PaperStatus
 from app.providers.base import LLM
 

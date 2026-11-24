@@ -44,12 +44,8 @@ from app.core import (
     workspace_package_screening,
     workspaces,
 )  # fmt: skip
-from app.core.candidates import Candidate
-from app.core.chunking import STRATEGY_VERSION
 from app.core.citations_bundle import SPOOL_BYTES
 from app.core.citations_import import CitationsImportError
-from app.core.errors import Conflict, InvalidInput, NotFound
-from app.core.source_types import DETAILS_SOURCES
 from app.core.workspace_package_shapes import (
     AnswersDoc,
     Manifest,
@@ -59,6 +55,10 @@ from app.core.workspace_package_shapes import (
     ScreeningV2,
     TagsDoc,
 )
+from app.domain.candidates import Candidate
+from app.domain.chunking import STRATEGY_VERSION
+from app.domain.errors import Conflict, InvalidInput, NotFound
+from app.domain.source_types import DETAILS_SOURCES
 from app.models import Chunk, Note, Paper, PaperStatus, Workspace, WorkspaceTag, note_anchors
 from app.models.tag import paper_tags
 from app.models.workspace import workspace_papers

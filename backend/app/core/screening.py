@@ -12,10 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections, workspaces
 from app.core.branches import default_branch_on_decision
-from app.core.errors import Conflict, NotFound
 from app.core.screening_rank import Doc, Features, features, rank, stop_hint
 from app.core.search_run_results import NOT_JUDGED
 from app.core.workspace_search import _hit_out_dict
+from app.domain.errors import Conflict, NotFound
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun

@@ -4,9 +4,9 @@ import pytest
 from sqlalchemy import event, insert
 
 from app.core import charts, datasets
-from app.core.chart_spec import ChartSpecAdapter
-from app.core.datasets import CellIn, ColumnIn, GridIn, RowIn
-from app.core.errors import InvalidInput, NotFound
+from app.domain.chart_spec import ChartSpecAdapter
+from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Note, Paper, Provenance, note_charts
 
 pytestmark = pytest.mark.anyio

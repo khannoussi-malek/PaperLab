@@ -9,9 +9,9 @@ import uuid
 from sqlalchemy import func, select, update
 
 from app.core import diagram, diagram_compile
-from app.core.errors import DomainError, error_code
 from app.core.manuscript_diagrams import guard_errors
 from app.db import SessionLocal
+from app.domain.errors import DomainError, error_code
 from app.models import ManuscriptDiagram as Row
 from app.providers.base import LLMError, LLMUnavailable
 from app.workers import manuscripts as compile_worker

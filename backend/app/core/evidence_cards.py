@@ -16,8 +16,9 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import claims, llm_json, numbers, prompts, queue, quotes, retrieval, workspaces
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.core import claims, llm_json, prompts, queue, quotes, retrieval, workspaces
+from app.domain import numbers
+from app.domain.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, EvidenceCard, LLMOutput, Paper, PaperStatus, Workspace, workspace_papers
 
 CARD_PROMPT_VERSION = 2

@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import case, func, literal, or_
 from sqlalchemy.dialects.postgresql import JSONB
 
-from app.core.source_types import PROVENANCE_SOURCES
+from app.domain.source_types import PROVENANCE_SOURCES
 from app.models import Paper
 
 FIELD_GROUPS: dict[str, tuple[str, ...]] = {

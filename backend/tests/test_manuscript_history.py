@@ -5,7 +5,7 @@ import pytest
 
 from app.core import manuscript_history as history
 from app.core import manuscripts
-from app.core.errors import Conflict, NotFound
+from app.domain.errors import Conflict, NotFound
 from app.models import ManuscriptSnapshot
 
 pytestmark = pytest.mark.anyio

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import (
@@ -17,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.config import settings
 from app.models.base import Base
 
 NOW = text("now()")
@@ -282,3 +284,11 @@ class ManuscriptDiagram(Base):
     confirm_remote: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # re-checked by the job
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+
+# Where a manuscript's compiled PDF and its SyncTeX map live on disk.
+def pdf_path(manuscript_id: uuid.UUID) -> Path:
+    return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.pdf"
+
+
+def sync_path(manuscript_id: uuid.UUID) -> Path:
+    return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.sync.json"

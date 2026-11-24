@@ -8,8 +8,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import workspaces
-from app.core.errors import InvalidInput, NotFound
 from app.core.hit_links import seed_parent
+from app.domain.errors import InvalidInput, NotFound
 from app.models import workspace_papers
 from app.models.provenance import WorkspaceBranchState
 from app.models.workspace_search import WorkspaceSearchHit

@@ -10,11 +10,12 @@ from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import datasets
-from app.core.datasets import CellIn, ColumnIn, DatasetView, GridIn, Rect, RowIn, clean_name
-from app.core.errors import InvalidInput
-from app.core.numbers import parse_number
+from app.core.datasets import DatasetView, clean_name
 from app.core.papers import get_paper, get_paper_file
-from app.core.table_grid import caption_name, split_header, words_to_grid
+from app.domain.datasets import CellIn, ColumnIn, GridIn, Rect, RowIn
+from app.domain.errors import InvalidInput
+from app.domain.numbers import parse_number
+from app.domain.table_grid import caption_name, split_header, words_to_grid
 from app.models import Dataset, DatasetColumn, DatasetRow, Paper, cell_table
 from app.providers.extraction import read_region
 

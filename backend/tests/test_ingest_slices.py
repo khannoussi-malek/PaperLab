@@ -8,7 +8,7 @@ from conftest import FakeArq, FakeEmbedder, unit_vector
 from sqlalchemy import select
 
 from app.core import chunk_headers, embedding_sources, papers, queue
-from app.core.chunking import ChunkDraft
+from app.domain.chunking import ChunkDraft
 from app.models import Chunk, Paper, PaperStatus
 from app.workers import ingest
 from app.workers.settings import IngestWorkerSettings

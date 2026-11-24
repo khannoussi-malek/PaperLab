@@ -224,7 +224,7 @@ async def test_read_all_never_runs_more_than_two_at_once(shared, embedder):
 
 async def test_the_offline_fake_model_finds_every_paper_from_its_first_passage(shared, embedder):
     """What the E2E stack (LLM_PROVIDER=fake) answers."""
-    from app.providers.llm import FakeLLM  # noqa: PLC0415
+    from app.providers.llm_fake import FakeLLM  # noqa: PLC0415
 
     workspace, _ = await workspace_of(shared, embedder, ["Alpha"])
 

@@ -8,9 +8,9 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections, workspace_search, workspaces
-from app.core.errors import Conflict
 from app.core.pipeline import _refuse_remote
 from app.core.screening_suggest import SCREENING_PROMPT_VERSION, suggest
+from app.domain.errors import Conflict
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit

@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from app.core import notes
-from app.core.errors import InvalidInput, NotFound
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio

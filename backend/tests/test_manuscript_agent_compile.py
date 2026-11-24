@@ -5,8 +5,8 @@ import pytest
 
 from app.core import manuscript_agent_compile as mc
 from app.core import manuscripts, queue
-from app.core.errors import InvalidInput, NotFound
 from app.core.latex_compile import CompileResult
+from app.domain.errors import InvalidInput, NotFound
 from app.workers import manuscripts as worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]

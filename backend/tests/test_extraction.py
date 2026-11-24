@@ -3,9 +3,9 @@ import pymupdf
 import pytest
 from conftest import BERT_TITLE_LINES, TABLE_ROWS
 
-from app.core.chunking import Block
-from app.core.errors import InvalidInput
-from app.core.table_grid import caption_name, words_to_grid
+from app.domain.chunking import Block
+from app.domain.errors import InvalidInput
+from app.domain.table_grid import caption_name, words_to_grid
 from app.providers import extraction
 from app.providers.extraction import _title_from_blocks, extract, read_region
 

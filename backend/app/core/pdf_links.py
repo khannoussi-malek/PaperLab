@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 
 async def resolve_host(host: str) -> list[str]:

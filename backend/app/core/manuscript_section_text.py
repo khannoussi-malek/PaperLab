@@ -5,7 +5,8 @@ from pathlib import PurePosixPath
 
 from app.core.manuscript_sections import _SECTION, END_MARKERS, input_lines
 from app.core.manuscript_sentences import _blank_comments, _brace_end, claim_hash, to_plain
-from app.core.sections import Role, assign_roles
+from app.core.sections import assign_roles
+from app.domain.sections import Role
 
 MIN_BARE_WORDS = 20  # a file with no \section needs this much prose to count as one section
 

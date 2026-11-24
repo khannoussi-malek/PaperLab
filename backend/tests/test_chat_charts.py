@@ -6,11 +6,11 @@ import uuid
 import pytest
 
 from app.core import chat, chat_charts, datasets, workspaces
-from app.core.chart_spec import SeriesChart
-from app.core.datasets import CellIn, ColumnIn, GridIn, RowIn
-from app.core.errors import InvalidInput
+from app.domain.chart_spec import SeriesChart
+from app.domain.datasets import CellIn, ColumnIn, GridIn, RowIn
+from app.domain.errors import InvalidInput
 from app.models import Paper
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 

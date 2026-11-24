@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core import branches, screening, workspace_search
-from app.core.errors import InvalidInput, NotFound
+from app.domain.errors import InvalidInput, NotFound
 from app.models.provenance import WorkspaceBranchState
 from app.schemas.workspace_search import HitReviewUpdate
 from tests.screening_pool import make_pool
@@ -174,7 +174,11 @@ async def test_branch_on_a_papers_hit_is_stored_on_the_hit(session):
 # --- Snowball next (Task 8) ---
 from app.core import snowball_next  # noqa: E402
 from tests.test_snowball_links import (  # noqa: E402,F401  (fixtures)
-    _s2_with, _seed_hit, _workspace_and_run, edge_providers, fake_providers,
+    _s2_with,
+    _seed_hit,
+    _workspace_and_run,
+    edge_providers,
+    fake_providers,
 )
 
 

@@ -11,7 +11,7 @@ from test_embedding_index import worker_uses
 
 from app.config import settings
 from app.core import chat, embedding_index, embedding_sources, library, llm_connections, retrieval, workspaces
-from app.core.errors import Conflict
+from app.domain.errors import Conflict
 from app.models import Chunk, Paper
 from app.providers import embedding
 from app.workers import ingest

@@ -8,9 +8,9 @@ from test_chat import chunks_of, make_paper
 from test_sections import paper_with_headings
 
 from app.core import answer_provenance, briefs, chat, papers, workspaces
-from app.core.chunking import ChunkDraft
-from app.core.errors import NotFound
 from app.core.retrieval import RetrievedChunk
+from app.domain.chunking import ChunkDraft
+from app.domain.errors import NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance
 
 pytestmark = pytest.mark.anyio

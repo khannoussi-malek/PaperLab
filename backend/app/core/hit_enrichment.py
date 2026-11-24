@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import workspaces
 from app.core.abstracts import is_citation_only, usable_abstract
 from app.core.candidates import ARXIV_ID, ARXIV_VERSION, s2_triage
-from app.core.source_types import ARXIV_DOI_PREFIX
+from app.domain.source_types import ARXIV_DOI_PREFIX
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchHit
 from app.providers import arxiv, semantic_scholar

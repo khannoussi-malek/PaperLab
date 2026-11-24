@@ -18,11 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import lenses, prompts, sections
 from app.core.chat import SMALL_PAPER_CHARS, Prepared, _size, chunk_sources, cut_to_budget, format_context
-from app.core.errors import Conflict, InvalidInput
 from app.core.finding_lines import Kind, bare, clean_line, grams, reads_as_wording, split_label
 from app.core.notes import _get_note, papers_of
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, retrieve, searchable
+from app.domain.errors import Conflict, InvalidInput
 from app.models import Chunk, LLMOutput, Note, PaperStatus, Provenance
 
 OUTPUT_KIND = "check"  # the llm_outputs.kind of a check

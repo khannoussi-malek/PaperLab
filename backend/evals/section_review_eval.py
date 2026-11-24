@@ -20,9 +20,9 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.core import llm_connections, section_review
-from app.core.errors import DomainError
 from app.core.section_rubrics import RUBRICS
 from app.db import SessionLocal
+from app.domain.errors import DomainError
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm import build_llm
 from evals.run import EvalError

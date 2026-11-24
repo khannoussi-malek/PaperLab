@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import delete, select
 
 from app.core import notes
-from app.core.errors import InvalidInput, NotFound
+from app.domain.errors import InvalidInput, NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance
 
 pytestmark = pytest.mark.anyio

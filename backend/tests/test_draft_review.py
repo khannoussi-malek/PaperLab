@@ -5,7 +5,7 @@ import pytest
 from app.core import draft_review as dr
 from app.core import draft_review_issues as di
 from app.providers.base import LLMError, LLMUnavailable
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 FILES = {

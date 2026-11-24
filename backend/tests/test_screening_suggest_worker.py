@@ -18,7 +18,7 @@ from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 from app.providers import discovery_fake
 from app.providers.base import LLMError, LLMUnavailable
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 from app.workers import screening_suggest as worker_module
 from tests.conftest import TEST_DATABASE_URL
 from tests.screening_pool import BASE, make_pool

@@ -2,7 +2,7 @@ import pytest
 
 from app.core import section_review as sr
 from app.core.section_rubrics import RUBRICS
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 
 pytestmark = pytest.mark.anyio
 

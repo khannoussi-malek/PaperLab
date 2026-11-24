@@ -2,7 +2,7 @@
 
 import re
 
-from app.core.errors import InvalidInput
+from app.domain.errors import InvalidInput
 
 TEXT_EXTENSIONS = {".tex", ".bib", ".sty", ".cls", ".bst", ".txt", ".md", ".csv", ".dat", ".json",
                    ".clo", ".def", ".cfg", ".bbx", ".cbx", ".tikz", ".pgf"}

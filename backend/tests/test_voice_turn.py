@@ -11,7 +11,7 @@ from app.models import LLMOutput, Paper
 from app.models.voice_turn import VoiceTurn
 from app.providers import embedding
 from app.providers.base import SpeechUnavailable
-from app.providers.llm import FakeLLM
+from app.providers.llm_fake import FakeLLM
 from app.providers.speech import FakeSpeech
 
 pytestmark = pytest.mark.anyio
