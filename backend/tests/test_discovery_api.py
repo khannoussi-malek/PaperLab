@@ -226,7 +226,7 @@ async def test_the_discovery_dependency_serves_the_fake_offline_and_closes_its_c
         providers = await anext(dependency)
         assert providers.client("openalex") is None  # off by default, fake or not
         assert providers.client("semantic_scholar").headers["x-api-key"] == "secret-key"
-        assert providers.client("unpaywall").params["email"] == discovery_fake_data.MAILTO  # fake stands in for the email
+        assert providers.client("unpaywall").params["email"] == discovery_fake_data.MAILTO  # fake stands in
         assert (await providers.pdf.get(f"{discovery_fake_data.PDF_HOST}/paper.pdf")).content.startswith(b"%PDF")
 
     assert providers.client("semantic_scholar").is_closed and providers.pdf.is_closed

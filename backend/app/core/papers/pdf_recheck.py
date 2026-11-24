@@ -121,7 +121,9 @@ async def run(session: AsyncSession, providers: source_clients.Providers, now: d
     return counts
 
 
-async def run_for(session: AsyncSession, providers: source_clients.Providers, paper_ids: list[uuid.UUID]) -> dict[str, int]:
+async def run_for(
+    session: AsyncSession, providers: source_clients.Providers, paper_ids: list[uuid.UUID]
+) -> dict[str, int]:
     """Re-checks the papers someone asked about, whatever Settings says about the weekly look. Counts by outcome."""
     counts = _no_counts()
     for index, paper_id in enumerate(paper_ids):

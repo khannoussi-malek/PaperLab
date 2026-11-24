@@ -1,4 +1,5 @@
-"""Importing a workspace package: match its papers to the library, then write the workspace, papers, PDFs, tags, notes and record."""
+"""Importing a workspace package: match its papers to the library, then write the workspace, papers, PDFs, tags,
+notes and record."""
 
 import asyncio
 import itertools

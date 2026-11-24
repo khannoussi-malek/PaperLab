@@ -68,7 +68,8 @@ CheckLLMDep = Annotated[LLM, Depends(resolve_check_llm)]
 
 
 async def get_discovery(session: SessionDep) -> AsyncIterator[source_clients.Providers]:
-    """Find papers' and Similar's clients for one request (source_clients.open_providers). Tests override this with fakes."""
+    """Find papers' and Similar's clients for one request (source_clients.open_providers). Tests override this with
+    fakes."""
     async with source_clients.open_providers(session) as providers:
         yield providers
 

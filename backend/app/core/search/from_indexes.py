@@ -1,4 +1,5 @@
-"""Candidates from the big indexes' records: OpenAlex, Semantic Scholar, DBLP, arXiv, Crossref, CORE and the PubMed family."""
+"""Candidates from the big indexes' records: OpenAlex, Semantic Scholar, DBLP, arXiv, Crossref, CORE and the PubMed
+family."""
 
 import html
 import re

@@ -87,7 +87,9 @@ class Listing:
 # --- fetch -------------------------------------------------------------------------------------------------------
 
 
-async def _from_semantic_scholar(providers: source_clients.Providers, paper: Paper) -> dict[str, list[Candidate]] | None:
+async def _from_semantic_scholar(
+    providers: source_clients.Providers, paper: Paper
+) -> dict[str, list[Candidate]] | None:
     """None when Semantic Scholar doesn't know the paper."""
     key = await discovery.s2_key(providers.client("semantic_scholar"), paper.doi, paper.title)
     if key is None:

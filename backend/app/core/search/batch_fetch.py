@@ -1,4 +1,5 @@
-"""One fetch pass of a search run: ask each source for its next page, store new candidates as hits, back off a failing source."""
+"""One fetch pass of a search run: ask each source for its next page, store new candidates as hits, back off a
+failing source."""
 
 import uuid
 from collections import Counter

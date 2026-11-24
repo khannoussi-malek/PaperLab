@@ -1,4 +1,5 @@
-"""Notes a model wrote: a promoted answer fragment, a saved suggestion, and notes Claude or the local model place on an exact quote."""
+"""Notes a model wrote: a promoted answer fragment, a saved suggestion, and notes Claude or the local model place on
+an exact quote."""
 
 import asyncio
 import uuid

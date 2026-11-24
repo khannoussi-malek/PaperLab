@@ -1,4 +1,5 @@
-"""Candidates from repositories' and preprint servers' records: Zenodo, HAL, ACM DL, SSRN, DOAJ, OpenAIRE, OpenReview, IACR ePrint, the ACL Anthology, bioRxiv and medRxiv."""
+"""Candidates from repositories' and preprint servers' records: Zenodo, HAL, ACM DL, SSRN, DOAJ, OpenAIRE,
+OpenReview, IACR ePrint, the ACL Anthology, bioRxiv and medRxiv."""
 
 import html
 import re
