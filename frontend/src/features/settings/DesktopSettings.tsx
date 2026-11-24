@@ -42,7 +42,8 @@ function DesktopSection({ desktop }: { desktop: PaperlabDesktop }) {
     toggles.push({
       id: 'quick-capture',
       label: 'Quick Capture',
-      help: 'Press ⌃⌥P in any app to find a paper in your library, or add one by DOI, arXiv ID or link. Mac only.',
+      help:
+        'Press ⌃⌥P (or the shortcut set in settings.json) in any app to find a paper in your library, or add one by DOI, arXiv ID or link. Mac only.',
       read: capture.getCaptureEnabled,
       write: capture.setCaptureEnabled,
     })

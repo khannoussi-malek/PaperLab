@@ -79,6 +79,8 @@ export function spawnChild(log: (line: string) => void): Spawn {
   return (bin, args) => {
     const proc = spawnProcess(bin, args, { stdio: ['pipe', 'ignore', 'pipe'] })
     proc.on('error', (error) => log(`Quick Capture could not start: ${String(error)}`))
+    // A write to a helper that just died (EPIPE) must not become an uncaught exception in PaperLab's main process.
+    proc.stdin?.on('error', (error) => log(`Quick Capture's input closed: ${String(error)}`))
     proc.stderr?.on('data', (data: Buffer) => log(`Quick Capture: ${data.toString().trimEnd()}`))
     return {
       send: (line) => void proc.stdin?.write(line),

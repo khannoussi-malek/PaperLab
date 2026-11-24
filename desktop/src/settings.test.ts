@@ -26,7 +26,7 @@ describe('settings.json', () => {
       captureEnabled: false,
       captureShortcut: 'cmd+shift+k',
     })
-    for (const bad of ['""', '"   "', '42', `"${'x'.repeat(41)}"`]) {
+    for (const bad of ['""', '"   "', '42', `"${'x'.repeat(41)}"`, '"--port"']) {
       expect(parseSettings(`{"captureShortcut": ${bad}}`).captureShortcut).toBe('ctrl+alt+p')
     }
   })

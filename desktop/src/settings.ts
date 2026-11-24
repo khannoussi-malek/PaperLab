@@ -37,7 +37,7 @@ export const DEFAULTS: Settings = {
 const isPort = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 65535
 const isTextOrNull = (value: unknown): value is string | null => value === null || typeof value === 'string'
 const isShortcut = (value: unknown): value is string =>
-  typeof value === 'string' && value.trim() !== '' && value.length <= 40
+  typeof value === 'string' && value.trim() !== '' && value.length <= 40 && !value.startsWith('-') // never a flag
 
 function fields(text: string): Record<string, unknown> {
   try {

@@ -254,6 +254,12 @@ type Switch = 'keepRunning' | 'updatesEnabled' | 'captureEnabled'
 const SWITCHES: readonly unknown[] = ['keepRunning', 'updatesEnabled', 'captureEnabled']
 const isSwitch = (name: unknown): name is Switch => SWITCHES.includes(name)
 
+/** The tray item: starts the helper again if it stopped (its stdin keeps the line until it reads it), then opens it. */
+function showQuickCapture() {
+  startCaptureIfOn()
+  capture?.show()
+}
+
 /** Quick Capture (capture.ts) runs while its switch is on and the stack answers: macOS, and a build that has it (dev
  * runs it with cargo instead). */
 function startCaptureIfOn() {
@@ -336,12 +342,13 @@ function syncTray() {
     tray = new Tray(trayImage())
     tray.setToolTip('PaperLab')
   }
-  const quickCapture = process.platform === 'darwin' && settings.captureEnabled
+  const quickCapture =
+    process.platform === 'darwin' && settings.captureEnabled && existsSync(captureBinary(resourcesDir()))
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open PaperLab', click: showWindow },
       ...(quickCapture
-        ? [{ label: `Quick Capture (${shortcutLabel(settings.captureShortcut)})`, click: () => capture?.show() }]
+        ? [{ label: `Quick Capture (${shortcutLabel(settings.captureShortcut)})`, click: showQuickCapture }]
         : []),
       { label: 'Quit PaperLab', click: () => app.quit() },
     ]),
