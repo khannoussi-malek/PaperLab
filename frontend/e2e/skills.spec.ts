@@ -36,6 +36,13 @@ async function pickerOptions(page: Page): Promise<string[]> {
   return options
 }
 
+// A new page shows once its code has loaded (the fade waits for it), so wait for the reader to go before reading.
+async function openWorkspaceChat(page: Page, workspaceId: string) {
+  await page.goto(`/#/workspaces/${workspaceId}?tab=chat`)
+  await expect(page.locator('.reader')).toHaveCount(0)
+  await expect(picker(page)).toBeVisible()
+}
+
 async function openPaperChat(page: Page, paperId: string) {
   await page.goto(`/#/papers/${paperId}?tab=chat`)
   await expect(page.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true')
@@ -104,6 +111,6 @@ test("a workspace-only skill isn't offered in the reader", async ({ page, reques
   await openPaperChat(page, paperId)
   expect(await pickerOptions(page)).not.toContain('Compare the reading list')
 
-  await page.goto(`/#/workspaces/${workspaceId}?tab=chat`)
+  await openWorkspaceChat(page, workspaceId)
   expect(await pickerOptions(page)).toContain('Compare the reading list')
 })
