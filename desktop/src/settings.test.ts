@@ -16,7 +16,19 @@ describe('settings.json', () => {
       lastVersion: null,
       backedUpFrom: null,
       voiceEnabled: false,
+      captureEnabled: true,
+      captureShortcut: 'ctrl+alt+p',
     })
+  })
+
+  it('keeps a Quick Capture shortcut only when it is a short non-empty string', () => {
+    expect(parseSettings('{"captureEnabled": false, "captureShortcut": "cmd+shift+k"}')).toMatchObject({
+      captureEnabled: false,
+      captureShortcut: 'cmd+shift+k',
+    })
+    for (const bad of ['""', '"   "', '42', `"${'x'.repeat(41)}"`]) {
+      expect(parseSettings(`{"captureShortcut": ${bad}}`).captureShortcut).toBe('ctrl+alt+p')
+    }
   })
 
   it('voiceEnabled defaults to off and survives a round trip', () => {

@@ -16,6 +16,10 @@ export type Settings = {
   backedUpFrom: string | null
   /** Voice questions: the voice container runs (Settings → Voice). Off until the owner turns it on. */
   voiceEnabled: boolean
+  /** Quick Capture (M65): the shortcut panel runs beside PaperLab (macOS). On by default. */
+  captureEnabled: boolean
+  /** Its global shortcut, in the helper's own form ("ctrl+alt+p"); changed here, not in the app, for now. */
+  captureShortcut: string
 }
 
 export const DEFAULTS: Settings = {
@@ -26,10 +30,14 @@ export const DEFAULTS: Settings = {
   lastVersion: null,
   backedUpFrom: null,
   voiceEnabled: false,
+  captureEnabled: true,
+  captureShortcut: 'ctrl+alt+p',
 }
 
 const isPort = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 65535
 const isTextOrNull = (value: unknown): value is string | null => value === null || typeof value === 'string'
+const isShortcut = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim() !== '' && value.length <= 40
 
 function fields(text: string): Record<string, unknown> {
   try {
@@ -51,6 +59,8 @@ export function parseSettings(text: string): Settings {
     lastVersion: isTextOrNull(raw.lastVersion) ? raw.lastVersion : DEFAULTS.lastVersion,
     backedUpFrom: isTextOrNull(raw.backedUpFrom) ? raw.backedUpFrom : DEFAULTS.backedUpFrom,
     voiceEnabled: typeof raw.voiceEnabled === 'boolean' ? raw.voiceEnabled : DEFAULTS.voiceEnabled,
+    captureEnabled: typeof raw.captureEnabled === 'boolean' ? raw.captureEnabled : DEFAULTS.captureEnabled,
+    captureShortcut: isShortcut(raw.captureShortcut) ? raw.captureShortcut : DEFAULTS.captureShortcut,
   }
 }
 
