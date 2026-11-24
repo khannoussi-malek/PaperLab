@@ -31,11 +31,21 @@ test('the hover card stays open on the way to it and manages the note without th
   await hoverCard.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(panelCard).toContainText('second thought')
 
-  await hoverCard.getByLabel('Custom colour').fill('#ff00aa')
+  // Colour and Delete sit in the card's own menu. The menu renders outside the card, yet using it keeps the card (its
+  // trigger) mounted; once the menu closes with the pointer elsewhere, the card closes after the usual leave delay, and
+  // pointing at the highlight again brings it back.
+  await hoverCard.getByRole('button', { name: 'Note actions' }).click()
+  await page.getByRole('menuitem', { name: 'Colour' }).click()
+  await page.getByLabel('Custom colour').fill('#ff00aa')
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(255, 0, 170, 0.4)')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await expect(hoverCard).toHaveCount(0)
 
+  await line.hover()
   page.once('dialog', (dialog) => dialog.accept())
-  await hoverCard.getByRole('button', { name: 'Delete' }).click()
+  await hoverCard.getByRole('button', { name: 'Note actions' }).click()
+  await page.getByRole('menuitem', { name: 'Delete' }).click()
   await expect(panelCard).toHaveCount(0)
   await expect(hoverCard).toHaveCount(0)
   expect(await (await request.get(`/api/papers/${paperId}/notes`)).json()).toEqual([])
