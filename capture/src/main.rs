@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 mod api;
+mod float;
 mod galaxy;
 mod icon;
 mod input;
@@ -150,11 +151,13 @@ struct Args {
     browser: bool,
     /// `--no-galaxy`: the panel alone, no stars or papers behind it (Settings → Desktop app → Animation).
     galaxy: bool,
+    /// `--float` (M79 spike): a paper floating over every app, bottom right.
+    float: bool,
 }
 
 /// Our own flags; Rune's headless flags (`--snap`, `--scene`, …) pass through to Rune.
 fn args() -> Result<Args, String> {
-    let mut out = Args { port: DEFAULT_PORT, shortcut: DEFAULT_SHORTCUT.into(), stdin: false, browser: false, galaxy: true };
+    let mut out = Args { port: DEFAULT_PORT, shortcut: DEFAULT_SHORTCUT.into(), stdin: false, browser: false, galaxy: true, float: false };
     let mut argv = std::env::args().skip(1);
     while let Some(arg) = argv.next() {
         match arg.as_str() {
@@ -163,6 +166,7 @@ fn args() -> Result<Args, String> {
             "--stdin" => out.stdin = true,
             "--browser" => out.browser = true,
             "--no-galaxy" => out.galaxy = false,
+            "--float" => out.float = true,
             _ => {}
         }
     }
@@ -205,6 +209,9 @@ fn main() {
         }
         let galaxy = (args.galaxy && !rune::is_headless())
             .then(|| app.overlay(galaxy::spec(screen), galaxy::Galaxy::new(screen)));
+        if args.float && !rune::is_headless() {
+            app.overlay(float::spec(), float::Float::new(me.clone())).show();
+        }
         let ctx = Ctx { me, api, browser: args.browser.then_some(args.port), galaxy };
         let app = app
             .init(move || App::new(Some(ctx)))
