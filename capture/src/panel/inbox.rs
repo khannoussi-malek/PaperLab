@@ -40,7 +40,8 @@ impl Panel {
                 let picked = self.picked_item();
                 (self.inbox, self.inbox_error) = (Some(inbox), None);
                 self.reachable |= on_screen;
-                self.picked = self.inbox_rows().iter().position(|r| self.item(r) == picked && picked.is_some()).unwrap_or(0);
+                let again = |r: &Row| picked.is_some() && self.item(r) == picked;
+                self.picked = self.inbox_rows().iter().position(again).unwrap_or(0);
             }
             Err(ApiError::Unreachable) => self.reachable &= !on_screen,
             Err(ApiError::Said(sentence)) => {
