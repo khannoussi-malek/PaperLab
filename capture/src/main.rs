@@ -98,8 +98,8 @@ impl App {
         if by_shortcut {
             self.panel.mode = mode::Mode::Find;
         }
-        self.query = focused("");
         self.dispatch(Event::Shown);
+        self.query = focused(&self.panel.query.clone()); // empty, or an Ask answer's question
     }
 
     fn perform(&mut self, effect: Effect) {
@@ -138,6 +138,21 @@ impl App {
                 let result = api.cite(&paper_id, format).and_then(|text| copy(&text));
                 Event::Copied { seq, what: format!("{} of “{title}”", format.label()), result }
             }),
+            Effect::FetchWorkspaces => background(me, move || Event::Workspaces(api.workspaces())),
+            Effect::Ask { seq, workspace_id, question } => {
+                std::thread::spawn(move || {
+                    let hear = me.clone();
+                    let heard = move |said| hear.update(move |s, _| s.dispatch(Event::Heard { seq, result: Ok(said) }));
+                    if let Err(e) = api.ask(&workspace_id, &question, heard) {
+                        me.update(move |s, _| s.dispatch(Event::Heard { seq, result: Err(e) }));
+                    }
+                });
+            }
+            Effect::OpenWorkspace(id) => match ctx.browser {
+                Some(port) => open(&[&format!("http://127.0.0.1:{port}/#/workspaces/{id}?tab=chat")]),
+                None => open(&[&format!("paperlab://workspaces/{id}")]),
+            },
+            Effect::Copy { seq, text, what } => background(me, move || Event::Copied { seq, what, result: copy(&text) }),
             Effect::Novelty { seq, text } => background(me, move || Event::Novelty { seq, result: api.novelty(&text) }),
         }
     }
@@ -325,10 +340,10 @@ mod tests {
     #[test]
     fn tab_and_command_digits_move_along_the_mode_bar_and_a_pill_click_picks_one() {
         let mut rt = runtime();
-        assert!(rt.find("mode-2").is_some(), "a pill per mode");
+        assert!(rt.find("mode-3").is_some(), "a pill per mode");
         press(&mut rt, Key::Tab);
         assert_eq!(rt.state.panel.mode, mode::Mode::Cite);
-        command(&mut rt, Key::Command('3'));
+        command(&mut rt, Key::Command('4'));
         assert_eq!(rt.state.panel.mode, mode::Mode::Novelty);
         let (x, y) = rt.find("mode-0").expect("the Find pill");
         rt.pointer_move(x, y);

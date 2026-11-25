@@ -1,11 +1,12 @@
 //! Fixed states for `--snap` stills; they set the state through `Panel::step` and drop its effects.
 
 use crate::App;
-use crate::api::{Added, Candidate, Close, Closeness, Format, Found};
+use crate::api::{Added, Candidate, Close, Closeness, Format, Found, Said, Source, Workspace};
 use crate::library::Paper;
 use crate::mode::Mode;
 use crate::panel::{Event, Panel};
 
+const QUESTION: &str = "How do these papers handle documents longer than the context window?";
 const IDEA: &str = "Sparse attention lets long papers fit a small model's context";
 
 pub const ALL: &[(&str, fn(&mut App))] = &[
@@ -25,6 +26,9 @@ pub const ALL: &[(&str, fn(&mut App))] = &[
         p.step(Event::Copied { seq: p.seq, what, result: Ok(()) });
         set(s, "attention", p)
     }),
+    ("ask", |s| set(s, QUESTION, ask_typed())),
+    ("answering", |s| set(s, QUESTION, answer(false))),
+    ("answered", |s| set(s, QUESTION, answer(true))),
     ("searching", |s| { let mut p = novelty_typed(); p.step(Event::Submit); set(s, IDEA, p) }),
     ("done-before", |s| set(s, IDEA, done_before())),
     ("offline", |s| { let mut p = Panel::default(); p.step(Event::Papers(Err(crate::api::ApiError::Unreachable))); set(s, "", p) }),
@@ -56,6 +60,38 @@ fn library_shown() -> Panel {
 fn in_mode(mode: Mode) -> Panel {
     let mut p = library_shown();
     p.step(Event::Mode(mode));
+    p
+}
+
+fn ask_typed() -> Panel {
+    let mut p = in_mode(Mode::Ask);
+    let workspace = |id: &str, name: &str, paper_count| Workspace { id: id.into(), name: name.into(), paper_count };
+    p.step(Event::Workspaces(Ok(vec![
+        workspace("w1", "Thesis: long-context reading", 42),
+        workspace("w2", "Reading group, spring", 9),
+        workspace("w3", "Survey draft", 118),
+    ])));
+    p.step(Event::Query(QUESTION.into()));
+    p
+}
+
+fn answer(done: bool) -> Panel {
+    let mut p = ask_typed();
+    p.step(Event::Submit);
+    let seq = p.seq;
+    let sources = vec![
+        Source { label: "C1".into(), paper_id: "03".into(), page: 4 },
+        Source { label: "C2".into(), paper_id: "01".into(), page: 6 },
+        Source { label: "C3".into(), paper_id: "03".into(), page: 9 },
+    ];
+    p.step(Event::Heard { seq, result: Ok(Said::Sources(sources)) });
+    let text = "Two routes recur. Retrieval keeps the prompt short: the document is split into passages and only the \
+                closest few are read [C1], which scales to any length but can miss an answer spread across sections \
+                [C3]. Sparse attention instead lets the model read far more at once [C2]; it costs more memory and \
+                still has a ceiling. Your workspace has no paper comparing the two on the same documents.";
+    let text = if done { text } else { &text[..160] };
+    p.step(Event::Heard { seq, result: Ok(Said::Token(text.into())) });
+    if done { p.step(Event::Heard { seq, result: Ok(Said::Done) }); }
     p
 }
 

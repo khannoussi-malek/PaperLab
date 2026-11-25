@@ -12,7 +12,7 @@ import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import { backUp } from './backup'
 import { captureBinary, createCapture, shortcutLabel, spawnChild, type Capture } from './capture'
 import { findDocker, makeDocker, spawnRunner, staleTags, usable, type Docker } from './docker'
-import { linkIn, readerHash } from './deepLink'
+import { linkHash, linkIn } from './deepLink'
 import { fileLog } from './log'
 import { navigationFor, startupAction, type StartupAction } from './navigation'
 import { readSettings, settingsFile, updateSettings, type Settings } from './settings'
@@ -224,7 +224,7 @@ function showWindow() {
   win.focus()
 }
 
-/** A paperlab:// link waits here until PaperLab's own page is showing, then the window moves to its reader route. */
+/** A paperlab:// link waits here until PaperLab's own page is showing, then the window moves to its route. */
 let pendingHash: string | null = null
 
 function openPendingLink() {
@@ -243,8 +243,8 @@ function openPendingLink() {
 
 function openLink(url: string | undefined) {
   if (url === undefined) return
-  const hash = readerHash(url)
-  if (hash === null) return log('ignored a paperlab:// link that is not a paper link')
+  const hash = linkHash(url)
+  if (hash === null) return log('ignored a paperlab:// link that is not a paper or workspace link')
   pendingHash = hash
   showWindow()
   openPendingLink()
@@ -402,7 +402,7 @@ if (!app.requestSingleInstanceLock()) {
     if (linkIn(argv) === undefined) showWindow()
     else openLink(linkIn(argv))
   })
-  pendingHash = readerHash(linkIn(process.argv) ?? '') // Windows/Linux: the first launch came from a link
+  pendingHash = linkHash(linkIn(process.argv) ?? '') // Windows/Linux: the first launch came from a link
   app.on('activate', showWindow)
   app.on('before-quit', (event) => {
     if (quitting) return

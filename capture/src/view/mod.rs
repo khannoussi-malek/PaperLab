@@ -1,6 +1,7 @@
 //! What the panel draws for a `Panel` state: the field, the mode bar, one line saying what's happening, and the rows
 //! Enter acts on. Glass with a veil of the theme's card colour, so text keeps its contrast in light and dark mode.
 
+mod answer;
 mod rows;
 mod status;
 
@@ -48,6 +49,9 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
     if let Some(line) = status {
         panel = panel.child(row().key("status").px(18.0).py(10.0)
             .child(text(line).font(type_::LABEL).color(ink.muted).w_full()));
+    }
+    if let Some(answer) = answer::block(p, &ink) {
+        panel = panel.child(answer);
     }
     if let Some(list) = list {
         panel = panel.child(list);

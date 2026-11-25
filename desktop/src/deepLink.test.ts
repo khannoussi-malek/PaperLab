@@ -1,21 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { readerHash } from './deepLink'
+import { linkHash } from './deepLink'
 
 const P = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
 const C = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
 
-describe('readerHash', () => {
+describe('linkHash', () => {
   it('maps a paper link to the reader route', () => {
-    expect(readerHash(`paperlab://papers/${P}`)).toBe(`#/papers/${P}`)
-    expect(readerHash(`paperlab://papers/${P}?page=4`)).toBe(`#/papers/${P}?page=4`)
-    expect(readerHash(`paperlab://papers/${P}?page=4&chunk=${C}`)).toBe(`#/papers/${P}?page=4&chunk=${C}`)
-    expect(readerHash(`paperlab://papers/${P}?chunk=${C}`)).toBe(`#/papers/${P}?chunk=${C}`)
+    expect(linkHash(`paperlab://papers/${P}`)).toBe(`#/papers/${P}`)
+    expect(linkHash(`paperlab://papers/${P}?page=4`)).toBe(`#/papers/${P}?page=4`)
+    expect(linkHash(`paperlab://papers/${P}?page=4&chunk=${C}`)).toBe(`#/papers/${P}?page=4&chunk=${C}`)
+    expect(linkHash(`paperlab://papers/${P}?chunk=${C}`)).toBe(`#/papers/${P}?chunk=${C}`)
+  })
+
+  it("maps a workspace link to that workspace's chat", () => {
+    expect(linkHash(`paperlab://workspaces/${P}`)).toBe(`#/workspaces/${P}?tab=chat`)
+    expect(linkHash(`paperlab://workspaces/${P}?page=2`)).toBe(`#/workspaces/${P}?tab=chat`)
+    expect(linkHash('paperlab://workspaces/not-a-uuid')).toBeNull()
   })
 
   it('ignores unknown params but rejects bad known ones', () => {
-    expect(readerHash(`paperlab://papers/${P}?utm=x&page=2`)).toBe(`#/papers/${P}?page=2`)
+    expect(linkHash(`paperlab://papers/${P}?utm=x&page=2`)).toBe(`#/papers/${P}?page=2`)
     for (const q of ['page=0', 'page=-1', 'page=1.5', 'page=abc', 'page=', 'chunk=nope', 'page=1&page=2']) {
-      expect(readerHash(`paperlab://papers/${P}?${q}`)).toBeNull()
+      expect(linkHash(`paperlab://papers/${P}?${q}`)).toBeNull()
     }
   })
 
@@ -29,7 +35,7 @@ describe('readerHash', () => {
       'paperlab://papers/',
       'garbage',
     ]) {
-      expect(readerHash(url)).toBeNull()
+      expect(linkHash(url)).toBeNull()
     }
   })
 })

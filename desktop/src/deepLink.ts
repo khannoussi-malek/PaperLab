@@ -1,7 +1,11 @@
-/** paperlab://papers/<uuid>[?page=N][&chunk=<uuid>] -> the reader's hash route. Strict: anything else is null. */
+/**
+ * paperlab://papers/<uuid>[?page=N][&chunk=<uuid>] -> the reader's hash route;
+ * paperlab://workspaces/<uuid> -> that workspace's chat (Quick Capture's Ask opens its answer there).
+ * Strict: anything else is null.
+ */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export function readerHash(url: string): string | null {
+export function linkHash(url: string): string | null {
   let u: URL
   try {
     u = new URL(url)
@@ -9,7 +13,9 @@ export function readerHash(url: string): string | null {
     return null
   }
   const id = u.pathname.slice(1)
-  if (u.protocol !== 'paperlab:' || u.hostname !== 'papers' || !UUID.test(id)) return null
+  if (u.protocol !== 'paperlab:' || !UUID.test(id)) return null
+  if (u.hostname === 'workspaces') return `#/workspaces/${id}?tab=chat`
+  if (u.hostname !== 'papers') return null
   // Unknown params are ignored; a known one that is repeated or malformed rejects the whole link.
   const out: string[] = []
   for (const key of ['page', 'chunk']) {
