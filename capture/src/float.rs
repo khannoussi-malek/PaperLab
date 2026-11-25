@@ -40,6 +40,9 @@ const MENU_IDLE: f64 = 5.0;
 /// "Hide for an hour" (a screen share, a talk); the shortcut brings it back sooner. It fades back in over FADE_IN.
 const HIDE_FOR: f64 = 3600.0;
 const FADE_IN: f64 = 0.4;
+/// The badge's pulse when the Inbox grows.
+const PULSE: f32 = 0.35;
+const PULSE_SECONDS: f64 = 0.5;
 /// How often a hidden paper checks whether its hour is up. The frame clock stops while the Mac sleeps, so the hour is
 /// an hour awake; the shortcut brings it back at any time.
 const HIDDEN_POLL: std::time::Duration = std::time::Duration::from_secs(1);
@@ -92,8 +95,9 @@ pub struct Float {
     drop_over: bool,
     /// Until when it's hidden (the frame clock); nothing is drawn or takes a click before then.
     hidden_until: f64,
-    /// What waits in the Inbox, shown on the page's corner.
-    pub badge: usize,
+    /// What waits in the Inbox, shown on the page's corner, and when it last grew (the badge pulses once).
+    badge: usize,
+    badge_grew: f64,
     /// When it last opened or closed, for the grow and shrink.
     since: f64,
     closed_at: f64,
@@ -106,7 +110,7 @@ impl Float {
             me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, focus: Focus::Floating,
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
             menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, drop_over: false, badge: 0,
-            hidden_until: f64::NEG_INFINITY, since: -1.0,
+            badge_grew: f64::NEG_INFINITY, hidden_until: f64::NEG_INFINITY, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         }
     }
@@ -195,6 +199,21 @@ impl Float {
             Focus::Floating => {}
         }
         vec![]
+    }
+
+    /// The Inbox's count, after each refresh: more than before pulses the badge once, so something new is noticed
+    /// without anything popping up.
+    pub fn set_badge(&mut self, count: usize) {
+        if count > self.badge {
+            self.badge_grew = self.t;
+        }
+        self.badge = count;
+    }
+
+    /// The badge's size: 1, swelling to 1 + PULSE and back over PULSE_SECONDS after the count grew.
+    fn badge_scale(&self) -> f32 {
+        let k = (self.t - self.badge_grew) / PULSE_SECONDS;
+        if (0.0..1.0).contains(&k) { 1.0 + PULSE * (k * std::f64::consts::PI).sin() as f32 } else { 1.0 }
     }
 
     fn hidden(&self) -> bool {
@@ -374,7 +393,7 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
             .radial_gradient([halo, halo], halo, [(0.0, blue.alpha(glow)), (1.0, blue.alpha(0.0))]))
         .children(menu(s, (cx_, cy_), still, dark))
         .child(paper((px, py), (pw, ph), bob, dark))
-        .child(badge(s.badge, (px + pw, py), blue))
+        .child(badge(s.badge, (px + pw, py), blue).scale(if still { 1.0 } else { s.badge_scale() }))
 }
 
 /// The bubbles, flying out from the page's centre (`centre`, in the overlay) to their spots, or back. Only bubbles
@@ -695,6 +714,19 @@ mod tests {
         });
         rt.frame(1.0 / 60.0);
         assert!(rt.find("paper").is_some(), "the shortcut brings it back at once");
+    }
+
+    #[test]
+    fn the_badge_pulses_once_when_the_inbox_grows_and_not_when_it_shrinks() {
+        let mut f = paper_at(10.0);
+        f.set_badge(2);
+        f.tick(10.0 + PULSE_SECONDS / 2.0);
+        assert!(f.badge_scale() > 1.3, "mid-pulse");
+        f.tick(10.0 + PULSE_SECONDS);
+        assert_eq!(f.badge_scale(), 1.0, "once");
+        f.set_badge(1);
+        f.tick(11.0 + PULSE_SECONDS / 2.0);
+        assert_eq!((f.badge, f.badge_scale()), (1, 1.0), "one read: no pulse");
     }
 
     #[test]

@@ -89,7 +89,7 @@ impl App {
     /// The floating paper's badge: what the Inbox holds.
     fn badge(&self, count: usize) {
         if let Some(float) = self.ctx.as_ref().and_then(|ctx| ctx.float.as_ref()) {
-            float.update(move |f, _| f.badge = count);
+            float.update(move |f, _| f.set_badge(count));
         }
     }
 
