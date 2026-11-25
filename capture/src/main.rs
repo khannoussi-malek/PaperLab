@@ -155,9 +155,11 @@ impl App {
                 Event::CloseNow(seq)
             }),
             Effect::Similar { seq, paper_id } => background(me, move || Event::Looked { seq, result: api.similar(&paper_id) }),
-            Effect::PutInWorkspace { seq, workspace_id, paper_id } => background(me, move || {
-                let result = api.put_in_workspace(&workspace_id, &paper_id);
-                Event::Put { seq, workspace_id, result }
+            Effect::PutInWorkspaces { seq, workspace_ids, paper_ids } => background(me, move || {
+                // ponytail: one request per paper and workspace; a drop is a handful of each. Already there is fine.
+                let pairs = workspace_ids.iter().flat_map(|w| paper_ids.iter().map(move |p| (w, p)));
+                let result = pairs.into_iter().try_for_each(|(w, p)| api.put_in_workspace(w, p));
+                Event::Put { seq, result }
             }),
             Effect::SaveNote { seq, paper_id, body } => {
                 background(me, move || Event::NoteSaved { seq, result: api.note(&paper_id, &body) });

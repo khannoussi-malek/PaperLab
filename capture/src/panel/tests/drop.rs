@@ -16,15 +16,22 @@ fn drop_two(p: &mut Panel) -> u64 {
 }
 
 #[test]
-fn a_drop_uploads_in_find_and_follows_the_last_paper() {
+fn a_drop_uploads_in_find_then_asks_which_workspaces_for_every_paper() {
     let mut p = shown_with_library();
     p.step(Event::Mode(Mode::Cite));
     let seq = drop_two(&mut p);
     assert_eq!((p.mode, &p.phase), (Mode::Find, &Phase::Uploading { count: 2 }));
     let fx = p.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a")), Ok(ingesting("b"))] });
-    assert_eq!(fx, vec![Effect::Poll("b".into())]);
-    assert!(matches!(&p.phase, Phase::Added(x) if x.id == "b"));
-    assert_eq!(p.upload_note.as_deref(), Some("Added 2 PDFs; following the last one."));
+    assert_eq!(fx, vec![Effect::FetchWorkspaces]);
+    let Phase::Filing(f) = &p.phase else { panic!("{:?}", p.phase) };
+    assert_eq!((f.paper_ids.as_slice(), f.what.as_str(), &f.note), (["a".to_owned(), "b".to_owned()].as_slice(), "these 2 papers", &None));
+    let mut one = shown_with_library();
+    let seq = match one.step(Event::Dropped(vec!["/a.pdf".into()])).as_slice() {
+        [Effect::Upload { seq, .. }] => *seq,
+        other => panic!("{other:?}"),
+    };
+    one.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a"))] });
+    assert!(matches!(&one.phase, Phase::Filing(f) if f.what == "“Paper a”"));
 }
 
 #[test]
@@ -33,7 +40,8 @@ fn a_partly_failed_drop_says_how_many_and_why() {
     let seq = drop_two(&mut p);
     let results = vec![Err(ApiError::Said("'b.pdf' is not a PDF".into())), Ok(ingesting("a"))];
     p.step(Event::Uploaded { seq, results });
-    assert_eq!(p.upload_note.as_deref(), Some("Added 1 of 2 PDFs ('b.pdf' is not a PDF); following the last one."));
+    let Phase::Filing(f) = &p.phase else { panic!("{:?}", p.phase) };
+    assert_eq!((f.paper_ids.as_slice(), f.note.as_deref()), (["a".to_owned()].as_slice(), Some("Added 1 of 2 PDFs ('b.pdf' is not a PDF).")));
     let mut all = shown_with_library();
     let seq = drop_two(&mut all);
     all.step(Event::Uploaded { seq, results: vec![Err(ApiError::Unreachable), Err(ApiError::Unreachable)] });
@@ -58,14 +66,14 @@ fn something_else_dropped_says_what_to_do() {
 }
 
 #[test]
-fn reopening_mid_upload_keeps_it_and_follows_its_paper() {
+fn reopening_mid_upload_keeps_it_and_asks_once_it_lands() {
     let mut p = shown_with_library();
     let seq = drop_two(&mut p);
     p.step(Event::Closed);
     p.step(Event::Shown);
     assert_eq!(p.phase, Phase::Uploading { count: 2 });
     assert_eq!(p.step(Event::Dropped(vec!["/c.pdf".into()])), vec![], "still one at a time");
-    assert_eq!(p.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a"))] }), vec![Effect::Poll("a".into())]);
+    assert_eq!(p.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a"))] }), vec![Effect::FetchWorkspaces]);
 }
 
 #[test]
@@ -82,13 +90,10 @@ fn reopening_mid_add_keeps_it_too() {
 }
 
 #[test]
-fn the_drop_note_goes_with_the_next_add_and_a_refused_drop_stops_following() {
+fn a_refused_drop_while_asking_replaces_the_question() {
     let mut p = shown_with_library();
     let seq = drop_two(&mut p);
     p.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a")), Ok(ingesting("b"))] });
     p.step(Event::DropRefused);
-    assert_eq!(p.step(Event::Status { id: "b".into(), result: Ok(ingesting("b")) }), vec![], "no longer followed");
-    assert_eq!(p.phase, Phase::Failed(NOT_A_PDF.into()));
-    p.step(Event::Query("graph".into()));
-    assert_eq!(p.upload_note, None);
+    assert_eq!(p.phase, Phase::Failed(NOT_A_PDF.into()), "the papers are in the library; ⌘↵ files them later");
 }

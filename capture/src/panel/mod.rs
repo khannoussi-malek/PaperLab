@@ -88,7 +88,9 @@ pub enum Event {
     Uploaded { seq: u64, results: Vec<Result<Paper, ApiError>> },
     Inbox(Result<Inbox, ApiError>),
     NoteSaved { seq: u64, result: Result<(), ApiError> },
-    Put { seq: u64, workspace_id: String, result: Result<(), ApiError> },
+    Put { seq: u64, result: Result<(), ApiError> },
+    /// A click on a row: pick it and act on it, as Enter would.
+    Click(usize),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -116,7 +118,8 @@ pub enum Effect {
     Copy { seq: u64, text: String, what: String },
     /// Save a note on a whole paper.
     SaveNote { seq: u64, paper_id: String, body: String },
-    PutInWorkspace { seq: u64, workspace_id: String, paper_id: String },
+    /// Put every paper in every workspace.
+    PutInWorkspaces { seq: u64, workspace_ids: Vec<String>, paper_ids: Vec<String> },
     /// Papers like a library one; the answer comes back as a lookup's (`Event::Looked`).
     Similar { seq: u64, paper_id: String },
     Upload { seq: u64, paths: Vec<PathBuf> },
@@ -141,6 +144,8 @@ pub enum Row {
     /// Inbox: a free PDF found, a saved search with new results.
     FoundPdf(usize),
     NewHits(usize),
+    /// Filing: put the papers in the workspaces picked (or, none picked, leave them in the library).
+    FilingDone,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -164,8 +169,6 @@ pub struct Panel {
     aside: Option<Answer>,
     /// A note off screen, waiting for Note (see note.rs).
     note_aside: Option<Aside>,
-    /// What a drop of several PDFs came to, shown with the followed paper's progress.
-    pub upload_note: Option<String>,
     /// What's new, once listed (the floating paper's badge counts it).
     pub inbox: Option<Inbox>,
     /// PaperLab's sentence when the Inbox couldn't be listed.
@@ -180,7 +183,7 @@ impl Default for Panel {
     fn default() -> Self {
         Panel {
             mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
-            library_error: None, workspaces: None, last_workspace: None, ask_error: None, aside: None, note_aside: None, upload_note: None, inbox: None, inbox_error: None, seq: 0, polling: None, hidden: false,
+            library_error: None, workspaces: None, last_workspace: None, ask_error: None, aside: None, note_aside: None, inbox: None, inbox_error: None, seq: 0, polling: None, hidden: false,
         }
     }
 }
@@ -226,7 +229,12 @@ impl Panel {
             Event::Uploaded { seq, results } => self.uploaded(seq, results),
             Event::Inbox(result) => self.inbox_arrived(result),
             Event::NoteSaved { seq, result } => self.note_saved(seq, result),
-            Event::Put { seq, workspace_id, result } => self.put_done(seq, workspace_id, result),
+            Event::Put { seq, result } => self.put_done(seq, result),
+            Event::Click(row) if row < self.rows().len() => {
+                self.picked = row;
+                self.submit(false)
+            }
+            Event::Click(_) => vec![],
             Event::Papers(result) => self.papers_arrived(result),
             Event::Looked { seq, result } => self.looked(seq, result),
             Event::AddDone { seq, result } => self.add_done(seq, result),
@@ -288,7 +296,6 @@ impl Panel {
         }
         self.set_note_aside();
         (self.mode, self.phase, self.picked, self.polling, self.aside) = (mode, Phase::Library, 0, None, None);
-        self.upload_note = None;
         self.bring_note_back();
         self.entered()
     }
@@ -305,7 +312,7 @@ impl Panel {
     /// Typing in a mode other than Find: the text is the query; an earlier answer, or one still coming, no longer
     /// matches it.
     fn typed(&mut self, q: String) -> Vec<Effect> {
-        (self.query, self.picked, self.phase, self.aside, self.upload_note) = (q, 0, Phase::Library, None, None);
+        (self.query, self.picked, self.phase, self.aside) = (q, 0, Phase::Library, None);
         vec![]
     }
 

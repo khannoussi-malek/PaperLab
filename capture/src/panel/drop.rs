@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use super::{Effect, Panel, Phase, UNREACHABLE};
+use super::{Effect, Filing, Panel, Phase, UNREACHABLE};
 use crate::api::ApiError;
 use crate::library::Paper;
 use crate::mode::Mode;
@@ -17,7 +17,7 @@ impl Panel {
         }
         self.set_note_aside();
         self.seq += 1;
-        (self.mode, self.picked, self.polling, self.upload_note) = (Mode::Find, 0, None, None);
+        (self.mode, self.picked, self.polling) = (Mode::Find, 0, None);
         self.phase = Phase::Uploading { count: paths.len() };
         vec![Effect::Upload { seq: self.seq, paths }]
     }
@@ -44,26 +44,26 @@ impl Panel {
             }
         }
         let first_error = (!errors.is_empty()).then(|| errors.swap_remove(0));
-        let Some(paper) = papers.pop() else {
-            self.phase = first_error.map_or(Phase::Library, |e| self.failed(e));
-            return vec![];
+        let failed = errors.len() + usize::from(first_error.is_some());
+        let what = match papers.as_slice() {
+            [] => {
+                self.phase = first_error.map_or(Phase::Library, |e| self.failed(e));
+                return vec![];
+            }
+            [one] => format!("“{}”", one.title),
+            many => format!("these {} papers", many.len()),
         };
-        self.upload_note = note(total, errors.len() + usize::from(first_error.is_some()), first_error);
-        self.follow(paper)
+        // Added: now where should they go? PaperLab reads them meanwhile.
+        let ids = papers.into_iter().map(|p| p.id).collect();
+        self.start_filing(Filing::new(ids, what, note(total, failed, first_error)))
     }
 }
 
-/// What a drop of several files came to; nothing to add for one.
+/// What a drop came to when some PDFs didn't make it; nothing to add when all did.
 fn note(total: usize, failed: usize, first_error: Option<ApiError>) -> Option<String> {
-    match (total, first_error) {
-        (1, _) => None,
-        (_, None) => Some(format!("Added {total} PDFs; following the last one.")),
-        (_, Some(e)) => {
-            let why = match e {
-                ApiError::Unreachable => UNREACHABLE.to_owned(),
-                ApiError::Said(sentence) => sentence,
-            };
-            Some(format!("Added {} of {total} PDFs ({why}); following the last one.", total - failed))
-        }
-    }
+    let why = match first_error? {
+        ApiError::Unreachable => UNREACHABLE.to_owned(),
+        ApiError::Said(sentence) => sentence,
+    };
+    Some(format!("Added {} of {total} PDFs ({why}).", total - failed))
 }

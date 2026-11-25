@@ -40,7 +40,7 @@ impl Panel {
         // it waits for Enter on its "Search online" row so each keystroke doesn't ask every source.
         let pasted = q.len() > self.query.len() + 1;
         self.query = q;
-        (self.picked, self.polling, self.upload_note) = (0, None, None);
+        (self.picked, self.polling) = (0, None);
         match classify(&self.query).lookup() {
             Some(query) if pasted => {
                 let query = query.to_owned();
@@ -138,7 +138,9 @@ impl Panel {
             }
             Row::OpenAdded(id) => vec![Effect::Open(id), Effect::Close],
             Row::OpenPaperLab => vec![Effect::OpenPaperLab, Effect::Close],
-            Row::Close(_) | Row::Workspace(_) | Row::CopyAnswer | Row::OpenAnswer | Row::Source(_) | Row::FoundPdf(_) | Row::NewHits(_) => vec![], // other modes' rows
+            // other modes' rows, and filing's (its own submit)
+            Row::Close(_) | Row::Workspace(_) | Row::CopyAnswer | Row::OpenAnswer | Row::Source(_) | Row::FoundPdf(_)
+            | Row::NewHits(_) | Row::FilingDone => vec![],
         }
     }
 
