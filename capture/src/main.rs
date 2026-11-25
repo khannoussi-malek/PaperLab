@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 use rune::{Align, AppHandle, AppSpec, DisplayTarget, OverlayPlacement, ScreenEdge, TextEdit, WindowOptions, WindowSpec};
 
 use api::{Api, ApiError};
-use panel::{Effect, Event, Panel, Phase};
+use panel::{Effect, Event, Panel};
 
 const BUNDLE_ID: &str = "io.github.khannoussi-malek.paperlab";
 const DEFAULT_PORT: u16 = 5190;
@@ -68,7 +68,7 @@ impl App {
     pub fn dispatch(&mut self, event: Event) {
         match &event {
             Event::Papers(Ok(_)) => self.papers_at = Some(Instant::now()),
-            Event::Papers(Err(_)) | Event::AddDone(Ok(_)) => self.papers_at = None,
+            Event::Papers(Err(_)) | Event::AddDone { result: Ok(_), .. } => self.papers_at = None,
             _ => {}
         }
         for effect in self.panel.step(event) {
@@ -112,8 +112,8 @@ impl App {
         match effect {
             Effect::FetchPapers => background(me, move || Event::Papers(api.papers())),
             Effect::Lookup { seq, query } => background(me, move || Event::Looked { seq, result: api.lookup(&query) }),
-            Effect::Add { candidate, save_without_pdf } => {
-                background(me, move || Event::AddDone(api.add(&candidate, save_without_pdf)));
+            Effect::Add { seq, candidate, save_without_pdf } => {
+                background(me, move || Event::AddDone { seq, result: api.add(&candidate, save_without_pdf) });
             }
             Effect::Poll(id) => background(me, move || {
                 std::thread::sleep(POLL_EVERY);
@@ -130,18 +130,13 @@ impl App {
                 None => open(&["-b", BUNDLE_ID]),
             },
             Effect::Close => self.close(),
-            Effect::CloseSoon => {
-                std::thread::spawn(move || {
-                    std::thread::sleep(CONFIRM_FOR);
-                    // Still showing the confirmation: the user hasn't moved on.
-                    me.update(|s, _| if matches!(s.panel.phase, Phase::Copied(_)) { s.close() });
-                });
-            }
-            Effect::Cite { paper_id, title, format } => background(me, move || {
-                let result = api.cite(&paper_id, format).and_then(|text| {
-                    clipboard::copy(&text).map_err(|e| ApiError::Said(format!("Couldn't copy it: {e}.")))
-                });
-                Event::Cited { title, format, result }
+            Effect::CloseSoon(seq) => background(me, move || {
+                std::thread::sleep(CONFIRM_FOR);
+                Event::CloseNow(seq)
+            }),
+            Effect::Cite { seq, paper_id, title, format } => background(me, move || {
+                let result = api.cite(&paper_id, format).and_then(|text| copy(&text));
+                Event::Copied { seq, what: format!("{} of “{title}”", format.label()), result }
             }),
             Effect::Novelty { seq, text } => background(me, move || Event::Novelty { seq, result: api.novelty(&text) }),
         }
@@ -159,6 +154,10 @@ fn background(me: AppHandle<App>, work: impl FnOnce() -> Event + Send + 'static)
         let event = work();
         me.update(move |s, _| s.dispatch(event));
     });
+}
+
+fn copy(text: &str) -> Result<(), ApiError> {
+    clipboard::copy(text).map_err(|e| ApiError::Said(format!("Couldn't copy it to the clipboard ({e}).")))
 }
 
 fn open(args: &[&str]) {

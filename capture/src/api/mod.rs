@@ -55,10 +55,16 @@ impl Api {
 /// Parses straight into `T`, skipping the fields it doesn't name: a 959-paper list is 2.1 MB of JSON, and a
 /// `Value` tree of all of it held ~110 MB of the panel's footprint afterwards.
 fn ok<T: serde::de::DeserializeOwned>(status: u16, body: Vec<u8>) -> Result<T, ApiError> {
-    if !(200..300).contains(&status) {
-        return Err(ApiError::Said(said(status, &serde_json::from_slice(&body).unwrap_or(Value::Null))));
-    }
+    refused(status, &body)?;
     serde_json::from_slice(&body).map_err(|e| ApiError::Said(format!("PaperLab's answer didn't read as expected ({e}).")))
+}
+
+/// A non-2xx answer as PaperLab's sentence for it.
+fn refused(status: u16, body: &[u8]) -> Result<(), ApiError> {
+    if (200..300).contains(&status) {
+        return Ok(());
+    }
+    Err(ApiError::Said(said(status, &serde_json::from_slice(body).unwrap_or(Value::Null))))
 }
 
 /// PaperLab's errors carry a sentence in `detail`; a validation error carries a list instead.

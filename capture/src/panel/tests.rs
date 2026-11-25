@@ -75,7 +75,7 @@ fn typing_while_adding_keeps_the_add_and_its_answer() {
     assert_eq!(p.step(Event::Query("2401.12345x".into())), vec![]);
     let mut queued = paper("n", "New paper", &[], 2017, "2026");
     queued.status = "uploaded".into();
-    assert_eq!(p.step(Event::AddDone(Ok(Added::Queued(queued)))), vec![Effect::Poll("n".into())]);
+    assert_eq!(p.step(Event::AddDone { seq: p.seq, result: Ok(Added::Queued(queued)) }), vec![Effect::Poll("n".into())]);
 }
 
 #[test]
@@ -87,13 +87,13 @@ fn after_an_add_enter_acts_on_the_first_row_and_a_closed_panel_stops_following()
     p.step(Event::Down);
     p.step(Event::Down);
     p.step(Event::Submit);
-    p.step(Event::AddDone(Ok(Added::NoFreePdf("No free PDF.".into()))));
-    assert_eq!(p.step(Event::Submit), vec![Effect::Add { candidate: candidate("C", None), save_without_pdf: true }]);
+    p.step(Event::AddDone { seq: p.seq, result: Ok(Added::NoFreePdf("No free PDF.".into())) });
+    assert_eq!(p.step(Event::Submit), vec![Effect::Add { seq: p.seq, candidate: candidate("C", None), save_without_pdf: true }]);
 
     p.step(Event::Closed);
     let mut queued = paper("c", "C", &[], 2017, "2026");
     queued.status = "uploaded".into();
-    assert_eq!(p.step(Event::AddDone(Ok(Added::Queued(queued)))), vec![]); // kept, not polled while hidden
+    assert_eq!(p.step(Event::AddDone { seq: p.seq, result: Ok(Added::Queued(queued)) }), vec![]); // kept, not polled while hidden
 }
 
 #[test]
@@ -103,11 +103,11 @@ fn add_a_found_paper_and_follow_it_until_ready() {
     let found = Found { results: vec![candidate("New paper", None)], notices: vec!["S2 is busy.".into()] };
     p.step(Event::Looked { seq: 1, result: Ok(found) });
     assert_eq!(p.rows(), vec![Row::Candidate(0)]);
-    assert_eq!(p.step(Event::Submit), vec![Effect::Add { candidate: candidate("New paper", None), save_without_pdf: false }]);
+    assert_eq!(p.step(Event::Submit), vec![Effect::Add { seq: p.seq, candidate: candidate("New paper", None), save_without_pdf: false }]);
 
     let mut queued = paper("n", "New paper", &[], 2017, "2026");
     queued.status = "uploaded".into();
-    assert_eq!(p.step(Event::AddDone(Ok(Added::Queued(queued.clone())))), vec![Effect::Poll("n".into())]);
+    assert_eq!(p.step(Event::AddDone { seq: p.seq, result: Ok(Added::Queued(queued.clone())) }), vec![Effect::Poll("n".into())]);
     queued.status = "embedding".into();
     assert_eq!(p.step(Event::Status { id: "n".into(), result: Ok(queued.clone()) }), vec![Effect::Poll("n".into())]);
     queued.status = "ready".into();
@@ -124,7 +124,7 @@ fn closing_stops_the_polling() {
     p.step(Event::Submit);
     let mut queued = paper("n", "New", &[], 2017, "2026");
     queued.status = "uploaded".into();
-    p.step(Event::AddDone(Ok(Added::Queued(queued.clone()))));
+    p.step(Event::AddDone { seq: p.seq, result: Ok(Added::Queued(queued.clone())) });
     p.step(Event::Closed);
     assert_eq!(p.step(Event::Status { id: "n".into(), result: Ok(queued) }), vec![]);
 }
@@ -143,9 +143,9 @@ fn no_free_pdf_offers_save_without_pdf() {
     p.step(Event::Query("2401.12345".into()));
     p.step(Event::Looked { seq: 1, result: Ok(Found { results: vec![candidate("Paywalled", None)], notices: vec![] }) });
     p.step(Event::Submit);
-    p.step(Event::AddDone(Ok(Added::NoFreePdf("No free PDF was found for this paper.".into()))));
+    p.step(Event::AddDone { seq: p.seq, result: Ok(Added::NoFreePdf("No free PDF was found for this paper.".into())) });
     assert_eq!(p.rows(), vec![Row::SaveWithoutPdf]);
-    assert_eq!(p.step(Event::Submit), vec![Effect::Add { candidate: candidate("Paywalled", None), save_without_pdf: true }]);
+    assert_eq!(p.step(Event::Submit), vec![Effect::Add { seq: p.seq, candidate: candidate("Paywalled", None), save_without_pdf: true }]);
 }
 
 #[test]
@@ -208,13 +208,14 @@ fn cite_copies_apa_on_enter_and_bibtex_on_command_enter_then_closes() {
     let mut p = shown_with_library();
     p.step(Event::Mode(Mode::Cite));
     typed(&mut p, "attention");
-    let apa = Effect::Cite { paper_id: "a".into(), title: "Attention Is All You Need".into(), format: Format::Apa };
+    let apa = Effect::Cite { seq: 1, paper_id: "a".into(), title: "Attention Is All You Need".into(), format: Format::Apa };
     assert_eq!(p.step(Event::Submit), vec![apa]);
+    p.step(Event::Query("attention".into())); // the user moved on: the APA copy is dropped
     p.step(Event::Down);
-    let bibtex = Effect::Cite { paper_id: "b".into(), title: "Graph attention networks".into(), format: Format::Bibtex };
+    let bibtex = Effect::Cite { seq: 2, paper_id: "b".into(), title: "Graph attention networks".into(), format: Format::Bibtex };
     assert_eq!(p.step(Event::SubmitAlt), vec![bibtex]);
-    let done = p.step(Event::Cited { title: "Graph attention networks".into(), format: Format::Bibtex, result: Ok(()) });
-    assert_eq!(done, vec![Effect::CloseSoon]);
+    let what = "the BibTeX entry of “Graph attention networks”".to_owned();
+    assert_eq!(p.step(Event::Copied { seq: 2, what, result: Ok(()) }), vec![Effect::CloseSoon(2)]);
     assert_eq!(p.phase, Phase::Copied("Copied the BibTeX entry of “Graph attention networks”.".into()));
 }
 
@@ -222,7 +223,8 @@ fn cite_copies_apa_on_enter_and_bibtex_on_command_enter_then_closes() {
 fn a_failed_copy_says_why_and_stays_open() {
     let mut p = shown_with_library();
     p.step(Event::Mode(Mode::Cite));
-    let failed = Event::Cited { title: "x".into(), format: Format::Apa, result: Err(ApiError::Said("No such paper.".into())) };
+    let seq = match p.step(Event::Submit).as_slice() { [Effect::Cite { seq, .. }] => *seq, other => panic!("{other:?}") };
+    let failed = Event::Copied { seq, what: "x".into(), result: Err(ApiError::Said("No such paper.".into())) };
     assert_eq!(p.step(failed), vec![]);
     assert_eq!(p.phase, Phase::Failed("No such paper.".into()));
 }
@@ -261,4 +263,73 @@ fn done_before_offline_offers_to_open_paperlab() {
     p.step(Event::Submit);
     p.step(Event::Novelty { seq: 1, result: Err(ApiError::Unreachable) });
     assert_eq!(p.rows(), vec![Row::OpenPaperLab]);
+}
+
+fn adding(p: &mut Panel, title: &str) -> Vec<Effect> {
+    p.step(Event::Query("2401.12345".into()));
+    let seq = p.seq;
+    p.step(Event::Looked { seq, result: Ok(Found { results: vec![candidate(title, None)], notices: vec![] }) });
+    p.step(Event::Submit)
+}
+
+#[test]
+fn a_late_add_answer_does_not_land_on_a_newer_add() {
+    let mut p = shown_with_library();
+    let first = adding(&mut p, "A");
+    let [Effect::Add { seq: a, .. }] = first.as_slice() else { panic!("{first:?}") };
+    let a = *a;
+    p.step(Event::Closed);
+    p.step(Event::Shown);
+    adding(&mut p, "B");
+    let late = Paper { id: "a".into(), ..paper("a", "A", &[], 2020, "x") };
+    assert_eq!(p.step(Event::AddDone { seq: a, result: Ok(Added::Queued(late)) }), vec![]);
+    assert!(matches!(&p.phase, Phase::Adding(c) if c.title == "B"));
+}
+
+fn cite_enter(p: &mut Panel) -> u64 {
+    p.step(Event::Mode(Mode::Cite));
+    match p.step(Event::Submit).as_slice() {
+        [Effect::Cite { seq, .. }] => *seq,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn enter_twice_copies_once() {
+    let mut p = shown_with_library();
+    cite_enter(&mut p);
+    assert_eq!(p.step(Event::SubmitAlt), vec![], "the first copy is still under way");
+}
+
+#[test]
+fn a_copy_answering_after_a_mode_switch_changes_nothing() {
+    let mut p = shown_with_library();
+    let seq = cite_enter(&mut p);
+    p.step(Event::Mode(Mode::Find));
+    assert_eq!(p.step(Event::Copied { seq, what: "it".into(), result: Ok(()) }), vec![]);
+    assert_eq!(p.phase, Phase::Library);
+}
+
+#[test]
+fn the_panel_closes_after_a_copy_only_if_the_user_has_not_moved_on() {
+    let mut p = shown_with_library();
+    let seq = cite_enter(&mut p);
+    assert_eq!(p.step(Event::Copied { seq, what: "it".into(), result: Ok(()) }), vec![Effect::CloseSoon(seq)]);
+    assert_eq!(p.step(Event::CloseNow(seq + 1)), vec![], "another copy's timer");
+    assert_eq!(p.step(Event::CloseNow(seq)), vec![Effect::Close]);
+    let mut moved = shown_with_library();
+    let seq = cite_enter(&mut moved);
+    moved.step(Event::Copied { seq, what: "it".into(), result: Ok(()) });
+    moved.step(Event::Query("other".into()));
+    assert_eq!(moved.step(Event::CloseNow(seq)), vec![]);
+}
+
+#[test]
+fn the_librarys_own_error_sentence_is_kept_for_the_status_line() {
+    let mut p = Panel::default();
+    p.step(Event::Shown);
+    p.step(Event::Papers(Err(ApiError::Said("The database is migrating.".into()))));
+    assert_eq!(p.library_error.as_deref(), Some("The database is migrating."));
+    p.step(Event::Papers(Ok(vec![])));
+    assert_eq!(p.library_error, None);
 }

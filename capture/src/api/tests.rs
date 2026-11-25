@@ -97,6 +97,7 @@ fn a_reference_comes_back_as_its_text_and_an_error_as_its_sentence() {
     });
     assert_eq!(api.cite("p1", Format::Bibtex), Ok("\"@article{k, title={T}}\"".into()));
     assert_eq!(api.cite("p1", Format::Apa), Err(ApiError::Said("unknown_format".into())));
+    assert!(matches!(cite::reference(b" \n"), Err(ApiError::Said(_))), "nothing to copy is an error");
 }
 
 #[test]

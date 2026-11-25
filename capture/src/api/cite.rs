@@ -1,7 +1,7 @@
 //! A library paper's reference, as PaperLab exports it: APA as plain text, or a BibTeX entry.
 
-use super::{Api, ApiError, said};
-use serde_json::{Value, json};
+use super::{Api, ApiError, refused};
+use serde_json::json;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Format {
@@ -30,9 +30,16 @@ impl Api {
         let url = format!("{}/api/citations/export", self.base);
         let payload = json!({ "paper_ids": [paper_id], "format": format.wire() });
         let (status, body) = self.send(self.agent.post(&url).send_json(&payload))?;
-        if !(200..300).contains(&status) {
-            return Err(ApiError::Said(said(status, &serde_json::from_slice(&body).unwrap_or(Value::Null))));
-        }
-        Ok(String::from_utf8_lossy(&body).trim().to_owned())
+        refused(status, &body)?;
+        reference(&body)
     }
+}
+
+/// The exported text; nothing at all is an error, so an empty clipboard is never reported as "Copied".
+pub(super) fn reference(body: &[u8]) -> Result<String, ApiError> {
+    let text = String::from_utf8_lossy(body).trim().to_owned();
+    if text.is_empty() {
+        return Err(ApiError::Said("PaperLab gave no reference for this paper.".into()));
+    }
+    Ok(text)
 }

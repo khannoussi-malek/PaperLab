@@ -24,6 +24,8 @@ pub enum Phase {
     NoFreePdf { candidate: Candidate, message: String },
     Failed(String),
     /// Cite: a reference is on the clipboard (the sentence saying which).
+    /// A copy under way (Enter again waits for it).
+    Copying,
     Copied(String),
     /// Done before?: looking through the library for the idea.
     Searching,
@@ -40,14 +42,17 @@ pub enum Event {
     Submit,
     Papers(Result<Vec<Paper>, ApiError>),
     Looked { seq: u64, result: Result<Found, ApiError> },
-    AddDone(Result<Added, ApiError>),
+    AddDone { seq: u64, result: Result<Added, ApiError> },
     Status { id: String, result: Result<Paper, ApiError> },
     /// The mode bar: one mode, or the next/previous (Tab, ⇧Tab).
     Mode(Mode),
     NextMode { forward: bool },
     /// ⌘↵: the mode's second action (Cite: BibTeX instead of APA).
     SubmitAlt,
-    Cited { title: String, format: Format, result: Result<(), ApiError> },
+    /// Something reached the clipboard (`what`: "the APA reference of “…”"), or didn't.
+    Copied { seq: u64, what: String, result: Result<(), ApiError> },
+    /// A moment after a copy: close if "Copied …" is still what the panel shows.
+    CloseNow(u64),
     Novelty { seq: u64, result: Result<Closeness, ApiError> },
 }
 
@@ -55,16 +60,16 @@ pub enum Event {
 pub enum Effect {
     FetchPapers,
     Lookup { seq: u64, query: String },
-    Add { candidate: Candidate, save_without_pdf: bool },
+    Add { seq: u64, candidate: Candidate, save_without_pdf: bool },
     /// Ask for the paper's status again in a second.
     Poll(String),
     Open(String),
     OpenPaperLab,
     Close,
-    /// Close once the user has read a short confirmation.
-    CloseSoon,
+    /// Send `CloseNow` back in a moment, once the user has read the confirmation.
+    CloseSoon(u64),
     /// Copy a library paper's reference to the clipboard.
-    Cite { paper_id: String, title: String, format: Format },
+    Cite { seq: u64, paper_id: String, title: String, format: Format },
     Novelty { seq: u64, text: String },
 }
 
@@ -90,7 +95,9 @@ pub struct Panel {
     pub papers: Vec<Paper>,
     /// False once a call found nothing listening; true again when one answers.
     pub reachable: bool,
-    seq: u64,
+    /// The library's own sentence when it couldn't be listed (shown while nothing else is).
+    pub library_error: Option<String>,
+    pub(crate) seq: u64,
     polling: Option<String>,
     /// Closed since it was last shown: an add finishing now is kept but not followed.
     hidden: bool,
@@ -98,7 +105,10 @@ pub struct Panel {
 
 impl Default for Panel {
     fn default() -> Self {
-        Panel { mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true, seq: 0, polling: None, hidden: false }
+        Panel {
+            mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
+            library_error: None, seq: 0, polling: None, hidden: false,
+        }
     }
 }
 
@@ -126,11 +136,12 @@ impl Panel {
             Event::SubmitAlt => self.submit(true),
             Event::Mode(mode) => self.set_mode(mode),
             Event::NextMode { forward } => self.set_mode(self.mode.step(forward)),
-            Event::Cited { title, format, result } => self.cited(title, format, result),
+            Event::Copied { seq, what, result } => self.copied(seq, what, result),
+            Event::CloseNow(seq) => self.close_now(seq),
             Event::Novelty { seq, result } => self.novelty(seq, result),
             Event::Papers(result) => self.papers_arrived(result),
             Event::Looked { seq, result } => self.looked(seq, result),
-            Event::AddDone(result) => self.add_done(result),
+            Event::AddDone { seq, result } => self.add_done(seq, result),
             Event::Status { id, result } => self.status(id, result),
         }
     }
@@ -186,11 +197,11 @@ impl Panel {
     fn papers_arrived(&mut self, result: Result<Vec<Paper>, ApiError>) -> Vec<Effect> {
         match result {
             Ok(papers) => {
-                self.papers = papers;
-                self.reachable = true;
+                (self.papers, self.reachable, self.library_error) = (papers, true, None);
                 self.clamp();
             }
-            Err(e) => self.reachable = e != ApiError::Unreachable,
+            Err(ApiError::Unreachable) => self.reachable = false,
+            Err(ApiError::Said(sentence)) => (self.reachable, self.library_error) = (true, Some(sentence)),
         }
         vec![]
     }

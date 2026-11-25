@@ -20,7 +20,9 @@ pub const ALL: &[(&str, fn(&mut App))] = &[
     ("copied", |s| {
         let mut p = in_mode(Mode::Cite);
         p.step(Event::Query("attention".into()));
-        p.step(Event::Cited { title: "Attention Is All You Need".into(), format: Format::Apa, result: Ok(()) });
+        p.step(Event::Submit);
+        let what = format!("{} of “Attention Is All You Need”", Format::Apa.label());
+        p.step(Event::Copied { seq: p.seq, what, result: Ok(()) });
         set(s, "attention", p)
     }),
     ("searching", |s| { let mut p = novelty_typed(); p.step(Event::Submit); set(s, IDEA, p) }),
@@ -103,6 +105,6 @@ fn added(answer: Option<Added>) -> Panel {
     let found = Found { results: vec![candidate("Retrieval-augmented reading of long papers", None)], notices: vec![] };
     p.step(Event::Looked { seq: 1, result: Ok(found) });
     p.step(Event::Submit);
-    if let Some(answer) = answer { p.step(Event::AddDone(Ok(answer))); }
+    if let Some(answer) = answer { p.step(Event::AddDone { seq: 2, result: Ok(answer) }); }
     p
 }

@@ -5,7 +5,8 @@ use crate::panel::{Panel, Phase};
 
 pub(super) fn line(p: &Panel) -> Option<String> {
     match &p.phase {
-        Phase::Library => None,
+        Phase::Library => p.library_error.clone(),
+        Phase::Copying => Some("Copying…".into()),
         Phase::LookingUp(q) => Some(format!("Looking up {q}…")),
         Phase::Found(f) if f.results.is_empty() => Some(join("Nothing found.", &f.notices)),
         Phase::Found(f) => (!f.notices.is_empty()).then(|| f.notices.join(" ")),

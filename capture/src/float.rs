@@ -98,7 +98,7 @@ impl Float {
             Phase::Move => {
                 if self.dragging || d.dx.hypot(d.dy) >= CLICK_SLOP {
                     self.dragging = true;
-                    self.origin = (self.grab.0 + d.dx, self.grab.1 + d.dy);
+                    self.origin = on_screen((self.grab.0 + d.dx, self.grab.1 + d.dy), self.screen);
                     if let Some(handle) = &self.handle {
                         handle.set_placement(Some(place(self.origin)));
                     }
@@ -121,6 +121,14 @@ fn place(origin: (f32, f32)) -> OverlayPlacement {
 /// Where it starts: bottom right of a screen this size (points), clear of the Dock's usual height.
 pub fn start(screen: (f32, f32)) -> (f32, f32) {
     (screen.0 - SIZE.0 - 16.0, screen.1 - SIZE.1 - 72.0)
+}
+
+/// `origin`, moved just enough that the page (at its biggest) stays on a screen this size; the clear halo may leave it.
+fn on_screen(origin: (f32, f32), screen: (f32, f32)) -> (f32, f32) {
+    let inset = ((SIZE.0 - BIG.0) / 2.0, (SIZE.1 - BIG.1) / 2.0);
+    let x = origin.0.clamp(-inset.0, (screen.0 - SIZE.0 + inset.0).max(-inset.0));
+    let y = origin.1.clamp(-inset.1, (screen.1 - SIZE.1 + inset.1).max(-inset.1));
+    (x, y)
 }
 
 /// The page's rect on screen (x, y, width, height) at `size`, for an overlay at `origin`: centred in the overlay.
@@ -225,6 +233,15 @@ mod tests {
         assert_eq!(y, SCREEN.1 - PANEL_MAX_HEIGHT - MARGIN);
         let tiny = panel_spot([10.0, 10.0, 44.0, 56.0], (500.0, 300.0));
         assert!(tiny.0 >= MARGIN && tiny.1 >= MARGIN);
+    }
+
+    #[test]
+    fn a_drag_keeps_the_page_itself_on_screen() {
+        let [x, y, _, h] = paper_on_screen(on_screen((-500.0, 5000.0), SCREEN), BIG);
+        assert_eq!((x, y + h), (0.0, SCREEN.1));
+        let [x, y, w, _] = paper_on_screen(on_screen((5000.0, -500.0), SCREEN), BIG);
+        assert_eq!((x + w, y), (SCREEN.0, 0.0));
+        assert_eq!(on_screen((300.0, 200.0), SCREEN), (300.0, 200.0), "inside: left alone");
     }
 
     #[test]

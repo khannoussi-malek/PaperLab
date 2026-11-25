@@ -2,7 +2,7 @@
 //! until it's ready.
 
 use super::{Effect, Panel, Phase, Row};
-use crate::api::{Added, ApiError, Found};
+use crate::api::{Added, ApiError, Candidate, Found};
 use crate::input::{Input, classify};
 use crate::library::{Paper, matching};
 
@@ -23,7 +23,7 @@ impl Panel {
             Phase::NoFreePdf { .. } => vec![Row::SaveWithoutPdf],
             Phase::Failed(_) if !self.reachable => vec![Row::OpenPaperLab],
             Phase::LookingUp(_) | Phase::Adding(_) | Phase::Failed(_) => vec![],
-            Phase::Copied(_) | Phase::Searching | Phase::Close(_) => vec![], // other modes' answers
+            Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) => vec![], // other modes' answers
         }
     }
 
@@ -62,8 +62,17 @@ impl Panel {
         vec![]
     }
 
-    pub(super) fn add_done(&mut self, result: Result<Added, ApiError>) -> Vec<Effect> {
+    fn add(&mut self, candidate: Candidate, save_without_pdf: bool) -> Vec<Effect> {
+        self.seq += 1;
+        self.phase = Phase::Adding(candidate.clone());
+        vec![Effect::Add { seq: self.seq, candidate, save_without_pdf }]
+    }
+
+    pub(super) fn add_done(&mut self, seq: u64, result: Result<Added, ApiError>) -> Vec<Effect> {
         let Phase::Adding(candidate) = &self.phase else { return vec![] };
+        if seq != self.seq {
+            return vec![]; // an earlier add, answering while a newer one is under way
+        }
         let candidate = candidate.clone();
         self.picked = 0; // the rows change: Enter acts on the first one
         match result {
@@ -113,17 +122,13 @@ impl Panel {
                 let candidate = found.results[i].clone();
                 match &candidate.paper_id {
                     Some(id) => vec![Effect::Open(id.clone()), Effect::Close],
-                    None => {
-                        self.phase = Phase::Adding(candidate.clone());
-                        vec![Effect::Add { candidate, save_without_pdf: false }]
-                    }
+                    None => self.add(candidate, false),
                 }
             }
             Row::SaveWithoutPdf => {
                 let Phase::NoFreePdf { candidate, .. } = &self.phase else { return vec![] };
                 let candidate = candidate.clone();
-                self.phase = Phase::Adding(candidate.clone());
-                vec![Effect::Add { candidate, save_without_pdf: true }]
+                self.add(candidate, true)
             }
             Row::OpenAdded(id) => vec![Effect::Open(id), Effect::Close],
             Row::OpenPaperLab => vec![Effect::OpenPaperLab, Effect::Close],
