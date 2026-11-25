@@ -67,3 +67,16 @@ fn no_workspace_yet_or_offline_offers_paperlab() {
     assert_eq!(p.rows(), vec![Row::OpenPaperLab]);
     assert_eq!(p.step(Event::Submit), vec![Effect::OpenPaperLab, Effect::Close]);
 }
+
+#[test]
+fn a_put_under_way_holds_through_tab_and_a_reopen_and_its_answer_lands() {
+    let mut p = filing_graph_attention();
+    let Some(Effect::PutInWorkspace { seq, .. }) = p.step(Event::Submit).pop() else { panic!() };
+    assert_eq!(p.step(Event::NextMode { forward: true }), vec![], "Tab waits for the put");
+    p.step(Event::Closed);
+    p.mode = Mode::Ask; // a bubble reopened it in Ask
+    p.step(Event::Shown);
+    assert_eq!(p.mode, Mode::Find);
+    assert_eq!(p.step(Event::Put { seq, workspace_id: "w1".into(), result: Ok(()) }), vec![Effect::CloseSoon(seq)]);
+    assert!(matches!(p.phase, Phase::Filed(_)));
+}

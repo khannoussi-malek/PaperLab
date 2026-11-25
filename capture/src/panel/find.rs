@@ -32,7 +32,7 @@ impl Panel {
     }
 
     pub(super) fn find_query(&mut self, q: String) -> Vec<Effect> {
-        if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
+        if self.in_flight() {
             self.query = q; // the add in flight keeps the panel: its answer must not be dropped
             return vec![];
         }

@@ -88,8 +88,35 @@ fn filing(p: &Panel, f: &Filing) -> String {
     match (&f.putting, &f.error, &p.workspaces) {
         (Some((_, name)), _, _) => format!("Putting it in “{name}”…"),
         (None, Some(error), _) => error.clone(),
-        (None, None, None) if p.reachable => "Listing your workspaces…".into(),
+        (None, None, None) => p.ask_error.clone().unwrap_or_else(|| "Listing your workspaces…".into()),
         (None, None, Some(all)) if all.is_empty() => "Make a workspace in PaperLab first.".into(),
+        (None, None, Some(_)) if p.rows().is_empty() => format!("No workspace’s name holds “{}”.", p.query.trim()),
         _ => format!("Which workspace for “{}”?", f.title),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::{ApiError, Workspace};
+    use crate::panel::Event;
+
+    fn filing() -> Panel {
+        let mut p = Panel::default();
+        p.step(Event::Papers(Ok(vec![crate::library::paper("a", "Attention", &[], 2017, "2026-01")])));
+        p.step(Event::SubmitAlt);
+        assert!(matches!(p.phase, Phase::Filing(_)));
+        p
+    }
+
+    #[test]
+    fn filing_says_why_a_list_is_missing_or_empty() {
+        let mut p = filing();
+        assert_eq!(line(&p).as_deref(), Some("Listing your workspaces…"));
+        p.step(Event::Workspaces(Err(ApiError::Said("The database is busy.".into()))));
+        assert_eq!(line(&p).as_deref(), Some("The database is busy."), "not “Listing…” forever");
+        p.step(Event::Workspaces(Ok(vec![Workspace { id: "w".into(), name: "Thesis".into(), paper_count: 1 }])));
+        p.step(Event::Query("zzz".into()));
+        assert_eq!(line(&p).as_deref(), Some("No workspace’s name holds “zzz”."));
     }
 }

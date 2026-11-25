@@ -5,8 +5,9 @@
 use super::{Effect, Panel, Phase, Row};
 use crate::api::{ApiError, Said, Source, Workspace};
 
-/// Rows of workspaces, and of cited papers, at most (the panel stays a glance; PaperLab shows the rest).
-// ponytail: no workspace filter; the 7th workspace and on are reached through PaperLab until someone has that many.
+/// Rows of workspaces, and of cited papers, at most (the panel stays a glance; PaperLab shows the rest). Filing a
+/// paper narrows the workspaces by name, so every one is reachable there.
+// ponytail: Ask has no workspace filter; its 7th workspace and on are reached through PaperLab.
 pub(super) const MAX_WORKSPACES: usize = 6;
 const MAX_SOURCES: usize = 3;
 

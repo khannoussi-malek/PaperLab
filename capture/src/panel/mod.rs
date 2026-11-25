@@ -200,7 +200,7 @@ impl Panel {
         match event {
             Event::Shown => self.shown(),
             Event::Closed => self.closed(),
-            Event::Query(q) if matches!(self.phase, Phase::Filing(_)) => self.filing_typed(q),
+            Event::Query(q) if self.mode == Mode::Find && matches!(self.phase, Phase::Filing(_)) => self.filing_typed(q),
             Event::Query(q) if self.mode == Mode::Find => self.find_query(q),
             Event::Query(q) if self.mode == Mode::Note => self.note_typed(q),
             Event::Query(q) => self.typed(q),
@@ -233,7 +233,7 @@ impl Panel {
     fn shown(&mut self) -> Vec<Effect> {
         // An add or upload still under way stays on screen, so its answer is shown and followed; it keeps Find,
         // whatever mode the panel was opened in. A note waits aside unless the panel opened in Note.
-        let in_flight = matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. });
+        let in_flight = self.in_flight();
         if self.mode != Mode::Note {
             self.set_note_aside();
         }
@@ -277,8 +277,8 @@ impl Panel {
 
     /// Another mode: what was typed stays (find a paper, then cite it); the last answer goes.
     fn set_mode(&mut self, mode: Mode) -> Vec<Effect> {
-        if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
-            return vec![]; // an add or upload in flight keeps Find until it answers
+        if self.in_flight() {
+            return vec![]; // an add, upload or put in flight keeps Find until it answers
         }
         self.set_note_aside();
         (self.mode, self.phase, self.picked, self.polling, self.aside) = (mode, Phase::Library, 0, None, None);
@@ -301,6 +301,15 @@ impl Panel {
     fn typed(&mut self, q: String) -> Vec<Effect> {
         (self.query, self.picked, self.phase, self.aside, self.upload_note) = (q, 0, Phase::Library, None, None);
         vec![]
+    }
+
+    /// An add, an upload or a put under way: its answer must find the panel where it left it, so Find stays.
+    fn in_flight(&self) -> bool {
+        match &self.phase {
+            Phase::Adding(_) | Phase::Uploading { .. } => true,
+            Phase::Filing(filing) => filing.putting.is_some(),
+            _ => false,
+        }
     }
 
     fn closed(&mut self) -> Vec<Effect> {
