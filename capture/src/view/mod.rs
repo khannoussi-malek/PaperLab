@@ -10,7 +10,7 @@ use rune::{Color, Cx, El, Key, KeyEvent, SystemMaterial, Tx, col, el, row, text,
 
 use crate::App;
 use crate::mode::{MODES, Mode};
-use crate::panel::Event;
+use crate::panel::{Event, Panel};
 
 pub const WIDTH: f32 = 600.0;
 
@@ -40,7 +40,7 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
         .border(1.0, if dark { Color::WHITE.alpha(0.1) } else { t.separator })
         .child(el().key("veil").absolute(0.0, 0.0).w_full().h_full().fill(veil))
         .child(header(app, &ink))
-        .child(mode_bar(p.mode, &ink));
+        .child(mode_bar(p, &ink));
     let status = status::line(p);
     let list = rows::list(p, &ink);
     if status.is_some() || list.is_some() {
@@ -93,15 +93,25 @@ fn key(s: &mut App, ev: &KeyEvent) -> bool {
 }
 
 /// One pill per mode; the active one in the logo's blue. Tab and ⌘1… move along it too.
-fn mode_bar(active: Mode, ink: &Ink) -> El {
+fn mode_bar(p: &Panel, ink: &Ink) -> El {
+    let active = p.mode;
+    let waiting = p.inbox.as_ref().map_or(0, |inbox| inbox.count());
     let mut bar = row().key("modes").px(14.0).pb(10.0).gap(6.0).center_y();
     for (i, mode) in MODES.into_iter().enumerate() {
         let on = mode == active;
         bar = bar.child(row().key(format!("mode-{i}")).h(26.0).px(12.0).radius(13.0).center_y()
             .fill(if on { logo_blue() } else { Color::TRANSPARENT })
             .border(1.0, if on { Color::TRANSPARENT } else { ink.separator })
-            .child(text(mode.label()).font(type_::LABEL).color(if on { Color::WHITE } else { ink.muted }))
+            .child(text(pill_label(mode, waiting)).font(type_::LABEL).color(if on { Color::WHITE } else { ink.muted }))
             .on_press(move |s: &mut App| s.dispatch(Event::Mode(mode))));
     }
     bar.child(el().grow(1.0)).child(text("⇥ next").font(type_::LABEL).color(ink.muted.alpha(0.7)))
+}
+
+/// A mode's pill text: Inbox shows how much waits in it.
+fn pill_label(mode: Mode, waiting: usize) -> String {
+    match (mode, waiting) {
+        (Mode::Inbox, n) if n > 0 => format!("{} · {n}", mode.label()),
+        _ => mode.label().to_owned(),
+    }
 }

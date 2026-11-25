@@ -4,6 +4,7 @@
 mod ask;
 mod cite;
 mod discovery;
+mod inbox;
 mod library;
 mod novelty;
 mod upload;
@@ -13,6 +14,7 @@ mod tests;
 pub use ask::{Said, Source, Workspace};
 pub use cite::Format;
 pub use discovery::{Added, Candidate, Found};
+pub use inbox::{FoundPdf, Inbox, NewHits};
 pub use novelty::{Close, Closeness};
 
 use std::time::Duration;

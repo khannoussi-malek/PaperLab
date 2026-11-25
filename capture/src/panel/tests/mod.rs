@@ -6,6 +6,7 @@ use serde_json::json;
 
 mod ask;
 mod drop;
+mod inbox;
 
 fn shown_with_library() -> Panel {
     let mut p = Panel::default();

@@ -53,7 +53,7 @@ fn the_answer_streams_in_and_then_offers_copy_open_and_its_papers() {
     assert_eq!(a.cited().iter().map(|c| c.labels.join(",")).collect::<Vec<_>>(), vec!["C1,C3", "C2"]);
     assert_eq!(p.rows(), vec![Row::CopyAnswer, Row::OpenAnswer, Row::Source(0), Row::Source(1)]);
     p.step(Event::Down);
-    assert_eq!(p.step(Event::Submit), vec![Effect::OpenWorkspace("w1".into()), Effect::Close]);
+    assert_eq!(p.step(Event::Submit), vec![Effect::OpenWorkspace { id: "w1".into(), tab: "chat" }, Effect::Close]);
     p.step(Event::Up);
     let copy = p.step(Event::Submit);
     assert!(matches!(copy.as_slice(), [Effect::Copy { text, .. }] if text == "Weights [C1] over tokens [C2]."), "{copy:?}");

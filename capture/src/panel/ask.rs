@@ -82,7 +82,7 @@ impl Panel {
                 self.phase = Phase::Copying;
                 vec![Effect::Copy { seq: self.seq, text, what: "the answer".into() }]
             }
-            (Some(Row::OpenAnswer), Phase::Answer(a)) => vec![Effect::OpenWorkspace(a.workspace.id.clone()), Effect::Close],
+            (Some(Row::OpenAnswer), Phase::Answer(a)) => vec![Effect::OpenWorkspace { id: a.workspace.id.clone(), tab: "chat" }, Effect::Close],
             (Some(Row::Source(i)), Phase::Answer(a)) => vec![Effect::Open(a.cited()[i].paper_id.clone()), Effect::Close],
             (Some(Row::OpenPaperLab), _) => vec![Effect::OpenPaperLab, Effect::Close],
             _ => vec![],
@@ -139,10 +139,5 @@ impl Panel {
             Phase::Answer(a) => Some(a),
             _ => self.copied_answer.take(),
         }
-    }
-
-    /// Entering Ask (or opening the panel in it): the workspace list, fresh.
-    pub(super) fn ask_entered(&self) -> Vec<Effect> {
-        if self.mode == Mode::Ask { vec![Effect::FetchWorkspaces] } else { vec![] }
     }
 }

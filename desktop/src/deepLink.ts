@@ -1,8 +1,10 @@
 /**
  * paperlab://papers/<uuid>[?page=N][&chunk=<uuid>] -> the reader's hash route;
- * paperlab://workspaces/<uuid> -> that workspace's chat (Quick Capture's Ask opens its answer there).
+ * paperlab://workspaces/<uuid>[?tab=chat|search] -> that workspace's chat (Quick Capture's Ask answer) or search
+ * (its Inbox's new results); any other tab is chat.
  * Strict: anything else is null.
  */
+const WORKSPACE_TABS = ['chat', 'search'] as const
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function linkHash(url: string): string | null {
@@ -14,7 +16,10 @@ export function linkHash(url: string): string | null {
   }
   const id = u.pathname.slice(1)
   if (u.protocol !== 'paperlab:' || !UUID.test(id)) return null
-  if (u.hostname === 'workspaces') return `#/workspaces/${id}?tab=chat`
+  if (u.hostname === 'workspaces') {
+    const tab = WORKSPACE_TABS.find((t) => t === u.searchParams.get('tab')) ?? 'chat'
+    return `#/workspaces/${id}?tab=${tab}`
+  }
   if (u.hostname !== 'papers') return null
   // Unknown params are ignored; a known one that is repeated or malformed rejects the whole link.
   const out: string[] = []

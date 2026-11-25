@@ -6,6 +6,7 @@ mod ask;
 mod cite;
 mod drop;
 mod find;
+mod inbox;
 mod novelty;
 #[cfg(test)]
 mod tests;
@@ -14,7 +15,7 @@ pub use ask::{Answer, Writing};
 
 use std::path::PathBuf;
 
-use crate::api::{Added, ApiError, Candidate, Closeness, Format, Found, Said, Workspace};
+use crate::api::{Added, ApiError, Candidate, Closeness, Format, Found, Inbox, Said, Workspace};
 use crate::library::Paper;
 use crate::mode::Mode;
 
@@ -71,6 +72,7 @@ pub enum Event {
     Dropped(Vec<PathBuf>),
     DropRefused,
     Uploaded { seq: u64, results: Vec<Result<Paper, ApiError>> },
+    Inbox(Result<Inbox, ApiError>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -90,8 +92,11 @@ pub enum Effect {
     Novelty { seq: u64, text: String },
     FetchWorkspaces,
     Ask { seq: u64, workspace_id: String, question: String },
-    /// The workspace's chat in PaperLab, where the answer is saved.
-    OpenWorkspace(String),
+    /// A workspace in PaperLab at one of its tabs: "chat" (where an Ask answer is saved), "search".
+    OpenWorkspace { id: String, tab: &'static str },
+    FetchInbox,
+    /// The owner opened a free PDF the re-check found: it leaves the Inbox.
+    FoundSeen(String),
     Copy { seq: u64, text: String, what: String },
     Upload { seq: u64, paths: Vec<PathBuf> },
 }
@@ -112,6 +117,9 @@ pub enum Row {
     CopyAnswer,
     OpenAnswer,
     Source(usize),
+    /// Inbox: a free PDF found, a saved search with new results.
+    FoundPdf(usize),
+    NewHits(usize),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -134,6 +142,10 @@ pub struct Panel {
     copied_answer: Option<Answer>,
     /// What a drop of several PDFs came to, shown with the followed paper's progress.
     pub upload_note: Option<String>,
+    /// What's new, once listed (the floating paper's badge counts it).
+    pub inbox: Option<Inbox>,
+    /// PaperLab's sentence when the Inbox couldn't be listed.
+    pub inbox_error: Option<String>,
     pub(crate) seq: u64,
     polling: Option<String>,
     /// Closed since it was last shown: an add finishing now is kept but not followed.
@@ -144,7 +156,7 @@ impl Default for Panel {
     fn default() -> Self {
         Panel {
             mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
-            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, upload_note: None, seq: 0, polling: None, hidden: false,
+            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, upload_note: None, inbox: None, inbox_error: None, seq: 0, polling: None, hidden: false,
         }
     }
 }
@@ -158,6 +170,7 @@ impl Panel {
             Mode::Find => self.find_rows(),
             Mode::Cite => self.cite_rows(),
             Mode::Ask => self.ask_rows(),
+            Mode::Inbox => self.inbox_rows(),
             Mode::Novelty => self.novelty_rows(),
         }
     }
@@ -182,6 +195,7 @@ impl Panel {
             Event::Dropped(paths) => self.dropped(paths),
             Event::DropRefused => self.drop_refused(),
             Event::Uploaded { seq, results } => self.uploaded(seq, results),
+            Event::Inbox(result) => self.inbox_arrived(result),
             Event::Papers(result) => self.papers_arrived(result),
             Event::Looked { seq, result } => self.looked(seq, result),
             Event::AddDone { seq, result } => self.add_done(seq, result),
@@ -197,7 +211,8 @@ impl Panel {
         let answer = self.answer_to_keep();
         let mut kept = Panel {
             mode: self.mode, papers: std::mem::take(&mut self.papers), reachable: self.reachable, seq: self.seq,
-            workspaces: self.workspaces.take(), last_workspace: self.last_workspace.take(), ..Panel::default()
+            workspaces: self.workspaces.take(), last_workspace: self.last_workspace.take(), inbox: self.inbox.take(),
+            ..Panel::default()
         };
         if let Some(a) = answer {
             kept.query = a.question.clone();
@@ -207,7 +222,7 @@ impl Panel {
             kept.phase = std::mem::replace(&mut self.phase, Phase::Library);
         }
         *self = kept;
-        [vec![Effect::FetchPapers], self.ask_entered()].concat()
+        [vec![Effect::FetchPapers], self.entered()].concat()
     }
 
     /// Enter (or ⌘↵, `alt`): the mode's action on the picked row.
@@ -216,6 +231,7 @@ impl Panel {
             Mode::Find => self.find_submit(),
             Mode::Cite => self.cite_submit(if alt { Format::Bibtex } else { Format::Apa }),
             Mode::Ask => self.ask_submit(),
+            Mode::Inbox => self.inbox_submit(),
             Mode::Novelty => self.novelty_submit(),
         }
     }
@@ -227,7 +243,16 @@ impl Panel {
         }
         (self.mode, self.phase, self.picked, self.polling, self.copied_answer) = (mode, Phase::Library, 0, None, None);
         self.upload_note = None;
-        self.ask_entered()
+        self.entered()
+    }
+
+    /// Entering a mode (or opening the panel in it): what it lists, fresh.
+    fn entered(&self) -> Vec<Effect> {
+        match self.mode {
+            Mode::Ask => vec![Effect::FetchWorkspaces],
+            Mode::Inbox => vec![Effect::FetchInbox],
+            Mode::Find | Mode::Cite | Mode::Novelty => vec![],
+        }
     }
 
     /// Typing in a mode other than Find: the text is the query; an earlier answer, or one still coming, no longer

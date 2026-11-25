@@ -34,6 +34,9 @@ const BUNDLE_ID: &str = "io.github.khannoussi-malek.paperlab";
 const DEFAULT_PORT: u16 = 5190;
 const DEFAULT_SHORTCUT: &str = "ctrl+alt+p";
 const POLL_EVERY: Duration = Duration::from_secs(1);
+/// How often the floating paper looks for something new (free PDFs found, new saved-search results), so its badge
+/// also drops soon after the owner handles them inside PaperLab.
+const INBOX_EVERY: Duration = Duration::from_secs(5 * 60);
 /// How long "Copied …" stays before the panel closes by itself.
 const CONFIRM_FOR: Duration = Duration::from_millis(900);
 
@@ -69,10 +72,18 @@ impl App {
         match &event {
             Event::Papers(Ok(_)) => self.papers_at = Some(Instant::now()),
             Event::Papers(Err(_)) | Event::AddDone { result: Ok(_), .. } => self.papers_at = None,
+            Event::Inbox(Ok(inbox)) => self.badge(inbox.count()),
             _ => {}
         }
         for effect in self.panel.step(event) {
             self.perform(effect);
+        }
+    }
+
+    /// The floating paper's badge: what the Inbox holds.
+    fn badge(&self, count: usize) {
+        if let Some(float) = self.ctx.as_ref().and_then(|ctx| ctx.float.as_ref()) {
+            float.update(move |f, _| f.badge = count);
         }
     }
 
@@ -148,10 +159,17 @@ impl App {
                     }
                 });
             }
-            Effect::OpenWorkspace(id) => match ctx.browser {
-                Some(port) => open(&[&format!("http://127.0.0.1:{port}/#/workspaces/{id}?tab=chat")]),
-                None => open(&[&format!("paperlab://workspaces/{id}")]),
+            Effect::OpenWorkspace { id, tab } => match ctx.browser {
+                Some(port) => open(&[&format!("http://127.0.0.1:{port}/#/workspaces/{id}?tab={tab}")]),
+                None => open(&[&format!("paperlab://workspaces/{id}?tab={tab}")]),
             },
+            Effect::FetchInbox => background(me, move || Event::Inbox(api.inbox())),
+            Effect::FoundSeen(id) => background(me, move || {
+                if let Err(e) = api.found_seen(&id) {
+                    eprintln!("paperlab-capture: couldn't mark a found PDF seen: {e:?}");
+                }
+                Event::Inbox(api.inbox()) // the badge drops by one
+            }),
             Effect::Copy { seq, text, what } => background(me, move || Event::Copied { seq, what, result: copy(&text) }),
             Effect::Upload { seq, paths } => background(me, move || {
                 let results = paths.iter().map(|path| api.upload(path)).collect();
@@ -166,6 +184,15 @@ fn focused(text: &str) -> TextEdit {
     let mut edit = TextEdit::new(text);
     edit.focused = true;
     edit
+}
+
+/// Lists the Inbox now and every INBOX_EVERY after, for the floating paper's badge (App::dispatch passes it on).
+fn keep_inbox_fresh(me: AppHandle<App>, api: Api) {
+    std::thread::spawn(move || loop {
+        let result = api.inbox();
+        me.update(move |s, _| s.dispatch(Event::Inbox(result)));
+        std::thread::sleep(INBOX_EVERY);
+    });
 }
 
 fn background(me: AppHandle<App>, work: impl FnOnce() -> Event + Send + 'static) {
@@ -269,6 +296,7 @@ fn main() {
             let own = handle.clone();
             handle.update(move |s, _| s.handle = Some(own)); // so a drag can move its own overlay
             handle.show();
+            keep_inbox_fresh(me.clone(), api.clone()); // the paper's badge
             handle
         });
         let ctx = Ctx { me, api, browser: args.browser.then_some(args.port), galaxy, float };

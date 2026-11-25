@@ -134,7 +134,7 @@ impl Panel {
             }
             Row::OpenAdded(id) => vec![Effect::Open(id), Effect::Close],
             Row::OpenPaperLab => vec![Effect::OpenPaperLab, Effect::Close],
-            Row::Close(_) | Row::Workspace(_) | Row::CopyAnswer | Row::OpenAnswer | Row::Source(_) => vec![], // other modes' rows
+            Row::Close(_) | Row::Workspace(_) | Row::CopyAnswer | Row::OpenAnswer | Row::Source(_) | Row::FoundPdf(_) | Row::NewHits(_) => vec![], // other modes' rows
         }
     }
 
