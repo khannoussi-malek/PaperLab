@@ -35,8 +35,10 @@ const quiet = () => {}
 
 describe('Quick Capture helper', () => {
   it('is started with the API port, its shortcut and commands on stdin', () => {
-    expect(captureArgs(5190, 'ctrl+alt+p')).toEqual(['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin'])
-    expect(captureArgs(5190, 'ctrl+alt+p', false)).toEqual(['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin', '--no-galaxy'])
+    const base = ['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin']
+    expect(captureArgs(5190, 'ctrl+alt+p')).toEqual(base)
+    expect(captureArgs(5190, 'ctrl+alt+p', { animation: false })).toEqual([...base, '--no-galaxy'])
+    expect(captureArgs(5190, 'ctrl+alt+p', { float: true })).toEqual([...base, '--float'])
     expect(captureBinary('/Res')).toBe('/Res/capture/paperlab-capture')
     expect(shortcutLabel('ctrl+alt+p')).toBe('⌃⌥P')
     expect(shortcutLabel('cmd+shift+k')).toBe('⌘⇧K')
@@ -79,6 +81,18 @@ describe('Quick Capture helper', () => {
     expect(next).toBe(1)
     capture.stop(() => (next += 1)) // none running: at once
     expect(next).toBe(2)
+  })
+
+  it('a second stop while the first still waits goes on once, after the exit (two quick switch flips)', () => {
+    const fake = fakeSpawn()
+    const capture = createCapture({ spawn: fake.spawn, bin: '/b', port: 5190, shortcut: 's', log: quiet })
+    capture.start()
+    const went: string[] = []
+    capture.stop(() => went.push('first'))
+    capture.stop(() => went.push('second'))
+    expect(went).toEqual([])
+    fake.children[0].exit(null)
+    expect(went).toEqual(['second'])
   })
 
   it('can be started again after a stop (the switch turned back on)', () => {

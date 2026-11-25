@@ -21,7 +21,7 @@ export type Spawn = (bin: string, args: string[]) => Child
 export type Capture = {
   start(): void
   show(): void
-  /** Stops it for good; `then` runs once it has exited (at once when none is running). */
+  /** Stops it for good; `then` runs once it has exited (at once when none is running; a later stop's replaces it). */
   stop(then?: () => void): void
   running(): boolean
 }
@@ -31,8 +31,7 @@ type Options = {
   bin: string
   port: number
   shortcut: string
-  /** The stars and papers behind the panel (Settings → Desktop app → Animation). */
-  animation?: boolean
+  look?: Look
   log: (line: string) => void
 }
 
@@ -45,32 +44,44 @@ export const shortcutLabel = (shortcut: string) =>
     .map((part) => SYMBOLS[part.trim().toLowerCase()] ?? part.trim().toUpperCase())
     .join('')
 
-export const captureArgs = (port: number, shortcut: string, animation = true) => [
+/** How the helper shows itself (Settings → Desktop app); each is read once, when it starts. */
+export type Look = {
+  /** The stars and papers behind the panel. On unless turned off. */
+  animation?: boolean
+  /** The floating paper over every app (M79). Off unless turned on. */
+  float?: boolean
+}
+
+export const captureArgs = (port: number, shortcut: string, { animation = true, float = false }: Look = {}) => [
   '--port',
   String(port),
   '--shortcut',
   shortcut,
   '--stdin',
   ...(animation ? [] : ['--no-galaxy']),
+  ...(float ? ['--float'] : []),
 ]
 
 /** Packaged: electron-builder's extraResources put the binary for the app's arch here. */
 export const captureBinary = (resourcesDir: string) => join(resourcesDir, 'capture', 'paperlab-capture')
 
-export function createCapture({ spawn, bin, port, shortcut, animation = true, log }: Options): Capture {
+export function createCapture({ spawn, bin, port, shortcut, look = {}, log }: Options): Capture {
   let child: Child | null = null
   let restarts = 0
   let stopped = false
   let afterExit: (() => void) | null = null
+  /** The helper stopped but not yet exited. */
+  let exiting: Child | null = null
 
   function run() {
-    const started = spawn(bin, captureArgs(port, shortcut, animation))
+    const started = spawn(bin, captureArgs(port, shortcut, look))
     child = started
     started.onExit((code) => {
       if (child !== started) {
         // An older helper, already stopped: whoever waited for it to let go of the shortcut goes on now.
         const then = afterExit
         afterExit = null
+        exiting = null
         return then?.()
       }
       child = null
@@ -95,9 +106,15 @@ export function createCapture({ spawn, bin, port, shortcut, animation = true, lo
       stopped = true
       const running = child
       child = null
-      if (running === null) return then?.()
-      afterExit = then ?? null
-      running.kill()
+      if (running !== null) {
+        exiting = running
+        afterExit = then ?? null
+        return running.kill()
+      }
+      // A stopped helper still holding the shortcut: this stop's `then` waits for it instead of an earlier one's, so
+      // two quick switch flips start one new helper, not two.
+      if (exiting !== null) afterExit = then ?? null
+      else then?.()
     },
     running: () => child !== null,
   }
