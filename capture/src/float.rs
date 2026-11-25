@@ -109,8 +109,8 @@ impl Float {
         Float {
             me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, focus: Focus::Floating,
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
-            menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, drop_over: false, badge: 0, badge_grew: f64::NEG_INFINITY,
-            hidden_until: f64::NEG_INFINITY, since: -1.0,
+            menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, drop_over: false, badge: 0,
+            badge_grew: f64::NEG_INFINITY, hidden_until: f64::NEG_INFINITY, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         }
     }
