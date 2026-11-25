@@ -18,7 +18,7 @@ const GROW_SECONDS: f64 = 0.2;
 /// The panel's gap from the page, its width (as the view draws it) and the most it grows to, in points.
 const GAP: f32 = 14.0;
 const PANEL_WIDTH: f32 = crate::view::WIDTH;
-const PANEL_MAX_HEIGHT: f32 = 480.0;
+const PANEL_MAX_HEIGHT: f32 = 620.0;
 const MARGIN: f32 = 8.0;
 /// A click this soon after the panel closed is the one that closed it (focus left the panel for the page): it must
 /// not reopen it.

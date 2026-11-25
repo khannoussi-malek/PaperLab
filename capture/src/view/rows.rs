@@ -54,6 +54,19 @@ fn row_text(p: &Panel, r: &Row) -> (String, String) {
             _ => Default::default(),
         },
         Row::OpenPaperLab => ("Open PaperLab".into(), UNREACHABLE.into()),
+        Row::Workspace(i) => {
+            let Some(w) = p.workspaces.as_ref().and_then(|all| all.get(*i)) else { return Default::default() };
+            let last = if p.last_workspace.as_ref() == Some(&w.id) { " · asked last" } else { "" };
+            (w.name.clone(), format!("{} paper{}{last}", w.paper_count, if w.paper_count == 1 { "" } else { "s" }))
+        }
+        Row::CopyAnswer => ("Copy the answer".into(), "Plain text, with its [C1] markers".into()),
+        Row::OpenAnswer => ("Open in PaperLab".into(), "The workspace's chat, with this answer and its passages".into()),
+        Row::Source(i) => {
+            let Phase::Answer(a) = &p.phase else { return Default::default() };
+            let Some(c) = a.cited().into_iter().nth(*i) else { return Default::default() };
+            let title = p.papers.iter().find(|x| x.id == c.paper_id).map(|x| x.title.clone());
+            (title.unwrap_or_else(|| "A paper in this workspace".into()), format!("{} · p. {}", c.labels.join(", "), c.page))
+        }
         Row::Close(i) => {
             let Phase::Close(c) = &p.phase else { return Default::default() };
             let close = &c.papers[*i];
@@ -66,7 +79,9 @@ fn badge(p: &Panel, r: &Row) -> Option<&'static str> {
     match (r, &p.phase) {
         (Row::Candidate(i), Phase::Found(f)) => Some(if f.results[*i].paper_id.is_some() { "In your library" } else { "Add ↵" }),
         (Row::Paper(_), _) if p.mode == Mode::Cite => Some("Copy ↵"),
-        (Row::Paper(_) | Row::OpenAdded(_) | Row::Close(_), _) => Some("Open ↵"),
+        (Row::Workspace(_), _) => Some("Ask ↵"),
+        (Row::CopyAnswer, _) => Some("Copy ↵"),
+        (Row::Paper(_) | Row::OpenAdded(_) | Row::Close(_) | Row::OpenAnswer | Row::Source(_), _) => Some("Open ↵"),
         _ => None,
     }
 }

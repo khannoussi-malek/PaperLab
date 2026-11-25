@@ -111,3 +111,49 @@ fn the_closest_papers_read_with_their_labels() {
     assert_eq!((found.papers[0].label.as_str(), found.papers[0].page, found.note.as_str()), ("very close", Some(3), "Only your library."));
 }
 
+
+fn heard_from(stream: &str) -> Vec<Said> {
+    let mut heard = vec![];
+    ask::read_events(stream.as_bytes(), |said| heard.push(said));
+    heard
+}
+
+#[test]
+fn an_answer_streams_as_sources_then_tokens_then_done_and_pings_are_skipped() {
+    let stream = "event: sources\r\ndata: {\"whole_paper\":false,\"sources\":[{\"label\":\"C1\",\"paper_id\":\"p\",\"page\":4,\
+                  \"chunk_id\":null,\"section\":null,\"bbox\":null,\"from_abstract\":false,\"replaced\":false}],\"notes\":[]}\r\n\r\n\
+                  : ping\r\n\r\n\
+                  event: token\r\ndata: {\"text\":\"Yes [C1]\"}\r\n\r\n\
+                  event: token\r\ndata: {\"text\":\".\"}\r\n\r\n\
+                  event: done\r\ndata: {\"output_id\":\"o\"}\r\n\r\n\
+                  event: token\r\ndata: {\"text\":\"after the end\"}\r\n\r\n";
+    let source = Source { label: "C1".into(), paper_id: "p".into(), page: 4 };
+    assert_eq!(heard_from(stream), vec![Said::Sources(vec![source]), Said::Token("Yes [C1]".into()), Said::Token(".".into()), Said::Done]);
+}
+
+#[test]
+fn an_answer_error_says_paperlabs_sentence_and_a_cut_stream_says_so() {
+    let failed = heard_from("event: token\ndata: {\"text\":\"Half\"}\n\nevent: error\ndata: {\"message\":\"The model stopped.\",\"retryable\":true}\n\n");
+    assert_eq!(failed, vec![Said::Token("Half".into()), Said::Failed("The model stopped.".into())]);
+    let cut = heard_from("event: token\ndata: {\"text\":\"Half\"}\n\n");
+    assert!(matches!(cut.as_slice(), [Said::Token(_), Said::Failed(_)]), "{cut:?}");
+}
+
+#[test]
+fn workspaces_are_listed_and_a_refused_question_gives_paperlabs_sentence() {
+    let api = fake(|_, path, _| match path {
+        "/api/workspaces" => (200, json!([{ "id": "w", "name": "Thesis", "paper_count": 12, "note_count": 0 }])),
+        _ => (503, json!({ "detail": "No model is set up yet." })),
+    });
+    assert_eq!(api.workspaces(), Ok(vec![Workspace { id: "w".into(), name: "Thesis".into(), paper_count: 12 }]));
+    assert_eq!(api.ask("w", "why?", |_| {}), Err(ApiError::Said("No model is set up yet.".into())));
+}
+
+#[test]
+fn sse_edge_cases_done_without_json_data_alone_multi_line_and_no_trailing_blank() {
+    assert_eq!(heard_from("event: token\ndata: {\"text\":\"a\"}\n\nevent: done\ndata:\n\n"), vec![Said::Token("a".into()), Said::Done]);
+    assert_eq!(heard_from("data: {\"stray\":1}\n\nevent: token\ndata: {\"text\":\"b\"}\n\nevent: done\ndata: {}\n\n"),
+               vec![Said::Token("b".into()), Said::Done], "a data-only block doesn't leak into the next event");
+    assert_eq!(heard_from("event: token\ndata: {\"text\":\ndata: \"c\"}\n\nevent: done\ndata: {}"),
+               vec![Said::Token("c".into()), Said::Done], "lines join with a newline; the last event needs no blank line");
+}

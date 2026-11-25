@@ -4,6 +4,8 @@ use crate::mode::Mode;
 use crate::library::paper;
 use serde_json::json;
 
+mod ask;
+
 fn shown_with_library() -> Panel {
     let mut p = Panel::default();
     assert_eq!(p.step(Event::Shown), vec![Effect::FetchPapers]);

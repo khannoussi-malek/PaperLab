@@ -7,18 +7,21 @@ pub enum Mode {
     Find,
     /// Find a library paper and copy its reference.
     Cite,
+    /// Ask a workspace a question; the answer streams in, with the papers it cites.
+    Ask,
     /// Paste an idea: the closest papers in the library.
     Novelty,
 }
 
 /// The mode bar, left to right; Tab moves along it and ⌘1, ⌘2… jump to a place in it.
-pub const MODES: [Mode; 3] = [Mode::Find, Mode::Cite, Mode::Novelty];
+pub const MODES: [Mode; 4] = [Mode::Find, Mode::Cite, Mode::Ask, Mode::Novelty];
 
 impl Mode {
     pub fn label(self) -> &'static str {
         match self {
             Mode::Find => "Find",
             Mode::Cite => "Cite",
+            Mode::Ask => "Ask",
             Mode::Novelty => "Done before?",
         }
     }
@@ -28,6 +31,7 @@ impl Mode {
         match self {
             Mode::Find => "Find a paper, or paste a DOI, arXiv ID or link",
             Mode::Cite => "Find the paper to cite: ↵ copies APA, ⌘↵ BibTeX",
+            Mode::Ask => "Ask a workspace a question, then ↵",
             Mode::Novelty => "Paste an idea or an abstract, then ↵: has it been done?",
         }
     }

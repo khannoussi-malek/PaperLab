@@ -2,13 +2,16 @@
 //! without a window or a server; `main.rs` performs the effects and feeds the answers back as events. Each mode's own
 //! rules live in its module beside this one; this one holds the state and routes events to them.
 
+mod ask;
 mod cite;
 mod find;
 mod novelty;
 #[cfg(test)]
 mod tests;
 
-use crate::api::{Added, ApiError, Candidate, Closeness, Format, Found};
+pub use ask::{Answer, Writing};
+
+use crate::api::{Added, ApiError, Candidate, Closeness, Format, Found, Said, Workspace};
 use crate::library::Paper;
 use crate::mode::Mode;
 
@@ -30,6 +33,8 @@ pub enum Phase {
     /// Done before?: looking through the library for the idea.
     Searching,
     Close(Closeness),
+    /// Ask: an answer being written, or written.
+    Answer(Answer),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,6 +59,9 @@ pub enum Event {
     /// A moment after a copy: close if "Copied …" is still what the panel shows.
     CloseNow(u64),
     Novelty { seq: u64, result: Result<Closeness, ApiError> },
+    Workspaces(Result<Vec<Workspace>, ApiError>),
+    /// One step of an answer as PaperLab writes it; an error before the first.
+    Heard { seq: u64, result: Result<Said, ApiError> },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -71,6 +79,11 @@ pub enum Effect {
     /// Copy a library paper's reference to the clipboard.
     Cite { seq: u64, paper_id: String, title: String, format: Format },
     Novelty { seq: u64, text: String },
+    FetchWorkspaces,
+    Ask { seq: u64, workspace_id: String, question: String },
+    /// The workspace's chat in PaperLab, where the answer is saved.
+    OpenWorkspace(String),
+    Copy { seq: u64, text: String, what: String },
 }
 
 /// What Enter acts on, in display order.
@@ -84,6 +97,11 @@ pub enum Row {
     OpenPaperLab,
     /// A paper close to the idea (Done before?), by its place in the answer.
     Close(usize),
+    /// Ask: a workspace to ask (by its place in the list); then the finished answer's actions and cited papers.
+    Workspace(usize),
+    CopyAnswer,
+    OpenAnswer,
+    Source(usize),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -97,6 +115,13 @@ pub struct Panel {
     pub reachable: bool,
     /// The library's own sentence when it couldn't be listed (shown while nothing else is).
     pub library_error: Option<String>,
+    /// Ask's workspaces once listed, and the one last asked (first in the list next time).
+    pub workspaces: Option<Vec<Workspace>>,
+    pub last_workspace: Option<String>,
+    /// Ask's own sentence when the workspaces couldn't be listed.
+    pub ask_error: Option<String>,
+    /// An answer copied from (the copy replaced it on screen); reopening in Ask brings it back.
+    copied_answer: Option<Answer>,
     pub(crate) seq: u64,
     polling: Option<String>,
     /// Closed since it was last shown: an add finishing now is kept but not followed.
@@ -107,7 +132,7 @@ impl Default for Panel {
     fn default() -> Self {
         Panel {
             mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
-            library_error: None, seq: 0, polling: None, hidden: false,
+            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, seq: 0, polling: None, hidden: false,
         }
     }
 }
@@ -120,6 +145,7 @@ impl Panel {
         match self.mode {
             Mode::Find => self.find_rows(),
             Mode::Cite => self.cite_rows(),
+            Mode::Ask => self.ask_rows(),
             Mode::Novelty => self.novelty_rows(),
         }
     }
@@ -139,6 +165,8 @@ impl Panel {
             Event::Copied { seq, what, result } => self.copied(seq, what, result),
             Event::CloseNow(seq) => self.close_now(seq),
             Event::Novelty { seq, result } => self.novelty(seq, result),
+            Event::Workspaces(result) => self.workspaces_arrived(result),
+            Event::Heard { seq, result } => self.heard(seq, result),
             Event::Papers(result) => self.papers_arrived(result),
             Event::Looked { seq, result } => self.looked(seq, result),
             Event::AddDone { seq, result } => self.add_done(seq, result),
@@ -146,12 +174,20 @@ impl Panel {
         }
     }
 
+    /// Opened again: a fresh field in the same mode, except that an Ask answer comes back with its question (the user
+    /// may have clicked away to paste it, or to wait for it).
     fn shown(&mut self) -> Vec<Effect> {
-        *self = Panel {
+        let answer = self.answer_to_keep();
+        let mut kept = Panel {
             mode: self.mode, papers: std::mem::take(&mut self.papers), reachable: self.reachable, seq: self.seq,
-            ..Panel::default()
+            workspaces: self.workspaces.take(), last_workspace: self.last_workspace.take(), ..Panel::default()
         };
-        vec![Effect::FetchPapers]
+        if let Some(a) = answer {
+            kept.query = a.question.clone();
+            kept.phase = Phase::Answer(a);
+        }
+        *self = kept;
+        [vec![Effect::FetchPapers], self.ask_entered()].concat()
     }
 
     /// Enter (or ⌘↵, `alt`): the mode's action on the picked row.
@@ -159,6 +195,7 @@ impl Panel {
         match self.mode {
             Mode::Find => self.find_submit(),
             Mode::Cite => self.cite_submit(if alt { Format::Bibtex } else { Format::Apa }),
+            Mode::Ask => self.ask_submit(),
             Mode::Novelty => self.novelty_submit(),
         }
     }
@@ -168,14 +205,14 @@ impl Panel {
         if matches!(self.phase, Phase::Adding(_)) {
             return vec![]; // an add in flight keeps Find until it answers
         }
-        (self.mode, self.phase, self.picked, self.polling) = (mode, Phase::Library, 0, None);
-        vec![]
+        (self.mode, self.phase, self.picked, self.polling, self.copied_answer) = (mode, Phase::Library, 0, None, None);
+        self.ask_entered()
     }
 
     /// Typing in a mode other than Find: the text is the query; an earlier answer, or one still coming, no longer
     /// matches it.
     fn typed(&mut self, q: String) -> Vec<Effect> {
-        (self.query, self.picked, self.phase) = (q, 0, Phase::Library);
+        (self.query, self.picked, self.phase, self.copied_answer) = (q, 0, Phase::Library, None);
         vec![]
     }
 

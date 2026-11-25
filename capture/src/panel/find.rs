@@ -23,7 +23,7 @@ impl Panel {
             Phase::NoFreePdf { .. } => vec![Row::SaveWithoutPdf],
             Phase::Failed(_) if !self.reachable => vec![Row::OpenPaperLab],
             Phase::LookingUp(_) | Phase::Adding(_) | Phase::Failed(_) => vec![],
-            Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) => vec![], // other modes' answers
+            Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) | Phase::Answer(_) => vec![], // other modes' answers
         }
     }
 
@@ -132,7 +132,7 @@ impl Panel {
             }
             Row::OpenAdded(id) => vec![Effect::Open(id), Effect::Close],
             Row::OpenPaperLab => vec![Effect::OpenPaperLab, Effect::Close],
-            Row::Close(_) => vec![], // Done before?'s rows
+            Row::Close(_) | Row::Workspace(_) | Row::CopyAnswer | Row::OpenAnswer | Row::Source(_) => vec![], // other modes' rows
         }
     }
 
