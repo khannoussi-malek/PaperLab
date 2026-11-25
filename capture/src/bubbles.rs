@@ -66,9 +66,6 @@ pub const PILL: (f32, f32) = (132.0, 34.0);
 const ROW: f32 = PILL.1 + 8.0;
 const RADIUS: f32 = 150.0;
 const MARGIN: f32 = 8.0;
-/// How far a bubble can sit from the page's centre (x, y), with the crescent pushed up or down to stay on screen:
-/// the floating paper's overlay is twice this, so every bubble lands inside it.
-pub const REACH: (f32, f32) = (RADIUS + PILL.0 + MARGIN, 268.0);
 /// The pop: each bubble starts this long after the one before and takes POP to land; the fold takes FOLD.
 const STAGGER: f64 = 0.04;
 const POP: f64 = 0.3;
@@ -139,6 +136,9 @@ pub fn pill(i: usize, bubble: &Bubble, waiting: usize, dark: bool, k: f32) -> El
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// How far a bubble can sit from the page's centre (x, y), with the crescent pushed up or down to stay on screen.
+    const REACH: (f32, f32) = (RADIUS + PILL.0 + MARGIN, 268.0);
 
     const SCREEN: (f32, f32) = (1440.0, 900.0);
     /// When the last bubble has landed.
