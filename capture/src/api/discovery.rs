@@ -41,6 +41,15 @@ impl Api {
         Ok(Found { results: out.results.into_iter().filter_map(candidate).collect(), notices: out.notices })
     }
 
+    /// Papers like a library one, from Semantic Scholar, as a lookup's results (PaperLab's sentence when it's off,
+    /// doesn't know the paper or is busy).
+    pub fn similar(&self, paper_id: &str) -> Result<Found, ApiError> {
+        let url = format!("{}/api/papers/{paper_id}/similar", self.base);
+        let (status, body) = self.send(self.agent.get(&url).call())?;
+        let results: Vec<Value> = ok(status, body)?;
+        Ok(Found { results: results.into_iter().filter_map(candidate).collect(), notices: vec![] })
+    }
+
     pub fn add(&self, candidate: &Candidate, save_without_pdf: bool) -> Result<Added, ApiError> {
         let url = format!("{}/api/discovery/add", self.base);
         let payload = json!({ "candidate": candidate.raw, "save_without_pdf": save_without_pdf });

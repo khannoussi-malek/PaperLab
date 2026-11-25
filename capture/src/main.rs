@@ -154,6 +154,7 @@ impl App {
                 std::thread::sleep(CONFIRM_FOR);
                 Event::CloseNow(seq)
             }),
+            Effect::Similar { seq, paper_id } => background(me, move || Event::Looked { seq, result: api.similar(&paper_id) }),
             Effect::PutInWorkspace { seq, workspace_id, paper_id } => background(me, move || {
                 let result = api.put_in_workspace(&workspace_id, &paper_id);
                 Event::Put { seq, workspace_id, result }
@@ -400,6 +401,13 @@ mod tests {
     fn command(rt: &mut Runtime<App>, key: Key) {
         rt.key(KeyEvent { key, mods: Mods { cmd: true, ..Mods::default() } });
         rt.frame(1.0 / 60.0);
+    }
+
+    #[test]
+    fn command_l_in_find_asks_for_papers_like_the_picked_one() {
+        let mut rt = runtime();
+        command(&mut rt, Key::Command('l'));
+        assert!(matches!(rt.state.sent.as_slice(), [Effect::Similar { paper_id, .. }] if paper_id == "b"), "{:?}", rt.state.sent);
     }
 
     #[test]

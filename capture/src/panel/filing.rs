@@ -18,12 +18,7 @@ pub struct Filing {
 impl Panel {
     /// ⌘↵ in Find: the picked paper (a library one, or the one just added) is the one to file.
     pub(super) fn file_picked(&mut self) -> Vec<Effect> {
-        let paper = match (self.rows().into_iter().nth(self.picked), &self.phase) {
-            (Some(Row::Paper(i)), _) => Some((self.papers[i].id.clone(), self.papers[i].title.clone())),
-            (Some(Row::OpenAdded(_)), Phase::Added(added)) => Some((added.id.clone(), added.title.clone())),
-            _ => None,
-        };
-        let Some((paper_id, title)) = paper else { return vec![] };
+        let Some((paper_id, title)) = self.picked_paper() else { return vec![] };
         let filing = Filing { paper_id, title, putting: None, error: None };
         (self.phase, self.query, self.picked, self.polling) = (Phase::Filing(filing), String::new(), 0, None);
         vec![Effect::FetchWorkspaces] // fresh: one made in PaperLab a minute ago belongs in the list
