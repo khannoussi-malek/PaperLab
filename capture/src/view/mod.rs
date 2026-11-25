@@ -86,7 +86,7 @@ fn key(s: &mut App, ev: &KeyEvent) -> bool {
         (Key::Up, _) => s.dispatch(Event::Up),
         (Key::Tab, _) => s.dispatch(Event::NextMode { forward: !ev.mods.shift }),
         (Key::Enter, _) if ev.mods.cmd => s.dispatch(Event::SubmitAlt),
-        _ if ev.is_command('l') => s.dispatch(Event::Similar),
+        _ if ev.is_command('l') && !ev.mods.shift => s.dispatch(Event::Similar),
         (Key::Escape, _) => s.close(),
         _ => return false,
     }

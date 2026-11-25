@@ -364,3 +364,14 @@ fn command_l_needs_a_paper_picked_in_find() {
     p.step(Event::Mode(Mode::Cite));
     assert_eq!(p.step(Event::Similar), vec![]);
 }
+
+#[test]
+fn command_l_works_on_the_paper_just_added_but_waits_for_an_add_in_flight() {
+    let mut p = shown_with_library();
+    p.step(Event::Query("2401.12345".into()));
+    p.phase = Phase::Adding(candidate("Sparse attention", None));
+    assert_eq!(p.step(Event::Similar), vec![], "an add in flight keeps the panel");
+    let seq = p.seq;
+    p.step(Event::AddDone { seq, result: Ok(Added::Queued(paper("n", "Sparse attention", &[], 2024, "2026-03"))) });
+    assert!(matches!(p.step(Event::Similar).as_slice(), [Effect::Similar { paper_id, .. }] if paper_id == "n"));
+}
