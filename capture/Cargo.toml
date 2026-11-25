@@ -23,7 +23,7 @@ png = "0.18"
 # the versions Rune already builds, so nothing new is downloaded.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSScreen"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSScreen", "NSEvent"] }
 
 [patch.crates-io]
 winit = { git = "https://github.com/anomalyco/rune", rev = "b3503d9b2e41077aef7f4a34c2683a08ae06ed6d" }

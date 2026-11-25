@@ -78,6 +78,10 @@ pub struct Float {
     placed: Rect,
     /// The page's centre at the press, while a drag is under way.
     grab: (f32, f32),
+    /// The pointer at the press, as AppKit has it (bottom-left points), until the release.
+    pressed_at: Option<(f64, f64)>,
+    /// Reads the pointer (`displays::pointer`, AppKit's bottom-left points; a fixed answer in tests).
+    read_pointer: fn() -> Option<(f64, f64)>,
     dragging: bool,
     /// Frame clock, seconds.
     t: f64,
@@ -110,7 +114,8 @@ impl Float {
         let page = place::start(&displays);
         let mut float = Float {
             me, handle: None, page, displays, read_displays: crate::displays::read, displays_at: 0.0,
-            placed: [0.0; 4], grab: page, dragging: false, t: 0.0, focus: Focus::Floating,
+            placed: [0.0; 4], grab: page, pressed_at: None, read_pointer: crate::displays::pointer,
+            dragging: false, t: 0.0, focus: Focus::Floating,
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
             menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, drop_over: false, badge: 0,
             badge_grew: f64::NEG_INFINITY, hidden_until: f64::NEG_INFINITY, since: -1.0,
@@ -340,7 +345,18 @@ impl Float {
     }
 
     fn grab_page(&mut self) {
-        (self.grab, self.dragging) = (self.page, false);
+        (self.grab, self.pressed_at, self.dragging) = (self.page, (self.read_pointer)(), false);
+    }
+
+    /// How far the pointer has gone since the press. From AppKit when it can say: Rune measures it from the window's
+    /// moves in its current scale, which jumps when the page crosses onto a display of another scale (a 1x monitor
+    /// beside a 2x laptop) and threw it back. Rune's own `rune` travel otherwise.
+    fn travel(&self, rune: (f32, f32)) -> (f32, f32) {
+        match (self.pressed_at, (self.read_pointer)()) {
+            // AppKit's y grows upward, ours downward: only the difference's sign flips, no screen height involved
+            (Some(from), Some(to)) => ((to.0 - from.0) as f32, (from.1 - to.1) as f32),
+            _ => rune,
+        }
     }
 
     /// The pointer `travel` points from the press: past CLICK_SLOP the page follows it, whole on whichever display
@@ -359,10 +375,13 @@ impl Float {
     fn drag(&mut self, d: &Drag) -> Vec<Act> {
         match d.phase {
             Phase::Down => self.grab_page(),
-            Phase::Move => self.drag_to((d.dx, d.dy)),
+            Phase::Move => {
+                let travel = self.travel((d.dx, d.dy));
+                self.drag_to(travel);
+            }
             Phase::Up => {
                 let clicked = !self.dragging && !d.cancelled();
-                self.dragging = false;
+                (self.dragging, self.pressed_at) = (false, None);
                 if clicked {
                     return self.click();
                 }
@@ -521,7 +540,7 @@ mod tests {
     /// A floating paper with nothing to tell (its `Act`s are the answer) and an empty clipboard, its clock at `t`.
     fn paper_at(t: f64) -> Float {
         let mut f = Float::new(None, vec![LAPTOP]);
-        (f.paste, f.read_displays) = (|| None, || vec![]);
+        (f.paste, f.read_displays, f.read_pointer) = (|| None, || vec![], || None);
         f.tick(t);
         f
     }
@@ -758,6 +777,34 @@ mod tests {
         assert_eq!(ox + ow, MONITOR[0] + MONITOR[2], "and its overlay stays on the monitor, cut at the edge");
         let (px, _) = f.panel_at();
         assert!(px >= MONITOR[0] && px + crate::view::WIDTH <= MONITOR[0] + MONITOR[2], "its panel opens there too");
+    }
+
+    #[test]
+    fn a_drag_onto_a_monitor_on_the_left_follows_appkits_pointer_not_runes_travel() {
+        /// A 1x monitor left of the laptop, its top level with the laptop's.
+        const LEFT: Rect = [-1920.0, 0.0, 1920.0, 1080.0];
+        let mut f = paper_at(10.0);
+        f.displays = vec![LAPTOP, LEFT];
+        f.page = (1300.0, 700.0);
+        f.read_pointer = || Some((1300.0, 900.0 - 700.0)); // AppKit: bottom-left origin, on the page
+        f.grab_page();
+        assert_eq!(f.pressed_at, Some((1300.0, 200.0)), "as AppKit gave it");
+        f.read_pointer = || Some((-600.0, 900.0 - 500.0)); // well onto the left monitor
+        let travel = f.travel((-40.0, 3.0)); // Rune's travel, thrown off by the change of scale
+        assert_eq!(travel, (-1900.0, -200.0));
+        f.drag_to(travel);
+        assert_eq!(f.page, (-600.0, 500.0), "on the left monitor, under the pointer");
+        assert_eq!(place::display_of(f.page, &f.displays), LEFT);
+        assert!(f.placed[0] < 0.0, "its overlay went with it: {:?}", f.placed);
+        f.drag_to((-9000.0, 0.0));
+        assert_eq!(f.page_rect(BIG)[0], -1920.0, "and right to its left edge");
+    }
+
+    #[test]
+    fn without_appkits_pointer_runes_travel_is_used() {
+        let mut f = paper_at(10.0);
+        f.grab_page();
+        assert_eq!(f.travel((12.0, -5.0)), (12.0, -5.0));
     }
 
     #[test]

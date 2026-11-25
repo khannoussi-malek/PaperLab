@@ -22,6 +22,19 @@ pub fn read() -> Vec<Rect> {
     from_appkit(&frames)
 }
 
+/// The pointer, as AppKit has it: global points from the main display's bottom-left, y up. Points are the same size on
+/// every display, so the distance between two readings is the pointer's real travel, wherever it went.
+#[cfg(target_os = "macos")]
+pub fn pointer() -> Option<(f64, f64)> {
+    let at = objc2_app_kit::NSEvent::mouseLocation();
+    Some((at.x, at.y))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn pointer() -> Option<(f64, f64)> {
+    None // Rune's own drag travel is used instead
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn read() -> Vec<Rect> {
     vec![] // the floating paper is macOS only (Settings → Desktop app)
