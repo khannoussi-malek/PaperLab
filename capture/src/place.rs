@@ -89,6 +89,17 @@ mod tests {
     }
 
     #[test]
+    fn a_monitor_on_the_left_has_negative_points_and_works_the_same() {
+        let left = [-1920.0, 0.0, 1920.0, 1080.0];
+        let all = [LAPTOP, left];
+        assert_eq!(display_of((-600.0, 500.0), &all), left);
+        assert_eq!(keep_page((-5000.0, 500.0), HALF, &all), (-1920.0 + HALF.0, 500.0), "its left edge");
+        assert_eq!(main_display(&all), LAPTOP);
+        let (x, _) = panel_spot([-1900.0, 300.0, 44.0, 56.0], left);
+        assert_eq!(x, -1900.0 + 44.0 + GAP, "no room on its left: right of it, still on that monitor");
+    }
+
+    #[test]
     fn it_starts_bottom_right_of_the_main_display_whatever_the_order() {
         assert_eq!(start(&BOTH), (1440.0 - START.0, 900.0 - START.1));
     }
