@@ -98,11 +98,12 @@ pub struct Float {
     /// When the bubbles came out or the pointer last left one, for MENU_IDLE.
     touched: f64,
     /// Senses a file drag from another app (file_drag.rs; fixed answers in tests): the drag pasteboard's count when
-    /// the button went down (None while it's up), and whether the panel was opened for this drag.
+    /// the button went down (None while it's up), and what this drag turned out to be (None until it's over the page:
+    /// Some(true) the panel was opened for its files, Some(false) it carries none, so the pasteboard isn't read again).
     sense: fn() -> crate::file_drag::Sense,
     carries_files: fn() -> bool,
     drag_start: Option<isize>,
-    offered: bool,
+    drag_files: Option<bool>,
     /// Until when it's hidden (the frame clock); nothing is drawn or takes a click before then.
     hidden_until: f64,
     /// What waits in the Inbox, shown on the page's corner, and when it last grew (the badge pulses once).
@@ -123,7 +124,7 @@ impl Float {
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
             menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, badge: 0,
             sense: crate::file_drag::sense, carries_files: crate::file_drag::carries_files, drag_start: None,
-            offered: false,
+            drag_files: None,
             badge_grew: f64::NEG_INFINITY, hidden_until: f64::NEG_INFINITY, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         };
@@ -308,19 +309,20 @@ impl Float {
         let now = (self.sense)();
         match (now.button, self.drag_start) {
             (true, None) => {
-                (self.drag_start, self.offered) = (Some(now.count), false);
+                (self.drag_start, self.drag_files) = (Some(now.count), None);
                 vec![]
             }
             (false, Some(_)) => {
                 self.drag_start = None;
-                if std::mem::take(&mut self.offered) { vec![Act::Take(Event::DragEnded)] } else { vec![] }
+                if self.drag_files.take() == Some(true) { vec![Act::Take(Event::DragEnded)] } else { vec![] }
             }
-            (true, Some(start)) if !self.offered && !self.dragging && now.count != start => {
+            (true, Some(start)) if self.drag_files.is_none() && !self.dragging && now.count != start => {
                 let Some(at) = self.pointer().filter(|&at| self.over_page(at)) else { return vec![] };
-                if !(self.carries_files)() {
-                    return vec![];
+                let files = (self.carries_files)();
+                self.drag_files = Some(files);
+                if !files {
+                    return vec![]; // text or a link: nothing for the paper; decided for the rest of this drag
                 }
-                self.offered = true;
                 self.focus_on(Focus::Panel);
                 let at = place::drop_spot(at, place::display_of(at, &self.displays));
                 vec![Act::Show { at, mode: Some(Mode::Find), query: None }, Act::Take(Event::DropOffered)]
@@ -818,15 +820,22 @@ mod tests {
         f.watch_drag();
         assert_eq!(f.watch_drag(), vec![], "button held, no drag (a selection): nothing");
         set_sense(true, 6);
-        f.carries_files = || false;
-        assert_eq!(f.watch_drag(), vec![], "a drag of text: nothing");
-        f.carries_files = || true;
         f.read_pointer = || Some((200.0, 900.0 - 200.0));
         assert_eq!(f.watch_drag(), vec![], "files, but far from the page: nothing yet");
         f.read_pointer = || Some((1300.0, 900.0 - 700.0));
         assert_eq!(f.watch_drag().len(), 2, "carried over the page: the panel opens");
         set_sense(false, 6);
-        f.watch_drag();
+        assert_eq!(f.watch_drag(), vec![Act::Take(Event::DragEnded)]);
+        let mut text = pointed_at();
+        set_sense(true, 9);
+        text.watch_drag();
+        set_sense(true, 10);
+        text.carries_files = || false;
+        assert_eq!(text.watch_drag(), vec![], "a drag of text: nothing");
+        text.carries_files = || panic!("decided: the pasteboard isn't read again this drag");
+        assert_eq!(text.watch_drag(), vec![]);
+        set_sense(false, 10);
+        assert_eq!(text.watch_drag(), vec![], "and its end tells no one");
         let mut own = pointed_at();
         set_sense(true, 7);
         own.watch_drag();
