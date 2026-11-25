@@ -76,9 +76,10 @@ pub struct Float {
     displays_at: f64,
     /// Where the overlay is: what it draws, cut to the page's display (`frame`).
     placed: Rect,
-    /// The page's centre at the press, while a drag is under way, and the pointer then (global, top-left).
+    /// The page's centre at the press, while a drag is under way.
     grab: (f32, f32),
-    pressed_at: Option<(f32, f32)>,
+    /// The pointer at the press, as AppKit has it (bottom-left points), until the release.
+    pressed_at: Option<(f64, f64)>,
     /// Reads the pointer (`displays::pointer`, AppKit's bottom-left points; a fixed answer in tests).
     read_pointer: fn() -> Option<(f64, f64)>,
     dragging: bool,
@@ -344,21 +345,16 @@ impl Float {
     }
 
     fn grab_page(&mut self) {
-        (self.grab, self.pressed_at, self.dragging) = (self.page, self.pointer(), false);
-    }
-
-    /// The pointer in global points, top-left origin (place.rs), when AppKit can say.
-    fn pointer(&self) -> Option<(f32, f32)> {
-        let main_height = f64::from(place::main_display(&self.displays)[3]);
-        (self.read_pointer)().map(|(x, y)| (x as f32, (main_height - y) as f32))
+        (self.grab, self.pressed_at, self.dragging) = (self.page, (self.read_pointer)(), false);
     }
 
     /// How far the pointer has gone since the press. From AppKit when it can say: Rune measures it from the window's
     /// moves in its current scale, which jumps when the page crosses onto a display of another scale (a 1x monitor
     /// beside a 2x laptop) and threw it back. Rune's own `rune` travel otherwise.
     fn travel(&self, rune: (f32, f32)) -> (f32, f32) {
-        match (self.pressed_at, self.pointer()) {
-            (Some(from), Some(to)) => (to.0 - from.0, to.1 - from.1),
+        match (self.pressed_at, (self.read_pointer)()) {
+            // AppKit's y grows upward, ours downward: only the difference's sign flips, no screen height involved
+            (Some(from), Some(to)) => ((to.0 - from.0) as f32, (from.1 - to.1) as f32),
             _ => rune,
         }
     }
@@ -385,7 +381,7 @@ impl Float {
             }
             Phase::Up => {
                 let clicked = !self.dragging && !d.cancelled();
-                self.dragging = false;
+                (self.dragging, self.pressed_at) = (false, None);
                 if clicked {
                     return self.click();
                 }
@@ -792,7 +788,7 @@ mod tests {
         f.page = (1300.0, 700.0);
         f.read_pointer = || Some((1300.0, 900.0 - 700.0)); // AppKit: bottom-left origin, on the page
         f.grab_page();
-        assert_eq!(f.pressed_at, Some((1300.0, 700.0)));
+        assert_eq!(f.pressed_at, Some((1300.0, 200.0)), "as AppKit gave it");
         f.read_pointer = || Some((-600.0, 900.0 - 500.0)); // well onto the left monitor
         let travel = f.travel((-40.0, 3.0)); // Rune's travel, thrown off by the change of scale
         assert_eq!(travel, (-1900.0, -200.0));
