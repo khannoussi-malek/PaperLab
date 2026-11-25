@@ -22,13 +22,13 @@ impl Panel {
             Phase::Added(paper) => vec![Row::OpenAdded(paper.id.clone())],
             Phase::NoFreePdf { .. } => vec![Row::SaveWithoutPdf],
             Phase::Failed(_) if !self.reachable => vec![Row::OpenPaperLab],
-            Phase::LookingUp(_) | Phase::Adding(_) | Phase::Failed(_) => vec![],
+            Phase::LookingUp(_) | Phase::Adding(_) | Phase::Uploading { .. } | Phase::Failed(_) => vec![],
             Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) | Phase::Answer(_) => vec![], // other modes' answers
         }
     }
 
     pub(super) fn find_query(&mut self, q: String) -> Vec<Effect> {
-        if matches!(self.phase, Phase::Adding(_)) {
+        if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
             self.query = q; // the add in flight keeps the panel: its answer must not be dropped
             return vec![];
         }
@@ -36,8 +36,7 @@ impl Panel {
         // it waits for Enter on its "Search online" row so each keystroke doesn't ask every source.
         let pasted = q.len() > self.query.len() + 1;
         self.query = q;
-        self.picked = 0;
-        self.polling = None;
+        (self.picked, self.polling, self.upload_note) = (0, None, None);
         match classify(&self.query).lookup() {
             Some(query) if pasted => {
                 let query = query.to_owned();
@@ -76,13 +75,7 @@ impl Panel {
         let candidate = candidate.clone();
         self.picked = 0; // the rows change: Enter acts on the first one
         match result {
-            Ok(Added::Queued(paper)) => {
-                let follow = !done(&paper) && !self.hidden;
-                let fx = if follow { vec![Effect::Poll(paper.id.clone())] } else { vec![] };
-                self.polling = (!fx.is_empty()).then(|| paper.id.clone());
-                self.phase = Phase::Added(paper);
-                fx
-            }
+            Ok(Added::Queued(paper)) => self.follow(paper),
             Ok(Added::AlreadyInLibrary(id)) => vec![Effect::Open(id), Effect::Close],
             Ok(Added::NoFreePdf(message)) => {
                 self.phase = Phase::NoFreePdf { candidate, message };
@@ -93,6 +86,15 @@ impl Panel {
                 vec![]
             }
         }
+    }
+
+    /// A paper just added: shown, and followed until it's ready while the panel is open.
+    pub(super) fn follow(&mut self, paper: Paper) -> Vec<Effect> {
+        let follow = !done(&paper) && !self.hidden;
+        self.polling = follow.then(|| paper.id.clone());
+        let fx = if follow { vec![Effect::Poll(paper.id.clone())] } else { vec![] };
+        self.phase = Phase::Added(paper);
+        fx
     }
 
     pub(super) fn status(&mut self, id: String, result: Result<Paper, ApiError>) -> Vec<Effect> {

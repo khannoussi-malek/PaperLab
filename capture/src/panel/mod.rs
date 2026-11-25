@@ -4,12 +4,15 @@
 
 mod ask;
 mod cite;
+mod drop;
 mod find;
 mod novelty;
 #[cfg(test)]
 mod tests;
 
 pub use ask::{Answer, Writing};
+
+use std::path::PathBuf;
 
 use crate::api::{Added, ApiError, Candidate, Closeness, Format, Found, Said, Workspace};
 use crate::library::Paper;
@@ -22,6 +25,8 @@ pub enum Phase {
     LookingUp(String),
     Found(Found),
     Adding(Candidate),
+    /// PDFs dropped on the floating paper, on their way up.
+    Uploading { count: usize },
     /// The added paper and its latest status, until it's ready or failed.
     Added(Paper),
     NoFreePdf { candidate: Candidate, message: String },
@@ -62,6 +67,10 @@ pub enum Event {
     Workspaces(Result<Vec<Workspace>, ApiError>),
     /// One step of an answer as PaperLab writes it; an error before the first.
     Heard { seq: u64, result: Result<Said, ApiError> },
+    /// Files dropped on the floating paper: PDFs, or something else.
+    Dropped(Vec<PathBuf>),
+    DropRefused,
+    Uploaded { seq: u64, results: Vec<Result<Paper, ApiError>> },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -84,6 +93,7 @@ pub enum Effect {
     /// The workspace's chat in PaperLab, where the answer is saved.
     OpenWorkspace(String),
     Copy { seq: u64, text: String, what: String },
+    Upload { seq: u64, paths: Vec<PathBuf> },
 }
 
 /// What Enter acts on, in display order.
@@ -122,6 +132,8 @@ pub struct Panel {
     pub ask_error: Option<String>,
     /// An answer copied from (the copy replaced it on screen); reopening in Ask brings it back.
     copied_answer: Option<Answer>,
+    /// What a drop of several PDFs came to, shown with the followed paper's progress.
+    pub upload_note: Option<String>,
     pub(crate) seq: u64,
     polling: Option<String>,
     /// Closed since it was last shown: an add finishing now is kept but not followed.
@@ -132,7 +144,7 @@ impl Default for Panel {
     fn default() -> Self {
         Panel {
             mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
-            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, seq: 0, polling: None, hidden: false,
+            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, upload_note: None, seq: 0, polling: None, hidden: false,
         }
     }
 }
@@ -167,6 +179,9 @@ impl Panel {
             Event::Novelty { seq, result } => self.novelty(seq, result),
             Event::Workspaces(result) => self.workspaces_arrived(result),
             Event::Heard { seq, result } => self.heard(seq, result),
+            Event::Dropped(paths) => self.dropped(paths),
+            Event::DropRefused => self.drop_refused(),
+            Event::Uploaded { seq, results } => self.uploaded(seq, results),
             Event::Papers(result) => self.papers_arrived(result),
             Event::Looked { seq, result } => self.looked(seq, result),
             Event::AddDone { seq, result } => self.add_done(seq, result),
@@ -177,6 +192,8 @@ impl Panel {
     /// Opened again: a fresh field in the same mode, except that an Ask answer comes back with its question (the user
     /// may have clicked away to paste it, or to wait for it).
     fn shown(&mut self) -> Vec<Effect> {
+        // An add or upload still under way stays on screen, so its answer is shown and followed.
+        let in_flight = matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. });
         let answer = self.answer_to_keep();
         let mut kept = Panel {
             mode: self.mode, papers: std::mem::take(&mut self.papers), reachable: self.reachable, seq: self.seq,
@@ -185,6 +202,9 @@ impl Panel {
         if let Some(a) = answer {
             kept.query = a.question.clone();
             kept.phase = Phase::Answer(a);
+        } else if in_flight {
+            kept.query = std::mem::take(&mut self.query);
+            kept.phase = std::mem::replace(&mut self.phase, Phase::Library);
         }
         *self = kept;
         [vec![Effect::FetchPapers], self.ask_entered()].concat()
@@ -202,17 +222,18 @@ impl Panel {
 
     /// Another mode: what was typed stays (find a paper, then cite it); the last answer goes.
     fn set_mode(&mut self, mode: Mode) -> Vec<Effect> {
-        if matches!(self.phase, Phase::Adding(_)) {
-            return vec![]; // an add in flight keeps Find until it answers
+        if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
+            return vec![]; // an add or upload in flight keeps Find until it answers
         }
         (self.mode, self.phase, self.picked, self.polling, self.copied_answer) = (mode, Phase::Library, 0, None, None);
+        self.upload_note = None;
         self.ask_entered()
     }
 
     /// Typing in a mode other than Find: the text is the query; an earlier answer, or one still coming, no longer
     /// matches it.
     fn typed(&mut self, q: String) -> Vec<Effect> {
-        (self.query, self.picked, self.phase, self.copied_answer) = (q, 0, Phase::Library, None);
+        (self.query, self.picked, self.phase, self.copied_answer, self.upload_note) = (q, 0, Phase::Library, None, None);
         vec![]
     }
 

@@ -38,6 +38,8 @@ pub struct Float {
     t: f64,
     /// Its panel is open.
     open: bool,
+    /// A PDF is being dragged over it: it lights up as if open.
+    drop_over: bool,
     /// When it last opened or closed, for the grow and shrink.
     since: f64,
     closed_at: f64,
@@ -47,7 +49,7 @@ impl Float {
     pub fn new(me: AppHandle<crate::App>, screen: (f32, f32)) -> Self {
         let origin = start(screen);
         Float {
-            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, open: false, since: -1.0,
+            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, open: false, drop_over: false, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         }
     }
@@ -88,6 +90,16 @@ impl Float {
             let page = paper_on_screen(self.origin, BIG);
             crate::show_at(&self.me, panel_spot(page, self.screen));
         }
+    }
+
+    /// Files dropped on it: the panel opens beside it (if it isn't open) and takes them, PDFs or not.
+    fn dropped(&mut self, event: crate::panel::Event) {
+        self.drop_over = false;
+        if !self.open {
+            self.set_open(true);
+            crate::show_at(&self.me, panel_spot(paper_on_screen(self.origin, BIG), self.screen));
+        }
+        self.me.update(move |s, _| s.dispatch(event));
     }
 
     /// Press, move, release on the page: a press that barely moves is a click; otherwise the overlay follows the
@@ -169,7 +181,7 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let dark = cx.system_dark();
     let still = cx.is_reduced_motion();
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
-    let open = s.openness();
+    let open = if s.drop_over { 1.0 } else { s.openness() };
     let size = (SMALL.0 + (BIG.0 - SMALL.0) * open, SMALL.1 + (BIG.1 - SMALL.1) * open);
     // Floats while idle; held still while dragged or open (the user is looking at it).
     let bob = if still || s.dragging { 0.0 } else { (s.t / 3.2 * std::f64::consts::TAU).sin() as f32 * (1.0 - open) };
@@ -179,6 +191,12 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let halo = 46.0 + 18.0 * open;
     let glow = if dark { 0.32 + 0.16 * open } else { 0.2 + 0.12 * open };
     el().key("float").w_full().h_full()
+        .on_drop_files(|s: &mut Float, files, _: &mut Tx| {
+            s.dropped(crate::panel::Event::Dropped(files.to_vec()));
+        })
+        .accepts_extensions(&["pdf"])
+        .on_drop_hover(|s: &mut Float, over, _: &mut Tx| s.drop_over = over)
+        .on_drop_rejected(|s: &mut Float, _, _: &mut Tx| s.dropped(crate::panel::Event::DropRefused))
         .child(el().key("halo").absolute(cx_ - halo, cy_ - halo).size(halo * 2.0, halo * 2.0)
             .radial_gradient([halo, halo], halo, [(0.0, blue.alpha(glow)), (1.0, blue.alpha(0.0))]))
         .child(paper((px, py), (pw, ph), bob, dark))

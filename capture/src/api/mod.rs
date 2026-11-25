@@ -6,6 +6,7 @@ mod cite;
 mod discovery;
 mod library;
 mod novelty;
+mod upload;
 #[cfg(test)]
 mod tests;
 

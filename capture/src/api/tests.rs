@@ -157,3 +157,18 @@ fn sse_edge_cases_done_without_json_data_alone_multi_line_and_no_trailing_blank(
     assert_eq!(heard_from("event: token\ndata: {\"text\":\ndata: \"c\"}\n\nevent: done\ndata: {}"),
                vec![Said::Token("c".into()), Said::Done], "lines join with a newline; the last event needs no blank line");
 }
+
+#[test]
+fn an_upload_is_one_file_part_whose_name_cannot_break_its_header() {
+    let body = String::from_utf8(upload::multipart("b0undary", "my \"paper\"\r\n.pdf", b"%PDF-1.7")).unwrap();
+    assert!(body.contains("filename=\"my paper.pdf\""), "{body}");
+    assert!(body.starts_with("--b0undary\r\n") && body.contains("application/pdf\r\n\r\n%PDF-1.7\r\n--b0undary--"), "{body}");
+    assert!(body.ends_with("--\r\n"));
+}
+
+#[test]
+fn an_unreadable_file_says_which() {
+    let api = Api::new(9);
+    let err = api.upload(std::path::Path::new("/no/such/dir/missing.pdf")).unwrap_err();
+    assert!(matches!(err, ApiError::Said(s) if s.contains("missing.pdf")));
+}

@@ -26,6 +26,7 @@ pub const ALL: &[(&str, fn(&mut App))] = &[
         p.step(Event::Copied { seq: p.seq, what, result: Ok(()) });
         set(s, "attention", p)
     }),
+    ("dropped", |s| set(s, "", dropped())),
     ("ask", |s| set(s, QUESTION, ask_typed())),
     ("answering", |s| set(s, QUESTION, answer(false))),
     ("answered", |s| set(s, QUESTION, answer(true))),
@@ -60,6 +61,15 @@ fn library_shown() -> Panel {
 fn in_mode(mode: Mode) -> Panel {
     let mut p = library_shown();
     p.step(Event::Mode(mode));
+    p
+}
+
+fn dropped() -> Panel {
+    let mut p = library_shown();
+    p.step(Event::Dropped(vec!["/Downloads/long-context.pdf".into(), "/Downloads/sparse.pdf".into()]));
+    let seq = p.seq;
+    let results = vec![Ok(paper("a", "Sparse Attention for Long Documents", "uploaded")), Ok(paper("b", "Reading Long Papers with Small Models", "extracting"))];
+    p.step(Event::Uploaded { seq, results });
     p
 }
 
