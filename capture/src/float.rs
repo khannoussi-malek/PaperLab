@@ -10,7 +10,7 @@ use rune::{
     OverlayPlacement, OverlaySpec, Phase, Tx, el,
 };
 
-use crate::bubbles::{self, Bubble, PILL, REACH};
+use crate::bubbles::{self, Bubble, PILL, Pick, REACH};
 use crate::input::Input;
 use crate::mode::Mode;
 use crate::panel::Event;
@@ -37,6 +37,9 @@ const REOPEN_GRACE: f64 = 0.35;
 /// The bubbles fold by themselves after this long without the pointer on one (the overlay never has the keyboard, so
 /// there is no Esc, and a click elsewhere goes to another app).
 const MENU_IDLE: f64 = 5.0;
+/// "Hide for an hour" (a screen share, a talk); the shortcut brings it back sooner. It fades back in over FADE_IN.
+const HIDE_FOR: f64 = 3600.0;
+const FADE_IN: f64 = 0.4;
 
 /// What the page is doing. Bubbles out or panel open, it is big and still; floating, it bobs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +55,7 @@ pub enum Act {
     /// Open the panel with its top-left here, in `mode` (None: the last one used), with `query` typed in.
     Show { at: (f32, f32), mode: Option<Mode>, query: Option<String> },
     ClosePanel,
+    OpenPaperLab,
     /// Hand the panel an event (dropped files).
     Take(Event),
 }
@@ -83,6 +87,8 @@ pub struct Float {
     touched: f64,
     /// A PDF is being dragged over it: it lights up as if open.
     drop_over: bool,
+    /// Until when it's hidden (the frame clock); nothing is drawn or takes a click before then.
+    hidden_until: f64,
     /// What waits in the Inbox, shown on the page's corner.
     pub badge: usize,
     /// When it last opened or closed, for the grow and shrink.
@@ -97,7 +103,7 @@ impl Float {
             me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, focus: Focus::Floating,
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
             menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, drop_over: false, badge: 0,
-            since: -1.0,
+            hidden_until: f64::NEG_INFINITY, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         }
     }
@@ -156,6 +162,17 @@ impl Float {
     /// A click on the page: the bubbles come out, or fold back; with the panel open it closes. A click that comes
     /// just after the panel closed is the one that closed it and does nothing.
     fn click(&mut self) -> Vec<Act> {
+        let items = || bubbles::menu(self.copied());
+        self.press(items())
+    }
+
+    /// A right-click (or control-click) on the page: the paper's own bubbles, open PaperLab or hide it.
+    fn right_click(&mut self) -> Vec<Act> {
+        self.press(bubbles::paper_menu())
+    }
+
+    /// A press on the page: `items` come out, or the bubbles fold back; with the panel open it closes.
+    fn press(&mut self, items: Vec<Bubble>) -> Vec<Act> {
         match self.focus {
             Focus::Menu => self.focus_on(Focus::Floating),
             Focus::Panel => {
@@ -163,7 +180,6 @@ impl Float {
                 return vec![Act::ClosePanel];
             }
             Focus::Floating if self.t - self.closed_at >= REOPEN_GRACE => {
-                let items = bubbles::menu(self.copied());
                 if items != self.items {
                     // other bubbles than a half-finished fold was folding: they all pop from the page
                     (self.items, self.menu_from, self.menu_since) = (items, [0.0; bubbles::MAX], f64::NEG_INFINITY);
@@ -175,12 +191,35 @@ impl Float {
         vec![]
     }
 
+    fn hidden(&self) -> bool {
+        self.t < self.hidden_until
+    }
+
+    /// Back now (the shortcut was pressed while it was hidden).
+    pub fn unhide(&mut self) {
+        if self.hidden() {
+            self.hidden_until = self.t;
+        }
+    }
+
     /// A bubble picked: they fold and the panel opens beside the page in that mode (Find, looking the clipboard's
     /// paper up, for that bubble); the page stays big and still.
     fn pick(&mut self, bubble: Bubble) -> Vec<Act> {
-        self.focus_on(Focus::Panel);
-        let (mode, query) = bubble.opens();
-        vec![Act::Show { at: self.panel_at(), mode: Some(mode), query }]
+        match bubble.pick() {
+            Pick::Panel(mode, query) => {
+                self.focus_on(Focus::Panel);
+                vec![Act::Show { at: self.panel_at(), mode: Some(mode), query }]
+            }
+            Pick::OpenPaperLab => {
+                self.focus_on(Focus::Floating);
+                vec![Act::OpenPaperLab]
+            }
+            Pick::Hide => {
+                self.focus_on(Focus::Floating);
+                self.hidden_until = self.t + HIDE_FOR;
+                vec![]
+            }
+        }
     }
 
     /// Files dropped on it: the panel opens beside it (if it isn't open) and takes them, PDFs or not.
@@ -216,6 +255,7 @@ impl Float {
             match act {
                 Act::Show { at, mode, query } => crate::show_at(me, at, mode, query),
                 Act::ClosePanel => me.update(|s, _| s.close()),
+                Act::OpenPaperLab => me.update(|s, _| s.perform(crate::panel::Effect::OpenPaperLab)),
                 Act::Take(event) => me.update(move |s, _| s.dispatch(event)),
             }
         }
@@ -301,6 +341,10 @@ fn poll(s: &mut Float, now: f64, _: &mut Tx) -> bool {
 }
 
 fn view(s: &Float, cx: &mut Cx<Float>) -> El {
+    if s.hidden() {
+        return el(); // nothing to see or click: the clear overlay passes everything to the app below
+    }
+    let back = ((s.t - s.hidden_until) / FADE_IN).clamp(0.0, 1.0) as f32; // 1 unless it just came back
     let dark = cx.system_dark();
     let still = cx.is_reduced_motion();
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
@@ -313,7 +357,7 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let (cx_, cy_) = (px + pw / 2.0, py + ph / 2.0);
     let halo = 46.0 + 18.0 * open;
     let glow = if dark { 0.32 + 0.16 * open } else { 0.2 + 0.12 * open };
-    el().key("float").w_full().h_full()
+    el().key("float").w_full().h_full().opacity(back)
         .child(el().key("halo").absolute(cx_ - halo, cy_ - halo).size(halo * 2.0, halo * 2.0)
             .radial_gradient([halo, halo], halo, [(0.0, blue.alpha(glow)), (1.0, blue.alpha(0.0))]))
         .children(menu(s, (cx_, cy_), still, dark))
@@ -370,6 +414,10 @@ fn paper(at: (f32, f32), size: (f32, f32), bob: f32, dark: bool) -> El {
         .hit()
         .on_drag(|s: &mut Float, d: &mut Drag, _: &mut Tx| {
             let acts = s.drag(d);
+            s.tell(acts);
+        })
+        .on_secondary_press(|s: &mut Float, _, _: &mut Tx| {
+            let acts = s.right_click();
             s.tell(acts);
         })
         // Drops land on the page only, never on the clear overlay around it, which belongs to the app below.
@@ -582,6 +630,43 @@ mod tests {
         rt.update(|s, _| s.tick(10.0 + MENU_IDLE + 1.0));
         assert!(rt.state.dragging, "the drag is under way");
         assert_eq!(rt.state.focus, Focus::Menu, "being moved isn't being left alone");
+    }
+
+    #[test]
+    fn a_right_click_offers_open_paperlab_and_hide() {
+        let mut f = paper_at(10.0);
+        assert_eq!(f.right_click(), vec![]);
+        assert_eq!((f.focus, &f.items), (Focus::Menu, &bubbles::paper_menu()));
+        assert_eq!(f.pick(Bubble::OpenPaperLab), vec![Act::OpenPaperLab]);
+        assert_eq!(f.focus, Focus::Floating, "PaperLab comes forward; the paper floats again");
+        f.tick(11.0);
+        f.click();
+        assert_eq!(f.items, bubbles::menu(None), "a left click is back to the functions");
+    }
+
+    #[test]
+    fn hidden_for_an_hour_it_draws_nothing_until_then_or_until_the_shortcut() {
+        use rune::{Env, Runtime};
+        let mut rt = Runtime::new(paper_at(10.0), view, SIZE, Env { system_dark: false, scale: 2.0 });
+        rt.update(|s, _| {
+            s.right_click();
+            assert_eq!(s.pick(Bubble::Hide), vec![]);
+        });
+        rt.frame(1.0 / 60.0);
+        assert!(rt.find("paper").is_none(), "nothing to see or click");
+        rt.update(|s, _| s.tick(10.0 + HIDE_FOR - 1.0));
+        rt.frame(1.0 / 60.0);
+        assert!(rt.find("paper").is_none(), "not yet");
+        rt.update(|s, _| s.tick(10.0 + HIDE_FOR));
+        rt.frame(1.0 / 60.0);
+        assert!(rt.find("paper").is_some(), "back after the hour");
+        rt.update(|s, _| {
+            s.right_click();
+            s.pick(Bubble::Hide);
+            s.unhide();
+        });
+        rt.frame(1.0 / 60.0);
+        assert!(rt.find("paper").is_some(), "the shortcut brings it back at once");
     }
 
     #[test]

@@ -1,8 +1,9 @@
 //! The bubble menu (M79): a click on the floating paper fans PaperLab's functions out around it in a crescent, on the
 //! side of the screen with room. They pop out one after another with a little overshoot and fold back faster than
 //! they came, so the eye follows them but nobody waits. When the clipboard holds a DOI, an arXiv ID or a link, a
-//! first, blue bubble offers to add that paper in one click. This file is which bubbles there are, where they go and
-//! how they look; float.rs decides when they show and what a pick does.
+//! first, blue bubble offers to add that paper in one click. A right-click brings out the paper's own two: open
+//! PaperLab, or hide the paper for an hour. This file is which bubbles there are, where they go and how they look;
+//! float.rs decides when they show and carries out a pick.
 
 use rune::tok;
 use rune::{Color, El, row, text};
@@ -16,14 +17,28 @@ pub enum Bubble {
     /// Look up and add the paper the clipboard names: an `Input::Doi` or `Input::Arxiv`.
     Copied(Input),
     Mode(Mode),
+    /// The right-click pair.
+    OpenPaperLab,
+    Hide,
+}
+
+/// What picking a bubble does.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pick {
+    /// Open the panel in this mode, with this typed in (the copied paper's identifier, to look up in Find).
+    Panel(Mode, Option<String>),
+    OpenPaperLab,
+    /// Hide the floating paper for a while.
+    Hide,
 }
 
 impl Bubble {
-    /// The panel it opens: its mode, and what it types in (the copied paper's identifier, to look up in Find).
-    pub fn opens(&self) -> (Mode, Option<String>) {
+    pub fn pick(&self) -> Pick {
         match self {
-            Bubble::Mode(mode) => (*mode, None),
-            Bubble::Copied(input) => (Mode::Find, input.lookup().map(str::to_owned)),
+            Bubble::Mode(mode) => Pick::Panel(*mode, None),
+            Bubble::Copied(input) => Pick::Panel(Mode::Find, input.lookup().map(str::to_owned)),
+            Bubble::OpenPaperLab => Pick::OpenPaperLab,
+            Bubble::Hide => Pick::Hide,
         }
     }
 
@@ -32,8 +47,15 @@ impl Bubble {
             Bubble::Mode(mode) => crate::view::pill_label(*mode, waiting),
             Bubble::Copied(Input::Arxiv(_)) => "Add copied arXiv".to_owned(),
             Bubble::Copied(_) => "Add copied DOI".to_owned(),
+            Bubble::OpenPaperLab => "Open PaperLab".to_owned(),
+            Bubble::Hide => "Hide for an hour".to_owned(),
         }
     }
+}
+
+/// The right-click bubbles: the paper's own actions.
+pub fn paper_menu() -> Vec<Bubble> {
+    vec![Bubble::OpenPaperLab, Bubble::Hide]
 }
 
 /// The most bubbles there can be: the modes and the clipboard's paper.
@@ -100,7 +122,7 @@ pub fn pill(i: usize, bubble: &Bubble, waiting: usize, dark: bool, k: f32) -> El
     let t = tok::theme(dark);
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
     let (fill, ink, hover) = match bubble {
-        Bubble::Mode(_) => (t.card.alpha(0.97), blue, blue),
+        Bubble::Mode(_) | Bubble::OpenPaperLab | Bubble::Hide => (t.card.alpha(0.97), blue, blue),
         Bubble::Copied(_) => (blue, Color::WHITE, Color::WHITE.alpha(0.18)),
     };
     let label = bubble.label(waiting);
@@ -181,8 +203,9 @@ mod tests {
         let doi = Input::Doi("10.1234/x".into());
         let with = menu(Some(doi.clone()));
         assert_eq!((with.len(), &with[0]), (MAX, &Bubble::Copied(doi)));
-        assert_eq!(with[0].opens(), (Mode::Find, Some("10.1234/x".to_owned())));
-        assert_eq!(with[1].opens(), (Mode::Find, None));
+        assert_eq!(with[0].pick(), Pick::Panel(Mode::Find, Some("10.1234/x".to_owned())));
+        assert_eq!(with[1].pick(), Pick::Panel(Mode::Find, None));
+        assert_eq!(paper_menu().iter().map(Bubble::pick).collect::<Vec<_>>(), [Pick::OpenPaperLab, Pick::Hide]);
         assert_eq!(with[0].label(0), "Add copied DOI");
         assert_eq!(Bubble::Copied(Input::Arxiv("1706.03762".into())).label(0), "Add copied arXiv");
     }
