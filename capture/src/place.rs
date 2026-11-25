@@ -69,6 +69,35 @@ pub fn panel_spot(page: Rect, display: Rect) -> (f32, f32) {
     (x, y)
 }
 
+/// A display's edge the page can tuck into.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Edge {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+/// The edge of `display` the page (`page`, a rect) was left against: within `snap` points of it, the nearest one.
+pub fn edge_near(page: Rect, display: Rect, snap: f32) -> Option<Edge> {
+    let [x, y, w, h] = page;
+    let [dx, dy, dw, dh] = display;
+    let gaps = [(Edge::Left, x - dx), (Edge::Right, dx + dw - (x + w)), (Edge::Top, y - dy), (Edge::Bottom, dy + dh - (y + h))];
+    gaps.into_iter().filter(|&(_, gap)| gap <= snap).min_by(|a, b| a.1.total_cmp(&b.1)).map(|(edge, _)| edge)
+}
+
+/// Where a page centred at `centre`, `half` its size each way, sits tucked into `edge` of `display`: all of it past
+/// the edge but a `tab` points wide strip.
+pub fn tucked(centre: (f32, f32), half: (f32, f32), edge: Edge, display: Rect, tab: f32) -> (f32, f32) {
+    let [dx, dy, dw, dh] = display;
+    match edge {
+        Edge::Left => (dx - half.0 + tab, centre.1),
+        Edge::Right => (dx + dw + half.0 - tab, centre.1),
+        Edge::Top => (centre.0, dy - half.1 + tab),
+        Edge::Bottom => (centre.0, dy + dh + half.1 - tab),
+    }
+}
+
 /// The least the panel is tall while it waits for a drop (its field, mode bar and one line).
 const DROP_HEIGHT: f32 = 120.0;
 
@@ -132,6 +161,20 @@ mod tests {
         let bubbles = [[1100.0, 300.0, 132.0, 34.0], [1150.0, 600.0, 132.0, 34.0]];
         let [x, y, w, h] = frame(&[halo, bubbles[0], bubbles[1]], LAPTOP);
         assert_eq!((x, y, x + w, y + h), (1100.0, 300.0, 1440.0, 634.0));
+    }
+
+    #[test]
+    fn a_page_left_against_an_edge_tucks_into_it_leaving_a_tab() {
+        let at_right = [1440.0 - 44.0 - 3.0, 400.0, 44.0, 56.0];
+        assert_eq!(edge_near(at_right, LAPTOP, 24.0), Some(Edge::Right));
+        assert_eq!(edge_near([700.0, 400.0, 44.0, 56.0], LAPTOP, 24.0), None, "mid-screen: no edge");
+        assert_eq!(edge_near([2.0, 900.0 - 56.0 - 10.0, 44.0, 56.0], LAPTOP, 24.0), Some(Edge::Left), "a corner: the nearer edge");
+        let (x, y) = tucked((1418.0, 428.0), HALF, Edge::Right, LAPTOP, 10.0);
+        assert_eq!((x - HALF.0, y), (1440.0 - 10.0, 428.0), "only a 10 pt strip left on screen");
+        let (x, _) = tucked((1500.0, 300.0), HALF, Edge::Left, MONITOR, 10.0);
+        assert_eq!(x + HALF.0, 1440.0 + 10.0, "the monitor's own left edge");
+        let (_, y) = tucked((600.0, 30.0), HALF, Edge::Top, LAPTOP, 10.0);
+        assert_eq!(y + HALF.1, 10.0);
     }
 
     #[test]

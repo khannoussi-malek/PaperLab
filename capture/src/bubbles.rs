@@ -106,7 +106,7 @@ pub fn progress(since: f64, i: usize, n: usize, open: bool, from: f32) -> f32 {
 }
 
 /// Overshoots about 8% and comes back: the pop.
-fn back_out(x: f64) -> f64 {
+pub(crate) fn back_out(x: f64) -> f64 {
     const C1: f64 = 1.4;
     let x = x - 1.0;
     1.0 + (C1 + 1.0) * x * x * x + C1 * x * x

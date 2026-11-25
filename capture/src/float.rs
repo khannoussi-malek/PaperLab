@@ -2,7 +2,8 @@
 //! idle and can be dragged anywhere, onto any display and right up to its edges (place.rs). A click fans PaperLab's
 //! functions out around it as bubbles (bubbles.rs); picking one opens the Quick Capture panel beside it in that mode.
 //! While the bubbles or the panel are up the page holds still, a little bigger, so the eye can rest on it. Closing the
-//! panel any way lets it float again.
+//! panel any way lets it float again. Left against a screen's edge it tucks into it, a tab and a grip showing, and
+//! slides back out when pointed at, needed, or brought a file.
 //!
 //! `Float` decides (`click`, `pick`, `dropped`, `tick` return what the app should do, as `Act`s); `tell` does it.
 
@@ -15,11 +16,18 @@ use crate::bubbles::{self, Bubble, PILL, Pick};
 use crate::input::Input;
 use crate::mode::Mode;
 use crate::panel::Event;
-use crate::place::{self, Rect};
+use crate::place::{self, Edge, Rect};
 
 /// How far the glow (and the Inbox badge) reaches from the page's centre: the overlay's size while the bubbles are in.
 /// Only the page and the bubbles take clicks; the clear rest passes them to the app below.
 const HALO: f32 = 70.0;
+/// Tucked into an edge: the strip of page left showing, how close to an edge a release tucks it, how long the slide
+/// takes, how long it waits after the pointer leaves before sliding in, and how near the tab counts as pointing at it.
+const TAB: f32 = 10.0;
+const SNAP: f32 = 24.0;
+const TUCK_SECONDS: f64 = 0.35;
+const TUCK_DELAY: f64 = 0.8;
+const PEEK_NEAR: f32 = 8.0;
 /// How often it asks macOS for the displays again (a monitor plugged in or out; Rune doesn't say).
 const DISPLAYS_EVERY: f64 = 2.0;
 /// The page while idle, and while its panel is open.
@@ -76,6 +84,13 @@ pub struct Float {
     displays_at: f64,
     /// Where the overlay is: what it draws, cut to the page's display (`frame`).
     placed: Rect,
+    /// The edge it's tucked into (None: free), whether it's sliding in (or out), when that began and from how far in
+    /// (0 out, 1 tucked), and when it last had a reason to be out.
+    tucked: Option<Edge>,
+    tuck_in: bool,
+    tuck_since: f64,
+    tuck_from: f32,
+    out_wanted_at: f64,
     /// The page's centre at the press, while a drag is under way.
     grab: (f32, f32),
     /// The pointer at the press, as AppKit has it (bottom-left points), until the release.
@@ -119,7 +134,8 @@ impl Float {
         let page = place::start(&displays);
         let mut float = Float {
             me, handle: None, page, displays, read_displays: crate::displays::read, displays_at: 0.0,
-            placed: [0.0; 4], grab: page, pressed_at: None, read_pointer: crate::displays::pointer,
+            placed: [0.0; 4], tucked: None, tuck_in: false, tuck_since: f64::NEG_INFINITY, tuck_from: 0.0,
+            out_wanted_at: 0.0, grab: page, pressed_at: None, read_pointer: crate::displays::pointer,
             dragging: false, t: 0.0, focus: Focus::Floating,
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
             menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, badge: 0,
@@ -147,6 +163,53 @@ impl Float {
         [self.page.0 - size.0 / 2.0, self.page.1 - size.1 / 2.0, size.0, size.1]
     }
 
+    /// How far into its edge the page is: 0 out (all on screen) to 1 tucked. Sliding in eases; sliding out overshoots
+    /// a touch and settles, so it pops back.
+    fn tuckedness(&self) -> f32 {
+        let k = ((self.t - self.tuck_since) / TUCK_SECONDS).clamp(0.0, 1.0);
+        let (target, curve) = if self.tuck_in { (1.0, ease(k)) } else { (0.0, bubbles::back_out(k)) };
+        self.tuck_from + (target - self.tuck_from) * curve as f32
+    }
+
+    /// Slide in or out, from wherever a half-finished slide is.
+    fn set_tuck(&mut self, tuck_in: bool) {
+        if tuck_in != self.tuck_in {
+            (self.tuck_from, self.tuck_in, self.tuck_since) = (self.tuckedness(), tuck_in, self.t);
+        }
+    }
+
+    /// The page's centre as drawn: slid toward its edge as far as it's tucked.
+    fn drawn(&self) -> (f32, f32) {
+        let Some(edge) = self.tucked else { return self.page };
+        let to = place::tucked(self.page, (SMALL.0 / 2.0, SMALL.1 / 2.0), edge, self.display(), TAB);
+        let k = self.tuckedness();
+        (self.page.0 + (to.0 - self.page.0) * k, self.page.1 + (to.1 - self.page.1) * k)
+    }
+
+    /// The page's rect as drawn, at `size`.
+    fn drawn_rect(&self, size: (f32, f32)) -> Rect {
+        let (x, y) = self.drawn();
+        [x - size.0 / 2.0, y - size.1 / 2.0, size.0, size.1]
+    }
+
+    /// Tucked: out while pointed at, open, dragged or brought a file; back in a moment after the last of those.
+    fn tuck_tick(&mut self) {
+        if self.tucked.is_none() {
+            return;
+        }
+        let pointed = self.pointer().is_some_and(|p| near(self.drawn_rect(SMALL), p, PEEK_NEAR));
+        if pointed || self.focus != Focus::Floating || self.dragging || self.drag_files == Some(true) {
+            self.out_wanted_at = self.t;
+        }
+        self.set_tuck(self.t - self.out_wanted_at >= TUCK_DELAY);
+    }
+
+    /// A drag ended: against an edge, the page tucks into it (once the pointer has left it); elsewhere it's free.
+    fn snap(&mut self) {
+        self.tucked = place::edge_near(self.page_rect(BIG), self.display(), SNAP);
+        (self.tuck_in, self.tuck_from, self.tuck_since, self.out_wanted_at) = (false, 0.0, self.t, self.t);
+    }
+
     /// Each bubble's top-left, in global points: the crescent on the page's display.
     fn spots(&self) -> Vec<(f32, f32)> {
         let [dx, dy, dw, dh] = self.display();
@@ -156,7 +219,8 @@ impl Float {
 
     /// What the overlay must hold: the page's glow, and the bubbles while any is out, cut to its display.
     fn frame(&self) -> Rect {
-        let glow = [self.page.0 - HALO, self.page.1 - HALO, 2.0 * HALO, 2.0 * HALO];
+        let (x, y) = self.drawn();
+        let glow = [x - HALO, y - HALO, 2.0 * HALO, 2.0 * HALO];
         let out = self.focus == Focus::Menu || self.bubbles_out().iter().any(|&k| k > 0.0);
         let pills = self.spots().into_iter().filter(|_| out).map(|(x, y)| [x, y, PILL.0, PILL.1]);
         place::frame(&std::iter::once(glow).chain(pills).collect::<Vec<_>>(), self.display())
@@ -337,11 +401,10 @@ impl Float {
         (self.read_pointer)().map(|(x, y)| (x as f32, (main_height - y) as f32))
     }
 
-    /// `at` is on the page, or near enough to it (a drop is aimed less carefully than a click).
+    /// `at` is on the page as drawn (its tab, when tucked), or near enough to it: a drop is aimed less carefully than
+    /// a click.
     fn over_page(&self, at: (f32, f32)) -> bool {
-        const NEAR: f32 = 16.0;
-        let [x, y, w, h] = self.page_rect(BIG);
-        at.0 >= x - NEAR && at.0 <= x + w + NEAR && at.1 >= y - NEAR && at.1 <= y + h + NEAR
+        near(self.drawn_rect(BIG), at, 16.0)
     }
 
     /// The pointer came onto a bubble or left it.
@@ -364,6 +427,7 @@ impl Float {
         if self.focus == Focus::Menu && !self.hovered && self.t - self.touched >= MENU_IDLE {
             self.focus_on(Focus::Floating);
         }
+        self.tuck_tick();
         self.place_overlay(); // the bubbles came out or finished folding: the overlay grows or shrinks to them
     }
 
@@ -383,6 +447,16 @@ impl Float {
                 Act::Take(event) => me.update(move |s, _| s.dispatch(event)),
             }
         }
+    }
+
+    /// The press ends: a click if it barely moved; a drag ends against an edge or not (`snap`).
+    fn release(&mut self, cancelled: bool) -> Vec<Act> {
+        let (dragged, clicked) = (self.dragging, !self.dragging && !cancelled);
+        (self.dragging, self.pressed_at) = (false, None);
+        if dragged {
+            self.snap();
+        }
+        if clicked { self.click() } else { vec![] }
     }
 
     fn grab_page(&mut self) {
@@ -405,6 +479,7 @@ impl Float {
     fn drag_to(&mut self, travel: (f32, f32)) {
         if self.dragging || travel.0.hypot(travel.1) >= CLICK_SLOP {
             (self.dragging, self.touched) = (true, self.t); // moving the page is using the bubbles
+            self.tucked = None; // taken off its edge; a release there tucks it again
             let to = (self.grab.0 + travel.0, self.grab.1 + travel.1);
             self.page = place::keep_page(to, (BIG.0 / 2.0, BIG.1 / 2.0), &self.displays);
             self.place_overlay();
@@ -420,13 +495,7 @@ impl Float {
                 let travel = self.travel((d.dx, d.dy));
                 self.drag_to(travel);
             }
-            Phase::Up => {
-                let clicked = !self.dragging && !d.cancelled();
-                (self.dragging, self.pressed_at) = (false, None);
-                if clicked {
-                    return self.click();
-                }
-            }
+            Phase::Up => return self.release(d.cancelled()),
         }
         vec![]
     }
@@ -473,9 +542,11 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let open = s.openness();
     let size = (SMALL.0 + (BIG.0 - SMALL.0) * open, SMALL.1 + (BIG.1 - SMALL.1) * open);
     // Floats while idle; held still while dragged or open (the user is looking at it).
-    let bob = if still || s.dragging { 0.0 } else { (s.t / 3.2 * std::f64::consts::TAU).sin() as f32 * (1.0 - open) };
+    let tucked = s.tuckedness();
+    let calm = still || s.dragging || (s.tucked.is_some() && tucked > 0.0);
+    let bob = if calm { 0.0 } else { (s.t / 3.2 * std::f64::consts::TAU).sin() as f32 * (1.0 - open) };
     // the overlay's own points: the page's place on screen, less where the overlay is
-    let [px, py, pw, ph] = s.page_rect(size);
+    let [px, py, pw, ph] = s.drawn_rect(size);
     let (px, py) = (px - s.placed[0], py - s.placed[1] + 3.0 * bob);
     let (cx_, cy_) = (px + pw / 2.0, py + ph / 2.0);
     let halo = 46.0 + 18.0 * open;
@@ -485,7 +556,37 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
             .radial_gradient([halo, halo], halo, [(0.0, blue.alpha(glow)), (1.0, blue.alpha(0.0))]))
         .children(menu(s, (cx_, cy_), still, dark))
         .child(paper((px, py), (pw, ph), bob, dark))
-        .child(badge(s.badge, (px + pw, py), blue).scale(if still { 1.0 } else { s.badge_scale() }))
+        .children(grip(s, (px, py, pw, ph), tucked, blue))
+        // the badge stays on screen when the page's corner is tucked away
+        .child(badge(s.badge, (corner(px + pw, s.placed[2]), corner(py, s.placed[3])), blue)
+            .scale(if still { 1.0 } else { s.badge_scale() }))
+}
+
+/// A badge's centre kept inside an overlay this long (its own half and a point to spare).
+fn corner(at: f32, length: f32) -> f32 {
+    at.clamp(10.0, (length - 10.0).max(10.0))
+}
+
+/// `at` within `margin` points of `rect`.
+fn near(rect: Rect, at: (f32, f32), margin: f32) -> bool {
+    let [x, y, w, h] = rect;
+    at.0 >= x - margin && at.0 <= x + w + margin && at.1 >= y - margin && at.1 <= y + h + margin
+}
+
+/// The grip on a tucked page's tab: a short blue bar along the strip still showing, fading in as it tucks.
+fn grip(s: &Float, page: (f32, f32, f32, f32), tucked: f32, blue: Color) -> Option<El> {
+    let edge = s.tucked.filter(|_| tucked > 0.05)?;
+    let (px, py, pw, ph) = page;
+    let [dx, dy, dw, dh] = s.display();
+    let (ox, oy) = (s.placed[0], s.placed[1]);
+    let along = |a: f32, b: f32| a.max(b); // the display edge, in the overlay's points
+    let (x, y, w, h) = match edge {
+        Edge::Left => (along(px, dx - ox) + TAB / 2.0 - 1.5, py + ph / 2.0 - 11.0, 3.0, 22.0),
+        Edge::Right => ((px + pw).min(dx + dw - ox) - TAB / 2.0 - 1.5, py + ph / 2.0 - 11.0, 3.0, 22.0),
+        Edge::Top => (px + pw / 2.0 - 11.0, along(py, dy - oy) + TAB / 2.0 - 1.5, 22.0, 3.0),
+        Edge::Bottom => (px + pw / 2.0 - 11.0, (py + ph).min(dy + dh - oy) - TAB / 2.0 - 1.5, 22.0, 3.0),
+    };
+    Some(el().key("grip").absolute(x, y).size(w, h).radius(1.5).fill(blue).opacity(tucked.clamp(0.0, 1.0)))
 }
 
 /// The bubbles, flying out from the page's centre (`centre`, in the overlay) to their spots, or back. Only bubbles
@@ -842,6 +943,69 @@ mod tests {
         own.dragging = true; // the page itself being moved
         set_sense(true, 8);
         assert_eq!(own.watch_drag(), vec![], "its own drag isn't a file drop");
+    }
+
+    /// A paper just let go against the laptop's right edge, the pointer gone, its clock at `t`.
+    fn left_at_the_right_edge(t: f64) -> Float {
+        let mut f = paper_at(t);
+        f.page = place::keep_page((9000.0, 400.0), (BIG.0 / 2.0, BIG.1 / 2.0), &f.displays);
+        f.dragging = true;
+        assert_eq!(f.release(false), vec![], "a drag's end isn't a click");
+        f
+    }
+
+    /// How much of the drawn page is on the laptop, across.
+    fn showing(f: &Float) -> f32 {
+        let [x, _, w, _] = f.drawn_rect(SMALL);
+        (x + w).min(1440.0) - x.max(0.0)
+    }
+
+    #[test]
+    fn let_go_against_an_edge_it_tucks_in_once_the_pointer_has_left_leaving_a_tab() {
+        let mut f = left_at_the_right_edge(10.0);
+        assert_eq!(f.tucked, Some(Edge::Right));
+        f.tick(10.0 + TUCK_DELAY / 2.0);
+        assert_eq!(showing(&f), SMALL.0, "a moment first: all of it still showing");
+        f.tick(10.0 + TUCK_DELAY); // a frame each refresh: the slide starts as the moment is up
+        f.tick(10.0 + TUCK_DELAY + TUCK_SECONDS / 2.0);
+        assert!(showing(&f) < SMALL.0 && showing(&f) > TAB, "sliding in: {}", showing(&f));
+        f.tick(10.0 + TUCK_DELAY + TUCK_SECONDS + 0.1);
+        assert!((showing(&f) - TAB).abs() < 0.01, "tucked: just the tab, {}", showing(&f));
+        assert!(f.placed[0] + f.placed[2] <= 1440.0, "its overlay stays on the screen");
+    }
+
+    #[test]
+    fn pointing_at_the_tab_or_opening_the_bubbles_slides_it_out_with_a_little_overshoot() {
+        let mut f = left_at_the_right_edge(10.0);
+        f.tick(10.0 + TUCK_DELAY);
+        f.tick(12.0);
+        f.read_pointer = || Some((1436.0, 900.0 - 400.0)); // on the tab
+        f.tick(12.1);
+        f.tick(12.1 + TUCK_SECONDS * 0.6);
+        assert!(f.tuckedness() < 0.0, "past out, a touch: the bounce ({})", f.tuckedness());
+        f.tick(12.1 + TUCK_SECONDS + 0.01);
+        assert_eq!(showing(&f), SMALL.0, "all of it out");
+        f.read_pointer = || None; // the pointer left
+        f.tick(13.0);
+        f.tick(13.0 + TUCK_DELAY);
+        f.tick(13.0 + TUCK_DELAY + TUCK_SECONDS);
+        assert!((showing(&f) - TAB).abs() < 0.01, "and back in");
+        f.click();
+        f.tick(14.0);
+        f.tick(14.0 + TUCK_SECONDS + 0.01);
+        assert_eq!((f.focus, showing(&f)), (Focus::Menu, SMALL.0), "bubbles out: so is the page");
+    }
+
+    #[test]
+    fn dragged_away_from_the_edge_it_is_free_and_let_go_mid_screen_it_stays_out() {
+        let mut f = left_at_the_right_edge(10.0);
+        f.grab_page();
+        f.drag_to((-400.0, 0.0));
+        assert_eq!(f.tucked, None);
+        f.release(false);
+        assert_eq!(f.tucked, None, "mid-screen: free");
+        f.tick(20.0);
+        assert_eq!(f.drawn(), f.page);
     }
 
     #[test]
