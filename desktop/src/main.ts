@@ -250,8 +250,10 @@ function openLink(url: string | undefined) {
   openPendingLink()
 }
 
-type Switch = 'keepRunning' | 'updatesEnabled' | 'captureEnabled' | 'captureAnimation'
-const SWITCHES: readonly unknown[] = ['keepRunning', 'updatesEnabled', 'captureEnabled', 'captureAnimation']
+type Switch = 'keepRunning' | 'updatesEnabled' | 'captureEnabled' | 'captureAnimation' | 'captureFloat'
+const SWITCHES: readonly unknown[] = ['keepRunning', 'updatesEnabled', 'captureEnabled', 'captureAnimation', 'captureFloat']
+/** The helper reads these once, at start: changing one restarts it. */
+const CAPTURE_LOOK: readonly Switch[] = ['captureAnimation', 'captureFloat']
 const isSwitch = (name: unknown): name is Switch => SWITCHES.includes(name)
 
 /** The tray item: starts the helper again if it stopped (its stdin keeps the line until it reads it), then opens it. */
@@ -271,7 +273,7 @@ function startCaptureIfOn() {
     bin,
     port: settings.port,
     shortcut: settings.captureShortcut,
-    animation: settings.captureAnimation,
+    look: { animation: settings.captureAnimation, float: settings.captureFloat },
     log,
   })
   capture.start()
@@ -322,9 +324,8 @@ function handleSwitches() {
       if (value) startCaptureIfOn()
       else capture?.stop()
     }
-    if (name === 'captureAnimation' && capture !== null) {
-      // The helper reads it once, at start: a new one starts with the new setting once the old one has let go of
-      // the global shortcut.
+    if (CAPTURE_LOOK.includes(name) && capture !== null) {
+      // A new helper starts with the new setting once the old one has let go of the global shortcut.
       capture.stop(() => {
         capture = null
         startCaptureIfOn()

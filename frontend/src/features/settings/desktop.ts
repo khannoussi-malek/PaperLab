@@ -61,6 +61,19 @@ export function captureBridge(scope: object): CaptureBridge | null {
   return isComplete ? (candidate as CaptureBridge) : null
 }
 
+/** The floating paper switch (M79): a small page over every app that opens Quick Capture beside it. */
+export type CaptureFloatBridge = {
+  getCaptureFloat(): Promise<boolean>
+  setCaptureFloat(value: boolean): Promise<void>
+}
+
+/** The floating paper switch on `scope`, or null when either method is missing (an older app, another OS, a browser). */
+export function captureFloatBridge(scope: object): CaptureFloatBridge | null {
+  const candidate = (scope as { paperlabDesktop?: Partial<CaptureFloatBridge> }).paperlabDesktop
+  const isComplete = typeof candidate?.getCaptureFloat === 'function' && typeof candidate?.setCaptureFloat === 'function'
+  return isComplete ? (candidate as CaptureFloatBridge) : null
+}
+
 /** Quick Capture's Animation switch: the stars and floating papers behind the panel. */
 export type CaptureAnimationBridge = {
   getCaptureAnimation(): Promise<boolean>

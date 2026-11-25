@@ -22,6 +22,8 @@ export type Settings = {
   captureShortcut: string
   /** The stars and floating papers behind the Quick Capture panel. On by default; Reduce motion stills them anyway. */
   captureAnimation: boolean
+  /** M79: a small page floating over every app that opens Quick Capture beside it. On by default (macOS). */
+  captureFloat: boolean
 }
 
 export const DEFAULTS: Settings = {
@@ -35,6 +37,7 @@ export const DEFAULTS: Settings = {
   captureEnabled: true,
   captureShortcut: 'ctrl+alt+p',
   captureAnimation: true,
+  captureFloat: true,
 }
 
 const isPort = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 65535
@@ -65,6 +68,7 @@ export function parseSettings(text: string): Settings {
     captureEnabled: typeof raw.captureEnabled === 'boolean' ? raw.captureEnabled : DEFAULTS.captureEnabled,
     captureShortcut: isShortcut(raw.captureShortcut) ? raw.captureShortcut : DEFAULTS.captureShortcut,
     captureAnimation: typeof raw.captureAnimation === 'boolean' ? raw.captureAnimation : DEFAULTS.captureAnimation,
+    captureFloat: typeof raw.captureFloat === 'boolean' ? raw.captureFloat : DEFAULTS.captureFloat,
   }
 }
 

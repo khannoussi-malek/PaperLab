@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { captureAnimationBridge, captureBridge, desktopBridge, voiceBridge, type PaperlabDesktop, type VoiceBridge } from './desktop'
+import { captureAnimationBridge, captureBridge, captureFloatBridge, desktopBridge, voiceBridge, type PaperlabDesktop, type VoiceBridge } from './desktop'
 
 const bridge: PaperlabDesktop = {
   getKeepRunning: async () => false,
@@ -61,6 +61,15 @@ describe('captureBridge', () => {
     expect(captureBridge({ paperlabDesktop: both })).toBe(both)
     expect(captureBridge({ paperlabDesktop: { getCaptureEnabled: both.getCaptureEnabled } })).toBeNull()
     expect(captureBridge({})).toBeNull()
+  })
+})
+
+describe('captureFloatBridge', () => {
+  it('needs both methods', () => {
+    const both = { getCaptureFloat: async () => true, setCaptureFloat: async () => {} }
+    expect(captureFloatBridge({ paperlabDesktop: both })).toBe(both)
+    expect(captureFloatBridge({ paperlabDesktop: { getCaptureFloat: both.getCaptureFloat } })).toBeNull()
+    expect(captureFloatBridge({})).toBeNull()
   })
 })
 

@@ -9,13 +9,15 @@ contextBridge.exposeInMainWorld('paperlabDesktop', {
   setKeepRunning: (value: boolean) => ipcRenderer.invoke('paperlab:set', 'keepRunning', value),
   getUpdatesEnabled: () => ipcRenderer.invoke('paperlab:get', 'updatesEnabled'),
   setUpdatesEnabled: (value: boolean) => ipcRenderer.invoke('paperlab:set', 'updatesEnabled', value),
-  // Quick Capture is macOS only: elsewhere its two switches aren't offered.
+  // Quick Capture is macOS only: elsewhere its switches aren't offered.
   ...(process.platform === 'darwin'
     ? {
         getCaptureEnabled: () => ipcRenderer.invoke('paperlab:get', 'captureEnabled'),
         setCaptureEnabled: (value: boolean) => ipcRenderer.invoke('paperlab:set', 'captureEnabled', value),
         getCaptureAnimation: () => ipcRenderer.invoke('paperlab:get', 'captureAnimation'),
         setCaptureAnimation: (value: boolean) => ipcRenderer.invoke('paperlab:set', 'captureAnimation', value),
+        getCaptureFloat: () => ipcRenderer.invoke('paperlab:get', 'captureFloat'),
+        setCaptureFloat: (value: boolean) => ipcRenderer.invoke('paperlab:set', 'captureFloat', value),
       }
     : {}),
   getVoiceEnabled: () => ipcRenderer.invoke('paperlab:voice:get'),

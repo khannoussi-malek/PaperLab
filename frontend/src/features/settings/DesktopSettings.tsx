@@ -4,7 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { captureAnimationBridge, captureBridge, useDesktop, type PaperlabDesktop } from './desktop'
+import { captureAnimationBridge, captureBridge, captureFloatBridge, useDesktop, type PaperlabDesktop } from './desktop'
 
 /** Settings → Desktop app (P5, P8): only inside the desktop app, where window.paperlabDesktop exists. */
 export function DesktopSettings() {
@@ -46,6 +46,17 @@ function DesktopSection({ desktop }: { desktop: PaperlabDesktop }) {
         'Press ⌃⌥P (or the shortcut set in settings.json) in any app to find a paper in your library, or add one by DOI, arXiv ID or link. Mac only.',
       read: capture.getCaptureEnabled,
       write: capture.setCaptureEnabled,
+    })
+  }
+  const float = captureFloatBridge(globalThis)
+  if (float !== null) {
+    toggles.push({
+      id: 'floating-paper',
+      label: 'Floating paper',
+      help:
+        'A small page floats over every app. Click it to find, cite or add a paper, ask a workspace, or check whether an idea has been done. Drag it anywhere.',
+      read: float.getCaptureFloat,
+      write: float.setCaptureFloat,
     })
   }
   const animation = captureAnimationBridge(globalThis)

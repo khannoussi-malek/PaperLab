@@ -35,8 +35,10 @@ const quiet = () => {}
 
 describe('Quick Capture helper', () => {
   it('is started with the API port, its shortcut and commands on stdin', () => {
-    expect(captureArgs(5190, 'ctrl+alt+p')).toEqual(['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin'])
-    expect(captureArgs(5190, 'ctrl+alt+p', false)).toEqual(['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin', '--no-galaxy'])
+    const base = ['--port', '5190', '--shortcut', 'ctrl+alt+p', '--stdin']
+    expect(captureArgs(5190, 'ctrl+alt+p')).toEqual(base)
+    expect(captureArgs(5190, 'ctrl+alt+p', { animation: false })).toEqual([...base, '--no-galaxy'])
+    expect(captureArgs(5190, 'ctrl+alt+p', { float: true })).toEqual([...base, '--float'])
     expect(captureBinary('/Res')).toBe('/Res/capture/paperlab-capture')
     expect(shortcutLabel('ctrl+alt+p')).toBe('⌃⌥P')
     expect(shortcutLabel('cmd+shift+k')).toBe('⌘⇧K')
