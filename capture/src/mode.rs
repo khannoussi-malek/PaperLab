@@ -9,6 +9,8 @@ pub enum Mode {
     Cite,
     /// Ask a workspace a question; the answer streams in, with the papers it cites.
     Ask,
+    /// Find a paper, then write a note on it.
+    Note,
     /// Paste an idea: the closest papers in the library.
     Novelty,
     /// What's new: free PDFs found for saved papers, saved searches with new results.
@@ -16,7 +18,7 @@ pub enum Mode {
 }
 
 /// The mode bar, left to right; Tab moves along it and ⌘1, ⌘2… jump to a place in it.
-pub const MODES: [Mode; 5] = [Mode::Find, Mode::Cite, Mode::Ask, Mode::Novelty, Mode::Inbox];
+pub const MODES: [Mode; 6] = [Mode::Find, Mode::Cite, Mode::Ask, Mode::Note, Mode::Novelty, Mode::Inbox];
 
 impl Mode {
     pub fn label(self) -> &'static str {
@@ -24,6 +26,7 @@ impl Mode {
             Mode::Find => "Find",
             Mode::Cite => "Cite",
             Mode::Ask => "Ask",
+            Mode::Note => "Note",
             Mode::Novelty => "Done before?",
             Mode::Inbox => "Inbox",
         }
@@ -35,6 +38,7 @@ impl Mode {
             Mode::Find => "Find a paper, or paste a DOI, arXiv ID or link",
             Mode::Cite => "Find the paper to cite: ↵ copies APA, ⌘↵ BibTeX",
             Mode::Ask => "Ask a workspace a question, then ↵",
+            Mode::Note => "Find the paper to write on, then ↵",
             Mode::Novelty => "Paste an idea or an abstract, then ↵: has it been done?",
             Mode::Inbox => "What's new since you last looked; ↵ opens it",
         }

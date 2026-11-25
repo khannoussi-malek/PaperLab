@@ -70,7 +70,7 @@ fn header(app: &App, ink: &Ink) -> El {
 
 fn field(app: &App, ink: &Ink) -> El {
     text_input(&app.query, type_::BODY.lh(26.0)).key("query").single_line().grow(1.0)
-        .color(ink.text).placeholder(app.panel.mode.placeholder(), ink.muted)
+        .color(ink.text).placeholder(app.panel.placeholder(), ink.muted)
         .on_edit(|s: &mut App| &mut s.query)
         .on_input_change(|s: &mut App, _| { let q = s.query.text.clone(); s.dispatch(Event::Query(q)); })
         .on_input_key(|s: &mut App, ev: &KeyEvent, _: &mut Tx| key(s, ev))
