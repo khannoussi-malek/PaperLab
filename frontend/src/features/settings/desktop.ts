@@ -47,19 +47,21 @@ export function useVoiceBridge(): VoiceBridge | null {
   return voiceBridge(globalThis)
 }
 
+/** The bridge on `scope` when it has every one of `methods`, else null: an older desktop app, another OS, a browser. */
+function bridgeWith<T>(scope: object, methods: readonly (keyof T & string)[]): T | null {
+  const candidate = (scope as { paperlabDesktop?: Record<string, unknown> }).paperlabDesktop
+  const complete = candidate !== undefined && methods.every((method) => typeof candidate[method] === 'function')
+  return complete ? (candidate as T) : null
+}
+
 /** Quick Capture's switch (M65), on the same bridge in a desktop app that has the helper. */
 export type CaptureBridge = {
   getCaptureEnabled(): Promise<boolean>
   setCaptureEnabled(value: boolean): Promise<void>
 }
 
-/** The Quick Capture switch on `scope`, or null when either method is missing (an older desktop app, or a browser). */
-export function captureBridge(scope: object): CaptureBridge | null {
-  const candidate = (scope as { paperlabDesktop?: Partial<CaptureBridge> }).paperlabDesktop
-  const isComplete =
-    typeof candidate?.getCaptureEnabled === 'function' && typeof candidate?.setCaptureEnabled === 'function'
-  return isComplete ? (candidate as CaptureBridge) : null
-}
+/** The Quick Capture switch on `scope`, or null. */
+export const captureBridge = (scope: object) => bridgeWith<CaptureBridge>(scope, ['getCaptureEnabled', 'setCaptureEnabled'])
 
 /** The floating paper switch (M79): a small page over every app that opens Quick Capture beside it. */
 export type CaptureFloatBridge = {
@@ -67,12 +69,9 @@ export type CaptureFloatBridge = {
   setCaptureFloat(value: boolean): Promise<void>
 }
 
-/** The floating paper switch on `scope`, or null when either method is missing (an older app, another OS, a browser). */
-export function captureFloatBridge(scope: object): CaptureFloatBridge | null {
-  const candidate = (scope as { paperlabDesktop?: Partial<CaptureFloatBridge> }).paperlabDesktop
-  const isComplete = typeof candidate?.getCaptureFloat === 'function' && typeof candidate?.setCaptureFloat === 'function'
-  return isComplete ? (candidate as CaptureFloatBridge) : null
-}
+/** The floating paper switch on `scope`, or null. */
+export const captureFloatBridge = (scope: object) =>
+  bridgeWith<CaptureFloatBridge>(scope, ['getCaptureFloat', 'setCaptureFloat'])
 
 /** Quick Capture's Animation switch: the stars and floating papers behind the panel. */
 export type CaptureAnimationBridge = {
@@ -80,10 +79,6 @@ export type CaptureAnimationBridge = {
   setCaptureAnimation(value: boolean): Promise<void>
 }
 
-/** The Animation switch on `scope`, or null when either method is missing (an older desktop app, or a browser). */
-export function captureAnimationBridge(scope: object): CaptureAnimationBridge | null {
-  const candidate = (scope as { paperlabDesktop?: Partial<CaptureAnimationBridge> }).paperlabDesktop
-  const isComplete =
-    typeof candidate?.getCaptureAnimation === 'function' && typeof candidate?.setCaptureAnimation === 'function'
-  return isComplete ? (candidate as CaptureAnimationBridge) : null
-}
+/** The Animation switch on `scope`, or null. */
+export const captureAnimationBridge = (scope: object) =>
+  bridgeWith<CaptureAnimationBridge>(scope, ['getCaptureAnimation', 'setCaptureAnimation'])

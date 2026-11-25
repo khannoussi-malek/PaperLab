@@ -83,6 +83,18 @@ describe('Quick Capture helper', () => {
     expect(next).toBe(2)
   })
 
+  it('a second stop while the first still waits goes on once, after the exit (two quick switch flips)', () => {
+    const fake = fakeSpawn()
+    const capture = createCapture({ spawn: fake.spawn, bin: '/b', port: 5190, shortcut: 's', log: quiet })
+    capture.start()
+    const went: string[] = []
+    capture.stop(() => went.push('first'))
+    capture.stop(() => went.push('second'))
+    expect(went).toEqual([])
+    fake.children[0].exit(null)
+    expect(went).toEqual(['second'])
+  })
+
   it('can be started again after a stop (the switch turned back on)', () => {
     const fake = fakeSpawn()
     const capture = createCapture({ spawn: fake.spawn, bin: '/b', port: 5190, shortcut: 's', log: quiet })
