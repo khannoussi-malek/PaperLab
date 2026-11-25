@@ -27,6 +27,8 @@ pub const ALL: &[(&str, fn(&mut App))] = &[
         set(s, "attention", p)
     }),
     ("dropped", |s| set(s, "", dropped())),
+    ("note", |s| { let mut p = in_mode(Mode::Note); p.step(Event::Query("retrieval".into())); set(s, "retrieval", p) }),
+    ("note-writing", |s| set(s, NOTE, note_writing())),
     ("inbox", |s| set(s, "", inbox())),
     ("ask", |s| set(s, QUESTION, ask_typed())),
     ("answering", |s| set(s, QUESTION, answer(false))),
@@ -62,6 +64,16 @@ fn library_shown() -> Panel {
 fn in_mode(mode: Mode) -> Panel {
     let mut p = library_shown();
     p.step(Event::Mode(mode));
+    p
+}
+
+const NOTE: &str = "Their retriever is frozen: try fine-tuning it on our corpus";
+
+fn note_writing() -> Panel {
+    let mut p = in_mode(Mode::Note);
+    p.step(Event::Query("retrieval".into()));
+    p.step(Event::Submit);
+    p.step(Event::Query(NOTE.into()));
     p
 }
 

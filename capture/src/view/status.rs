@@ -26,6 +26,9 @@ pub(super) fn line(p: &Panel) -> Option<String> {
         Phase::Searching => Some("Looking through your library for papers close to it…".into()),
         Phase::Close(c) if c.papers.is_empty() => Some(join("Nothing in your library is close.", std::slice::from_ref(&c.note))),
         Phase::Close(c) => (!c.note.is_empty()).then(|| c.note.clone()),
+        Phase::Note(d) => Some(d.error.clone().unwrap_or_else(|| format!("A note on “{}”: ↵ saves it to the paper.", d.title))),
+        Phase::SavingNote(d) => Some(format!("Saving your note on “{}”…", d.title)),
+        Phase::NoteSaved(sentence) => Some(sentence.clone()),
     }
 }
 

@@ -101,6 +101,20 @@ fn a_reference_comes_back_as_its_text_and_an_error_as_its_sentence() {
 }
 
 #[test]
+fn a_note_is_posted_on_its_paper_and_a_refusal_gives_paperlabs_sentence() {
+    let api = fake(|method, path, body| {
+        let sent: Value = serde_json::from_str(body).unwrap_or(Value::Null);
+        match (method, path) {
+            ("POST", "/api/notes") if sent == json!({ "paper_id": "p1", "body": "Read §3" }) => (201, json!({ "id": "n1" })),
+            ("POST", "/api/notes") => (404, json!({ "detail": "Paper p2 does not exist." })),
+            _ => (405, json!({})),
+        }
+    });
+    assert_eq!(api.note("p1", "Read §3"), Ok(()));
+    assert_eq!(api.note("p2", "Read §3"), Err(ApiError::Said("Paper p2 does not exist.".into())));
+}
+
+#[test]
 fn the_closest_papers_read_with_their_labels() {
     let api = fake(|_, _, _| {
         (200, json!({ "papers": [{ "paper_id": "p1", "title": "T", "year": 2020, "label": "very close",

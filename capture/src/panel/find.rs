@@ -23,7 +23,9 @@ impl Panel {
             Phase::NoFreePdf { .. } => vec![Row::SaveWithoutPdf],
             Phase::Failed(_) if !self.reachable => vec![Row::OpenPaperLab],
             Phase::LookingUp(_) | Phase::Adding(_) | Phase::Uploading { .. } | Phase::Failed(_) => vec![],
-            Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) | Phase::Answer(_) => vec![], // other modes' answers
+            // other modes' phases
+            Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) | Phase::Answer(_) => vec![],
+            Phase::Note(_) | Phase::SavingNote(_) | Phase::NoteSaved(_) => vec![],
         }
     }
 

@@ -79,6 +79,11 @@ impl App {
         for effect in self.panel.step(event) {
             self.perform(effect);
         }
+        // The panel owns the text: when it changes it (an answer's question back, a note's field emptied once its
+        // paper is picked), the field follows. Typing leaves them equal, so the caret never jumps.
+        if self.panel.query != self.query.text {
+            self.query = focused(&self.panel.query);
+        }
     }
 
     /// The floating paper's badge: what the Inbox holds.
@@ -115,7 +120,6 @@ impl App {
         if let Some(query) = query {
             self.dispatch(Event::Query(query));
         }
-        self.query = focused(&self.panel.query.clone()); // empty, an Ask answer's question, or `query`
     }
 
     fn perform(&mut self, effect: Effect) {
@@ -150,6 +154,9 @@ impl App {
                 std::thread::sleep(CONFIRM_FOR);
                 Event::CloseNow(seq)
             }),
+            Effect::SaveNote { seq, paper_id, body } => {
+                background(me, move || Event::NoteSaved { seq, result: api.note(&paper_id, &body) });
+            }
             Effect::Cite { seq, paper_id, title, format } => background(me, move || {
                 let result = api.cite(&paper_id, format).and_then(|text| copy(&text));
                 Event::Copied { seq, what: format!("{} of “{title}”", format.label()), result }
@@ -387,12 +394,28 @@ mod tests {
     }
 
     #[test]
+    fn in_note_enter_on_a_paper_empties_the_field_for_the_note() {
+        let mut rt = runtime();
+        command(&mut rt, Key::Command('4'));
+        assert_eq!(rt.state.panel.mode, mode::Mode::Note);
+        rt.paste("graph");
+        rt.frame(1.0 / 60.0);
+        press(&mut rt, Key::Enter);
+        assert_eq!(rt.state.query.text, "", "the field now takes the note");
+        rt.paste("Compare heads");
+        rt.frame(1.0 / 60.0);
+        press(&mut rt, Key::Enter);
+        let note = Effect::SaveNote { seq: 1, paper_id: "b".into(), body: "Compare heads".into() };
+        assert_eq!(rt.state.sent, vec![note]);
+    }
+
+    #[test]
     fn tab_and_command_digits_move_along_the_mode_bar_and_a_pill_click_picks_one() {
         let mut rt = runtime();
         assert!(rt.find("mode-3").is_some(), "a pill per mode");
         press(&mut rt, Key::Tab);
         assert_eq!(rt.state.panel.mode, mode::Mode::Cite);
-        command(&mut rt, Key::Command('4'));
+        command(&mut rt, Key::Command('5'));
         assert_eq!(rt.state.panel.mode, mode::Mode::Novelty);
         let (x, y) = rt.find("mode-0").expect("the Find pill");
         rt.pointer_move(x, y);

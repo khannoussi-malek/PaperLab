@@ -7,11 +7,14 @@ mod cite;
 mod drop;
 mod find;
 mod inbox;
+mod note;
 mod novelty;
 #[cfg(test)]
 mod tests;
 
 pub use ask::{Answer, Writing};
+pub use note::Draft;
+use note::Aside;
 
 use std::path::PathBuf;
 
@@ -41,6 +44,10 @@ pub enum Phase {
     Close(Closeness),
     /// Ask: an answer being written, or written.
     Answer(Answer),
+    /// Note: one being written on a paper (the field holds it), being saved, saved (the sentence saying where).
+    Note(Draft),
+    SavingNote(Draft),
+    NoteSaved(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +80,7 @@ pub enum Event {
     DropRefused,
     Uploaded { seq: u64, results: Vec<Result<Paper, ApiError>> },
     Inbox(Result<Inbox, ApiError>),
+    NoteSaved { seq: u64, result: Result<(), ApiError> },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -98,6 +106,8 @@ pub enum Effect {
     /// The owner opened a free PDF the re-check found: it leaves the Inbox.
     FoundSeen(String),
     Copy { seq: u64, text: String, what: String },
+    /// Save a note on a whole paper.
+    SaveNote { seq: u64, paper_id: String, body: String },
     Upload { seq: u64, paths: Vec<PathBuf> },
 }
 
@@ -141,6 +151,8 @@ pub struct Panel {
     /// An Ask answer off screen: copied from (the copy replaced it), or set aside when the panel reopened in another
     /// mode. It keeps filling in as it streams, and reopening in Ask brings it back.
     aside: Option<Answer>,
+    /// A note off screen, waiting for Note (see note.rs).
+    note_aside: Option<Aside>,
     /// What a drop of several PDFs came to, shown with the followed paper's progress.
     pub upload_note: Option<String>,
     /// What's new, once listed (the floating paper's badge counts it).
@@ -157,7 +169,7 @@ impl Default for Panel {
     fn default() -> Self {
         Panel {
             mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
-            library_error: None, workspaces: None, last_workspace: None, ask_error: None, aside: None, upload_note: None, inbox: None, inbox_error: None, seq: 0, polling: None, hidden: false,
+            library_error: None, workspaces: None, last_workspace: None, ask_error: None, aside: None, note_aside: None, upload_note: None, inbox: None, inbox_error: None, seq: 0, polling: None, hidden: false,
         }
     }
 }
@@ -173,6 +185,7 @@ impl Panel {
             Mode::Ask => self.ask_rows(),
             Mode::Inbox => self.inbox_rows(),
             Mode::Novelty => self.novelty_rows(),
+            Mode::Note => self.note_rows(),
         }
     }
 
@@ -181,6 +194,7 @@ impl Panel {
             Event::Shown => self.shown(),
             Event::Closed => self.closed(),
             Event::Query(q) if self.mode == Mode::Find => self.find_query(q),
+            Event::Query(q) if self.mode == Mode::Note => self.note_typed(q),
             Event::Query(q) => self.typed(q),
             Event::Up => self.pick_by(-1),
             Event::Down => self.pick_by(1),
@@ -197,6 +211,7 @@ impl Panel {
             Event::DropRefused => self.drop_refused(),
             Event::Uploaded { seq, results } => self.uploaded(seq, results),
             Event::Inbox(result) => self.inbox_arrived(result),
+            Event::NoteSaved { seq, result } => self.note_saved(seq, result),
             Event::Papers(result) => self.papers_arrived(result),
             Event::Looked { seq, result } => self.looked(seq, result),
             Event::AddDone { seq, result } => self.add_done(seq, result),
@@ -207,14 +222,18 @@ impl Panel {
     /// Opened again: a fresh field in the same mode, except that an Ask answer comes back with its question (the user
     /// may have clicked away to paste it, or to wait for it). Opened in another mode, the answer waits aside for Ask.
     fn shown(&mut self) -> Vec<Effect> {
-        // An add or upload still under way stays on screen, so its answer is shown and followed.
+        // An add or upload still under way stays on screen, so its answer is shown and followed; it keeps Find,
+        // whatever mode the panel was opened in. A note waits aside unless the panel opened in Note.
         let in_flight = matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. });
+        if self.mode != Mode::Note {
+            self.set_note_aside();
+        }
         let answer = self.answer_to_keep();
         let mut kept = Panel {
-            // an add or upload in flight keeps Find until it answers, whatever mode the panel was opened in
             mode: if in_flight { Mode::Find } else { self.mode },
             papers: std::mem::take(&mut self.papers), reachable: self.reachable, seq: self.seq,
             workspaces: self.workspaces.take(), last_workspace: self.last_workspace.take(), inbox: self.inbox.take(),
+            note_aside: self.note_aside.take(),
             ..Panel::default()
         };
         match answer {
@@ -224,11 +243,12 @@ impl Panel {
             }
             aside => kept.aside = aside,
         }
-        if in_flight {
+        if in_flight || matches!(self.phase, Phase::Note(_) | Phase::SavingNote(_)) {
             kept.query = std::mem::take(&mut self.query);
             kept.phase = std::mem::replace(&mut self.phase, Phase::Library);
         }
         *self = kept;
+        self.bring_note_back();
         [vec![Effect::FetchPapers], self.entered()].concat()
     }
 
@@ -240,6 +260,7 @@ impl Panel {
             Mode::Ask => self.ask_submit(),
             Mode::Inbox => self.inbox_submit(),
             Mode::Novelty => self.novelty_submit(),
+            Mode::Note => self.note_submit(),
         }
     }
 
@@ -248,8 +269,10 @@ impl Panel {
         if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
             return vec![]; // an add or upload in flight keeps Find until it answers
         }
+        self.set_note_aside();
         (self.mode, self.phase, self.picked, self.polling, self.aside) = (mode, Phase::Library, 0, None, None);
         self.upload_note = None;
+        self.bring_note_back();
         self.entered()
     }
 
@@ -258,7 +281,7 @@ impl Panel {
         match self.mode {
             Mode::Ask => vec![Effect::FetchWorkspaces],
             Mode::Inbox => vec![Effect::FetchInbox],
-            Mode::Find | Mode::Cite | Mode::Novelty => vec![],
+            Mode::Find | Mode::Cite | Mode::Novelty | Mode::Note => vec![],
         }
     }
 

@@ -464,7 +464,7 @@ mod tests {
         f.click(); // the six start folding from where they are
         f.paste = || None;
         f.tick(11.02);
-        f.click(); // the five, reopened mid-fold
+        f.click(); // the modes alone, reopened mid-fold
         assert_eq!(f.items[0], Bubble::Mode(Mode::Find));
         assert_eq!(f.bubbles_out()[0], 0.0, "Find pops from the page, not from where the copied bubble was");
     }
