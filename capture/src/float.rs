@@ -11,6 +11,7 @@ use rune::{
 };
 
 use crate::bubbles::{self, Bubble, PILL, REACH};
+use crate::input::Input;
 use crate::mode::Mode;
 use crate::panel::Event;
 
@@ -117,11 +118,13 @@ impl Float {
         std::array::from_fn(|i| bubbles::progress(self.t - self.menu_since, i, n, menu, self.menu_from[i]))
     }
 
-    /// A paper the clipboard names: its DOI, arXiv ID or link, as Find would look it up.
-    fn copied(&self) -> Option<String> {
-        // ponytail: a long clipboard is prose or data, never an identifier; 2 kB skips classifying it
-        let text = (self.paste)().filter(|text| text.len() <= 2048)?;
-        crate::input::classify(&text).lookup().map(str::to_owned)
+    /// A paper the clipboard names by its DOI or arXiv ID (bare or as a doi.org / arxiv.org link). Any other link is
+    /// left alone: people copy web pages all day, and a bubble for each would be noise.
+    fn copied(&self) -> Option<Input> {
+        match crate::input::classify(&(self.paste)()?) {
+            input @ (Input::Doi(_) | Input::Arxiv(_)) => Some(input),
+            _ => None,
+        }
     }
 
     /// Every change of focus goes through here. The page's grow and the bubbles' pop or fold each start from where a
@@ -160,7 +163,11 @@ impl Float {
                 return vec![Act::ClosePanel];
             }
             Focus::Floating if self.t - self.closed_at >= REOPEN_GRACE => {
-                self.items = bubbles::menu(self.copied());
+                let items = bubbles::menu(self.copied());
+                if items != self.items {
+                    // other bubbles than a half-finished fold was folding: they all pop from the page
+                    (self.items, self.menu_from, self.menu_since) = (items, [0.0; bubbles::MAX], f64::NEG_INFINITY);
+                }
                 self.focus_on(Focus::Menu);
             }
             Focus::Floating => {}
@@ -172,11 +179,8 @@ impl Float {
     /// paper up, for that bubble); the page stays big and still.
     fn pick(&mut self, bubble: Bubble) -> Vec<Act> {
         self.focus_on(Focus::Panel);
-        let at = self.panel_at();
-        match bubble {
-            Bubble::Mode(mode) => vec![Act::Show { at, mode: Some(mode), query: None }],
-            Bubble::Copied(query) => vec![Act::Show { at, mode: Some(Mode::Find), query: Some(query) }],
-        }
+        let (mode, query) = bubble.opens();
+        vec![Act::Show { at: self.panel_at(), mode: Some(mode), query }]
     }
 
     /// Files dropped on it: the panel opens beside it (if it isn't open) and takes them, PDFs or not.
@@ -443,7 +447,7 @@ mod tests {
         let mut f = paper_at(10.0);
         f.paste = || Some("  https://doi.org/10.48550/arXiv.1706.03762 \n".into());
         f.click();
-        assert_eq!(f.items[0], Bubble::Copied("10.48550/arXiv.1706.03762".into()));
+        assert_eq!(f.items[0], Bubble::Copied(Input::Doi("10.48550/arXiv.1706.03762".into())));
         assert_eq!(f.items.len(), bubbles::MAX);
         let acts = f.pick(f.items[0].clone());
         let query = Some("10.48550/arXiv.1706.03762".to_owned());
@@ -451,9 +455,24 @@ mod tests {
     }
 
     #[test]
-    fn copied_prose_or_nothing_adds_no_bubble() {
+    fn an_arxiv_link_counts_and_a_changed_clipboard_pops_its_bubbles_from_the_page() {
+        let mut f = paper_at(10.0);
+        f.paste = || Some("https://arxiv.org/abs/1706.03762".into());
+        f.click();
+        assert_eq!(f.items[0], Bubble::Copied(Input::Arxiv("1706.03762".into())));
+        f.tick(11.0);
+        f.click(); // the six start folding from where they are
+        f.paste = || None;
+        f.tick(11.02);
+        f.click(); // the five, reopened mid-fold
+        assert_eq!(f.items[0], Bubble::Mode(Mode::Find));
+        assert_eq!(f.bubbles_out()[0], 0.0, "Find pops from the page, not from where the copied bubble was");
+    }
+
+    #[test]
+    fn copied_prose_a_web_page_or_nothing_adds_no_bubble() {
         for paste in [(|| None) as fn() -> Option<String>, || Some("a sentence about attention".into()),
-            || Some("10.1234/x ".repeat(300))] {
+            || Some("https://news.example.com/today".into())] {
             let mut f = paper_at(10.0);
             f.paste = paste;
             f.click();

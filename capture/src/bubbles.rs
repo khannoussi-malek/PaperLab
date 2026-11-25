@@ -7,14 +7,33 @@
 use rune::tok;
 use rune::{Color, El, row, text};
 
+use crate::input::Input;
 use crate::mode::{MODES, Mode};
 
 /// What a bubble does.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Bubble {
-    /// Look up and add the paper the clipboard names (its DOI, arXiv ID or link).
-    Copied(String),
+    /// Look up and add the paper the clipboard names: an `Input::Doi` or `Input::Arxiv`.
+    Copied(Input),
     Mode(Mode),
+}
+
+impl Bubble {
+    /// The panel it opens: its mode, and what it types in (the copied paper's identifier, to look up in Find).
+    pub fn opens(&self) -> (Mode, Option<String>) {
+        match self {
+            Bubble::Mode(mode) => (*mode, None),
+            Bubble::Copied(input) => (Mode::Find, input.lookup().map(str::to_owned)),
+        }
+    }
+
+    fn label(&self, waiting: usize) -> String {
+        match self {
+            Bubble::Mode(mode) => crate::view::pill_label(*mode, waiting),
+            Bubble::Copied(Input::Arxiv(_)) => "Add copied arXiv".to_owned(),
+            Bubble::Copied(_) => "Add copied DOI".to_owned(),
+        }
+    }
 }
 
 /// The most bubbles there can be: the five modes and the clipboard's paper.
@@ -34,7 +53,7 @@ const POP: f64 = 0.3;
 const FOLD: f64 = 0.16;
 
 /// The bubbles, top to bottom: the clipboard's paper first when there is one, then the modes.
-pub fn menu(copied: Option<String>) -> Vec<Bubble> {
+pub fn menu(copied: Option<Input>) -> Vec<Bubble> {
     copied.map(Bubble::Copied).into_iter().chain(MODES.map(Bubble::Mode)).collect()
 }
 
@@ -80,10 +99,11 @@ fn back_out(x: f64) -> f64 {
 pub fn pill(i: usize, bubble: &Bubble, waiting: usize, dark: bool, k: f32) -> El {
     let t = tok::theme(dark);
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
-    let (label, fill, ink, hover) = match bubble {
-        Bubble::Mode(mode) => (crate::view::pill_label(*mode, waiting), t.card.alpha(0.97), blue, blue),
-        Bubble::Copied(_) => ("Add copied paper".to_owned(), blue, Color::WHITE, Color::WHITE.alpha(0.18)),
+    let (fill, ink, hover) = match bubble {
+        Bubble::Mode(_) => (t.card.alpha(0.97), blue, blue),
+        Bubble::Copied(_) => (blue, Color::WHITE, Color::WHITE.alpha(0.18)),
     };
+    let label = bubble.label(waiting);
     row().key(format!("bubble-{i}")).size(PILL.0, PILL.1).radius(PILL.1 / 2.0).center()
         .fill(fill)
         .border(1.0, if dark { Color::WHITE.alpha(0.12) } else { t.separator })
@@ -158,7 +178,12 @@ mod tests {
     #[test]
     fn the_clipboard_paper_comes_first_and_only_when_there_is_one() {
         assert_eq!(menu(None), MODES.map(Bubble::Mode).to_vec());
-        let with = menu(Some("10.1/x".into()));
-        assert_eq!((with.len(), &with[0]), (MAX, &Bubble::Copied("10.1/x".into())));
+        let doi = Input::Doi("10.1234/x".into());
+        let with = menu(Some(doi.clone()));
+        assert_eq!((with.len(), &with[0]), (MAX, &Bubble::Copied(doi)));
+        assert_eq!(with[0].opens(), (Mode::Find, Some("10.1234/x".to_owned())));
+        assert_eq!(with[1].opens(), (Mode::Find, None));
+        assert_eq!(with[0].label(0), "Add copied DOI");
+        assert_eq!(Bubble::Copied(Input::Arxiv("1706.03762".into())).label(0), "Add copied arXiv");
     }
 }

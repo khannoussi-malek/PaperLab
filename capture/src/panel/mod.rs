@@ -138,8 +138,9 @@ pub struct Panel {
     pub last_workspace: Option<String>,
     /// Ask's own sentence when the workspaces couldn't be listed.
     pub ask_error: Option<String>,
-    /// An answer copied from (the copy replaced it on screen); reopening in Ask brings it back.
-    copied_answer: Option<Answer>,
+    /// An Ask answer off screen: copied from (the copy replaced it), or set aside when the panel reopened in another
+    /// mode. It keeps filling in as it streams, and reopening in Ask brings it back.
+    aside: Option<Answer>,
     /// What a drop of several PDFs came to, shown with the followed paper's progress.
     pub upload_note: Option<String>,
     /// What's new, once listed (the floating paper's badge counts it).
@@ -156,7 +157,7 @@ impl Default for Panel {
     fn default() -> Self {
         Panel {
             mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
-            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, upload_note: None, inbox: None, inbox_error: None, seq: 0, polling: None, hidden: false,
+            library_error: None, workspaces: None, last_workspace: None, ask_error: None, aside: None, upload_note: None, inbox: None, inbox_error: None, seq: 0, polling: None, hidden: false,
         }
     }
 }
@@ -204,20 +205,26 @@ impl Panel {
     }
 
     /// Opened again: a fresh field in the same mode, except that an Ask answer comes back with its question (the user
-    /// may have clicked away to paste it, or to wait for it).
+    /// may have clicked away to paste it, or to wait for it). Opened in another mode, the answer waits aside for Ask.
     fn shown(&mut self) -> Vec<Effect> {
         // An add or upload still under way stays on screen, so its answer is shown and followed.
         let in_flight = matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. });
         let answer = self.answer_to_keep();
         let mut kept = Panel {
-            mode: self.mode, papers: std::mem::take(&mut self.papers), reachable: self.reachable, seq: self.seq,
+            // an add or upload in flight keeps Find until it answers, whatever mode the panel was opened in
+            mode: if in_flight { Mode::Find } else { self.mode },
+            papers: std::mem::take(&mut self.papers), reachable: self.reachable, seq: self.seq,
             workspaces: self.workspaces.take(), last_workspace: self.last_workspace.take(), inbox: self.inbox.take(),
             ..Panel::default()
         };
-        if let Some(a) = answer {
-            kept.query = a.question.clone();
-            kept.phase = Phase::Answer(a);
-        } else if in_flight {
+        match answer {
+            Some(a) if kept.mode == Mode::Ask => {
+                kept.query = a.question.clone();
+                kept.phase = Phase::Answer(a);
+            }
+            aside => kept.aside = aside,
+        }
+        if in_flight {
             kept.query = std::mem::take(&mut self.query);
             kept.phase = std::mem::replace(&mut self.phase, Phase::Library);
         }
@@ -241,7 +248,7 @@ impl Panel {
         if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
             return vec![]; // an add or upload in flight keeps Find until it answers
         }
-        (self.mode, self.phase, self.picked, self.polling, self.copied_answer) = (mode, Phase::Library, 0, None, None);
+        (self.mode, self.phase, self.picked, self.polling, self.aside) = (mode, Phase::Library, 0, None, None);
         self.upload_note = None;
         self.entered()
     }
@@ -258,7 +265,7 @@ impl Panel {
     /// Typing in a mode other than Find: the text is the query; an earlier answer, or one still coming, no longer
     /// matches it.
     fn typed(&mut self, q: String) -> Vec<Effect> {
-        (self.query, self.picked, self.phase, self.copied_answer, self.upload_note) = (q, 0, Phase::Library, None, None);
+        (self.query, self.picked, self.phase, self.aside, self.upload_note) = (q, 0, Phase::Library, None, None);
         vec![]
     }
 
