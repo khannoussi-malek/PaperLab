@@ -51,6 +51,8 @@ struct Ctx {
     browser: Option<u16>,
     /// The galaxy behind the panel (galaxy.rs); None where there's no screen.
     galaxy: Option<rune::OverlayHandle<galaxy::Galaxy>>,
+    /// The floating paper (float.rs, `--float`), told when the panel closes so it floats again.
+    float: Option<rune::OverlayHandle<float::Float>>,
 }
 
 impl App {
@@ -70,6 +72,9 @@ impl App {
     }
 
     pub fn close(&mut self) {
+        if let Some(float) = self.ctx.as_ref().and_then(|ctx| ctx.float.as_ref()) {
+            float.update(|f, _| f.panel_closed());
+        }
         if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()) {
             galaxy.update(|g, _| g.close());
             galaxy.fade_out(Duration::from_millis(250));
@@ -78,8 +83,10 @@ impl App {
         self.dispatch(Event::Closed);
     }
 
-    fn shown(&mut self) {
-        if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()) {
+    /// Opened: by the shortcut (`galaxy`: with the galaxy behind it) or from the floating paper (without: the paper is
+    /// the animation, and the user wants the function).
+    fn shown(&mut self, galaxy: bool) {
+        if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()).filter(|_| galaxy) {
             galaxy.update(|g, _| g.open());
             galaxy.show(); // before the panel, which then orders in above it
         }
@@ -138,8 +145,15 @@ fn open(args: &[&str]) {
     }
 }
 
+/// Opens the panel beside the floating paper, at `at` (its top-left on the main display, in points).
+fn show_at(me: &AppHandle<App>, at: (f32, f32)) {
+    me.update(|s, _| s.shown(false));
+    me.place(DisplayTarget::Primary, OverlayPlacement::Rect { x: at.0, y: at.1, width: view::WIDTH, height: 56.0 });
+    me.show();
+}
+
 fn show(me: &AppHandle<App>) {
-    me.update(|s, _| s.shown());
+    me.update(|s, _| s.shown(true));
     me.place(DisplayTarget::Primary, OverlayPlacement::Edge { edge: ScreenEdge::Top, margin: 150.0, align: Align::Center, inset: 0.0 });
     me.show();
 }
@@ -209,14 +223,15 @@ fn main() {
         }
         let galaxy = (args.galaxy && !rune::is_headless())
             .then(|| app.overlay(galaxy::spec(screen), galaxy::Galaxy::new(screen)));
-        if args.float && !rune::is_headless() {
-            let origin = float::start(screen);
-            let handle = app.overlay(float::spec(origin), float::Float::new(me.clone(), origin));
+        let float = (args.float && !rune::is_headless()).then(|| {
+            let state = float::Float::new(me.clone(), screen);
+            let handle = app.overlay(float::spec(state.origin()), state);
             let own = handle.clone();
             handle.update(move |s, _| s.handle = Some(own)); // so a drag can move its own overlay
             handle.show();
-        }
-        let ctx = Ctx { me, api, browser: args.browser.then_some(args.port), galaxy };
+            handle
+        });
+        let ctx = Ctx { me, api, browser: args.browser.then_some(args.port), galaxy, float };
         let app = app
             .init(move || App::new(Some(ctx)))
             .global_shortcut_named(&args.shortcut, "quick-capture", "Open PaperLab Quick Capture", |s, _| {
