@@ -11,6 +11,7 @@
 
 mod api;
 mod clipboard;
+mod bubbles;
 mod float;
 mod galaxy;
 mod icon;
@@ -99,15 +100,16 @@ impl App {
         self.dispatch(Event::Closed);
     }
 
-    /// Opened by the shortcut: in Find, with the galaxy behind it. Opened from the floating paper: in the last mode
-    /// used and without the galaxy (the paper is the animation, and the user wants the function).
-    fn shown(&mut self, by_shortcut: bool) {
-        if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()).filter(|_| by_shortcut) {
+    /// Opened by the shortcut: in Find, with the galaxy behind it. Opened from the floating paper: in the mode its
+    /// bubble picked (None: the last one used, for a drop) and without the galaxy (the bubbles were the animation, and
+    /// the user wants the function).
+    fn shown(&mut self, mode: Option<mode::Mode>, galaxy: bool) {
+        if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()).filter(|_| galaxy) {
             galaxy.update(|g, _| g.open());
             galaxy.show(); // before the panel, which then orders in above it
         }
-        if by_shortcut {
-            self.panel.mode = mode::Mode::Find;
+        if let Some(mode) = mode {
+            self.panel.mode = mode;
         }
         self.dispatch(Event::Shown);
         self.query = focused(&self.panel.query.clone()); // empty, or an Ask answer's question
@@ -212,15 +214,16 @@ fn open(args: &[&str]) {
     }
 }
 
-/// Opens the panel beside the floating paper, at `at` (its top-left on the main display, in points).
-fn show_at(me: &AppHandle<App>, at: (f32, f32)) {
-    me.update(|s, _| s.shown(false));
+/// Opens the panel beside the floating paper, at `at` (its top-left on the main display, in points), in `mode` (None:
+/// the last one used).
+fn show_at(me: &AppHandle<App>, at: (f32, f32), mode: Option<mode::Mode>) {
+    me.update(move |s, _| s.shown(mode, false));
     me.place(DisplayTarget::Primary, OverlayPlacement::Rect { x: at.0, y: at.1, width: view::WIDTH, height: 56.0 });
     me.show();
 }
 
 fn show(me: &AppHandle<App>) {
-    me.update(|s, _| s.shown(true));
+    me.update(|s, _| s.shown(Some(mode::Mode::Find), true));
     me.place(DisplayTarget::Primary, OverlayPlacement::Edge { edge: ScreenEdge::Top, margin: 150.0, align: Align::Center, inset: 0.0 });
     me.show();
 }
@@ -291,7 +294,7 @@ fn main() {
         let galaxy = (args.galaxy && !rune::is_headless())
             .then(|| app.overlay(galaxy::spec(screen), galaxy::Galaxy::new(screen)));
         let float = (args.float && !rune::is_headless()).then(|| {
-            let state = float::Float::new(me.clone(), screen);
+            let state = float::Float::new(Some(me.clone()), screen);
             let handle = app.overlay(float::spec(state.origin()), state);
             let own = handle.clone();
             handle.update(move |s, _| s.handle = Some(own)); // so a drag can move its own overlay
