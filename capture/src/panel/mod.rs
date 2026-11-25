@@ -144,6 +144,8 @@ pub struct Panel {
     pub upload_note: Option<String>,
     /// What's new, once listed (the floating paper's badge counts it).
     pub inbox: Option<Inbox>,
+    /// PaperLab's sentence when the Inbox couldn't be listed.
+    pub inbox_error: Option<String>,
     pub(crate) seq: u64,
     polling: Option<String>,
     /// Closed since it was last shown: an add finishing now is kept but not followed.
@@ -154,7 +156,7 @@ impl Default for Panel {
     fn default() -> Self {
         Panel {
             mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
-            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, upload_note: None, inbox: None, seq: 0, polling: None, hidden: false,
+            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, upload_note: None, inbox: None, inbox_error: None, seq: 0, polling: None, hidden: false,
         }
     }
 }

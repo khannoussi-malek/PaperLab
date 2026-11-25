@@ -48,3 +48,16 @@ fn the_inbox_is_fetched_on_reopen_and_kept_meanwhile_and_offline_offers_paperlab
     off.step(Event::Inbox(Err(ApiError::Unreachable)));
     assert_eq!(off.rows(), vec![Row::OpenPaperLab]);
 }
+
+#[test]
+fn a_refresh_keeps_the_picked_item_and_doesnt_call_paperlab_down_from_another_mode() {
+    let mut p = in_inbox();
+    p.step(Event::Down); // the saved search
+    let mut fresher = inbox();
+    fresher.found.push(FoundPdf { id: "e2".into(), paper_id: "p2".into(), title: "Another".into() });
+    p.step(Event::Inbox(Ok(fresher)));
+    assert_eq!(p.rows()[p.picked], Row::NewHits(0), "still the saved search");
+    let mut find = shown_with_library();
+    find.step(Event::Inbox(Err(ApiError::Unreachable)));
+    assert!(find.reachable, "a background refresh in Find leaves the panel as it was");
+}

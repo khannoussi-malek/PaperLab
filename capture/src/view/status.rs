@@ -7,7 +7,7 @@ use crate::panel::{Answer, Panel, Phase, Writing};
 pub(super) fn line(p: &Panel) -> Option<String> {
     match &p.phase {
         Phase::Library if p.mode == Mode::Ask => p.ask_error.clone().or_else(|| ask_hint(p)),
-        Phase::Library if p.mode == Mode::Inbox => inbox_hint(p),
+        Phase::Library if p.mode == Mode::Inbox => p.inbox_error.clone().or_else(|| inbox_hint(p)),
         Phase::Library => p.library_error.clone(),
         Phase::Answer(a) => Some(answering(a)),
         Phase::Copying => Some("Copying…".into()),

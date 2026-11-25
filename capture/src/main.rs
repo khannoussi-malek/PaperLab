@@ -34,9 +34,9 @@ const BUNDLE_ID: &str = "io.github.khannoussi-malek.paperlab";
 const DEFAULT_PORT: u16 = 5190;
 const DEFAULT_SHORTCUT: &str = "ctrl+alt+p";
 const POLL_EVERY: Duration = Duration::from_secs(1);
-/// How often the floating paper looks for something new (free PDFs found, new saved-search results). The re-check
-/// and saved searches run daily or weekly, so this needn't be often.
-const INBOX_EVERY: Duration = Duration::from_secs(15 * 60);
+/// How often the floating paper looks for something new (free PDFs found, new saved-search results), so its badge
+/// also drops soon after the owner handles them inside PaperLab.
+const INBOX_EVERY: Duration = Duration::from_secs(5 * 60);
 /// How long "Copied …" stays before the panel closes by itself.
 const CONFIRM_FOR: Duration = Duration::from_millis(900);
 

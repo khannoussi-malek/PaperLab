@@ -3,6 +3,7 @@
 //! workspace's search.
 
 use super::{Effect, Panel, Phase, Row};
+use crate::mode::Mode;
 use crate::api::{ApiError, Inbox};
 
 impl Panel {
@@ -30,13 +31,37 @@ impl Panel {
         }
     }
 
+    /// A fresh list, from opening Inbox or from the background refresh. The picked item stays picked; only while Inbox
+    /// is on screen does the answer say whether PaperLab is up (in another mode the refresh runs unseen).
     pub(super) fn inbox_arrived(&mut self, result: Result<Inbox, ApiError>) -> Vec<Effect> {
+        let on_screen = self.mode == Mode::Inbox;
         match result {
-            Ok(inbox) => (self.inbox, self.reachable) = (Some(inbox), true),
-            Err(ApiError::Unreachable) => self.reachable = false,
-            Err(ApiError::Said(_)) => {} // the last list stays; the next refresh tries again
+            Ok(inbox) => {
+                let picked = self.picked_item();
+                (self.inbox, self.inbox_error) = (Some(inbox), None);
+                self.reachable |= on_screen;
+                self.picked = self.inbox_rows().iter().position(|r| self.item(r) == picked && picked.is_some()).unwrap_or(0);
+            }
+            Err(ApiError::Unreachable) => self.reachable &= !on_screen,
+            Err(ApiError::Said(sentence)) => {
+                eprintln!("paperlab-capture: the Inbox couldn't be listed: {sentence}");
+                self.inbox_error = Some(sentence); // the last list stays; the next refresh tries again
+            }
         }
-        self.clamp();
         vec![]
+    }
+
+    fn picked_item(&self) -> Option<String> {
+        self.inbox_rows().get(self.picked).and_then(|r| self.item(r))
+    }
+
+    /// What a row is, across refreshes: the find's id, or the search's workspace and query.
+    fn item(&self, row: &Row) -> Option<String> {
+        let inbox = self.inbox.as_ref()?;
+        match row {
+            Row::FoundPdf(i) => inbox.found.get(*i).map(|f| f.id.clone()),
+            Row::NewHits(i) => inbox.searches.get(*i).map(|s| format!("{}\n{}", s.workspace_id, s.query)),
+            _ => None,
+        }
     }
 }

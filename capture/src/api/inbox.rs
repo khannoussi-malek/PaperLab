@@ -50,8 +50,14 @@ impl Api {
         let mut searches = vec![];
         for w in self.workspaces()? {
             let url = format!("{}/api/workspaces/{}/saved-searches", self.base, w.id);
-            let (status, body) = self.send(self.agent.get(url).call())?;
-            let saved: Vec<SavedSearch> = ok(status, body)?;
+            // One workspace failing (deleted meanwhile, say) leaves the rest of the Inbox and the badge.
+            let saved: Vec<SavedSearch> = match self.send(self.agent.get(url).call()).and_then(|(s, b)| ok(s, b)) {
+                Ok(saved) => saved,
+                Err(e) => {
+                    eprintln!("paperlab-capture: saved searches of workspace {} skipped: {e:?}", w.id);
+                    continue;
+                }
+            };
             searches.extend(saved.into_iter().filter(|s| s.new_hits > 0).map(|s| NewHits {
                 workspace_id: w.id.clone(), workspace: w.name.clone(), query: s.query, count: s.new_hits,
             }));
