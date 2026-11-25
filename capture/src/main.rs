@@ -210,7 +210,11 @@ fn main() {
         let galaxy = (args.galaxy && !rune::is_headless())
             .then(|| app.overlay(galaxy::spec(screen), galaxy::Galaxy::new(screen)));
         if args.float && !rune::is_headless() {
-            app.overlay(float::spec(), float::Float::new(me.clone())).show();
+            let origin = float::start(screen);
+            let handle = app.overlay(float::spec(origin), float::Float::new(me.clone(), origin));
+            let own = handle.clone();
+            handle.update(move |s, _| s.handle = Some(own)); // so a drag can move its own overlay
+            handle.show();
         }
         let ctx = Ctx { me, api, browser: args.browser.then_some(args.port), galaxy };
         let app = app
