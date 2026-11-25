@@ -67,6 +67,14 @@ fn row_text(p: &Panel, r: &Row) -> (String, String) {
             let title = p.papers.iter().find(|x| x.id == c.paper_id).map(|x| x.title.clone());
             (title.unwrap_or_else(|| "A paper in this workspace".into()), format!("{} · p. {}", c.labels.join(", "), c.page))
         }
+        Row::FoundPdf(i) => match p.inbox.as_ref().and_then(|x| x.found.get(*i)) {
+            Some(f) => (f.title.clone(), "A free PDF was found for it: open it to read".into()),
+            None => Default::default(),
+        },
+        Row::NewHits(i) => match p.inbox.as_ref().and_then(|x| x.searches.get(*i)) {
+            Some(s) => (format!("“{}”", s.query), format!("{} new result{} · {}", s.count, if s.count == 1 { "" } else { "s" }, s.workspace)),
+            None => Default::default(),
+        },
         Row::Close(i) => {
             let Phase::Close(c) = &p.phase else { return Default::default() };
             let close = &c.papers[*i];
@@ -81,7 +89,9 @@ fn badge(p: &Panel, r: &Row) -> Option<&'static str> {
         (Row::Paper(_), _) if p.mode == Mode::Cite => Some("Copy ↵"),
         (Row::Workspace(_), _) => Some("Ask ↵"),
         (Row::CopyAnswer, _) => Some("Copy ↵"),
-        (Row::Paper(_) | Row::OpenAdded(_) | Row::Close(_) | Row::OpenAnswer | Row::Source(_), _) => Some("Open ↵"),
+        (Row::Paper(_) | Row::OpenAdded(_) | Row::Close(_) | Row::OpenAnswer | Row::Source(_) | Row::FoundPdf(_) | Row::NewHits(_), _) => {
+            Some("Open ↵")
+        }
         _ => None,
     }
 }

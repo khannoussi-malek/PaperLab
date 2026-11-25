@@ -16,6 +16,8 @@ describe('linkHash', () => {
     expect(linkHash(`paperlab://workspaces/${P}`)).toBe(`#/workspaces/${P}?tab=chat`)
     expect(linkHash(`paperlab://workspaces/${P}?page=2`)).toBe(`#/workspaces/${P}?tab=chat`)
     expect(linkHash('paperlab://workspaces/not-a-uuid')).toBeNull()
+    expect(linkHash(`paperlab://workspaces/${P}?tab=search`)).toBe(`#/workspaces/${P}?tab=search`)
+    expect(linkHash(`paperlab://workspaces/${P}?tab=settings`)).toBe(`#/workspaces/${P}?tab=chat`)
   })
 
   it('ignores unknown params but rejects bad known ones', () => {

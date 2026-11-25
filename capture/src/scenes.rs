@@ -1,7 +1,7 @@
 //! Fixed states for `--snap` stills; they set the state through `Panel::step` and drop its effects.
 
 use crate::App;
-use crate::api::{Added, Candidate, Close, Closeness, Format, Found, Said, Source, Workspace};
+use crate::api::{Added, Candidate, Close, Closeness, Format, Found, FoundPdf, Inbox, NewHits, Said, Source, Workspace};
 use crate::library::Paper;
 use crate::mode::Mode;
 use crate::panel::{Event, Panel};
@@ -27,6 +27,7 @@ pub const ALL: &[(&str, fn(&mut App))] = &[
         set(s, "attention", p)
     }),
     ("dropped", |s| set(s, "", dropped())),
+    ("inbox", |s| set(s, "", inbox())),
     ("ask", |s| set(s, QUESTION, ask_typed())),
     ("answering", |s| set(s, QUESTION, answer(false))),
     ("answered", |s| set(s, QUESTION, answer(true))),
@@ -70,6 +71,19 @@ fn dropped() -> Panel {
     let seq = p.seq;
     let results = vec![Ok(paper("a", "Sparse Attention for Long Documents", "uploaded")), Ok(paper("b", "Reading Long Papers with Small Models", "extracting"))];
     p.step(Event::Uploaded { seq, results });
+    p
+}
+
+fn inbox() -> Panel {
+    let mut p = in_mode(Mode::Inbox);
+    let found = |id: &str, title: &str| FoundPdf { id: id.into(), paper_id: id.into(), title: title.into() };
+    let hits = |query: &str, count, workspace: &str| NewHits {
+        workspace_id: "w".into(), workspace: workspace.into(), query: query.into(), count,
+    };
+    p.step(Event::Inbox(Ok(Inbox {
+        found: vec![found("f1", "Longformer: The Long-Document Transformer")],
+        searches: vec![hits("sparse attention long documents", 4, "Thesis: long-context reading"), hits("retrieval augmented summarisation", 1, "Survey draft")],
+    })));
     p
 }
 

@@ -7,6 +7,7 @@ use crate::panel::{Answer, Panel, Phase, Writing};
 pub(super) fn line(p: &Panel) -> Option<String> {
     match &p.phase {
         Phase::Library if p.mode == Mode::Ask => p.ask_error.clone().or_else(|| ask_hint(p)),
+        Phase::Library if p.mode == Mode::Inbox => inbox_hint(p),
         Phase::Library => p.library_error.clone(),
         Phase::Answer(a) => Some(answering(a)),
         Phase::Copying => Some("Copying…".into()),
@@ -34,6 +35,16 @@ fn ask_hint(p: &Panel) -> Option<String> {
         None if p.reachable => Some("Listing your workspaces…".into()),
         Some(all) if all.is_empty() => Some("Ask answers from a workspace's papers: make a workspace in PaperLab first.".into()),
         Some(_) if p.query.trim().is_empty() => Some("Type a question; ↵ asks the workspace picked below.".into()),
+        _ => None,
+    }
+}
+
+fn inbox_hint(p: &Panel) -> Option<String> {
+    match &p.inbox {
+        None if p.reachable => Some("Looking for what's new…".into()),
+        Some(inbox) if inbox.count() == 0 => {
+            Some("Nothing new. Free PDFs the weekly re-check finds and new saved-search results show up here.".into())
+        }
         _ => None,
     }
 }

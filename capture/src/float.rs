@@ -40,6 +40,8 @@ pub struct Float {
     open: bool,
     /// A PDF is being dragged over it: it lights up as if open.
     drop_over: bool,
+    /// What waits in the Inbox, shown on the page's corner.
+    pub badge: usize,
     /// When it last opened or closed, for the grow and shrink.
     since: f64,
     closed_at: f64,
@@ -49,7 +51,7 @@ impl Float {
     pub fn new(me: AppHandle<crate::App>, screen: (f32, f32)) -> Self {
         let origin = start(screen);
         Float {
-            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, open: false, drop_over: false, since: -1.0,
+            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, open: false, drop_over: false, badge: 0, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         }
     }
@@ -200,6 +202,7 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
         .child(el().key("halo").absolute(cx_ - halo, cy_ - halo).size(halo * 2.0, halo * 2.0)
             .radial_gradient([halo, halo], halo, [(0.0, blue.alpha(glow)), (1.0, blue.alpha(0.0))]))
         .child(paper((px, py), (pw, ph), bob, dark))
+        .child(badge(s.badge, (px + pw, py), blue))
 }
 
 /// The page, drawn at any size between SMALL and BIG: its lines scale with it.
@@ -222,6 +225,17 @@ fn paper(at: (f32, f32), size: (f32, f32), bob: f32, dark: bool) -> El {
         .child(line(35.0, 18.0, ink))
         .hit()
         .on_drag(|s: &mut Float, d: &mut Drag, _: &mut Tx| s.drag(d))
+}
+
+/// The Inbox count on the page's top-right corner (centred on `corner`); nothing when there's nothing new.
+fn badge(count: usize, corner: (f32, f32), blue: Color) -> El {
+    const D: f32 = 18.0;
+    if count == 0 {
+        return el();
+    }
+    let label = if count > 9 { "9+".to_owned() } else { count.to_string() };
+    el().key("badge").absolute(corner.0 - D / 2.0, corner.1 - D / 2.0).size(D, D).radius(D / 2.0).fill(blue)
+        .border(1.5, Color::WHITE).center().child(rune::text(label).font(rune::TextStyle::new(10.5, 700.0)).color(Color::WHITE))
 }
 
 fn ease(x: f64) -> f64 {
