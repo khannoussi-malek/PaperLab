@@ -101,9 +101,9 @@ impl App {
     }
 
     /// Opened by the shortcut: in Find, with the galaxy behind it. Opened from the floating paper: in the mode its
-    /// bubble picked (None: the last one used, for a drop) and without the galaxy (the bubbles were the animation, and
-    /// the user wants the function).
-    fn shown(&mut self, mode: Option<mode::Mode>, galaxy: bool) {
+    /// bubble picked (None: the last one used, for a drop), with `query` typed in (the clipboard's paper), and without
+    /// the galaxy (the bubbles were the animation, and the user wants the function).
+    fn shown(&mut self, mode: Option<mode::Mode>, galaxy: bool, query: Option<String>) {
         if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()).filter(|_| galaxy) {
             galaxy.update(|g, _| g.open());
             galaxy.show(); // before the panel, which then orders in above it
@@ -112,7 +112,10 @@ impl App {
             self.panel.mode = mode;
         }
         self.dispatch(Event::Shown);
-        self.query = focused(&self.panel.query.clone()); // empty, or an Ask answer's question
+        if let Some(query) = query {
+            self.dispatch(Event::Query(query));
+        }
+        self.query = focused(&self.panel.query.clone()); // empty, an Ask answer's question, or `query`
     }
 
     fn perform(&mut self, effect: Effect) {
@@ -215,15 +218,15 @@ fn open(args: &[&str]) {
 }
 
 /// Opens the panel beside the floating paper, at `at` (its top-left on the main display, in points), in `mode` (None:
-/// the last one used).
-fn show_at(me: &AppHandle<App>, at: (f32, f32), mode: Option<mode::Mode>) {
-    me.update(move |s, _| s.shown(mode, false));
+/// the last one used), with `query` typed in.
+fn show_at(me: &AppHandle<App>, at: (f32, f32), mode: Option<mode::Mode>, query: Option<String>) {
+    me.update(move |s, _| s.shown(mode, false, query));
     me.place(DisplayTarget::Primary, OverlayPlacement::Rect { x: at.0, y: at.1, width: view::WIDTH, height: 56.0 });
     me.show();
 }
 
 fn show(me: &AppHandle<App>) {
-    me.update(|s, _| s.shown(Some(mode::Mode::Find), true));
+    me.update(|s, _| s.shown(Some(mode::Mode::Find), true, None));
     me.place(DisplayTarget::Primary, OverlayPlacement::Edge { edge: ScreenEdge::Top, margin: 150.0, align: Align::Center, inset: 0.0 });
     me.show();
 }
@@ -346,6 +349,17 @@ mod tests {
                 "one paper and Search online");
         press(&mut rt, Key::Enter);
         assert_eq!(rt.state.sent, vec![Effect::Open("b".into()), Effect::Close]);
+    }
+
+    #[test]
+    fn opened_with_the_copied_paper_it_is_typed_in_find_and_looked_up() {
+        let mut rt = runtime();
+        rt.state.panel.mode = mode::Mode::Ask;
+        rt.update(|s, _| s.shown(Some(mode::Mode::Find), false, Some("10.48550/arXiv.1706.03762".into())));
+        rt.frame(1.0 / 60.0);
+        assert_eq!(rt.state.panel.mode, mode::Mode::Find);
+        assert!(rt.state.sent.contains(&Effect::Lookup { seq: 1, query: "10.48550/arXiv.1706.03762".into() }));
+        assert_eq!(rt.state.query.text, "10.48550/arXiv.1706.03762", "the field shows what's looked up");
     }
 
     #[test]

@@ -4,7 +4,6 @@
 
 use super::{Effect, Panel, Phase, Row};
 use crate::api::{ApiError, Said, Source, Workspace};
-use crate::mode::Mode;
 
 /// Rows of workspaces, and of cited papers, at most (the panel stays a glance; PaperLab shows the rest).
 // ponytail: no workspace filter; the 7th workspace and on are reached through PaperLab until someone has that many.
@@ -77,7 +76,7 @@ impl Panel {
             (Some(Row::Workspace(i)), _) => self.ask(i),
             (Some(Row::CopyAnswer), Phase::Answer(a)) => {
                 let text = a.text.clone();
-                self.copied_answer = Some(a.clone()); // back on reopen, with Open in PaperLab and its papers
+                self.aside = Some(a.clone()); // back on reopen, with Open in PaperLab and its papers
                 self.seq += 1;
                 self.phase = Phase::Copying;
                 vec![Effect::Copy { seq: self.seq, text, what: "the answer".into() }]
@@ -106,16 +105,25 @@ impl Panel {
 
     /// One step of the answer being written; one for an answer the user has since left is dropped.
     pub(super) fn heard(&mut self, seq: u64, result: Result<Said, ApiError>) -> Vec<Effect> {
-        let Phase::Answer(a) = &mut self.phase else { return vec![] };
+        let on_screen = matches!(&self.phase, Phase::Answer(a) if a.seq == seq);
+        let a = match (&mut self.phase, &mut self.aside) {
+            (Phase::Answer(a), _) | (_, Some(a)) => a,
+            _ => return vec![],
+        };
         if a.seq != seq || a.state != Writing::Under {
             return vec![];
         }
         match result {
             Ok(Said::Sources(sources)) => a.sources = sources,
             Ok(Said::Token(text)) => a.text.push_str(&text),
-            Ok(Said::Done) => (a.state, self.picked) = (Writing::Done, 0),
+            Ok(Said::Done) => a.state = Writing::Done,
             Ok(Said::Failed(sentence)) => a.state = Writing::Failed(sentence),
-            Err(e) => self.phase = self.failed(e),
+            Err(e) if on_screen => self.phase = self.failed(e),
+            Err(ApiError::Unreachable) => a.state = Writing::Failed(super::UNREACHABLE.into()),
+            Err(ApiError::Said(sentence)) => a.state = Writing::Failed(sentence),
+        }
+        if on_screen && matches!(&self.phase, Phase::Answer(a) if a.state == Writing::Done) {
+            self.picked = 0;
         }
         vec![]
     }
@@ -130,14 +138,14 @@ impl Panel {
         vec![]
     }
 
-    /// The answer to show again when the panel reopens in Ask: the one on screen, or the one just copied.
+    /// The answer to keep when the panel reopens: the one on screen, or the one set aside.
     pub(super) fn answer_to_keep(&mut self) -> Option<Answer> {
-        if self.mode != Mode::Ask {
-            return None;
+        if !matches!(self.phase, Phase::Answer(_)) {
+            return self.aside.take(); // other phases (an add in flight) stay where they are
         }
         match std::mem::replace(&mut self.phase, Phase::Library) {
             Phase::Answer(a) => Some(a),
-            _ => self.copied_answer.take(),
+            _ => None,
         }
     }
 }

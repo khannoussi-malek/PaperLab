@@ -115,7 +115,7 @@ fn a_second_question_does_not_get_the_first_answers_words() {
 }
 
 #[test]
-fn a_copied_answer_comes_back_with_its_question_when_the_panel_reopens() {
+fn a_aside_comes_back_with_its_question_when_the_panel_reopens() {
     let mut p = in_ask();
     let seq = asked(&mut p, "what is attention?");
     p.step(Event::Heard { seq, result: Ok(Said::Token("Weights.".into())) });
@@ -136,4 +136,41 @@ fn a_workspace_list_error_stays_in_ask() {
     p.step(Event::Workspaces(Err(ApiError::Said("Workspaces are being migrated.".into()))));
     assert_eq!(p.ask_error.as_deref(), Some("Workspaces are being migrated."));
     assert_eq!(p.library_error, None, "Find's line stays clear");
+}
+
+#[test]
+fn an_answer_waits_aside_when_the_panel_reopens_in_another_mode_and_keeps_streaming() {
+    let mut p = in_ask();
+    let seq = asked(&mut p, "what is attention?");
+    p.step(Event::Closed);
+    p.mode = Mode::Find; // a bubble opened the panel in Find
+    p.step(Event::Shown);
+    assert_eq!((p.mode, &p.phase, p.query.as_str()), (Mode::Find, &Phase::Library, ""));
+    p.step(Event::Heard { seq, result: Ok(Said::Token("Weights.".into())) });
+    p.step(Event::Heard { seq, result: Ok(Said::Done) });
+    assert_eq!(p.phase, Phase::Library, "Find stays Find");
+    p.step(Event::Closed);
+    p.mode = Mode::Ask;
+    p.step(Event::Shown);
+    assert!(matches!(&p.phase, Phase::Answer(a) if a.text == "Weights." && a.state == Writing::Done));
+    assert_eq!(p.query, "what is attention?");
+}
+
+#[test]
+fn an_answer_aside_does_not_cost_an_add_in_flight() {
+    let mut p = in_ask();
+    asked(&mut p, "what is attention?");
+    p.step(Event::Closed);
+    p.mode = Mode::Find;
+    p.step(Event::Shown);
+    p.step(Event::Dropped(vec!["/tmp/a.pdf".into()]));
+    assert!(matches!(p.phase, Phase::Uploading { .. }));
+    p.step(Event::Closed);
+    p.step(Event::Shown);
+    assert!(matches!(p.phase, Phase::Uploading { .. }), "the upload stays on screen");
+    p.step(Event::Closed);
+    p.mode = Mode::Ask; // the Ask bubble, mid-upload
+    p.step(Event::Shown);
+    assert_eq!(p.mode, Mode::Find, "the upload keeps Find until it answers");
+    assert!(matches!(p.phase, Phase::Uploading { .. }) && p.aside.is_some(), "and the answer still waits for Ask");
 }

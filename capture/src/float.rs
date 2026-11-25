@@ -10,8 +10,9 @@ use rune::{
     OverlayPlacement, OverlaySpec, Phase, Tx, el,
 };
 
-use crate::bubbles::{self, PILL, REACH};
-use crate::mode::{MODES, Mode};
+use crate::bubbles::{self, Bubble, PILL, REACH};
+use crate::input::Input;
+use crate::mode::Mode;
 use crate::panel::Event;
 
 /// The overlay: the page, its halo and room for the bubbles around it (the panel is its own window). Only the page
@@ -48,8 +49,8 @@ enum Focus {
 /// What the floating paper asks of the app.
 #[derive(Debug, PartialEq)]
 pub enum Act {
-    /// Open the panel with its top-left here, in `mode` (None: the last one used).
-    Show { at: (f32, f32), mode: Option<Mode> },
+    /// Open the panel with its top-left here, in `mode` (None: the last one used), with `query` typed in.
+    Show { at: (f32, f32), mode: Option<Mode>, query: Option<String> },
     ClosePanel,
     /// Hand the panel an event (dropped files).
     Take(Event),
@@ -69,9 +70,13 @@ pub struct Float {
     /// Frame clock, seconds.
     t: f64,
     focus: Focus,
+    /// The bubbles, chosen as they come out (the clipboard is read then) and kept until the next time.
+    items: Vec<Bubble>,
+    /// Reads the clipboard (`clipboard::paste`; a fixed answer in tests).
+    paste: fn() -> Option<String>,
     /// When the bubbles last came out or started folding, and how far out each was then, for their animation.
     menu_since: f64,
-    menu_from: [f32; 5],
+    menu_from: [f32; bubbles::MAX],
     /// The pointer is on a bubble: they stay out.
     hovered: bool,
     /// When the bubbles came out or the pointer last left one, for MENU_IDLE.
@@ -90,7 +95,8 @@ impl Float {
         let origin = start(screen);
         Float {
             me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, focus: Focus::Floating,
-            menu_since: f64::NEG_INFINITY, menu_from: [0.0; 5], hovered: false, touched: 0.0, drop_over: false, badge: 0,
+            items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
+            menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, drop_over: false, badge: 0,
             since: -1.0,
             closed_at: f64::NEG_INFINITY,
         }
@@ -107,9 +113,18 @@ impl Float {
     }
 
     /// How far out each bubble is now: 0 at the page, 1 in place.
-    fn bubbles_out(&self) -> [f32; 5] {
-        let menu = self.focus == Focus::Menu;
-        std::array::from_fn(|i| bubbles::progress(self.t - self.menu_since, i, menu, self.menu_from[i]))
+    fn bubbles_out(&self) -> [f32; bubbles::MAX] {
+        let (menu, n) = (self.focus == Focus::Menu, self.items.len());
+        std::array::from_fn(|i| bubbles::progress(self.t - self.menu_since, i, n, menu, self.menu_from[i]))
+    }
+
+    /// A paper the clipboard names by its DOI or arXiv ID (bare or as a doi.org / arxiv.org link). Any other link is
+    /// left alone: people copy web pages all day, and a bubble for each would be noise.
+    fn copied(&self) -> Option<Input> {
+        match crate::input::classify(&(self.paste)()?) {
+            input @ (Input::Doi(_) | Input::Arxiv(_)) => Some(input),
+            _ => None,
+        }
     }
 
     /// Every change of focus goes through here. The page's grow and the bubbles' pop or fold each start from where a
@@ -147,22 +162,31 @@ impl Float {
                 self.focus_on(Focus::Floating);
                 return vec![Act::ClosePanel];
             }
-            Focus::Floating if self.t - self.closed_at >= REOPEN_GRACE => self.focus_on(Focus::Menu),
+            Focus::Floating if self.t - self.closed_at >= REOPEN_GRACE => {
+                let items = bubbles::menu(self.copied());
+                if items != self.items {
+                    // other bubbles than a half-finished fold was folding: they all pop from the page
+                    (self.items, self.menu_from, self.menu_since) = (items, [0.0; bubbles::MAX], f64::NEG_INFINITY);
+                }
+                self.focus_on(Focus::Menu);
+            }
             Focus::Floating => {}
         }
         vec![]
     }
 
-    /// A bubble picked: they fold and the panel opens beside the page in that mode; the page stays big and still.
-    fn pick(&mut self, mode: Mode) -> Vec<Act> {
+    /// A bubble picked: they fold and the panel opens beside the page in that mode (Find, looking the clipboard's
+    /// paper up, for that bubble); the page stays big and still.
+    fn pick(&mut self, bubble: Bubble) -> Vec<Act> {
         self.focus_on(Focus::Panel);
-        vec![Act::Show { at: self.panel_at(), mode: Some(mode) }]
+        let (mode, query) = bubble.opens();
+        vec![Act::Show { at: self.panel_at(), mode: Some(mode), query }]
     }
 
     /// Files dropped on it: the panel opens beside it (if it isn't open) and takes them, PDFs or not.
     fn dropped(&mut self, event: Event) -> Vec<Act> {
         self.drop_over = false;
-        let show = (self.focus != Focus::Panel).then(|| Act::Show { at: self.panel_at(), mode: None });
+        let show = (self.focus != Focus::Panel).then(|| Act::Show { at: self.panel_at(), mode: None, query: None });
         self.focus_on(Focus::Panel);
         show.into_iter().chain([Act::Take(event)]).collect()
     }
@@ -190,7 +214,7 @@ impl Float {
         let Some(me) = &self.me else { return };
         for act in acts {
             match act {
-                Act::Show { at, mode } => crate::show_at(me, at, mode),
+                Act::Show { at, mode, query } => crate::show_at(me, at, mode, query),
                 Act::ClosePanel => me.update(|s, _| s.close()),
                 Act::Take(event) => me.update(move |s, _| s.dispatch(event)),
             }
@@ -302,19 +326,20 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
 /// nothing invisible catches a click.
 fn menu(s: &Float, centre: (f32, f32), still: bool, dark: bool) -> Vec<El> {
     let on_screen = (s.origin.0 + centre.0, s.origin.1 + centre.1);
-    let spots = bubbles::spots(on_screen, s.screen);
+    let spots = bubbles::spots(on_screen, s.screen, s.items.len());
     let home = (centre.0 - PILL.0 / 2.0, centre.1 - PILL.1 / 2.0);
     let menu = s.focus == Focus::Menu;
     let out = s.bubbles_out();
-    MODES.into_iter().zip(spots).enumerate().filter_map(|(i, (mode, spot))| {
+    s.items.iter().zip(spots).enumerate().filter_map(|(i, (bubble, spot))| {
         let k = if still { f32::from(u8::from(menu)) } else { out[i] };
         let to = (spot.0 - s.origin.0, spot.1 - s.origin.1);
         let at = (home.0 + (to.0 - home.0) * k, home.1 + (to.1 - home.1) * k);
-        let pill = bubbles::pill(i, mode, s.badge, dark, k).absolute(at.0, at.1);
+        let pill = bubbles::pill(i, bubble, s.badge, dark, k).absolute(at.0, at.1);
+        let bubble = bubble.clone();
         match (menu, k > 0.0) {
             (true, true) => Some(pill.hit()
                 .on_press(move |s: &mut Float| {
-                    let acts = s.pick(mode);
+                    let acts = s.pick(bubble.clone());
                     s.tell(acts);
                 })
                 .on_hover_change(|s: &mut Float, inside, _: &mut Tx| s.hover(inside))),
@@ -409,11 +434,50 @@ mod tests {
         assert_eq!(on_screen((300.0, 200.0), SCREEN), (300.0, 200.0), "inside: left alone");
     }
 
-    /// A floating paper with nothing to tell (its `Act`s are the answer), its clock at `t`.
+    /// A floating paper with nothing to tell (its `Act`s are the answer) and an empty clipboard, its clock at `t`.
     fn paper_at(t: f64) -> Float {
         let mut f = Float::new(None, SCREEN);
+        f.paste = || None;
         f.tick(t);
         f
+    }
+
+    #[test]
+    fn a_copied_doi_adds_a_first_bubble_that_looks_it_up_in_find() {
+        let mut f = paper_at(10.0);
+        f.paste = || Some("  https://doi.org/10.48550/arXiv.1706.03762 \n".into());
+        f.click();
+        assert_eq!(f.items[0], Bubble::Copied(Input::Doi("10.48550/arXiv.1706.03762".into())));
+        assert_eq!(f.items.len(), bubbles::MAX);
+        let acts = f.pick(f.items[0].clone());
+        let query = Some("10.48550/arXiv.1706.03762".to_owned());
+        assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Find), query }]);
+    }
+
+    #[test]
+    fn an_arxiv_link_counts_and_a_changed_clipboard_pops_its_bubbles_from_the_page() {
+        let mut f = paper_at(10.0);
+        f.paste = || Some("https://arxiv.org/abs/1706.03762".into());
+        f.click();
+        assert_eq!(f.items[0], Bubble::Copied(Input::Arxiv("1706.03762".into())));
+        f.tick(11.0);
+        f.click(); // the six start folding from where they are
+        f.paste = || None;
+        f.tick(11.02);
+        f.click(); // the five, reopened mid-fold
+        assert_eq!(f.items[0], Bubble::Mode(Mode::Find));
+        assert_eq!(f.bubbles_out()[0], 0.0, "Find pops from the page, not from where the copied bubble was");
+    }
+
+    #[test]
+    fn copied_prose_a_web_page_or_nothing_adds_no_bubble() {
+        for paste in [(|| None) as fn() -> Option<String>, || Some("a sentence about attention".into()),
+            || Some("https://news.example.com/today".into())] {
+            let mut f = paper_at(10.0);
+            f.paste = paste;
+            f.click();
+            assert_eq!(f.items, bubbles::menu(None));
+        }
     }
 
     #[test]
@@ -430,8 +494,8 @@ mod tests {
     fn picking_a_bubble_opens_the_panel_beside_the_page_in_that_mode() {
         let mut f = paper_at(10.0);
         f.click();
-        let acts = f.pick(Mode::Ask);
-        assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Ask) }]);
+        let acts = f.pick(Bubble::Mode(Mode::Ask));
+        assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Ask), query: None }]);
         assert_eq!(f.focus, Focus::Panel, "the bubbles fold; the page stays still beside its panel");
         assert_eq!(f.click(), vec![Act::ClosePanel], "a click on the page closes the panel");
     }
@@ -440,7 +504,7 @@ mod tests {
     fn the_click_that_closed_the_panel_brings_nothing_out() {
         let mut f = paper_at(10.0);
         f.click();
-        f.pick(Mode::Find);
+        f.pick(Bubble::Mode(Mode::Find));
         f.panel_closed(); // focus left the panel for the page
         assert_eq!(f.click(), vec![]);
         assert_eq!(f.focus, Focus::Floating);
@@ -468,7 +532,7 @@ mod tests {
         let mut f = paper_at(10.0);
         f.click();
         let acts = f.dropped(Event::DropRefused);
-        assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: None }, Act::Take(Event::DropRefused)]);
+        assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: None, query: None }, Act::Take(Event::DropRefused)]);
         assert_eq!(f.focus, Focus::Panel);
         assert_eq!(f.dropped(Event::DropRefused), vec![Act::Take(Event::DropRefused)], "panel open: just the files");
     }
