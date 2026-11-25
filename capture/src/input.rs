@@ -44,6 +44,29 @@ pub fn classify(raw: &str) -> Input {
     Input::Text(s.to_owned())
 }
 
+/// Paper sites whose links name a paper without a DOI in them (PaperLab reads the page for it).
+const PAPER_HOSTS: [&str; 24] = [
+    "nature.com", "ieeexplore.ieee.org", "sciencedirect.com", "pubmed.ncbi.nlm.nih.gov", "ncbi.nlm.nih.gov",
+    "openreview.net", "aclanthology.org", "semanticscholar.org", "jstor.org", "proceedings.neurips.cc",
+    "papers.nips.cc", "proceedings.mlr.press", "biorxiv.org", "medrxiv.org", "ssrn.com", "frontiersin.org",
+    "mdpi.com", "plos.org", "cell.com", "science.org", "pnas.org", "link.springer.com", "academic.oup.com",
+    "cambridge.org",
+];
+
+/// A link that names a paper: a DOI in it (most publishers' article links), or a paper site's.
+pub fn names_a_paper(link: &str) -> bool {
+    let rest = link.split_once("://").map_or(link, |(_, rest)| rest);
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("").to_ascii_lowercase();
+    let host = host.rsplit_once('@').map_or(host.as_str(), |(_, h)| h); // user@host
+    // a DOI in the path: a "10.<registrant>" segment, its suffix after it
+    let segments: Vec<&str> = rest.split(['?', '#']).next().unwrap_or(rest).split('/').collect();
+    let registrant = |part: &str| {
+        part.strip_prefix("10.").is_some_and(|r| r.len() >= 4 && r.bytes().all(|b| b.is_ascii_digit() || b == b'.'))
+    };
+    let doi_inside = segments.windows(2).any(|pair| registrant(pair[0]) && !pair[1].is_empty());
+    doi_inside || PAPER_HOSTS.iter().any(|known| host == *known || host.ends_with(&format!(".{known}")))
+}
+
 fn strip_prefix_ci<'a>(s: &'a str, prefixes: &[&str]) -> Option<&'a str> {
     prefixes.iter().find_map(|p| s.get(..p.len()).filter(|head| head.eq_ignore_ascii_case(p)).map(|_| &s[p.len()..]))
 }
@@ -143,5 +166,20 @@ mod tests {
         assert_eq!(classify("   "), Input::Empty);
         assert_eq!(classify("graph/1234567"), Input::Arxiv("graph/1234567".into()));
         assert_eq!(classify("and/or"), Input::Text("and/or".into()));
+    }
+}
+
+#[cfg(test)]
+mod paper_link_tests {
+    use super::*;
+
+    #[test]
+    fn a_link_names_a_paper_by_a_doi_in_it_or_its_site() {
+        assert!(names_a_paper("https://dl.acm.org/doi/10.1145/3292500.3330701"), "a DOI in the path");
+        assert!(names_a_paper("https://link.springer.com/article/10.1007/s11263-015-0816-y"));
+        assert!(names_a_paper("https://www.nature.com/articles/s41586-021-03819-2"), "Nature: no DOI, a paper site");
+        assert!(names_a_paper("https://ieeexplore.ieee.org/document/9156610"));
+        assert!(!names_a_paper("https://news.ycombinator.com/item?id=1"), "any other page: no");
+        assert!(!names_a_paper("https://evilnature.com/x"), "a look-alike host: no");
     }
 }

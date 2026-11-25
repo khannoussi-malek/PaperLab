@@ -26,7 +26,7 @@ fn set_sense(button: bool, count: isize) {
 fn paper_at(t: f64) -> Float {
     let mut f = Float::new(None, vec![LAPTOP]);
     (f.paste, f.read_displays, f.read_pointer) = (|| None, || vec![], || None);
-    (f.sense, f.carries_files) = (sensed, || true);
+    (f.sense, f.carries_files, f.drag_link) = (sensed, || true, || None);
     f.tick(t);
     f
 }
@@ -449,4 +449,61 @@ fn a_display_change_frees_a_tucked_page() {
     f.read_displays = || vec![[0.0, 0.0, 1280.0, 800.0]];
     f.tick(10.0 + DISPLAYS_EVERY);
     assert_eq!(f.tuck.edge(), None);
+}
+
+#[test]
+fn a_copied_publisher_link_gets_its_bubble_and_any_other_page_does_not() {
+    let mut f = paper_at(10.0);
+    f.paste = || Some("https://www.nature.com/articles/s41586-021-03819-2".into());
+    f.click();
+    let link = Input::Link("https://www.nature.com/articles/s41586-021-03819-2".into());
+    assert_eq!(f.items[0], Bubble::Copied(link));
+    f.tick(11.0);
+    f.click();
+    f.paste = || Some("https://news.example.com/today".into());
+    f.tick(12.0);
+    f.click();
+    assert_eq!(f.items, bubbles::menu(None));
+}
+
+#[test]
+fn a_link_dragged_from_a_browser_lights_the_page_and_let_go_on_it_is_looked_up() {
+    let mut f = pointed_at();
+    (f.carries_files, f.drag_link) = (|| false, || Some("https://www.nature.com/articles/x".into()));
+    set_sense(true, 5);
+    f.watch_drag();
+    set_sense(true, 6);
+    assert_eq!(f.watch_drag(), vec![], "nothing opens while it's held");
+    assert!(f.link_over, "the page lights up as its target");
+    set_sense(false, 6);
+    let query = Some("https://www.nature.com/articles/x".to_owned());
+    assert_eq!(f.watch_drag(), vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Find), query }]);
+    assert_eq!((f.focus, f.link_over), (Focus::Panel, false));
+}
+
+#[test]
+fn a_link_carried_away_from_the_page_and_let_go_elsewhere_does_nothing() {
+    let mut f = pointed_at();
+    (f.carries_files, f.drag_link) = (|| false, || Some("https://example.org/paper".into()));
+    set_sense(true, 5);
+    f.watch_drag();
+    set_sense(true, 6);
+    f.watch_drag();
+    f.read_pointer = || Some((200.0, 900.0 - 200.0)); // carried off the page
+    f.watch_drag();
+    assert!(!f.link_over, "off the page: no longer lit");
+    set_sense(false, 6);
+    assert_eq!(f.watch_drag(), vec![]);
+}
+
+#[test]
+fn a_drag_with_neither_files_nor_a_link_does_nothing() {
+    let mut f = pointed_at();
+    (f.carries_files, f.drag_link) = (|| false, || None);
+    set_sense(true, 5);
+    f.watch_drag();
+    set_sense(true, 6);
+    assert_eq!(f.watch_drag(), vec![]);
+    set_sense(false, 6);
+    assert_eq!(f.watch_drag(), vec![]);
 }

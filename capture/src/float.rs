@@ -56,6 +56,14 @@ enum Focus {
     Panel,
 }
 
+/// What a drag from another app carries, as far as the paper cares.
+#[derive(Clone, Debug, PartialEq)]
+enum Carried {
+    Files,
+    Link(String),
+    Nothing,
+}
+
 /// What the floating paper asks of the app.
 #[derive(Debug, PartialEq)]
 pub enum Act {
@@ -103,13 +111,15 @@ pub struct Float {
     hovered: bool,
     /// When the bubbles came out or the pointer last left one, for MENU_IDLE.
     touched: f64,
-    /// Senses a file drag from another app (file_drag.rs; fixed answers in tests): the drag pasteboard's count when
-    /// the button went down (None while it's up), and what this drag turned out to be (None until it's over the page:
-    /// Some(true) the panel was opened for its files, Some(false) it carries none, so the pasteboard isn't read again).
+    /// Senses a drag from another app (file_drag.rs; fixed answers in tests): the drag pasteboard's count when the
+    /// button went down (None while it's up), and what this drag carries, read once when it first comes over the
+    /// page (None until then); for a link, whether it's over the page now (the page lights up as its target).
     sense: fn() -> crate::file_drag::Sense,
     carries_files: fn() -> bool,
+    drag_link: fn() -> Option<String>,
     drag_start: Option<isize>,
-    drag_files: Option<bool>,
+    carried: Option<Carried>,
+    link_over: bool,
     /// Until when it's hidden (the frame clock); nothing is drawn or takes a click before then.
     hidden_until: f64,
     /// What waits in the Inbox, shown on the page's corner, and when it last grew (the badge pulses once).
@@ -130,7 +140,7 @@ impl Float {
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
             menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, badge: 0,
             sense: crate::file_drag::sense, carries_files: crate::file_drag::carries_files, drag_start: None,
-            drag_files: None,
+            drag_link: crate::file_drag::link, carried: None, link_over: false,
             badge_grew: f64::NEG_INFINITY, hidden_until: f64::NEG_INFINITY, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         };
@@ -173,7 +183,8 @@ impl Float {
             return;
         }
         let pointed = self.pointer().is_some_and(|p| near(self.drawn_rect(SMALL), p, PEEK_NEAR));
-        let wanted_out = pointed || self.focus != Focus::Floating || self.dragging || self.drag_files == Some(true);
+        let brought = matches!(self.carried, Some(Carried::Files | Carried::Link(_)));
+        let wanted_out = pointed || self.focus != Focus::Floating || self.dragging || brought;
         self.tuck.watch(self.t, wanted_out);
     }
 
@@ -222,11 +233,13 @@ impl Float {
         std::array::from_fn(|i| bubbles::progress(self.t - self.menu_since, i, n, menu, self.menu_from[i]))
     }
 
-    /// A paper the clipboard names by its DOI or arXiv ID (bare or as a doi.org / arxiv.org link). Any other link is
-    /// left alone: people copy web pages all day, and a bubble for each would be noise.
+    /// A paper the clipboard names: its DOI or arXiv ID (bare or as a doi.org / arxiv.org link), or a link to it (a
+    /// DOI in it, or a paper site's: see `names_a_paper`). Any other link is left alone: people copy web pages all
+    /// day, and a bubble for each would be noise.
     fn copied(&self) -> Option<Input> {
         match crate::input::classify(&(self.paste)()?) {
             input @ (Input::Doi(_) | Input::Arxiv(_)) => Some(input),
+            Input::Link(link) if crate::input::names_a_paper(&link) => Some(Input::Link(link)),
             _ => None,
         }
     }
@@ -339,30 +352,54 @@ impl Float {
         }
     }
 
-    /// A frame's look at the mouse: a drag from another app (the drag pasteboard changed since the button went down)
-    /// carrying files and now over the page opens the panel under the pointer for the drop, once per drag. The drag
-    /// ending tells the panel, which closes if nothing was dropped on it.
+    /// A frame's look at the mouse, for a drag from another app (the drag pasteboard changed since the button went
+    /// down). What it carries is read once, when it first comes over the page. Files: the panel opens under the
+    /// pointer for the drop, once per drag, and the drag's end tells it. A link: the page lights up while it's over
+    /// it, and let go there, the panel opens in Find with the link looked up (read from the drag itself, so the
+    /// browser needn't accept a drop). Anything else: nothing.
     fn watch_drag(&mut self) -> Vec<Act> {
         let now = (self.sense)();
         match (now.button, self.drag_start) {
             (true, None) => {
-                (self.drag_start, self.drag_files) = (Some(now.count), None);
+                (self.drag_start, self.carried, self.link_over) = (Some(now.count), None, false);
                 vec![]
             }
             (false, Some(_)) => {
                 self.drag_start = None;
-                if self.drag_files.take() == Some(true) { vec![Act::Take(Event::DragEnded)] } else { vec![] }
-            }
-            (true, Some(start)) if self.drag_files.is_none() && !self.dragging && now.count != start => {
-                let Some(at) = self.pointer().filter(|&at| self.over_page(at)) else { return vec![] };
-                let files = (self.carries_files)();
-                self.drag_files = Some(files);
-                if !files {
-                    return vec![]; // text or a link: nothing for the paper; decided for the rest of this drag
+                let over = std::mem::take(&mut self.link_over);
+                match self.carried.take() {
+                    Some(Carried::Files) => vec![Act::Take(Event::DragEnded)],
+                    Some(Carried::Link(link)) if over => {
+                        self.focus_on(Focus::Panel);
+                        vec![Act::Show { at: self.panel_at(), mode: Some(Mode::Find), query: Some(link) }]
+                    }
+                    _ => vec![],
                 }
-                self.focus_on(Focus::Panel);
-                let at = place::drop_spot(at, place::display_of(at, &self.displays));
-                vec![Act::Show { at, mode: Some(Mode::Find), query: None }, Act::Take(Event::DropOffered)]
+            }
+            (true, Some(start)) if !self.dragging && now.count != start => {
+                let over = self.pointer().filter(|&at| self.over_page(at));
+                if let Some(Carried::Link(_)) = self.carried {
+                    self.link_over = over.is_some();
+                }
+                let (None, Some(at)) = (&self.carried, over) else { return vec![] };
+                let carried = if (self.carries_files)() {
+                    Carried::Files
+                } else {
+                    (self.drag_link)().map_or(Carried::Nothing, Carried::Link)
+                };
+                self.carried = Some(carried.clone());
+                match carried {
+                    Carried::Files => {
+                        self.focus_on(Focus::Panel);
+                        let at = place::drop_spot(at, place::display_of(at, &self.displays));
+                        vec![Act::Show { at, mode: Some(Mode::Find), query: None }, Act::Take(Event::DropOffered)]
+                    }
+                    Carried::Link(_) => {
+                        self.link_over = true;
+                        vec![]
+                    }
+                    Carried::Nothing => vec![],
+                }
             }
             _ => vec![],
         }
@@ -514,7 +551,7 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let dark = cx.system_dark();
     let still = cx.is_reduced_motion();
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
-    let open = s.openness();
+    let open = if s.link_over { 1.0 } else { s.openness() }; // a link held over it: lit as its target
     let size = (SMALL.0 + (BIG.0 - SMALL.0) * open, SMALL.1 + (BIG.1 - SMALL.1) * open);
     // Floats while idle; held still while dragged or open (the user is looking at it).
     let tucked = s.tuck.amount(s.t);

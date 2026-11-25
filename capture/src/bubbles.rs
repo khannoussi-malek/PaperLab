@@ -46,6 +46,7 @@ impl Bubble {
         match self {
             Bubble::Mode(mode) => crate::view::pill_label(*mode, waiting),
             Bubble::Copied(Input::Arxiv(_)) => "Add copied arXiv".to_owned(),
+            Bubble::Copied(Input::Link(_)) => "Add copied link".to_owned(),
             Bubble::Copied(_) => "Add copied DOI".to_owned(),
             Bubble::OpenPaperLab => "Open PaperLab".to_owned(),
             Bubble::Hide => "Hide for an hour".to_owned(),
