@@ -23,6 +23,7 @@ mod mode;
 mod panel;
 mod place;
 mod scenes;
+mod tuck;
 mod view;
 
 use std::io::BufRead;
