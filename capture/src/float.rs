@@ -739,7 +739,7 @@ mod tests {
         let f = Float::new(None, vec![MONITOR, LAPTOP]);
         let [x, y, w, h] = f.page_rect(BIG);
         assert!(x > 1000.0 && x + w < 1440.0 && y + h < 900.0, "on the laptop, bottom right: {x} {y}");
-        assert_eq!((f.placed[2], f.placed[3]), (2.0 * HALO, 2.0 * HALO), "small while the bubbles are in");
+        assert_eq!((f.placed[2], f.placed[3]), (2.0 * HALO, 2.0 * HALO), "folded: just the glow");
     }
 
     #[test]

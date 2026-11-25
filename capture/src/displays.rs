@@ -8,7 +8,13 @@ use crate::place::Rect;
 pub fn read() -> Vec<Rect> {
     use objc2::MainThreadMarker;
     use objc2_app_kit::NSScreen;
-    let Some(mtm) = MainThreadMarker::new() else { return vec![] };
+    let Some(mtm) = MainThreadMarker::new() else {
+        static SAID: std::sync::Once = std::sync::Once::new();
+        SAID.call_once(|| {
+            eprintln!("paperlab-capture: displays read off the main thread; a monitor change needs a restart");
+        });
+        return vec![];
+    };
     let frames: Vec<[f64; 4]> = NSScreen::screens(mtm).iter()
         .map(|s| s.frame())
         .map(|f| [f.origin.x, f.origin.y, f.size.width, f.size.height])
