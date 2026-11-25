@@ -35,18 +35,36 @@ mod mac {
         types.iter().any(|t| FILE_TYPES.iter().any(|f| t.to_string() == *f))
     }
 
-    /// The web link the drag carries (a link or the address dragged from a browser), if any.
+    /// The web link the drag carries (a link or the address dragged from a browser), if any: one http(s) URL, not a
+    /// paragraph that happens to start with one.
     pub fn link() -> Option<String> {
         let board = board();
         ["public.url", "public.utf8-plain-text"].into_iter()
             .filter_map(|kind| board.stringForType(&NSString::from_str(kind)))
             .map(|text| text.to_string().trim().to_owned())
-            .find(|text| text.starts_with("https://") || text.starts_with("http://"))
+            .find(|text| super::is_web_link(text))
     }
 }
 
 #[cfg(target_os = "macos")]
 pub use mac::{carries_files, link, sense};
+
+/// One http(s) URL and nothing else.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn is_web_link(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    (lower.starts_with("https://") || lower.starts_with("http://")) && !text.contains(char::is_whitespace)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_web_link_is_one_url_in_any_case_and_not_a_paragraph() {
+        assert!(super::is_web_link("HTTPS://www.nature.com/articles/x"));
+        assert!(!super::is_web_link("https://example.org/a and then some words"));
+        assert!(!super::is_web_link("ftp://example.org/x"));
+    }
+}
 
 #[cfg(not(target_os = "macos"))]
 pub fn sense() -> Sense {

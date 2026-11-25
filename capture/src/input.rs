@@ -44,27 +44,53 @@ pub fn classify(raw: &str) -> Input {
     Input::Text(s.to_owned())
 }
 
-/// Paper sites whose links name a paper without a DOI in them (PaperLab reads the page for it).
-const PAPER_HOSTS: [&str; 24] = [
-    "nature.com", "ieeexplore.ieee.org", "sciencedirect.com", "pubmed.ncbi.nlm.nih.gov", "ncbi.nlm.nih.gov",
-    "openreview.net", "aclanthology.org", "semanticscholar.org", "jstor.org", "proceedings.neurips.cc",
-    "papers.nips.cc", "proceedings.mlr.press", "biorxiv.org", "medrxiv.org", "ssrn.com", "frontiersin.org",
-    "mdpi.com", "plos.org", "cell.com", "science.org", "pnas.org", "link.springer.com", "academic.oup.com",
-    "cambridge.org",
+/// Paper sites whose article links name a paper without a DOI in them (PaperLab reads the page for it): a host, and
+/// the start of its article paths, so a site's other pages (news, search, a dictionary) don't count.
+const PAPER_PAGES: [(&str, &str); 19] = [
+    ("nature.com", "/articles/"),
+    ("ieeexplore.ieee.org", "/document/"),
+    ("sciencedirect.com", "/science/article/"),
+    ("pubmed.ncbi.nlm.nih.gov", "/"),
+    ("ncbi.nlm.nih.gov", "/pmc/articles/"),
+    ("pmc.ncbi.nlm.nih.gov", "/articles/"),
+    ("openreview.net", "/forum"),
+    ("aclanthology.org", "/"),
+    ("semanticscholar.org", "/paper/"),
+    ("jstor.org", "/stable/"),
+    ("proceedings.neurips.cc", "/paper"),
+    ("papers.nips.cc", "/paper"),
+    ("proceedings.mlr.press", "/v"),
+    ("biorxiv.org", "/content/"),
+    ("medrxiv.org", "/content/"),
+    ("papers.ssrn.com", "/sol3/papers.cfm"),
+    ("frontiersin.org", "/articles/"),
+    ("academic.oup.com", "/"),
+    ("journals.plos.org", "/"),
 ];
 
-/// A link that names a paper: a DOI in it (most publishers' article links), or a paper site's.
+/// A link that names a paper: a DOI in its path (most publishers' article links), or a paper site's article page.
 pub fn names_a_paper(link: &str) -> bool {
-    let rest = link.split_once("://").map_or(link, |(_, rest)| rest);
-    let host = rest.split(['/', '?', '#']).next().unwrap_or("").to_ascii_lowercase();
-    let host = host.rsplit_once('@').map_or(host.as_str(), |(_, h)| h); // user@host
-    // a DOI in the path: a "10.<registrant>" segment, its suffix after it
-    let segments: Vec<&str> = rest.split(['?', '#']).next().unwrap_or(rest).split('/').collect();
+    let Some((scheme, rest)) = link.trim().split_once("://") else { return false };
+    if !matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") {
+        return false;
+    }
+    let rest = rest.split(['?', '#']).next().unwrap_or(rest);
+    let (authority, path) = rest.split_once('/').map_or((rest, ""), |(a, p)| (a, p));
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h); // user@host
+    let host = host.split(':').next().unwrap_or(host).trim_end_matches('.').to_ascii_lowercase(); // host:443, host.
+    let path = format!("/{path}");
+    // a DOI in the path: a "10.<4+ digit registrant>" segment, its suffix after it
     let registrant = |part: &str| {
-        part.strip_prefix("10.").is_some_and(|r| r.len() >= 4 && r.bytes().all(|b| b.is_ascii_digit() || b == b'.'))
+        part.strip_prefix("10.").is_some_and(|r| {
+            let digits_first = r.len() >= 4 && r.bytes().take(4).all(|b| b.is_ascii_digit());
+            digits_first && r.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+        })
     };
+    let segments: Vec<&str> = path.split('/').collect();
     let doi_inside = segments.windows(2).any(|pair| registrant(pair[0]) && !pair[1].is_empty());
-    doi_inside || PAPER_HOSTS.iter().any(|known| host == *known || host.ends_with(&format!(".{known}")))
+    let on_site = |site: &str| host == site || host.ends_with(&format!(".{site}"));
+    let article = |start: &str| path.starts_with(start) && path.len() > start.len();
+    doi_inside || PAPER_PAGES.iter().any(|(site, start)| on_site(site) && article(start))
 }
 
 fn strip_prefix_ci<'a>(s: &'a str, prefixes: &[&str]) -> Option<&'a str> {
@@ -181,5 +207,12 @@ mod paper_link_tests {
         assert!(names_a_paper("https://ieeexplore.ieee.org/document/9156610"));
         assert!(!names_a_paper("https://news.ycombinator.com/item?id=1"), "any other page: no");
         assert!(!names_a_paper("https://evilnature.com/x"), "a look-alike host: no");
+        assert!(names_a_paper("HTTPS://WWW.Nature.com:443/articles/x"), "case and a port don't matter");
+        assert!(names_a_paper("https://www.nature.com./articles/x"), "nor a trailing dot");
+        assert!(!names_a_paper("https://www.nature.com/news/today"), "a paper site's other pages: no");
+        assert!(!names_a_paper("https://dictionary.cambridge.org/dictionary/word"));
+        assert!(!names_a_paper("https://nature.com@evil.example/articles/x"), "userinfo isn't the host");
+        assert!(!names_a_paper("https://example.com/docs/10.12.1/guide"), "a version number isn't a DOI");
+        assert!(!names_a_paper("ftp://nature.com/articles/x"));
     }
 }

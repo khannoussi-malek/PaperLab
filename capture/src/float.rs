@@ -56,11 +56,13 @@ enum Focus {
     Panel,
 }
 
-/// What a drag from another app carries, as far as the paper cares.
+/// What a drag from another app carries, as far as the paper cares, once it has come over the page.
 #[derive(Clone, Debug, PartialEq)]
 enum Carried {
     Files,
-    Link(String),
+    /// A web link, and whether it's over the page now (the page lights up as its target).
+    Link { link: String, over: bool },
+    /// Neither: nothing for the paper, and the pasteboard isn't read again this drag.
     Nothing,
 }
 
@@ -113,13 +115,12 @@ pub struct Float {
     touched: f64,
     /// Senses a drag from another app (file_drag.rs; fixed answers in tests): the drag pasteboard's count when the
     /// button went down (None while it's up), and what this drag carries, read once when it first comes over the
-    /// page (None until then); for a link, whether it's over the page now (the page lights up as its target).
+    /// page (None until then).
     sense: fn() -> crate::file_drag::Sense,
     carries_files: fn() -> bool,
     drag_link: fn() -> Option<String>,
     drag_start: Option<isize>,
     carried: Option<Carried>,
-    link_over: bool,
     /// Until when it's hidden (the frame clock); nothing is drawn or takes a click before then.
     hidden_until: f64,
     /// What waits in the Inbox, shown on the page's corner, and when it last grew (the badge pulses once).
@@ -140,7 +141,7 @@ impl Float {
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
             menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, badge: 0,
             sense: crate::file_drag::sense, carries_files: crate::file_drag::carries_files, drag_start: None,
-            drag_link: crate::file_drag::link, carried: None, link_over: false,
+            drag_link: crate::file_drag::link, carried: None,
             badge_grew: f64::NEG_INFINITY, hidden_until: f64::NEG_INFINITY, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         };
@@ -183,7 +184,7 @@ impl Float {
             return;
         }
         let pointed = self.pointer().is_some_and(|p| near(self.drawn_rect(SMALL), p, PEEK_NEAR));
-        let brought = matches!(self.carried, Some(Carried::Files | Carried::Link(_)));
+        let brought = matches!(self.carried, Some(Carried::Files | Carried::Link { over: true, .. }));
         let wanted_out = pointed || self.focus != Focus::Floating || self.dragging || brought;
         self.tuck.watch(self.t, wanted_out);
     }
@@ -361,15 +362,15 @@ impl Float {
         let now = (self.sense)();
         match (now.button, self.drag_start) {
             (true, None) => {
-                (self.drag_start, self.carried, self.link_over) = (Some(now.count), None, false);
+                (self.drag_start, self.carried) = (Some(now.count), None);
                 vec![]
             }
             (false, Some(_)) => {
                 self.drag_start = None;
-                let over = std::mem::take(&mut self.link_over);
                 match self.carried.take() {
                     Some(Carried::Files) => vec![Act::Take(Event::DragEnded)],
-                    Some(Carried::Link(link)) if over => {
+                    // let go: where the pointer is now, not where it was a frame ago
+                    Some(Carried::Link { link, .. }) if self.pointer().is_some_and(|at| self.over_page(at)) => {
                         self.focus_on(Focus::Panel);
                         vec![Act::Show { at: self.panel_at(), mode: Some(Mode::Find), query: Some(link) }]
                     }
@@ -378,31 +379,34 @@ impl Float {
             }
             (true, Some(start)) if !self.dragging && now.count != start => {
                 let over = self.pointer().filter(|&at| self.over_page(at));
-                if let Some(Carried::Link(_)) = self.carried {
-                    self.link_over = over.is_some();
-                }
-                let (None, Some(at)) = (&self.carried, over) else { return vec![] };
-                let carried = if (self.carries_files)() {
-                    Carried::Files
-                } else {
-                    (self.drag_link)().map_or(Carried::Nothing, Carried::Link)
-                };
-                self.carried = Some(carried.clone());
-                match carried {
-                    Carried::Files => {
-                        self.focus_on(Focus::Panel);
-                        let at = place::drop_spot(at, place::display_of(at, &self.displays));
-                        vec![Act::Show { at, mode: Some(Mode::Find), query: None }, Act::Take(Event::DropOffered)]
-                    }
-                    Carried::Link(_) => {
-                        self.link_over = true;
+                match &mut self.carried {
+                    Some(Carried::Link { over: lit, .. }) => {
+                        *lit = over.is_some();
                         vec![]
                     }
-                    Carried::Nothing => vec![],
+                    Some(_) => vec![],
+                    None => over.map_or(vec![], |at| self.first_over_page(at)),
                 }
             }
             _ => vec![],
         }
+    }
+
+    /// A drag from another app has come over the page for the first time, the pointer at `at`: what does it carry?
+    fn first_over_page(&mut self, at: (f32, f32)) -> Vec<Act> {
+        if (self.carries_files)() {
+            self.carried = Some(Carried::Files);
+            self.focus_on(Focus::Panel);
+            let at = place::drop_spot(at, place::display_of(at, &self.displays));
+            return vec![Act::Show { at, mode: Some(Mode::Find), query: None }, Act::Take(Event::DropOffered)];
+        }
+        self.carried = Some((self.drag_link)().map_or(Carried::Nothing, |link| Carried::Link { link, over: true }));
+        vec![]
+    }
+
+    /// A link is held over the page: it's lit as the link's target.
+    fn link_over(&self) -> bool {
+        matches!(self.carried, Some(Carried::Link { over: true, .. }))
     }
 
     /// The pointer in global points, top-left origin (place.rs), when AppKit can say.
@@ -551,7 +555,7 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let dark = cx.system_dark();
     let still = cx.is_reduced_motion();
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
-    let open = if s.link_over { 1.0 } else { s.openness() }; // a link held over it: lit as its target
+    let open = if s.link_over() { 1.0 } else { s.openness() }; // a link held over it: lit as its target
     let size = (SMALL.0 + (BIG.0 - SMALL.0) * open, SMALL.1 + (BIG.1 - SMALL.1) * open);
     // Floats while idle; held still while dragged or open (the user is looking at it).
     let tucked = s.tuck.amount(s.t);

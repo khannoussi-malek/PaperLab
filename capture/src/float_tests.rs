@@ -474,11 +474,11 @@ fn a_link_dragged_from_a_browser_lights_the_page_and_let_go_on_it_is_looked_up()
     f.watch_drag();
     set_sense(true, 6);
     assert_eq!(f.watch_drag(), vec![], "nothing opens while it's held");
-    assert!(f.link_over, "the page lights up as its target");
+    assert!(f.link_over(), "the page lights up as its target");
     set_sense(false, 6);
     let query = Some("https://www.nature.com/articles/x".to_owned());
     assert_eq!(f.watch_drag(), vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Find), query }]);
-    assert_eq!((f.focus, f.link_over), (Focus::Panel, false));
+    assert_eq!((f.focus, f.link_over()), (Focus::Panel, false));
 }
 
 #[test]
@@ -491,7 +491,7 @@ fn a_link_carried_away_from_the_page_and_let_go_elsewhere_does_nothing() {
     f.watch_drag();
     f.read_pointer = || Some((200.0, 900.0 - 200.0)); // carried off the page
     f.watch_drag();
-    assert!(!f.link_over, "off the page: no longer lit");
+    assert!(!f.link_over(), "off the page: no longer lit");
     set_sense(false, 6);
     assert_eq!(f.watch_drag(), vec![]);
 }
@@ -504,6 +504,20 @@ fn a_drag_with_neither_files_nor_a_link_does_nothing() {
     f.watch_drag();
     set_sense(true, 6);
     assert_eq!(f.watch_drag(), vec![]);
+    set_sense(false, 6);
+    assert_eq!(f.watch_drag(), vec![]);
+}
+
+#[test]
+fn a_link_let_go_just_off_the_page_isnt_taken_even_if_it_was_over_it_a_frame_ago() {
+    let mut f = pointed_at();
+    (f.carries_files, f.drag_link) = (|| false, || Some("https://example.org/paper".into()));
+    set_sense(true, 5);
+    f.watch_drag();
+    set_sense(true, 6);
+    f.watch_drag();
+    assert!(f.link_over());
+    f.read_pointer = || Some((200.0, 900.0 - 200.0)); // moved off and let go in the same frame
     set_sense(false, 6);
     assert_eq!(f.watch_drag(), vec![]);
 }
