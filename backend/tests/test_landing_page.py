@@ -22,23 +22,54 @@ def test_a_page_is_known_by_its_doi_first_then_its_arxiv_id_then_its_title():
     assert landing_page.identify(page(("citation_title", TITLE), ("citation_doi", f"doi:{DOI}"))) == DOI
     assert landing_page.identify(page(("dc.identifier", f"https://doi.org/{DOI}."))) == DOI
     assert landing_page.identify(page(("citation_arxiv_id", "1810.04805"))) == "arXiv:1810.04805"
-    assert landing_page.identify(page(("og:title", "  A &amp; B\n  rest "), attr="property")) == "A & B rest"
+    assert landing_page.identify(page(("citation_title", "  A &amp; B\n  rest "))) == "A & B rest"
+    assert landing_page.identify(page(("og:title", "Nature"), attr="property")) is None, (
+        "a site's title isn't a paper's"
+    )
     assert landing_page.identify(page(("description", "nothing useful"))) is None
 
 
-def test_only_links_count_and_only_public_web_pages_are_read():
+def test_only_links_count():
     assert landing_page.is_link(f"  {NATURE} ")
     assert not landing_page.is_link("protein structure prediction")
-    for url in (
-        "file:///etc/passwd",
-        "http://localhost:8000/api",
-        "http://127.0.0.1/",
-        "http://10.0.0.5/x",
-        "http://printer.local/",
-        "http://[::1]/",
-    ):
-        assert not landing_page._public(url), url
-    assert landing_page._public(NATURE) and landing_page._public("http://93.184.216.34/paper")
+
+
+async def test_only_public_web_pages_are_read_whatever_the_address_looks_like(monkeypatch):
+    inside = {"localhost": ["127.0.0.1"], "2130706433": ["127.0.0.1"], "intranet.example.org": ["10.0.0.5"]}
+
+    async def resolve(host: str) -> list[str]:  # DNS, faked as it answers these
+        return inside.get(host, ["93.184.216.34"])
+
+    monkeypatch.setattr("app.core.papers.pdf_links.resolve_host", resolve)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, text="x"))) as http:
+        for url in ("file:///etc/passwd", "http://localhost:8000/api", "http://127.0.0.1/", "http://[::1]/",
+                    "http://2130706433/", "http://intranet.example.org/paper"):  # fmt: skip
+            with pytest.raises(landing_page.PageUnreadable, match="only public web pages"):
+                await landing_page.read(http, url)
+
+
+async def test_a_redirect_into_the_private_network_is_refused_by_the_clients_guard(monkeypatch):
+    async def resolve(host: str) -> list[str]:
+        return ["10.0.0.5"] if host == "inside.example.org" else ["93.184.216.34"]
+
+    monkeypatch.setattr("app.core.papers.pdf_links.resolve_host", resolve)
+
+    def site(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "journal.example.org":
+            return httpx.Response(302, headers={"Location": "http://inside.example.org/admin"})
+        return httpx.Response(200, text="secrets")
+
+    from app.core.papers.pdf_links import guard
+
+    transport = httpx.MockTransport(site)
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True, event_hooks={"request": [guard]}) as http:
+        with pytest.raises(landing_page.PageUnreadable, match="only public web pages"):
+            await landing_page.read(http, "https://journal.example.org/paper")
+
+
+def test_a_page_in_latin_1_is_read_by_its_own_charset():
+    body = '<meta charset="iso-8859-1"><meta name="citation_title" content="Caf\xe9 effects">'.encode("latin-1")
+    assert landing_page.identify(landing_page._decode(body, None)) == "Café effects"
 
 
 async def test_a_page_is_read_up_to_its_size_cap_and_a_refusal_says_why():
@@ -51,8 +82,6 @@ async def test_a_page_is_read_up_to_its_size_cap_and_a_refusal_says_why():
         assert len(await landing_page.read(http, "https://example.org/big")) == landing_page.MAX_BYTES
         with pytest.raises(landing_page.PageUnreadable, match="answered 403"):
             await landing_page.read(http, "https://example.org/gone")
-        with pytest.raises(landing_page.PageUnreadable, match="only public web pages"):
-            await landing_page.read(http, "http://localhost/x")
 
 
 async def test_a_link_without_a_doi_is_searched_by_the_doi_its_page_gives(session, discovery_fakes):

@@ -6,28 +6,34 @@ can still be looked up by what its page says.
 Only http(s) pages on public hosts are read, through the client PaperLab already uses for publisher sites, with a
 time limit and a size cap: the page is the owner's own link, but a link is still outside input."""
 
+import asyncio
 import html
-import ipaddress
 import re
-from urllib.parse import urlsplit
 
 import httpx
 
-# The head of a page holds its meta tags; the rest is never needed.
+from app.core.papers.pdf_links import check_url
+from app.domain.errors import DomainError
+
+# The head of a page holds its meta tags; the rest is never needed. A slow site gets READ_SECONDS for the whole read.
 MAX_BYTES = 1_500_000
 TIMEOUT = httpx.Timeout(10.0)
+READ_SECONDS = 15.0
 
 COULD_NOT_READ = "Couldn't read that page ({why}). Copy the paper's DOI or title from it instead."
 SAYS_NOTHING = "That page doesn't say which paper it is. Copy the paper's DOI or title from it instead."
 
 _URL = re.compile(r"^https?://\S+$", re.IGNORECASE)
-_META = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
+# Bounded, so a page of unclosed tags can't make the scan quadratic.
+_META = re.compile(r"<meta\b[^>]{0,4000}>", re.IGNORECASE)
 _ATTR = re.compile(r"""([a-z_:.-]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)""", re.IGNORECASE)
+_CHARSET = re.compile(rb"""<meta[^>]{0,200}charset\s*=\s*["']?([a-z0-9_-]+)""", re.IGNORECASE)
 _DOI = re.compile(r"\b(10\.\d{4,9}/[^\s\"'<>]+)")
-# Meta names, in the order they're trusted.
+# Meta names, in the order they're trusted. Only the scholarly ones: a site's own `og:title` ("Nature", "Editorial")
+# would find some other paper.
 _DOI_NAMES = ("citation_doi", "prism.doi", "dc.identifier", "dc.identifier.doi", "bepress_citation_doi")
 _ARXIV_NAMES = ("citation_arxiv_id",)
-_TITLE_NAMES = ("citation_title", "dc.title", "og:title")
+_TITLE_NAMES = ("citation_title", "dc.title")
 
 
 class PageUnreadable(Exception):
@@ -64,39 +70,41 @@ def identify(page: str) -> str | None:
     return None
 
 
-def _public(url: str) -> bool:
-    """An http(s) URL whose host isn't this machine or a private network (by name or by literal address)."""
-    parts = urlsplit(url)
-    host = (parts.hostname or "").lower()
-    if (
-        parts.scheme not in ("http", "https")
-        or not host
-        or host == "localhost"
-        or host.endswith((".local", ".internal"))
-    ):
-        return False
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return True  # a name: public hosts are what links name
-    return address.is_global
-
-
 async def read(http: httpx.AsyncClient, url: str) -> str:
-    """The page's first MAX_BYTES as text. Raises PageUnreadable with the reason in words."""
-    if not _public(url):
-        raise PageUnreadable(COULD_NOT_READ.format(why="only public web pages are read"))
+    """The page's first MAX_BYTES as text. Raises PageUnreadable with the reason in words. The URL is checked as a PDF
+    link is (http(s), every address public); the client's own guard checks each redirect hop the same way."""
     try:
-        async with http.stream("GET", url, timeout=TIMEOUT, headers={"Accept": "text/html"}) as response:
-            if response.status_code >= 400:
-                raise PageUnreadable(COULD_NOT_READ.format(why=f"the site answered {response.status_code}"))
-            if not _public(str(response.url)):
-                raise PageUnreadable(COULD_NOT_READ.format(why="it redirects off the public web"))
-            body = bytearray()
-            async for chunk in response.aiter_bytes():
-                body.extend(chunk)
-                if len(body) >= MAX_BYTES:
-                    break
-            return body[:MAX_BYTES].decode(response.encoding or "utf-8", errors="replace")
+        await check_url(url)
+        async with asyncio.timeout(READ_SECONDS):
+            return await _fetch(http, url)
+    except DomainError as exc:  # unsafe_url, from the check or the client's guard
+        raise PageUnreadable(COULD_NOT_READ.format(why="only public web pages are read")) from exc
+    except TimeoutError as exc:
+        raise PageUnreadable(COULD_NOT_READ.format(why="the site took too long")) from exc
     except httpx.HTTPError as exc:
         raise PageUnreadable(COULD_NOT_READ.format(why="the site didn't answer")) from exc
+
+
+async def _fetch(http: httpx.AsyncClient, url: str) -> str:
+    async with http.stream("GET", url, timeout=TIMEOUT, headers={"Accept": "text/html"}) as response:
+        if response.status_code >= 400:
+            raise PageUnreadable(COULD_NOT_READ.format(why=f"the site answered {response.status_code}"))
+        body = bytearray()
+        async for chunk in response.aiter_bytes():
+            body.extend(chunk)
+            if len(body) >= MAX_BYTES:
+                break
+        return _decode(bytes(body[:MAX_BYTES]), response.charset_encoding)
+
+
+def _decode(body: bytes, header_charset: str | None) -> str:
+    """The header's charset, else the page's own `<meta charset>`, else UTF-8."""
+    named = _CHARSET.search(body[:4096])
+    for charset in (header_charset, named and named.group(1).decode("ascii")):
+        if not charset:
+            continue
+        try:
+            return body.decode(charset, errors="replace")
+        except LookupError:
+            continue  # a charset Python doesn't know
+    return body.decode("utf-8", errors="replace")
