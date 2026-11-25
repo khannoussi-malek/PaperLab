@@ -1,12 +1,16 @@
 //! PaperLab's REST API on 127.0.0.1, as Quick Capture calls it: the client and its error handling here, one module
 //! per area beside it. Blocking: callers run them off the UI thread.
 
+mod cite;
 mod discovery;
 mod library;
+mod novelty;
 #[cfg(test)]
 mod tests;
 
+pub use cite::Format;
 pub use discovery::{Added, Candidate, Found};
+pub use novelty::{Close, Closeness};
 
 use std::time::Duration;
 

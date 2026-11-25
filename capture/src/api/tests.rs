@@ -87,3 +87,26 @@ fn nothing_listening_is_unreachable() {
     let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
     assert_eq!(Api::new(port).papers(), Err(ApiError::Unreachable));
 }
+
+#[test]
+fn a_reference_comes_back_as_its_text_and_an_error_as_its_sentence() {
+    let api = fake(|_, path, body| match path {
+        "/api/citations/export" if body.contains("\"bibtex\"") => (200, json!("@article{k, title={T}}")),
+        "/api/citations/export" => (422, json!({ "detail": "unknown_format" })),
+        _ => (404, json!({})),
+    });
+    assert_eq!(api.cite("p1", Format::Bibtex), Ok("\"@article{k, title={T}}\"".into()));
+    assert_eq!(api.cite("p1", Format::Apa), Err(ApiError::Said("unknown_format".into())));
+}
+
+#[test]
+fn the_closest_papers_read_with_their_labels() {
+    let api = fake(|_, _, _| {
+        (200, json!({ "papers": [{ "paper_id": "p1", "title": "T", "year": 2020, "label": "very close",
+            "distance": 0.1, "passage": "We show…", "page": 3, "section": null, "from_abstract": false,
+            "chunk_id": "c" }], "searched_papers": 9, "note": "Only your library." }))
+    });
+    let found = api.novelty("an idea").unwrap();
+    assert_eq!((found.papers[0].label.as_str(), found.papers[0].page, found.note.as_str()), ("very close", Some(3), "Only your library."));
+}
+

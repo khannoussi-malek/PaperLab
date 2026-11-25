@@ -10,12 +10,15 @@
 #![forbid(unsafe_code)]
 
 mod api;
+mod clipboard;
 mod float;
 mod galaxy;
 mod icon;
 mod input;
 mod library;
+mod mode;
 mod panel;
+mod scenes;
 mod view;
 
 use std::io::BufRead;
@@ -24,13 +27,15 @@ use std::time::{Duration, Instant};
 
 use rune::{Align, AppHandle, AppSpec, DisplayTarget, OverlayPlacement, ScreenEdge, TextEdit, WindowOptions, WindowSpec};
 
-use api::Api;
-use panel::{Effect, Event, Panel};
+use api::{Api, ApiError};
+use panel::{Effect, Event, Panel, Phase};
 
 const BUNDLE_ID: &str = "io.github.khannoussi-malek.paperlab";
 const DEFAULT_PORT: u16 = 5190;
 const DEFAULT_SHORTCUT: &str = "ctrl+alt+p";
 const POLL_EVERY: Duration = Duration::from_secs(1);
+/// How long "Copied …" stays before the panel closes by itself.
+const CONFIRM_FOR: Duration = Duration::from_millis(900);
 
 pub struct App {
     panel: Panel,
@@ -83,12 +88,15 @@ impl App {
         self.dispatch(Event::Closed);
     }
 
-    /// Opened: by the shortcut (`galaxy`: with the galaxy behind it) or from the floating paper (without: the paper is
-    /// the animation, and the user wants the function).
-    fn shown(&mut self, galaxy: bool) {
-        if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()).filter(|_| galaxy) {
+    /// Opened by the shortcut: in Find, with the galaxy behind it. Opened from the floating paper: in the last mode
+    /// used and without the galaxy (the paper is the animation, and the user wants the function).
+    fn shown(&mut self, by_shortcut: bool) {
+        if let Some(galaxy) = self.ctx.as_ref().and_then(|ctx| ctx.galaxy.as_ref()).filter(|_| by_shortcut) {
             galaxy.update(|g, _| g.open());
             galaxy.show(); // before the panel, which then orders in above it
+        }
+        if by_shortcut {
+            self.panel.mode = mode::Mode::Find;
         }
         self.query = focused("");
         self.dispatch(Event::Shown);
@@ -122,6 +130,20 @@ impl App {
                 None => open(&["-b", BUNDLE_ID]),
             },
             Effect::Close => self.close(),
+            Effect::CloseSoon => {
+                std::thread::spawn(move || {
+                    std::thread::sleep(CONFIRM_FOR);
+                    // Still showing the confirmation: the user hasn't moved on.
+                    me.update(|s, _| if matches!(s.panel.phase, Phase::Copied(_)) { s.close() });
+                });
+            }
+            Effect::Cite { paper_id, title, format } => background(me, move || {
+                let result = api.cite(&paper_id, format).and_then(|text| {
+                    clipboard::copy(&text).map_err(|e| ApiError::Said(format!("Couldn't copy it: {e}.")))
+                });
+                Event::Cited { title, format, result }
+            }),
+            Effect::Novelty { seq, text } => background(me, move || Event::Novelty { seq, result: api.novelty(&text) }),
         }
     }
 }
@@ -242,74 +264,6 @@ fn main() {
     });
 }
 
-/// Fixed states for `--snap` stills; they set the state through `Panel::step` and drop its effects.
-mod scenes {
-    use crate::App;
-    use crate::api::{Added, Candidate, Found};
-    use crate::library::Paper;
-    use crate::panel::{Event, Panel};
-
-    pub const ALL: &[(&str, fn(&mut App))] = &[
-        ("library", |s| set(s, "", library_shown())),
-        ("typed", |s| { let mut p = library_shown(); p.step(Event::Query("transformer".into())); set(s, "transformer", p) }),
-        ("looking-up", |s| set(s, "10.48550/arXiv.1706.03762", looked_up(None))),
-        ("found", |s| set(s, "10.48550/arXiv.1706.03762", looked_up(Some(Ok(found()))))),
-        ("adding", |s| set(s, "2401.12345", added(None))),
-        ("added", |s| set(s, "2401.12345", added(Some(Added::Queued(paper("n", "Retrieval-augmented reading of long papers", "embedding")))))),
-        ("no-free-pdf", |s| set(s, "2401.12345", added(Some(Added::NoFreePdf("No free PDF was found for this paper. Open its page, download the PDF and use Upload PDFs.".into()))))),
-        ("offline", |s| { let mut p = Panel::default(); p.step(Event::Papers(Err(crate::api::ApiError::Unreachable))); set(s, "", p) }),
-    ];
-
-    fn set(s: &mut App, query: &str, panel: Panel) {
-        s.query = crate::focused(query);
-        s.panel = panel;
-    }
-
-    fn paper(id: &str, title: &str, status: &str) -> Paper {
-        Paper { id: id.into(), title: title.into(), authors: vec!["Ana Lopez".into(), "Wei Zhang".into(), "Sam Okafor".into()],
-                year: Some(2024), doi: None, status: status.into(), status_error: None, created_at: format!("2026-11-{id}") }
-    }
-
-    fn library_shown() -> Panel {
-        let mut p = Panel::default();
-        p.step(Event::Shown);
-        p.step(Event::Papers(Ok(vec![
-            paper("01", "Attention Is All You Need", "ready"),
-            paper("02", "BERT: Pre-training of Deep Bidirectional Transformers", "ready"),
-            paper("03", "Retrieval-Augmented Generation for Knowledge-Intensive NLP", "ready"),
-            paper("04", "Scaling Laws for Neural Language Models", "ready"),
-            paper("05", "An Image is Worth 16x16 Words: Transformers for Image Recognition", "ready"),
-        ])));
-        p
-    }
-
-    fn candidate(title: &str, paper_id: Option<&str>) -> Candidate {
-        Candidate { title: title.into(), authors: vec!["Ashish Vaswani".into(), "Noam Shazeer".into(), "Niki Parmar".into()],
-                    year: Some(2017), paper_id: paper_id.map(Into::into), raw: serde_json::json!({ "title": title }) }
-    }
-
-    fn found() -> Found {
-        Found { results: vec![candidate("Attention Is All You Need", None)],
-                notices: vec!["Semantic Scholar is busy or unreachable.".into()] }
-    }
-
-    fn looked_up(answer: Option<Result<Found, crate::api::ApiError>>) -> Panel {
-        let mut p = library_shown();
-        p.step(Event::Query("10.48550/arXiv.1706.03762".into()));
-        if let Some(result) = answer { p.step(Event::Looked { seq: 1, result }); }
-        p
-    }
-
-    fn added(answer: Option<Added>) -> Panel {
-        let mut p = library_shown();
-        p.step(Event::Query("2401.12345".into()));
-        let found = Found { results: vec![candidate("Retrieval-augmented reading of long papers", None)], notices: vec![] };
-        p.step(Event::Looked { seq: 1, result: Ok(found) });
-        p.step(Event::Submit);
-        if let Some(answer) = answer { p.step(Event::AddDone(Ok(answer))); }
-        p
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -362,6 +316,35 @@ mod tests {
         press(&mut rt, Key::Escape);
         assert_eq!(rt.state.panel.query, "");
         assert!(rt.state.sent.is_empty(), "no effect beyond the close itself");
+    }
+
+    fn command(rt: &mut Runtime<App>, key: Key) {
+        rt.key(KeyEvent { key, mods: Mods { cmd: true, ..Mods::default() } });
+        rt.frame(1.0 / 60.0);
+    }
+
+    #[test]
+    fn tab_and_command_digits_move_along_the_mode_bar_and_a_pill_click_picks_one() {
+        let mut rt = runtime();
+        assert!(rt.find("mode-2").is_some(), "a pill per mode");
+        press(&mut rt, Key::Tab);
+        assert_eq!(rt.state.panel.mode, mode::Mode::Cite);
+        command(&mut rt, Key::Command('3'));
+        assert_eq!(rt.state.panel.mode, mode::Mode::Novelty);
+        let (x, y) = rt.find("mode-0").expect("the Find pill");
+        rt.pointer_move(x, y);
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        rt.frame(1.0 / 60.0);
+        assert_eq!(rt.state.panel.mode, mode::Mode::Find);
+    }
+
+    #[test]
+    fn command_enter_in_cite_asks_for_bibtex() {
+        let mut rt = runtime();
+        press(&mut rt, Key::Tab);
+        command(&mut rt, Key::Enter);
+        assert!(matches!(rt.state.sent.as_slice(), [Effect::Cite { format: api::Format::Bibtex, .. }]), "{:?}", rt.state.sent);
     }
 
     #[test]

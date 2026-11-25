@@ -1,5 +1,6 @@
 use super::*;
-use crate::api::Added;
+use crate::api::{Added, Close, Closeness, Format};
+use crate::mode::Mode;
 use crate::library::paper;
 use serde_json::json;
 
@@ -164,4 +165,100 @@ fn a_lookup_error_shows_paperlabs_sentence() {
     p.step(Event::Query("2401.12345".into()));
     p.step(Event::Looked { seq: 1, result: Err(ApiError::Said("No paper source that can look this up is on.".into())) });
     assert_eq!(p.phase, Phase::Failed("No paper source that can look this up is on.".into()));
+}
+
+fn close(id: &str, label: &str) -> Close {
+    Close { paper_id: id.into(), title: format!("Paper {id}"), year: Some(2020), label: label.into(),
+            passage: "a passage".into(), page: Some(3) }
+}
+
+#[test]
+fn tab_walks_the_modes_and_the_query_stays_for_the_next_one() {
+    let mut p = shown_with_library();
+    typed(&mut p, "graph");
+    p.step(Event::NextMode { forward: true });
+    assert_eq!((p.mode, p.query.as_str()), (Mode::Cite, "graph"));
+    assert_eq!(p.rows(), vec![Row::Paper(1)], "Cite filters the library by the same text");
+    p.step(Event::NextMode { forward: false });
+    assert_eq!(p.mode, Mode::Find);
+}
+
+#[test]
+fn a_reopened_panel_keeps_its_mode() {
+    let mut p = shown_with_library();
+    p.step(Event::Mode(Mode::Novelty));
+    p.step(Event::Closed);
+    p.step(Event::Shown);
+    assert_eq!(p.mode, Mode::Novelty);
+}
+
+#[test]
+fn modes_wait_while_an_add_is_in_flight() {
+    let mut p = shown_with_library();
+    p.step(Event::Query("2401.12345".into()));
+    p.step(Event::Looked { seq: 1, result: Ok(Found { results: vec![candidate("New", None)], notices: vec![] }) });
+    p.step(Event::Submit);
+    assert!(matches!(p.phase, Phase::Adding(_)));
+    p.step(Event::Mode(Mode::Cite));
+    assert_eq!(p.mode, Mode::Find);
+}
+
+#[test]
+fn cite_copies_apa_on_enter_and_bibtex_on_command_enter_then_closes() {
+    let mut p = shown_with_library();
+    p.step(Event::Mode(Mode::Cite));
+    typed(&mut p, "attention");
+    let apa = Effect::Cite { paper_id: "a".into(), title: "Attention Is All You Need".into(), format: Format::Apa };
+    assert_eq!(p.step(Event::Submit), vec![apa]);
+    p.step(Event::Down);
+    let bibtex = Effect::Cite { paper_id: "b".into(), title: "Graph attention networks".into(), format: Format::Bibtex };
+    assert_eq!(p.step(Event::SubmitAlt), vec![bibtex]);
+    let done = p.step(Event::Cited { title: "Graph attention networks".into(), format: Format::Bibtex, result: Ok(()) });
+    assert_eq!(done, vec![Effect::CloseSoon]);
+    assert_eq!(p.phase, Phase::Copied("Copied the BibTeX entry of “Graph attention networks”.".into()));
+}
+
+#[test]
+fn a_failed_copy_says_why_and_stays_open() {
+    let mut p = shown_with_library();
+    p.step(Event::Mode(Mode::Cite));
+    let failed = Event::Cited { title: "x".into(), format: Format::Apa, result: Err(ApiError::Said("No such paper.".into())) };
+    assert_eq!(p.step(failed), vec![]);
+    assert_eq!(p.phase, Phase::Failed("No such paper.".into()));
+}
+
+#[test]
+fn done_before_searches_on_enter_and_opens_a_close_paper() {
+    let mut p = shown_with_library();
+    p.step(Event::Mode(Mode::Novelty));
+    assert_eq!(p.step(Event::Submit), vec![], "nothing typed, nothing asked");
+    typed(&mut p, "graph attention for citations ");
+    assert_eq!(p.step(Event::Submit), vec![Effect::Novelty { seq: 1, text: "graph attention for citations".into() }]);
+    assert_eq!(p.step(Event::Submit), vec![], "one search at a time");
+    let found = Closeness { papers: vec![close("x", "very close"), close("y", "related")], note: String::new() };
+    p.step(Event::Novelty { seq: 1, result: Ok(found) });
+    assert_eq!(p.rows(), vec![Row::Close(0), Row::Close(1)]);
+    p.step(Event::Down);
+    assert_eq!(p.step(Event::Submit), vec![Effect::Open("y".into()), Effect::Close]);
+}
+
+#[test]
+fn an_answer_for_text_since_edited_is_dropped() {
+    let mut p = shown_with_library();
+    p.step(Event::Mode(Mode::Novelty));
+    typed(&mut p, "idea");
+    p.step(Event::Submit);
+    p.step(Event::Query("idea, refined".into()));
+    p.step(Event::Novelty { seq: 1, result: Ok(Closeness { papers: vec![close("x", "related")], note: String::new() }) });
+    assert_eq!((p.phase.clone(), p.rows()), (Phase::Library, vec![]));
+}
+
+#[test]
+fn done_before_offline_offers_to_open_paperlab() {
+    let mut p = shown_with_library();
+    p.step(Event::Mode(Mode::Novelty));
+    typed(&mut p, "idea");
+    p.step(Event::Submit);
+    p.step(Event::Novelty { seq: 1, result: Err(ApiError::Unreachable) });
+    assert_eq!(p.rows(), vec![Row::OpenPaperLab]);
 }
