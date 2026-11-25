@@ -12,6 +12,7 @@
 mod api;
 mod clipboard;
 mod bubbles;
+mod displays;
 mod float;
 mod galaxy;
 mod icon;
@@ -19,6 +20,7 @@ mod input;
 mod library;
 mod mode;
 mod panel;
+mod place;
 mod scenes;
 mod view;
 
@@ -332,8 +334,10 @@ fn main() {
         let galaxy = (args.galaxy && !rune::is_headless())
             .then(|| app.overlay(galaxy::spec(screen), galaxy::Galaxy::new(screen)));
         let float = (args.float && !rune::is_headless()).then(|| {
-            let state = float::Float::new(Some(me.clone()), screen);
-            let handle = app.overlay(float::spec(state.origin()), state);
+            // every display, in global points: the paper can be dragged onto any of them
+            let bounds = displays.iter().map(|d| d.native_bounds().map(|v| v as f32)).collect();
+            let state = float::Float::new(Some(me.clone()), bounds);
+            let handle = app.overlay(float::spec(state.placed()), state);
             let own = handle.clone();
             handle.update(move |s, _| s.handle = Some(own)); // so a drag can move its own overlay
             handle.show();

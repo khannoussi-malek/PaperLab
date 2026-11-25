@@ -2181,6 +2181,8 @@ dependencies = [
 name = "paperlab-capture"
 version = "0.1.0"
 dependencies = [
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
  "png 0.18.1",
  "rune",
  "serde",

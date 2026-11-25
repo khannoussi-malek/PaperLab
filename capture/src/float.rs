@@ -1,7 +1,8 @@
 //! The floating paper (M79, `--float`): a small page over every app, PaperLab within one click. It bobs gently while
-//! idle and can be dragged anywhere. A click fans PaperLab's functions out around it as bubbles (bubbles.rs); picking
-//! one opens the Quick Capture panel beside it in that mode. While the bubbles or the panel are up the page holds
-//! still, a little bigger, so the eye can rest on it. Closing the panel any way lets it float again.
+//! idle and can be dragged anywhere, onto any display and right up to its edges (place.rs). A click fans PaperLab's
+//! functions out around it as bubbles (bubbles.rs); picking one opens the Quick Capture panel beside it in that mode.
+//! While the bubbles or the panel are up the page holds still, a little bigger, so the eye can rest on it. Closing the
+//! panel any way lets it float again.
 //!
 //! `Float` decides (`click`, `pick`, `dropped`, `tick` return what the app should do, as `Act`s); `tell` does it.
 
@@ -10,27 +11,23 @@ use rune::{
     OverlayPlacement, OverlaySpec, Phase, Tx, el,
 };
 
-use crate::bubbles::{self, Bubble, PILL, Pick, REACH};
+use crate::bubbles::{self, Bubble, PILL, Pick};
 use crate::input::Input;
 use crate::mode::Mode;
 use crate::panel::Event;
+use crate::place::{self, Rect};
 
-/// The overlay: the page, its halo and room for the bubbles around it (the panel is its own window). Only the page
-/// and the bubbles take clicks; the clear rest passes them to the app below.
-const SIZE: (f32, f32) = (2.0 * REACH.0, 2.0 * REACH.1);
-/// Where the page starts: its centre this far from the screen's bottom-right corner, clear of the Dock's usual height.
-const START: (f32, f32) = (91.0, 147.0);
+/// How far the glow (and the Inbox badge) reaches from the page's centre: the overlay's size while the bubbles are in.
+/// Only the page and the bubbles take clicks; the clear rest passes them to the app below.
+const HALO: f32 = 70.0;
+/// How often it asks macOS for the displays again (a monitor plugged in or out; Rune doesn't say).
+const DISPLAYS_EVERY: f64 = 2.0;
 /// The page while idle, and while its panel is open.
 const SMALL: (f32, f32) = (36.0, 46.0);
 const BIG: (f32, f32) = (44.0, 56.0);
 /// A press that travels less than this is a click, not a drag (points).
 const CLICK_SLOP: f32 = 4.0;
 const GROW_SECONDS: f64 = 0.2;
-/// The panel's gap from the page, its width (as the view draws it) and the most it grows to, in points.
-const GAP: f32 = 14.0;
-const PANEL_WIDTH: f32 = crate::view::WIDTH;
-const PANEL_MAX_HEIGHT: f32 = 620.0;
-const MARGIN: f32 = 8.0;
 /// A click this soon after the panel closed is the one that closed it (focus left the panel for the page): it must
 /// not reopen it.
 const REOPEN_GRACE: f64 = 0.35;
@@ -71,10 +68,15 @@ pub struct Float {
     me: Option<AppHandle<crate::App>>,
     /// Its own overlay, to move it while dragged; set once created.
     pub handle: Option<OverlayHandle<Float>>,
-    screen: (f32, f32),
-    /// The overlay's top-left on the main display, in points.
-    origin: (f32, f32),
-    /// The origin at the press, while a drag is under way.
+    /// The page's centre, in global points (place.rs).
+    page: (f32, f32),
+    /// The displays, and how to read them again (`displays::read`; a fixed list in tests), and when it last did.
+    displays: Vec<Rect>,
+    read_displays: fn() -> Vec<Rect>,
+    displays_at: f64,
+    /// Where the overlay is: what it draws, cut to the page's display (`frame`).
+    placed: Rect,
+    /// The page's centre at the press, while a drag is under way.
     grab: (f32, f32),
     dragging: bool,
     /// Frame clock, seconds.
@@ -104,19 +106,59 @@ pub struct Float {
 }
 
 impl Float {
-    pub fn new(me: Option<AppHandle<crate::App>>, screen: (f32, f32)) -> Self {
-        let origin = start(screen);
-        Float {
-            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, focus: Focus::Floating,
+    pub fn new(me: Option<AppHandle<crate::App>>, displays: Vec<Rect>) -> Self {
+        let page = place::start(&displays);
+        let mut float = Float {
+            me, handle: None, page, displays, read_displays: crate::displays::read, displays_at: 0.0,
+            placed: [0.0; 4], grab: page, dragging: false, t: 0.0, focus: Focus::Floating,
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
             menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, drop_over: false, badge: 0,
             badge_grew: f64::NEG_INFINITY, hidden_until: f64::NEG_INFINITY, since: -1.0,
             closed_at: f64::NEG_INFINITY,
-        }
+        };
+        float.placed = float.frame();
+        float
     }
 
-    pub fn origin(&self) -> (f32, f32) {
-        self.origin
+    /// Where the overlay is, for creating it.
+    pub fn placed(&self) -> Rect {
+        self.placed
+    }
+
+    /// The display the page is on.
+    fn display(&self) -> Rect {
+        place::display_of(self.page, &self.displays)
+    }
+
+    /// The page's rect at `size`, centred on its centre.
+    fn page_rect(&self, size: (f32, f32)) -> Rect {
+        [self.page.0 - size.0 / 2.0, self.page.1 - size.1 / 2.0, size.0, size.1]
+    }
+
+    /// Each bubble's top-left, in global points: the crescent on the page's display.
+    fn spots(&self) -> Vec<(f32, f32)> {
+        let [dx, dy, dw, dh] = self.display();
+        let local = (self.page.0 - dx, self.page.1 - dy);
+        bubbles::spots(local, (dw, dh), self.items.len()).into_iter().map(|(x, y)| (x + dx, y + dy)).collect()
+    }
+
+    /// What the overlay must hold: the page's glow, and the bubbles while any is out, cut to its display.
+    fn frame(&self) -> Rect {
+        let glow = [self.page.0 - HALO, self.page.1 - HALO, 2.0 * HALO, 2.0 * HALO];
+        let out = self.focus == Focus::Menu || self.bubbles_out().iter().any(|&k| k > 0.0);
+        let pills = self.spots().into_iter().filter(|_| out).map(|(x, y)| [x, y, PILL.0, PILL.1]);
+        place::frame(&std::iter::once(glow).chain(pills).collect::<Vec<_>>(), self.display())
+    }
+
+    /// Moves or resizes the overlay when what it must hold changed.
+    fn place_overlay(&mut self) {
+        let frame = self.frame();
+        if frame != self.placed {
+            self.placed = frame;
+            if let Some(handle) = &self.handle {
+                handle.set_placement(Some(placement(frame)));
+            }
+        }
     }
 
     /// 0 (small, floating) to 1 (big, still), easing over GROW_SECONDS.
@@ -264,14 +306,24 @@ impl Float {
     /// A frame: the clock moves, and bubbles left alone for MENU_IDLE fold.
     fn tick(&mut self, now: f64) {
         self.t = now;
+        if self.t - self.displays_at >= DISPLAYS_EVERY {
+            self.displays_at = self.t;
+            let fresh = (self.read_displays)();
+            if !fresh.is_empty() && fresh != self.displays {
+                // a monitor came or went: a page left on one that's gone moves to the nearest one there is
+                self.displays = fresh;
+                self.page = place::keep_page(self.page, (BIG.0 / 2.0, BIG.1 / 2.0), &self.displays);
+            }
+        }
         if self.focus == Focus::Menu && !self.hovered && self.t - self.touched >= MENU_IDLE {
             self.focus_on(Focus::Floating);
         }
+        self.place_overlay(); // the bubbles came out or finished folding: the overlay grows or shrinks to them
     }
 
-    /// Where the panel opens: beside the page at its biggest.
+    /// Where the panel opens: beside the page at its biggest, on its display.
     fn panel_at(&self) -> (f32, f32) {
-        panel_spot(paper_on_screen(self.origin, BIG), self.screen)
+        place::panel_spot(self.page_rect(BIG), self.display())
     }
 
     /// Does what the floating paper decided.
@@ -287,20 +339,27 @@ impl Float {
         }
     }
 
+    fn grab_page(&mut self) {
+        (self.grab, self.dragging) = (self.page, false);
+    }
+
+    /// The pointer `travel` points from the press: past CLICK_SLOP the page follows it, whole on whichever display
+    /// it's over, and the overlay with it.
+    fn drag_to(&mut self, travel: (f32, f32)) {
+        if self.dragging || travel.0.hypot(travel.1) >= CLICK_SLOP {
+            (self.dragging, self.touched) = (true, self.t); // moving the page is using the bubbles
+            let to = (self.grab.0 + travel.0, self.grab.1 + travel.1);
+            self.page = place::keep_page(to, (BIG.0 / 2.0, BIG.1 / 2.0), &self.displays);
+            self.place_overlay();
+        }
+    }
+
     /// Press, move, release on the page: a press that barely moves is a click; otherwise the overlay follows the
     /// pointer (Rune reports pointer travel even while the window moves under it).
     fn drag(&mut self, d: &Drag) -> Vec<Act> {
         match d.phase {
-            Phase::Down => (self.grab, self.dragging) = (self.origin, false),
-            Phase::Move => {
-                if self.dragging || d.dx.hypot(d.dy) >= CLICK_SLOP {
-                    (self.dragging, self.touched) = (true, self.t); // moving the page is using the bubbles
-                    self.origin = on_screen((self.grab.0 + d.dx, self.grab.1 + d.dy), self.screen);
-                    if let Some(handle) = &self.handle {
-                        handle.set_placement(Some(place(self.origin)));
-                    }
-                }
-            }
+            Phase::Down => self.grab_page(),
+            Phase::Move => self.drag_to((d.dx, d.dy)),
             Phase::Up => {
                 let clicked = !self.dragging && !d.cancelled();
                 self.dragging = false;
@@ -313,50 +372,22 @@ impl Float {
     }
 }
 
-fn place(origin: (f32, f32)) -> OverlayPlacement {
-    OverlayPlacement::Rect { x: origin.0, y: origin.1, width: SIZE.0, height: SIZE.1 }
+fn placement(frame: Rect) -> OverlayPlacement {
+    let [x, y, width, height] = frame;
+    OverlayPlacement::Rect { x, y, width, height } // global points on the primary target: any display (rune docs)
 }
 
-/// Where it starts on a screen this size (points): its page bottom right (START).
-pub fn start(screen: (f32, f32)) -> (f32, f32) {
-    (screen.0 - START.0 - SIZE.0 / 2.0, screen.1 - START.1 - SIZE.1 / 2.0)
-}
-
-/// `origin`, moved just enough that the page (at its biggest) stays on a screen this size; the clear rest may leave it.
-fn on_screen(origin: (f32, f32), screen: (f32, f32)) -> (f32, f32) {
-    let inset = ((SIZE.0 - BIG.0) / 2.0, (SIZE.1 - BIG.1) / 2.0);
-    let x = origin.0.clamp(-inset.0, (screen.0 - SIZE.0 + inset.0).max(-inset.0));
-    let y = origin.1.clamp(-inset.1, (screen.1 - SIZE.1 + inset.1).max(-inset.1));
-    (x, y)
-}
-
-/// The page's rect on screen (x, y, width, height) at `size`, for an overlay at `origin`: centred in the overlay.
-fn paper_on_screen(origin: (f32, f32), size: (f32, f32)) -> [f32; 4] {
-    [origin.0 + (SIZE.0 - size.0) / 2.0, origin.1 + (SIZE.1 - size.1) / 2.0, size.0, size.1]
-}
-
-/// Where the panel opens for a page at `page` (x, y, w, h): left of it when there's room, else right; its top level
-/// with the page's, both kept on screen with room for the panel at its tallest.
-pub fn panel_spot(page: [f32; 4], screen: (f32, f32)) -> (f32, f32) {
-    let [px, py, pw, _] = page;
-    let left = px - GAP - PANEL_WIDTH;
-    let x = if left >= MARGIN { left } else { px + pw + GAP };
-    let x = x.clamp(MARGIN, (screen.0 - PANEL_WIDTH - MARGIN).max(MARGIN));
-    let y = (py - 8.0).clamp(MARGIN, (screen.1 - PANEL_MAX_HEIGHT - MARGIN).max(MARGIN));
-    (x, y)
-}
-
-pub fn spec(origin: (f32, f32)) -> rune::ConfiguredOverlay<Float> {
+pub fn spec(frame: Rect) -> rune::ConfiguredOverlay<Float> {
     let options = OverlayOptions {
         display: DisplayTarget::Primary,
-        placement: Some(place(origin)),
+        placement: Some(placement(frame)),
         // Only the page takes clicks; the clear rest passes them to the app below.
         input: OverlayInput::Regions,
         keys: KeyPolicy::None,
         prewarm: true,
         ..Default::default()
     };
-    OverlaySpec::new("PaperLab floating paper", SIZE, view).options(options).poll(poll)
+    OverlaySpec::new("PaperLab floating paper", (frame[2], frame[3]), view).options(options).poll(poll)
 }
 
 fn poll(s: &mut Float, now: f64, tx: &mut Tx) -> bool {
@@ -366,9 +397,7 @@ fn poll(s: &mut Float, now: f64, tx: &mut Tx) -> bool {
         tx.wake_after(HIDDEN_POLL);
         return false;
     }
-    // ponytail: a frame each refresh for the bob and the bubbles (the overlay is ~500 x 400 pt, mostly clear); if it
-    // shows in Activity Monitor, shrink the overlay to the page while the bubbles are folded.
-    true
+    true // a frame each refresh for the bob and the bubbles; the overlay is the glow's 140 pt while they're in
 }
 
 fn view(s: &Float, cx: &mut Cx<Float>) -> El {
@@ -383,8 +412,9 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let size = (SMALL.0 + (BIG.0 - SMALL.0) * open, SMALL.1 + (BIG.1 - SMALL.1) * open);
     // Floats while idle; held still while dragged or open (the user is looking at it).
     let bob = if still || s.dragging { 0.0 } else { (s.t / 3.2 * std::f64::consts::TAU).sin() as f32 * (1.0 - open) };
-    let [px, py, pw, ph] = paper_on_screen((0.0, 0.0), size);
-    let (px, py) = (px, py + 3.0 * bob);
+    // the overlay's own points: the page's place on screen, less where the overlay is
+    let [px, py, pw, ph] = s.page_rect(size);
+    let (px, py) = (px - s.placed[0], py - s.placed[1] + 3.0 * bob);
     let (cx_, cy_) = (px + pw / 2.0, py + ph / 2.0);
     let halo = 46.0 + 18.0 * open;
     let glow = if dark { 0.32 + 0.16 * open } else { 0.2 + 0.12 * open };
@@ -400,14 +430,13 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
 /// on their way out or out take clicks; folding ones don't, and folded or not-yet-started ones aren't drawn at all, so
 /// nothing invisible catches a click.
 fn menu(s: &Float, centre: (f32, f32), still: bool, dark: bool) -> Vec<El> {
-    let on_screen = (s.origin.0 + centre.0, s.origin.1 + centre.1);
-    let spots = bubbles::spots(on_screen, s.screen, s.items.len());
+    let spots = s.spots();
     let home = (centre.0 - PILL.0 / 2.0, centre.1 - PILL.1 / 2.0);
     let menu = s.focus == Focus::Menu;
     let out = s.bubbles_out();
     s.items.iter().zip(spots).enumerate().filter_map(|(i, (bubble, spot))| {
         let k = if still { f32::from(u8::from(menu)) } else { out[i] };
-        let to = (spot.0 - s.origin.0, spot.1 - s.origin.1);
+        let to = (spot.0 - s.placed[0], spot.1 - s.placed[1]);
         let at = (home.0 + (to.0 - home.0) * k, home.1 + (to.1 - home.1) * k);
         let pill = bubbles::pill(i, bubble, s.badge, dark, k).absolute(at.0, at.1);
         let bubble = bubble.clone();
@@ -483,40 +512,16 @@ fn ease(x: f64) -> f64 {
 mod tests {
     use super::*;
 
-    const SCREEN: (f32, f32) = (1440.0, 900.0);
-
-    #[test]
-    fn the_panel_opens_left_of_a_paper_with_room_and_right_of_one_without() {
-        let right_side = [1300.0, 600.0, 44.0, 56.0];
-        let (x, _) = panel_spot(right_side, SCREEN);
-        assert_eq!(x, 1300.0 - GAP - PANEL_WIDTH);
-        let left_side = [40.0, 200.0, 44.0, 56.0];
-        let (x, y) = panel_spot(left_side, SCREEN);
-        assert_eq!((x, y), (40.0 + 44.0 + GAP, 192.0));
-    }
-
-    #[test]
-    fn the_panel_stays_on_screen_with_room_to_grow() {
-        let low = [1300.0, 880.0, 44.0, 56.0];
-        let (_, y) = panel_spot(low, SCREEN);
-        assert_eq!(y, SCREEN.1 - PANEL_MAX_HEIGHT - MARGIN);
-        let tiny = panel_spot([10.0, 10.0, 44.0, 56.0], (500.0, 300.0));
-        assert!(tiny.0 >= MARGIN && tiny.1 >= MARGIN);
-    }
-
-    #[test]
-    fn a_drag_keeps_the_page_itself_on_screen() {
-        let [x, y, _, h] = paper_on_screen(on_screen((-500.0, 5000.0), SCREEN), BIG);
-        assert_eq!((x, y + h), (0.0, SCREEN.1));
-        let [x, y, w, _] = paper_on_screen(on_screen((5000.0, -500.0), SCREEN), BIG);
-        assert_eq!((x + w, y), (SCREEN.0, 0.0));
-        assert_eq!(on_screen((300.0, 200.0), SCREEN), (300.0, 200.0), "inside: left alone");
-    }
+    /// A laptop, and a bigger monitor to its right with its top a little higher (as in place.rs).
+    const LAPTOP: Rect = [0.0, 0.0, 1440.0, 900.0];
+    const MONITOR: Rect = [1440.0, -200.0, 2560.0, 1440.0];
+    /// Big enough for the overlay at its biggest (the page, its glow and every bubble).
+    const VIEWPORT: (f32, f32) = (800.0, 800.0);
 
     /// A floating paper with nothing to tell (its `Act`s are the answer) and an empty clipboard, its clock at `t`.
     fn paper_at(t: f64) -> Float {
-        let mut f = Float::new(None, SCREEN);
-        f.paste = || None;
+        let mut f = Float::new(None, vec![LAPTOP]);
+        (f.paste, f.read_displays) = (|| None, || vec![]);
         f.tick(t);
         f
     }
@@ -619,7 +624,7 @@ mod tests {
     #[test]
     fn the_bubbles_are_drawn_only_once_out_and_a_press_on_one_picks_it() {
         use rune::{Env, Runtime};
-        let mut rt = Runtime::new(paper_at(10.0), view, SIZE, Env { system_dark: false, scale: 2.0 });
+        let mut rt = Runtime::new(paper_at(10.0), view, VIEWPORT, Env { system_dark: false, scale: 2.0 });
         rt.frame(0.0);
         assert!(rt.find("bubble-0").is_none(), "folded: nothing drawn, nothing to catch a click");
         rt.update(|s, _| {
@@ -650,7 +655,7 @@ mod tests {
     #[test]
     fn dragging_the_page_keeps_the_bubbles_out() {
         use rune::{Env, Runtime};
-        let mut rt = Runtime::new(paper_at(10.0), view, SIZE, Env { system_dark: false, scale: 2.0 });
+        let mut rt = Runtime::new(paper_at(10.0), view, VIEWPORT, Env { system_dark: false, scale: 2.0 });
         rt.update(|s, _| { s.click(); });
         rt.frame(0.0);
         let (x, y) = rt.find("paper").expect("the page");
@@ -694,7 +699,7 @@ mod tests {
     #[test]
     fn hidden_for_an_hour_it_draws_nothing_until_then_or_until_the_shortcut() {
         use rune::{Env, Runtime};
-        let mut rt = Runtime::new(paper_at(10.0), view, SIZE, Env { system_dark: false, scale: 2.0 });
+        let mut rt = Runtime::new(paper_at(10.0), view, VIEWPORT, Env { system_dark: false, scale: 2.0 });
         rt.update(|s, _| {
             s.right_click();
             assert_eq!(s.pick(Bubble::Hide), vec![]);
@@ -730,10 +735,59 @@ mod tests {
     }
 
     #[test]
-    fn it_starts_bottom_right_and_its_page_is_centred() {
-        let origin = start(SCREEN);
-        let [x, y, w, h] = paper_on_screen(origin, BIG);
-        assert!(x + w < SCREEN.0 && y + h < SCREEN.1);
-        assert_eq!((x - origin.0) * 2.0 + w, SIZE.0);
+    fn it_starts_bottom_right_of_the_main_display_in_a_glow_sized_overlay() {
+        let f = Float::new(None, vec![MONITOR, LAPTOP]);
+        let [x, y, w, h] = f.page_rect(BIG);
+        assert!(x > 1000.0 && x + w < 1440.0 && y + h < 900.0, "on the laptop, bottom right: {x} {y}");
+        assert_eq!((f.placed[2], f.placed[3]), (2.0 * HALO, 2.0 * HALO), "small while the bubbles are in");
     }
+
+    #[test]
+    fn a_drag_carries_the_page_onto_the_other_display_and_right_to_its_edge() {
+        let mut f = paper_at(10.0);
+        f.displays = vec![LAPTOP, MONITOR];
+        let grab = f.page;
+        f.grab_page();
+        f.drag_to((600.0, -300.0));
+        assert_eq!(place::display_of(f.page, &f.displays), MONITOR, "across onto the monitor");
+        assert_eq!(f.page, (grab.0 + 600.0, grab.1 - 300.0), "where the pointer took it");
+        f.drag_to((9000.0, 0.0));
+        let [x, _, w, _] = f.page_rect(BIG);
+        assert_eq!(x + w, MONITOR[0] + MONITOR[2], "right up to the monitor's edge");
+        let [ox, _, ow, _] = f.placed;
+        assert_eq!(ox + ow, MONITOR[0] + MONITOR[2], "and its overlay stays on the monitor, cut at the edge");
+        let (px, _) = f.panel_at();
+        assert!(px >= MONITOR[0] && px + crate::view::WIDTH <= MONITOR[0] + MONITOR[2], "its panel opens there too");
+    }
+
+    #[test]
+    fn a_monitor_unplugged_brings_the_page_back_to_one_that_is_there() {
+        let mut f = paper_at(10.0);
+        f.displays = vec![LAPTOP, MONITOR];
+        f.page = (3000.0, 500.0);
+        f.read_displays = || vec![LAPTOP];
+        f.tick(10.0 + DISPLAYS_EVERY);
+        assert_eq!(place::display_of(f.page, &[LAPTOP]), LAPTOP);
+        let [x, _, w, _] = f.page_rect(BIG);
+        assert_eq!(x + w, 1440.0, "at the laptop's edge, nearest where it was");
+    }
+
+    #[test]
+    fn the_overlay_grows_to_hold_the_bubbles_and_shrinks_once_they_have_folded() {
+        let mut f = paper_at(10.0);
+        let small = f.placed;
+        f.click();
+        f.tick(11.0);
+        let [x, y, w, h] = f.placed;
+        assert!(w > small[2] && h > small[3], "bigger: {:?}", f.placed);
+        for (sx, sy) in f.spots() {
+            assert!(sx >= x && sy >= y && sx + PILL.0 <= x + w && sy + PILL.1 <= y + h, "every bubble inside");
+        }
+        f.click();
+        f.tick(11.05);
+        assert!(f.placed[2] > small[2], "still folding: still big");
+        f.tick(12.0);
+        assert_eq!(f.placed, small, "folded: back to the glow");
+    }
+
 }
