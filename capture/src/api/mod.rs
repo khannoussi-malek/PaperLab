@@ -43,11 +43,7 @@ impl Api {
     }
 
     fn send(&self, sent: Result<ureq::http::Response<ureq::Body>, ureq::Error>) -> Result<(u16, Vec<u8>), ApiError> {
-        let mut response = sent.map_err(|e| match e {
-            // Listening but slow (a busy source on a lookup or an add): not "PaperLab isn't running".
-            ureq::Error::Timeout(_) => ApiError::Said("PaperLab didn't answer in time. Try again.".into()),
-            _ => ApiError::Unreachable,
-        })?;
+        let mut response = sent.map_err(not_sent)?;
         let status = response.status().as_u16();
         let body = response.body_mut().with_config().limit(64 << 20).read_to_vec().unwrap_or_default();
         Ok((status, body))
@@ -59,6 +55,16 @@ impl Api {
 fn ok<T: serde::de::DeserializeOwned>(status: u16, body: Vec<u8>) -> Result<T, ApiError> {
     refused(status, &body)?;
     serde_json::from_slice(&body).map_err(|e| ApiError::Said(format!("PaperLab's answer didn't read as expected ({e}).")))
+}
+
+/// A request that got no answer: nothing listening, or listening but too slow (a busy source on a lookup or an add),
+/// which is not "PaperLab isn't running"; anything else is said as it is.
+fn not_sent(e: ureq::Error) -> ApiError {
+    match e {
+        ureq::Error::Timeout(_) => ApiError::Said("PaperLab didn't answer in time. Try again.".into()),
+        ureq::Error::Io(_) | ureq::Error::ConnectionFailed | ureq::Error::HostNotFound => ApiError::Unreachable,
+        other => ApiError::Said(format!("Couldn't reach PaperLab ({other}).")),
+    }
 }
 
 /// A non-2xx answer as PaperLab's sentence for it.

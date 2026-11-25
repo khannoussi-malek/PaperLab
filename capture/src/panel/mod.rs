@@ -118,6 +118,10 @@ pub struct Panel {
     /// Ask's workspaces once listed, and the one last asked (first in the list next time).
     pub workspaces: Option<Vec<Workspace>>,
     pub last_workspace: Option<String>,
+    /// Ask's own sentence when the workspaces couldn't be listed.
+    pub ask_error: Option<String>,
+    /// An answer copied from (the copy replaced it on screen); reopening in Ask brings it back.
+    copied_answer: Option<Answer>,
     pub(crate) seq: u64,
     polling: Option<String>,
     /// Closed since it was last shown: an add finishing now is kept but not followed.
@@ -128,7 +132,7 @@ impl Default for Panel {
     fn default() -> Self {
         Panel {
             mode: Mode::Find, query: String::new(), picked: 0, phase: Phase::Library, papers: vec![], reachable: true,
-            library_error: None, workspaces: None, last_workspace: None, seq: 0, polling: None, hidden: false,
+            library_error: None, workspaces: None, last_workspace: None, ask_error: None, copied_answer: None, seq: 0, polling: None, hidden: false,
         }
     }
 }
@@ -170,17 +174,17 @@ impl Panel {
         }
     }
 
-    /// Opened again: a fresh field in the same mode, except that an Ask answer stays with its question (the user
+    /// Opened again: a fresh field in the same mode, except that an Ask answer comes back with its question (the user
     /// may have clicked away to paste it, or to wait for it).
     fn shown(&mut self) -> Vec<Effect> {
-        let answer = matches!(self.phase, Phase::Answer(_)) && self.mode == Mode::Ask;
+        let answer = self.answer_to_keep();
         let mut kept = Panel {
             mode: self.mode, papers: std::mem::take(&mut self.papers), reachable: self.reachable, seq: self.seq,
             workspaces: self.workspaces.take(), last_workspace: self.last_workspace.take(), ..Panel::default()
         };
-        if answer {
-            kept.phase = std::mem::replace(&mut self.phase, Phase::Library);
-            kept.query = std::mem::take(&mut self.query);
+        if let Some(a) = answer {
+            kept.query = a.question.clone();
+            kept.phase = Phase::Answer(a);
         }
         *self = kept;
         [vec![Effect::FetchPapers], self.ask_entered()].concat()
@@ -201,14 +205,14 @@ impl Panel {
         if matches!(self.phase, Phase::Adding(_)) {
             return vec![]; // an add in flight keeps Find until it answers
         }
-        (self.mode, self.phase, self.picked, self.polling) = (mode, Phase::Library, 0, None);
+        (self.mode, self.phase, self.picked, self.polling, self.copied_answer) = (mode, Phase::Library, 0, None, None);
         self.ask_entered()
     }
 
     /// Typing in a mode other than Find: the text is the query; an earlier answer, or one still coming, no longer
     /// matches it.
     fn typed(&mut self, q: String) -> Vec<Effect> {
-        (self.query, self.picked, self.phase) = (q, 0, Phase::Library);
+        (self.query, self.picked, self.phase, self.copied_answer) = (q, 0, Phase::Library, None);
         vec![]
     }
 

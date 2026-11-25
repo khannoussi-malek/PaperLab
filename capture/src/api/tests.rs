@@ -148,3 +148,12 @@ fn workspaces_are_listed_and_a_refused_question_gives_paperlabs_sentence() {
     assert_eq!(api.workspaces(), Ok(vec![Workspace { id: "w".into(), name: "Thesis".into(), paper_count: 12 }]));
     assert_eq!(api.ask("w", "why?", |_| {}), Err(ApiError::Said("No model is set up yet.".into())));
 }
+
+#[test]
+fn sse_edge_cases_done_without_json_data_alone_multi_line_and_no_trailing_blank() {
+    assert_eq!(heard_from("event: token\ndata: {\"text\":\"a\"}\n\nevent: done\ndata:\n\n"), vec![Said::Token("a".into()), Said::Done]);
+    assert_eq!(heard_from("data: {\"stray\":1}\n\nevent: token\ndata: {\"text\":\"b\"}\n\nevent: done\ndata: {}\n\n"),
+               vec![Said::Token("b".into()), Said::Done], "a data-only block doesn't leak into the next event");
+    assert_eq!(heard_from("event: token\ndata: {\"text\":\ndata: \"c\"}\n\nevent: done\ndata: {}"),
+               vec![Said::Token("c".into()), Said::Done], "lines join with a newline; the last event needs no blank line");
+}

@@ -15,6 +15,7 @@ const MAX_SOURCES: usize = 3;
 pub struct Answer {
     pub seq: u64,
     pub workspace: Workspace,
+    pub question: String,
     pub text: String,
     pub sources: Vec<Source>,
     pub state: Writing,
@@ -76,6 +77,7 @@ impl Panel {
             (Some(Row::Workspace(i)), _) => self.ask(i),
             (Some(Row::CopyAnswer), Phase::Answer(a)) => {
                 let text = a.text.clone();
+                self.copied_answer = Some(a.clone()); // back on reopen, with Open in PaperLab and its papers
                 self.seq += 1;
                 self.phase = Phase::Copying;
                 vec![Effect::Copy { seq: self.seq, text, what: "the answer".into() }]
@@ -95,8 +97,9 @@ impl Panel {
         let workspace = all[i].clone();
         self.seq += 1;
         self.last_workspace = Some(workspace.id.clone());
-        let ask = Effect::Ask { seq: self.seq, workspace_id: workspace.id.clone(), question };
-        self.phase = Phase::Answer(Answer { seq: self.seq, workspace, text: String::new(), sources: vec![], state: Writing::Under });
+        let ask = Effect::Ask { seq: self.seq, workspace_id: workspace.id.clone(), question: question.clone() };
+        let answer = Answer { seq: self.seq, workspace, question, text: String::new(), sources: vec![], state: Writing::Under };
+        self.phase = Phase::Answer(answer);
         self.picked = 0;
         vec![ask]
     }
@@ -119,12 +122,23 @@ impl Panel {
 
     pub(super) fn workspaces_arrived(&mut self, result: Result<Vec<Workspace>, ApiError>) -> Vec<Effect> {
         match result {
-            Ok(all) => (self.workspaces, self.reachable) = (Some(all), true),
+            Ok(all) => (self.workspaces, self.reachable, self.ask_error) = (Some(all), true, None),
             Err(ApiError::Unreachable) => self.reachable = false,
-            Err(ApiError::Said(sentence)) => self.library_error = Some(sentence),
+            Err(ApiError::Said(sentence)) => self.ask_error = Some(sentence),
         }
         self.clamp();
         vec![]
+    }
+
+    /// The answer to show again when the panel reopens in Ask: the one on screen, or the one just copied.
+    pub(super) fn answer_to_keep(&mut self) -> Option<Answer> {
+        if self.mode != Mode::Ask {
+            return None;
+        }
+        match std::mem::replace(&mut self.phase, Phase::Library) {
+            Phase::Answer(a) => Some(a),
+            _ => self.copied_answer.take(),
+        }
     }
 
     /// Entering Ask (or opening the panel in it): the workspace list, fresh.

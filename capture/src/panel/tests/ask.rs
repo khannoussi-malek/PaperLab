@@ -113,3 +113,27 @@ fn a_second_question_does_not_get_the_first_answers_words() {
     p.step(Event::Heard { seq: second, result: Ok(Said::Token("new".into())) });
     assert!(matches!(&p.phase, Phase::Answer(a) if a.text == "new"), "{:?}", p.phase);
 }
+
+#[test]
+fn a_copied_answer_comes_back_with_its_question_when_the_panel_reopens() {
+    let mut p = in_ask();
+    let seq = asked(&mut p, "what is attention?");
+    p.step(Event::Heard { seq, result: Ok(Said::Token("Weights.".into())) });
+    p.step(Event::Heard { seq, result: Ok(Said::Done) });
+    let copy = p.step(Event::Submit);
+    let [Effect::Copy { seq, .. }] = copy.as_slice() else { panic!("{copy:?}") };
+    p.step(Event::Copied { seq: *seq, what: "the answer".into(), result: Ok(()) });
+    p.step(Event::Closed);
+    p.step(Event::Shown);
+    assert!(matches!(&p.phase, Phase::Answer(a) if a.text == "Weights."), "{:?}", p.phase);
+    assert_eq!(p.query, "what is attention?");
+}
+
+#[test]
+fn a_workspace_list_error_stays_in_ask() {
+    let mut p = shown_with_library();
+    p.step(Event::Mode(Mode::Ask));
+    p.step(Event::Workspaces(Err(ApiError::Said("Workspaces are being migrated.".into()))));
+    assert_eq!(p.ask_error.as_deref(), Some("Workspaces are being migrated."));
+    assert_eq!(p.library_error, None, "Find's line stays clear");
+}

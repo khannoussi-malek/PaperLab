@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Api, ApiError, ok, refused};
+use super::{Api, ApiError, not_sent, ok, refused};
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Workspace {
@@ -44,7 +44,8 @@ impl Api {
         let url = format!("{}/api/workspaces/{workspace_id}/chat", self.base);
         // A local model can take minutes over an answer: no overall limit on this one request.
         let request = self.agent.post(&url).config().timeout_global(None).build();
-        let mut response = request.send_json(json!({ "question": question })).map_err(|_| ApiError::Unreachable)?;
+        // ponytail: no cancel; an answer the user left runs to its end on PaperLab's side, then this thread ends.
+        let mut response = request.send_json(json!({ "question": question })).map_err(not_sent)?;
         let status = response.status().as_u16();
         if !(200..300).contains(&status) {
             return refused(status, &response.body_mut().read_to_vec().unwrap_or_default());
@@ -57,34 +58,61 @@ impl Api {
 /// Reads server-sent events until the stream ends, `done` or `error`. Comments (pings) and unknown events are skipped;
 /// a stream that ends without `done` is reported as cut off.
 pub(super) fn read_events(reader: impl BufRead, mut heard: impl FnMut(Said)) {
-    let (mut event, mut data) = (String::new(), String::new());
+    let mut pending = Pending::default();
     for line in reader.lines() {
-        let Ok(line) = line else { break };
-        let line = line.trim_end_matches('\r');
-        if let Some(name) = line.strip_prefix("event:") {
-            event = name.trim().to_owned();
-        } else if let Some(more) = line.strip_prefix("data:") {
-            data.push_str(more.strip_prefix(' ').unwrap_or(more));
-        } else if line.is_empty() && !event.is_empty() {
-            let step = said_of(&event, &data);
-            (event, data) = (String::new(), String::new());
-            let Some(step) = step else { continue };
-            let last = matches!(step, Said::Done | Said::Failed(_));
-            heard(step);
-            if last {
-                return;
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                eprintln!("paperlab-capture: the answer stream broke: {e}");
+                break;
             }
+        };
+        let line = line.trim_end_matches('\r');
+        if !line.is_empty() {
+            pending.read(line);
+        } else if pending.dispatch(&mut heard) {
+            return;
         }
     }
-    heard(Said::Failed("The answer was cut off. Try again.".into()));
+    if !pending.dispatch(&mut heard) {
+        heard(Said::Failed("The answer was cut off. Try again.".into()));
+    }
+}
+
+/// The event being read: its name and its data lines, joined by newlines as the SSE format says.
+#[derive(Default)]
+struct Pending {
+    event: String,
+    data: Vec<String>,
+}
+
+impl Pending {
+    fn read(&mut self, line: &str) {
+        if let Some(name) = line.strip_prefix("event:") {
+            self.event = name.trim().to_owned();
+        } else if let Some(more) = line.strip_prefix("data:") {
+            self.data.push(more.strip_prefix(' ').unwrap_or(more).to_owned());
+        }
+    }
+
+    /// Hands the event on (and clears it, named or not); true when it ended the answer.
+    fn dispatch(&mut self, heard: &mut impl FnMut(Said)) -> bool {
+        let Pending { event, data } = std::mem::take(self);
+        let Some(step) = said_of(&event, &data.join("\n")) else { return false };
+        let last = matches!(step, Said::Done | Said::Failed(_));
+        heard(step);
+        last
+    }
 }
 
 fn said_of(event: &str, data: &str) -> Option<Said> {
+    if event == "done" {
+        return Some(Said::Done); // its data (the saved answer's id) isn't needed here
+    }
     let value: Value = serde_json::from_str(data).ok()?;
     match event {
         "sources" => serde_json::from_value(value.get("sources")?.clone()).ok().map(Said::Sources),
         "token" => value.get("text")?.as_str().map(|t| Said::Token(t.to_owned())),
-        "done" => Some(Said::Done),
         "error" => Some(Said::Failed(value.get("message")?.as_str()?.to_owned())),
         _ => None,
     }
