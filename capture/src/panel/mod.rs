@@ -53,6 +53,8 @@ pub enum Phase {
     /// Find, ⌘↵ on a paper: picking the workspace to put it in; then the sentence saying where it went.
     Filing(Filing),
     Filed(String),
+    /// A file is being dragged over the floating paper: the panel waits under the pointer for the drop.
+    DropHere,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -91,6 +93,9 @@ pub enum Event {
     Put { seq: u64, result: Result<(), ApiError> },
     /// A click on a row: pick it and act on it, as Enter would.
     Click(usize),
+    /// A file is being dragged over the floating paper (the panel opens for the drop), and that drag ended.
+    DropOffered,
+    DragEnded,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -226,6 +231,8 @@ impl Panel {
             Event::Heard { seq, result } => self.heard(seq, result),
             Event::Dropped(paths) => self.dropped(paths),
             Event::DropRefused => self.drop_refused(),
+            Event::DropOffered => self.drop_offered(),
+            Event::DragEnded => self.drag_ended(),
             Event::Uploaded { seq, results } => self.uploaded(seq, results),
             Event::Inbox(result) => self.inbox_arrived(result),
             Event::NoteSaved { seq, result } => self.note_saved(seq, result),

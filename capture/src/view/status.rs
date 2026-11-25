@@ -27,6 +27,7 @@ pub(super) fn line(p: &Panel) -> Option<String> {
         Phase::SavingNote(d) => Some(format!("Saving your note on “{}”…", d.title)),
         Phase::NoteSaved(sentence) | Phase::Filed(sentence) => Some(sentence.clone()),
         Phase::Filing(f) => Some(filing(p, f)),
+        Phase::DropHere => Some("Drop the PDFs here: they go into your library, then you choose workspaces.".into()),
     }
 }
 

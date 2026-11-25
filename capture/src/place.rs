@@ -69,6 +69,19 @@ pub fn panel_spot(page: Rect, display: Rect) -> (f32, f32) {
     (x, y)
 }
 
+/// The least the panel is tall while it waits for a drop (its field, mode bar and one line).
+const DROP_HEIGHT: f32 = 120.0;
+
+/// Where the panel opens for a drop: under the pointer (`at`), its field's row on it (or, at a display's bottom, the
+/// rows below), so letting go lands on the panel; kept on the pointer's display.
+pub fn drop_spot(at: (f32, f32), display: Rect) -> (f32, f32) {
+    let [dx, dy, dw, dh] = display;
+    // up to the display's very edges: the page can sit there, and the pointer on it
+    let x = (at.0 - 60.0).clamp(dx, (dx + dw - PANEL_WIDTH).max(dx));
+    let y = (at.1 - 28.0).clamp(dy, (dy + dh - DROP_HEIGHT).max(dy));
+    (x, y)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,6 +132,17 @@ mod tests {
         let bubbles = [[1100.0, 300.0, 132.0, 34.0], [1150.0, 600.0, 132.0, 34.0]];
         let [x, y, w, h] = frame(&[halo, bubbles[0], bubbles[1]], LAPTOP);
         assert_eq!((x, y, x + w, y + h), (1100.0, 300.0, 1440.0, 634.0));
+    }
+
+    #[test]
+    fn the_drop_panel_opens_under_the_pointer_even_at_a_screen_edge() {
+        for at in [(700.0, 400.0), (1435.0, 880.0), (5.0, 400.0), (3990.0, 1200.0)] {
+            let display = display_of(at, &BOTH);
+            let (x, y) = drop_spot(at, display);
+            let on = at.0 >= x && at.0 < x + PANEL_WIDTH && at.1 >= y && at.1 < y + DROP_HEIGHT;
+            assert!(on, "{at:?} not on the panel at {x},{y}");
+            assert!(x >= display[0] && x + PANEL_WIDTH <= display[0] + display[2], "{at:?}: off its display");
+        }
     }
 
     #[test]

@@ -97,8 +97,12 @@ pub struct Float {
     hovered: bool,
     /// When the bubbles came out or the pointer last left one, for MENU_IDLE.
     touched: f64,
-    /// A PDF is being dragged over it: it lights up as if open.
-    drop_over: bool,
+    /// Senses a file drag from another app (file_drag.rs; fixed answers in tests): the drag pasteboard's count when
+    /// the button went down (None while it's up), and whether the panel was opened for this drag.
+    sense: fn() -> crate::file_drag::Sense,
+    carries_files: fn() -> bool,
+    drag_start: Option<isize>,
+    offered: bool,
     /// Until when it's hidden (the frame clock); nothing is drawn or takes a click before then.
     hidden_until: f64,
     /// What waits in the Inbox, shown on the page's corner, and when it last grew (the badge pulses once).
@@ -117,7 +121,9 @@ impl Float {
             placed: [0.0; 4], grab: page, pressed_at: None, read_pointer: crate::displays::pointer,
             dragging: false, t: 0.0, focus: Focus::Floating,
             items: bubbles::menu(None), paste: crate::clipboard::paste, menu_since: f64::NEG_INFINITY,
-            menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, drop_over: false, badge: 0,
+            menu_from: [0.0; bubbles::MAX], hovered: false, touched: 0.0, badge: 0,
+            sense: crate::file_drag::sense, carries_files: crate::file_drag::carries_files, drag_start: None,
+            offered: false,
             badge_grew: f64::NEG_INFINITY, hidden_until: f64::NEG_INFINITY, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         };
@@ -288,19 +294,52 @@ impl Float {
             }
             Pick::Hide => {
                 self.focus_on(Focus::Floating);
-                (self.dragging, self.drop_over) = (false, false); // its page is gone: no gesture can finish on it
+                self.dragging = false; // its page is gone: no gesture can finish on it
                 self.hidden_until = self.t + HIDE_FOR;
                 vec![]
             }
         }
     }
 
-    /// Files dropped on it: the panel opens beside it (if it isn't open) and takes them, PDFs or not.
-    fn dropped(&mut self, event: Event) -> Vec<Act> {
-        self.drop_over = false;
-        let show = (self.focus != Focus::Panel).then(|| Act::Show { at: self.panel_at(), mode: None, query: None });
-        self.focus_on(Focus::Panel);
-        show.into_iter().chain([Act::Take(event)]).collect()
+    /// A frame's look at the mouse: a drag from another app (the drag pasteboard changed since the button went down)
+    /// carrying files and now over the page opens the panel under the pointer for the drop, once per drag. The drag
+    /// ending tells the panel, which closes if nothing was dropped on it.
+    fn watch_drag(&mut self) -> Vec<Act> {
+        let now = (self.sense)();
+        match (now.button, self.drag_start) {
+            (true, None) => {
+                (self.drag_start, self.offered) = (Some(now.count), false);
+                vec![]
+            }
+            (false, Some(_)) => {
+                self.drag_start = None;
+                if std::mem::take(&mut self.offered) { vec![Act::Take(Event::DragEnded)] } else { vec![] }
+            }
+            (true, Some(start)) if !self.offered && !self.dragging && now.count != start => {
+                let Some(at) = self.pointer().filter(|&at| self.over_page(at)) else { return vec![] };
+                if !(self.carries_files)() {
+                    return vec![];
+                }
+                self.offered = true;
+                self.focus_on(Focus::Panel);
+                let at = place::drop_spot(at, place::display_of(at, &self.displays));
+                vec![Act::Show { at, mode: Some(Mode::Find), query: None }, Act::Take(Event::DropOffered)]
+            }
+            _ => vec![],
+        }
+    }
+
+    /// The pointer in global points, top-left origin (place.rs), when AppKit can say.
+    fn pointer(&self) -> Option<(f32, f32)> {
+        let main_height = f64::from(place::main_display(&self.displays)[3]);
+        (self.read_pointer)().map(|(x, y)| (x as f32, (main_height - y) as f32))
+    }
+
+    /// `at` is on the page, or near enough to it (a drop is aimed less carefully than a click).
+    fn over_page(&self, at: (f32, f32)) -> bool {
+        const NEAR: f32 = 16.0;
+        let [x, y, w, h] = self.page_rect(BIG);
+        at.0 >= x - NEAR && at.0 <= x + w + NEAR && at.1 >= y - NEAR && at.1 <= y + h + NEAR
     }
 
     /// The pointer came onto a bubble or left it.
@@ -416,6 +455,8 @@ fn poll(s: &mut Float, now: f64, tx: &mut Tx) -> bool {
         tx.wake_after(HIDDEN_POLL);
         return false;
     }
+    let acts = s.watch_drag();
+    s.tell(acts);
     true // a frame each refresh for the bob and the bubbles; the overlay is the glow's 140 pt while they're in
 }
 
@@ -427,7 +468,7 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let dark = cx.system_dark();
     let still = cx.is_reduced_motion();
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
-    let open = if s.drop_over { 1.0 } else { s.openness() };
+    let open = s.openness();
     let size = (SMALL.0 + (BIG.0 - SMALL.0) * open, SMALL.1 + (BIG.1 - SMALL.1) * open);
     // Floats while idle; held still while dragged or open (the user is looking at it).
     let bob = if still || s.dragging { 0.0 } else { (s.t / 3.2 * std::f64::consts::TAU).sin() as f32 * (1.0 - open) };
@@ -499,17 +540,6 @@ fn paper(at: (f32, f32), size: (f32, f32), bob: f32, dark: bool) -> El {
             let acts = s.right_click();
             s.tell(acts);
         })
-        // Drops land on the page only, never on the clear overlay around it, which belongs to the app below.
-        .on_drop_files(|s: &mut Float, files, _: &mut Tx| {
-            let acts = s.dropped(Event::Dropped(files.to_vec()));
-            s.tell(acts);
-        })
-        .accepts_extensions(&["pdf"])
-        .on_drop_hover(|s: &mut Float, over, _: &mut Tx| s.drop_over = over)
-        .on_drop_rejected(|s: &mut Float, _, _: &mut Tx| {
-            let acts = s.dropped(Event::DropRefused);
-            s.tell(acts);
-        })
 }
 
 /// The Inbox count on the page's top-right corner (centred on `corner`); nothing when there's nothing new.
@@ -537,10 +567,24 @@ mod tests {
     /// Big enough for the overlay at its biggest (the page, its glow and every bubble).
     const VIEWPORT: (f32, f32) = (800.0, 800.0);
 
+    thread_local! {
+        /// What the fake mouse and drag pasteboard say (`sensed`).
+        static SENSE: std::cell::Cell<crate::file_drag::Sense> = std::cell::Cell::default();
+    }
+
+    fn sensed() -> crate::file_drag::Sense {
+        SENSE.with(|s| s.get())
+    }
+
+    fn set_sense(button: bool, count: isize) {
+        SENSE.with(|s| s.set(crate::file_drag::Sense { button, count }));
+    }
+
     /// A floating paper with nothing to tell (its `Act`s are the answer) and an empty clipboard, its clock at `t`.
     fn paper_at(t: f64) -> Float {
         let mut f = Float::new(None, vec![LAPTOP]);
         (f.paste, f.read_displays, f.read_pointer) = (|| None, || vec![], || None);
+        (f.sense, f.carries_files) = (sensed, || true);
         f.tick(t);
         f
     }
@@ -628,16 +672,6 @@ mod tests {
         assert_eq!(f.focus, Focus::Menu, "not yet");
         f.tick(10.0 + 4.0 * MENU_IDLE);
         assert_eq!(f.focus, Focus::Floating, "left alone: folded, floating again");
-    }
-
-    #[test]
-    fn a_drop_while_the_bubbles_are_out_opens_the_panel_and_hands_it_the_files() {
-        let mut f = paper_at(10.0);
-        f.click();
-        let acts = f.dropped(Event::DropRefused);
-        assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: None, query: None }, Act::Take(Event::DropRefused)]);
-        assert_eq!(f.focus, Focus::Panel);
-        assert_eq!(f.dropped(Event::DropRefused), vec![Act::Take(Event::DropRefused)], "panel open: just the files");
     }
 
     #[test]
@@ -751,6 +785,54 @@ mod tests {
         f.set_badge(1);
         f.tick(11.0 + PULSE_SECONDS / 2.0);
         assert_eq!((f.badge, f.badge_scale()), (1, 1.0), "one read: no pulse");
+    }
+
+    /// A paper whose pointer (AppKit, bottom-left) is on its page.
+    fn pointed_at() -> Float {
+        let mut f = paper_at(10.0);
+        f.page = (1300.0, 700.0);
+        f.read_pointer = || Some((1305.0, 900.0 - 705.0));
+        f
+    }
+
+    #[test]
+    fn a_file_dragged_over_the_page_opens_the_panel_under_the_pointer_once() {
+        let mut f = pointed_at();
+        set_sense(true, 5);
+        assert_eq!(f.watch_drag(), vec![], "the button went down: nothing is dragged yet");
+        set_sense(true, 6); // a drag started: the drag pasteboard changed
+        let acts = f.watch_drag();
+        let at = place::drop_spot((1305.0, 705.0), LAPTOP);
+        assert_eq!(acts, vec![Act::Show { at, mode: Some(Mode::Find), query: None }, Act::Take(Event::DropOffered)]);
+        assert_eq!(f.focus, Focus::Panel);
+        assert_eq!(f.watch_drag(), vec![], "once per drag");
+        set_sense(false, 6);
+        assert_eq!(f.watch_drag(), vec![Act::Take(Event::DragEnded)], "the drag ended: the panel is told");
+        assert_eq!(f.watch_drag(), vec![]);
+    }
+
+    #[test]
+    fn a_held_button_text_drag_or_a_drag_elsewhere_opens_nothing() {
+        let mut f = pointed_at();
+        set_sense(true, 5);
+        f.watch_drag();
+        assert_eq!(f.watch_drag(), vec![], "button held, no drag (a selection): nothing");
+        set_sense(true, 6);
+        f.carries_files = || false;
+        assert_eq!(f.watch_drag(), vec![], "a drag of text: nothing");
+        f.carries_files = || true;
+        f.read_pointer = || Some((200.0, 900.0 - 200.0));
+        assert_eq!(f.watch_drag(), vec![], "files, but far from the page: nothing yet");
+        f.read_pointer = || Some((1300.0, 900.0 - 700.0));
+        assert_eq!(f.watch_drag().len(), 2, "carried over the page: the panel opens");
+        set_sense(false, 6);
+        f.watch_drag();
+        let mut own = pointed_at();
+        set_sense(true, 7);
+        own.watch_drag();
+        own.dragging = true; // the page itself being moved
+        set_sense(true, 8);
+        assert_eq!(own.watch_drag(), vec![], "its own drag isn't a file drop");
     }
 
     #[test]

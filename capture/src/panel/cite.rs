@@ -45,7 +45,9 @@ impl Panel {
     }
 
     pub(super) fn close_now(&self, seq: u64) -> Vec<Effect> {
-        let confirmed = matches!(self.phase, Phase::Copied(_) | Phase::NoteSaved(_) | Phase::Filed(_));
+        // said and done (or, for a drop that never came, nothing to say): the panel closes
+        let confirmed =
+            matches!(self.phase, Phase::Copied(_) | Phase::NoteSaved(_) | Phase::Filed(_) | Phase::DropHere);
         if seq == self.seq && confirmed { vec![Effect::Close] } else { vec![] }
     }
 }

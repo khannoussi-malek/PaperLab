@@ -56,7 +56,11 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
     if let Some(list) = list {
         panel = panel.child(list);
     }
+    // Files dropped on the panel: the floating paper opens it under the pointer for that (an overlay takes no drops).
     col().w_full().child(panel)
+        .on_drop_files(|s: &mut App, files, _: &mut Tx| s.dispatch(Event::Dropped(files.to_vec())))
+        .accepts_extensions(&["pdf"])
+        .on_drop_rejected(|s: &mut App, _, _: &mut Tx| s.dispatch(Event::DropRefused))
 }
 
 /// PaperLab's icon with the logo's light behind it, and the field.

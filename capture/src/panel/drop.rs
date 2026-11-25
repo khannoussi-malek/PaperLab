@@ -22,6 +22,23 @@ impl Panel {
         vec![Effect::Upload { seq: self.seq, paths }]
     }
 
+    /// A file is being dragged over the floating paper: the panel (just opened under the pointer) waits for it in
+    /// Find. Not while an upload, add or put is under way.
+    pub(super) fn drop_offered(&mut self) -> Vec<Effect> {
+        if !self.in_flight() {
+            self.set_note_aside();
+            self.seq += 1;
+            (self.mode, self.phase, self.picked, self.polling) = (Mode::Find, Phase::DropHere, 0, None);
+        }
+        vec![]
+    }
+
+    /// The drag ended. Dropped here, the upload has taken over; let go elsewhere, the panel closes a moment later
+    /// (the moment lets a drop that's still on its way land first).
+    pub(super) fn drag_ended(&mut self) -> Vec<Effect> {
+        if self.phase == Phase::DropHere { vec![Effect::CloseSoon(self.seq)] } else { vec![] }
+    }
+
     pub(super) fn drop_refused(&mut self) -> Vec<Effect> {
         if !self.in_flight() {
             self.set_note_aside();
