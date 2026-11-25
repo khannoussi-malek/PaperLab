@@ -15,6 +15,7 @@ impl Panel {
         if paths.is_empty() || matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
             return vec![]; // one upload or add at a time; the user can drop again once it's done
         }
+        self.set_note_aside();
         self.seq += 1;
         (self.mode, self.picked, self.polling, self.upload_note) = (Mode::Find, 0, None, None);
         self.phase = Phase::Uploading { count: paths.len() };
@@ -23,6 +24,7 @@ impl Panel {
 
     pub(super) fn drop_refused(&mut self) -> Vec<Effect> {
         if !matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
+            self.set_note_aside();
             (self.mode, self.phase, self.polling) = (Mode::Find, Phase::Failed(NOT_A_PDF.into()), None);
         }
         vec![]

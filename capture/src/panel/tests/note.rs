@@ -50,26 +50,73 @@ fn a_save_that_fails_keeps_the_note_and_says_why() {
 }
 
 #[test]
-fn a_note_being_written_survives_the_panel_closing_and_reopening_in_another_mode() {
+fn a_note_waits_aside_when_the_panel_reopens_elsewhere_and_a_copied_doi_does_not_touch_it() {
     let mut p = writing_on_graph_attention();
     p.step(Event::Query("Half a tho".into()));
     p.step(Event::Closed);
-    p.mode = Mode::Cite; // a bubble opened the panel in Cite
+    p.mode = Mode::Find; // the copied-DOI bubble opens Find…
     p.step(Event::Shown);
-    assert_eq!(p.mode, Mode::Note, "the note keeps its mode until it's saved or left");
-    assert!(matches!(p.phase, Phase::Note(_)));
-    assert_eq!(p.query, "Half a tho");
+    p.step(Event::Query("10.48550/arXiv.1706.03762".into())); // …with the DOI typed in
+    assert_eq!((p.mode, p.query.as_str()), (Mode::Find, "10.48550/arXiv.1706.03762"));
+    p.step(Event::Closed);
+    p.mode = Mode::Note;
+    p.step(Event::Shown);
+    assert!(matches!(&p.phase, Phase::Note(d) if d.paper_id == "b"));
+    assert_eq!(p.query, "Half a tho", "not a word lost, none added");
 }
 
 #[test]
-fn a_late_or_stray_save_answer_changes_nothing() {
+fn tab_away_and_back_or_a_drop_keeps_the_note() {
+    let mut p = writing_on_graph_attention();
+    p.step(Event::Query("Compare heads".into()));
+    p.step(Event::NextMode { forward: true });
+    assert_eq!((p.mode, p.query.as_str(), &p.phase), (Mode::Novelty, "", &Phase::Library), "the next mode gets a clean field");
+    p.step(Event::Mode(Mode::Note));
+    assert!(matches!(p.phase, Phase::Note(_)));
+    assert_eq!(p.query, "Compare heads");
+    p.step(Event::DropRefused);
+    assert_eq!(p.mode, Mode::Find);
+    p.step(Event::Mode(Mode::Note));
+    assert!(matches!(&p.phase, Phase::Note(d) if d.paper_id == "b"), "a drop sets the note aside too");
+    assert_eq!((p.query.as_str(), p.mode), ("Compare heads", Mode::Note));
+}
+
+#[test]
+fn a_save_answer_reaches_a_note_set_aside() {
+    let mut p = writing_on_graph_attention();
+    let seq = saving(&mut p, "First");
+    p.step(Event::Mode(Mode::Cite));
+    assert_eq!(p.step(Event::NoteSaved { seq, result: Err(ApiError::Said("Busy.".into())) }), vec![]);
+    assert_eq!(p.phase, Phase::Library, "Cite stays Cite");
+    p.step(Event::Mode(Mode::Note));
+    assert!(matches!(&p.phase, Phase::Note(d) if d.error.as_deref() == Some("Busy.")), "back with why");
+    let again = saving(&mut p, "First");
+    p.step(Event::Mode(Mode::Find));
+    p.step(Event::NoteSaved { seq: again, result: Ok(()) });
+    p.step(Event::Mode(Mode::Note));
+    assert_eq!((&p.phase, p.query.as_str()), (&Phase::Library, ""), "saved while aside: nothing left to bring back");
+}
+
+#[test]
+fn enter_on_an_empty_or_too_long_note_says_why_and_an_edit_clears_it() {
+    let mut p = writing_on_graph_attention();
+    assert_eq!(p.step(Event::Submit), vec![]);
+    assert!(matches!(&p.phase, Phase::Note(d) if d.error.as_deref() == Some("Type the note first, then ↵ saves it.")));
+    p.step(Event::Query("x".repeat(50_001)));
+    assert_eq!(p.step(Event::Submit), vec![]);
+    assert!(matches!(&p.phase, Phase::Note(d) if d.error.as_ref().is_some_and(|e| e.contains("50000"))));
+    p.step(Event::Query("short".into()));
+    assert!(matches!(&p.phase, Phase::Note(d) if d.error.is_none()));
+}
+
+#[test]
+fn a_saved_note_leaves_the_field_and_a_stray_answer_changes_nothing() {
     let mut p = writing_on_graph_attention();
     let seq = saving(&mut p, "First");
     assert_eq!(p.step(Event::NoteSaved { seq: seq + 1, result: Ok(()) }), vec![]);
     assert!(matches!(p.phase, Phase::SavingNote(_)));
-    p.step(Event::Mode(Mode::Find));
-    assert_eq!(p.step(Event::NoteSaved { seq, result: Ok(()) }), vec![], "left Note: the answer has nowhere to go");
-    assert_eq!(p.phase, Phase::Library);
+    p.step(Event::NoteSaved { seq, result: Ok(()) });
+    assert_eq!(p.query, "", "the saved text leaves the field");
 }
 
 #[test]
