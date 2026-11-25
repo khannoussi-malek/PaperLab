@@ -109,7 +109,7 @@ fn mode_bar(p: &Panel, ink: &Ink) -> El {
 }
 
 /// A mode's pill text: Inbox shows how much waits in it.
-fn pill_label(mode: Mode, waiting: usize) -> String {
+pub(crate) fn pill_label(mode: Mode, waiting: usize) -> String {
     match (mode, waiting) {
         (Mode::Inbox, n) if n > 0 => format!("{} · {n}", mode.label()),
         _ => mode.label().to_owned(),

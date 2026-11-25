@@ -1,14 +1,24 @@
 //! The floating paper (M79, `--float`): a small page over every app, PaperLab within one click. It bobs gently while
-//! idle and can be dragged anywhere. A click opens the Quick Capture panel beside it; while the panel is open the page
-//! holds still, a little bigger, so the eye can rest on it. Closing the panel any way lets it float again.
+//! idle and can be dragged anywhere. A click fans PaperLab's functions out around it as bubbles (bubbles.rs); picking
+//! one opens the Quick Capture panel beside it in that mode. While the bubbles or the panel are up the page holds
+//! still, a little bigger, so the eye can rest on it. Closing the panel any way lets it float again.
+//!
+//! `Float` decides (`click`, `pick`, `dropped`, `tick` return what the app should do, as `Act`s); `tell` does it.
 
 use rune::{
     AppHandle, Color, Cx, DisplayTarget, Drag, El, KeyPolicy, OverlayHandle, OverlayInput, OverlayOptions,
     OverlayPlacement, OverlaySpec, Phase, Tx, el,
 };
 
-/// The overlay: the page and its halo, nothing more (the panel is its own window).
-const SIZE: (f32, f32) = (150.0, 150.0);
+use crate::bubbles::{self, PILL, REACH};
+use crate::mode::{MODES, Mode};
+use crate::panel::Event;
+
+/// The overlay: the page, its halo and room for the bubbles around it (the panel is its own window). Only the page
+/// and the bubbles take clicks; the clear rest passes them to the app below.
+const SIZE: (f32, f32) = (2.0 * REACH.0, 2.0 * REACH.1);
+/// Where the page starts: its centre this far from the screen's bottom-right corner, clear of the Dock's usual height.
+const START: (f32, f32) = (91.0, 147.0);
 /// The page while idle, and while its panel is open.
 const SMALL: (f32, f32) = (36.0, 46.0);
 const BIG: (f32, f32) = (44.0, 56.0);
@@ -23,9 +33,23 @@ const MARGIN: f32 = 8.0;
 /// A click this soon after the panel closed is the one that closed it (focus left the panel for the page): it must
 /// not reopen it.
 const REOPEN_GRACE: f64 = 0.35;
+/// The bubbles fold by themselves after this long without the pointer on one (the overlay never has the keyboard, so
+/// there is no Esc, and a click elsewhere goes to another app).
+const MENU_IDLE: f64 = 5.0;
+
+/// What the floating paper asks of the app.
+#[derive(Debug, PartialEq)]
+pub enum Act {
+    /// Open the panel with its top-left here, in `mode` (None: the last one used).
+    Show { at: (f32, f32), mode: Option<Mode> },
+    ClosePanel,
+    /// Hand the panel an event (dropped files).
+    Take(Event),
+}
 
 pub struct Float {
-    me: AppHandle<crate::App>,
+    /// The app, to `tell`; None in tests, which read the `Act`s instead.
+    me: Option<AppHandle<crate::App>>,
     /// Its own overlay, to move it while dragged; set once created.
     pub handle: Option<OverlayHandle<Float>>,
     screen: (f32, f32),
@@ -36,8 +60,16 @@ pub struct Float {
     dragging: bool,
     /// Frame clock, seconds.
     t: f64,
-    /// Its panel is open.
+    /// The bubbles or the panel are up: the page is big and still.
     open: bool,
+    /// The bubbles are out (`open` too, without the panel).
+    menu: bool,
+    /// When the bubbles last came out or folded, for their animation.
+    menu_since: f64,
+    /// The pointer is on a bubble: they stay out.
+    hovered: bool,
+    /// When the bubbles came out or the pointer last left one, for MENU_IDLE.
+    touched: f64,
     /// A PDF is being dragged over it: it lights up as if open.
     drop_over: bool,
     /// What waits in the Inbox, shown on the page's corner.
@@ -48,10 +80,11 @@ pub struct Float {
 }
 
 impl Float {
-    pub fn new(me: AppHandle<crate::App>, screen: (f32, f32)) -> Self {
+    pub fn new(me: Option<AppHandle<crate::App>>, screen: (f32, f32)) -> Self {
         let origin = start(screen);
         Float {
-            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, open: false, drop_over: false, badge: 0, since: -1.0,
+            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, open: false, menu: false,
+            menu_since: f64::NEG_INFINITY, hovered: false, touched: 0.0, drop_over: false, badge: 0, since: -1.0,
             closed_at: f64::NEG_INFINITY,
         }
     }
@@ -77,36 +110,87 @@ impl Float {
 
     /// The panel closed (Esc, a click outside, a paper opened): float again.
     pub fn panel_closed(&mut self) {
-        if self.open {
+        if self.open && !self.menu {
             self.closed_at = self.t;
         }
+        self.fold();
         self.set_open(false);
     }
 
-    fn click(&mut self) {
-        if self.open {
+    /// A click on the page: the bubbles come out, or fold back; with the panel open it closes. A click that comes
+    /// just after the panel closed is the one that closed it and does nothing.
+    fn click(&mut self) -> Vec<Act> {
+        if self.menu {
+            self.fold();
             self.set_open(false);
-            self.me.update(|s, _| s.close());
+            vec![]
+        } else if self.open {
+            self.set_open(false);
+            vec![Act::ClosePanel]
         } else if self.t - self.closed_at >= REOPEN_GRACE {
             self.set_open(true);
-            let page = paper_on_screen(self.origin, BIG);
-            crate::show_at(&self.me, panel_spot(page, self.screen));
+            (self.menu, self.menu_since, self.touched) = (true, self.t, self.t);
+            vec![]
+        } else {
+            vec![]
         }
     }
 
+    /// A bubble picked: they fold and the panel opens beside the page in that mode; the page stays big and still.
+    fn pick(&mut self, mode: Mode) -> Vec<Act> {
+        self.fold();
+        vec![Act::Show { at: self.panel_at(), mode: Some(mode) }]
+    }
+
     /// Files dropped on it: the panel opens beside it (if it isn't open) and takes them, PDFs or not.
-    fn dropped(&mut self, event: crate::panel::Event) {
+    fn dropped(&mut self, event: Event) -> Vec<Act> {
         self.drop_over = false;
-        if !self.open {
-            self.set_open(true);
-            crate::show_at(&self.me, panel_spot(paper_on_screen(self.origin, BIG), self.screen));
+        let show = (!self.open || self.menu).then(|| Act::Show { at: self.panel_at(), mode: None });
+        self.fold();
+        self.set_open(true);
+        show.into_iter().chain([Act::Take(event)]).collect()
+    }
+
+    /// The pointer came onto a bubble or left it.
+    fn hover(&mut self, inside: bool) {
+        (self.hovered, self.touched) = (inside, self.t);
+    }
+
+    /// A frame: the clock moves, and bubbles left alone for MENU_IDLE fold.
+    fn tick(&mut self, now: f64) {
+        self.t = now;
+        if self.menu && !self.hovered && self.t - self.touched >= MENU_IDLE {
+            self.fold();
+            self.set_open(false);
         }
-        self.me.update(move |s, _| s.dispatch(event));
+    }
+
+    fn fold(&mut self) {
+        if self.menu {
+            (self.menu, self.menu_since, self.hovered) = (false, self.t, false);
+        }
+    }
+
+    /// Where the panel opens: beside the page at its biggest.
+    fn panel_at(&self) -> (f32, f32) {
+        panel_spot(paper_on_screen(self.origin, BIG), self.screen)
+    }
+
+    /// Does what the floating paper decided.
+    fn tell(&self, acts: Vec<Act>) {
+        let Some(me) = &self.me else { return };
+        for act in acts {
+            match act {
+                Act::Show { at, mode } => crate::show_at(me, at, mode),
+                Act::ClosePanel => me.update(|s, _| s.close()),
+                Act::Take(event) => me.update(move |s, _| s.dispatch(event)),
+            }
+        }
     }
 
     /// Press, move, release on the page: a press that barely moves is a click; otherwise the overlay follows the
     /// pointer (Rune reports pointer travel even while the window moves under it).
-    fn drag(&mut self, d: &Drag) {
+    fn drag(&mut self, d: &Drag) -> Vec<Act> {
         match d.phase {
             Phase::Down => (self.grab, self.dragging) = (self.origin, false),
             Phase::Move => {
@@ -119,12 +203,14 @@ impl Float {
                 }
             }
             Phase::Up => {
-                if !self.dragging && !d.cancelled() {
-                    self.click();
-                }
+                let clicked = !self.dragging && !d.cancelled();
                 self.dragging = false;
+                if clicked {
+                    return self.click();
+                }
             }
         }
+        vec![]
     }
 }
 
@@ -132,12 +218,12 @@ fn place(origin: (f32, f32)) -> OverlayPlacement {
     OverlayPlacement::Rect { x: origin.0, y: origin.1, width: SIZE.0, height: SIZE.1 }
 }
 
-/// Where it starts: bottom right of a screen this size (points), clear of the Dock's usual height.
+/// Where it starts on a screen this size (points): its page bottom right (START).
 pub fn start(screen: (f32, f32)) -> (f32, f32) {
-    (screen.0 - SIZE.0 - 16.0, screen.1 - SIZE.1 - 72.0)
+    (screen.0 - START.0 - SIZE.0 / 2.0, screen.1 - START.1 - SIZE.1 / 2.0)
 }
 
-/// `origin`, moved just enough that the page (at its biggest) stays on a screen this size; the clear halo may leave it.
+/// `origin`, moved just enough that the page (at its biggest) stays on a screen this size; the clear rest may leave it.
 fn on_screen(origin: (f32, f32), screen: (f32, f32)) -> (f32, f32) {
     let inset = ((SIZE.0 - BIG.0) / 2.0, (SIZE.1 - BIG.1) / 2.0);
     let x = origin.0.clamp(-inset.0, (screen.0 - SIZE.0 + inset.0).max(-inset.0));
@@ -175,8 +261,10 @@ pub fn spec(origin: (f32, f32)) -> rune::ConfiguredOverlay<Float> {
 }
 
 fn poll(s: &mut Float, now: f64, _: &mut Tx) -> bool {
-    s.t = now;
-    true // ponytail: a frame each refresh for the bob (a 150 pt window); measured, and Reduce Motion stops it
+    s.tick(now);
+    // ponytail: a frame each refresh for the bob and the bubbles (the overlay is ~500 x 400 pt, mostly clear); if it
+    // shows in Activity Monitor, shrink the overlay to the page while the bubbles are folded.
+    true
 }
 
 fn view(s: &Float, cx: &mut Cx<Float>) -> El {
@@ -194,15 +282,45 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let glow = if dark { 0.32 + 0.16 * open } else { 0.2 + 0.12 * open };
     el().key("float").w_full().h_full()
         .on_drop_files(|s: &mut Float, files, _: &mut Tx| {
-            s.dropped(crate::panel::Event::Dropped(files.to_vec()));
+            let acts = s.dropped(Event::Dropped(files.to_vec()));
+            s.tell(acts);
         })
         .accepts_extensions(&["pdf"])
         .on_drop_hover(|s: &mut Float, over, _: &mut Tx| s.drop_over = over)
-        .on_drop_rejected(|s: &mut Float, _, _: &mut Tx| s.dropped(crate::panel::Event::DropRefused))
+        .on_drop_rejected(|s: &mut Float, _, _: &mut Tx| {
+            let acts = s.dropped(Event::DropRefused);
+            s.tell(acts);
+        })
         .child(el().key("halo").absolute(cx_ - halo, cy_ - halo).size(halo * 2.0, halo * 2.0)
             .radial_gradient([halo, halo], halo, [(0.0, blue.alpha(glow)), (1.0, blue.alpha(0.0))]))
+        .children(menu(s, (cx_, cy_), still, dark))
         .child(paper((px, py), (pw, ph), bob, dark))
         .child(badge(s.badge, (px + pw, py), blue))
+}
+
+/// The bubbles, flying out from the page's centre (`centre`, in the overlay) to their spots, or back. Only bubbles
+/// on their way out or out take clicks; folding ones don't, and folded or not-yet-started ones aren't drawn at all, so
+/// nothing invisible catches a click.
+fn menu(s: &Float, centre: (f32, f32), still: bool, dark: bool) -> Vec<El> {
+    let on_screen = (s.origin.0 + centre.0, s.origin.1 + centre.1);
+    let spots = bubbles::spots(on_screen, s.screen);
+    let home = (centre.0 - PILL.0 / 2.0, centre.1 - PILL.1 / 2.0);
+    MODES.into_iter().zip(spots).enumerate().filter_map(|(i, (mode, spot))| {
+        let k = if still { f32::from(u8::from(s.menu)) } else { bubbles::progress(s.t - s.menu_since, i, s.menu) };
+        let to = (spot.0 - s.origin.0, spot.1 - s.origin.1);
+        let at = (home.0 + (to.0 - home.0) * k, home.1 + (to.1 - home.1) * k);
+        let pill = bubbles::pill(i, mode, s.badge, dark, k).absolute(at.0, at.1);
+        match (s.menu, k > 0.0) {
+            (true, true) => Some(pill.hit()
+                .on_press(move |s: &mut Float| {
+                    let acts = s.pick(mode);
+                    s.tell(acts);
+                })
+                .on_hover_change(|s: &mut Float, inside, _: &mut Tx| s.hover(inside))),
+            (false, true) => Some(pill),
+            (_, false) => None,
+        }
+    }).collect()
 }
 
 /// The page, drawn at any size between SMALL and BIG: its lines scale with it.
@@ -224,7 +342,10 @@ fn paper(at: (f32, f32), size: (f32, f32), bob: f32, dark: bool) -> El {
         .child(line(27.0, 28.0, ink))
         .child(line(35.0, 18.0, ink))
         .hit()
-        .on_drag(|s: &mut Float, d: &mut Drag, _: &mut Tx| s.drag(d))
+        .on_drag(|s: &mut Float, d: &mut Drag, _: &mut Tx| {
+            let acts = s.drag(d);
+            s.tell(acts);
+        })
 }
 
 /// The Inbox count on the page's top-right corner (centred on `corner`); nothing when there's nothing new.
@@ -274,6 +395,88 @@ mod tests {
         let [x, y, w, _] = paper_on_screen(on_screen((5000.0, -500.0), SCREEN), BIG);
         assert_eq!((x + w, y), (SCREEN.0, 0.0));
         assert_eq!(on_screen((300.0, 200.0), SCREEN), (300.0, 200.0), "inside: left alone");
+    }
+
+    /// A floating paper with nothing to tell (its `Act`s are the answer), its clock at `t`.
+    fn paper_at(t: f64) -> Float {
+        let mut f = Float::new(None, SCREEN);
+        f.tick(t);
+        f
+    }
+
+    #[test]
+    fn a_click_brings_the_bubbles_out_and_a_second_folds_them() {
+        let mut f = paper_at(10.0);
+        assert_eq!(f.click(), vec![], "no panel yet: the bubbles are the menu");
+        assert!(f.menu && f.open, "bubbles out, page big and still");
+        f.tick(11.0);
+        assert_eq!(f.click(), vec![]);
+        assert!(!f.menu && !f.open, "folded, floating again");
+    }
+
+    #[test]
+    fn picking_a_bubble_opens_the_panel_beside_the_page_in_that_mode() {
+        let mut f = paper_at(10.0);
+        f.click();
+        let acts = f.pick(Mode::Ask);
+        assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Ask) }]);
+        assert!(!f.menu && f.open, "the bubbles fold; the page stays still beside its panel");
+        assert_eq!(f.click(), vec![Act::ClosePanel], "a click on the page closes the panel");
+    }
+
+    #[test]
+    fn the_click_that_closed_the_panel_brings_nothing_out() {
+        let mut f = paper_at(10.0);
+        f.click();
+        f.pick(Mode::Find);
+        f.panel_closed(); // focus left the panel for the page
+        assert_eq!(f.click(), vec![]);
+        assert!(!f.menu && !f.open);
+        f.tick(10.5);
+        f.click();
+        assert!(f.menu, "a later click does");
+    }
+
+    #[test]
+    fn the_bubbles_fold_by_themselves_unless_the_pointer_is_on_one() {
+        let mut f = paper_at(10.0);
+        f.click();
+        f.hover(true);
+        f.tick(10.0 + 3.0 * MENU_IDLE);
+        assert!(f.menu, "pointed at: they stay");
+        f.hover(false);
+        f.tick(10.0 + 4.0 * MENU_IDLE - 0.1);
+        assert!(f.menu, "not yet");
+        f.tick(10.0 + 4.0 * MENU_IDLE);
+        assert!(!f.menu && !f.open, "left alone: folded, floating again");
+    }
+
+    #[test]
+    fn a_drop_while_the_bubbles_are_out_opens_the_panel_and_hands_it_the_files() {
+        let mut f = paper_at(10.0);
+        f.click();
+        let acts = f.dropped(Event::DropRefused);
+        assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: None }, Act::Take(Event::DropRefused)]);
+        assert!(!f.menu && f.open);
+        assert_eq!(f.dropped(Event::DropRefused), vec![Act::Take(Event::DropRefused)], "panel open: just the files");
+    }
+
+    #[test]
+    fn the_bubbles_are_drawn_only_once_out_and_a_press_on_one_picks_it() {
+        use rune::{Env, Runtime};
+        let mut rt = Runtime::new(paper_at(10.0), view, SIZE, Env { system_dark: false, scale: 2.0 });
+        rt.frame(0.0);
+        assert!(rt.find("bubble-0").is_none(), "folded: nothing drawn, nothing to catch a click");
+        rt.update(|s, _| {
+            s.click();
+            s.tick(11.0);
+        });
+        rt.frame(1.0 / 60.0);
+        let (x, y) = rt.find("bubble-2").expect("Ask is out");
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        rt.frame(1.0 / 60.0);
+        assert!(!rt.state.menu && rt.state.open, "picked: folded, the panel would open");
     }
 
     #[test]
