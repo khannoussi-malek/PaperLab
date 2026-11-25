@@ -40,6 +40,9 @@ const MENU_IDLE: f64 = 5.0;
 /// "Hide for an hour" (a screen share, a talk); the shortcut brings it back sooner. It fades back in over FADE_IN.
 const HIDE_FOR: f64 = 3600.0;
 const FADE_IN: f64 = 0.4;
+/// How often a hidden paper checks whether its hour is up. The frame clock stops while the Mac sleeps, so the hour is
+/// an hour awake; the shortcut brings it back at any time.
+const HIDDEN_POLL: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// What the page is doing. Bubbles out or panel open, it is big and still; floating, it bobs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -168,6 +171,9 @@ impl Float {
 
     /// A right-click (or control-click) on the page: the paper's own bubbles, open PaperLab or hide it.
     fn right_click(&mut self) -> Vec<Act> {
+        if self.dragging {
+            return vec![]; // mid-drag: the page is being moved, not asked for anything
+        }
         self.press(bubbles::paper_menu())
     }
 
@@ -216,6 +222,7 @@ impl Float {
             }
             Pick::Hide => {
                 self.focus_on(Focus::Floating);
+                (self.dragging, self.drop_over) = (false, false); // its page is gone: no gesture can finish on it
                 self.hidden_until = self.t + HIDE_FOR;
                 vec![]
             }
@@ -333,8 +340,13 @@ pub fn spec(origin: (f32, f32)) -> rune::ConfiguredOverlay<Float> {
     OverlaySpec::new("PaperLab floating paper", SIZE, view).options(options).poll(poll)
 }
 
-fn poll(s: &mut Float, now: f64, _: &mut Tx) -> bool {
+fn poll(s: &mut Float, now: f64, tx: &mut Tx) -> bool {
     s.tick(now);
+    if s.hidden() {
+        // Nothing to draw: one look a second keeps the clock (and the hour) going instead of a frame each refresh.
+        tx.wake_after(HIDDEN_POLL);
+        return false;
+    }
     // ponytail: a frame each refresh for the bob and the bubbles (the overlay is ~500 x 400 pt, mostly clear); if it
     // shows in Activity Monitor, shrink the overlay to the page while the bubbles are folded.
     true
@@ -642,6 +654,22 @@ mod tests {
         f.tick(11.0);
         f.click();
         assert_eq!(f.items, bubbles::menu(None), "a left click is back to the functions");
+    }
+
+    #[test]
+    fn a_right_click_mid_drag_does_nothing_and_a_hidden_paper_polls_once_a_second() {
+        let mut f = paper_at(10.0);
+        f.dragging = true;
+        assert_eq!(f.right_click(), vec![]);
+        assert_eq!(f.focus, Focus::Floating);
+        f.dragging = false;
+        f.right_click();
+        f.pick(Bubble::Hide);
+        let mut tx = Tx::default();
+        assert!(!poll(&mut f, 20.0, &mut tx), "hidden: no frame to draw");
+        assert_eq!(f.t, 20.0, "the clock still moves");
+        f.unhide();
+        assert!(poll(&mut f, 20.5, &mut Tx::default()), "back: frames again");
     }
 
     #[test]
