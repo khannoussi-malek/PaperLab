@@ -37,6 +37,14 @@ const REOPEN_GRACE: f64 = 0.35;
 /// there is no Esc, and a click elsewhere goes to another app).
 const MENU_IDLE: f64 = 5.0;
 
+/// What the page is doing. Bubbles out or panel open, it is big and still; floating, it bobs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Focus {
+    Floating,
+    Menu,
+    Panel,
+}
+
 /// What the floating paper asks of the app.
 #[derive(Debug, PartialEq)]
 pub enum Act {
@@ -60,12 +68,10 @@ pub struct Float {
     dragging: bool,
     /// Frame clock, seconds.
     t: f64,
-    /// The bubbles or the panel are up: the page is big and still.
-    open: bool,
-    /// The bubbles are out (`open` too, without the panel).
-    menu: bool,
-    /// When the bubbles last came out or folded, for their animation.
+    focus: Focus,
+    /// When the bubbles last came out or started folding, and how far out each was then, for their animation.
     menu_since: f64,
+    menu_from: [f32; 5],
     /// The pointer is on a bubble: they stay out.
     hovered: bool,
     /// When the bubbles came out or the pointer last left one, for MENU_IDLE.
@@ -83,8 +89,9 @@ impl Float {
     pub fn new(me: Option<AppHandle<crate::App>>, screen: (f32, f32)) -> Self {
         let origin = start(screen);
         Float {
-            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, open: false, menu: false,
-            menu_since: f64::NEG_INFINITY, hovered: false, touched: 0.0, drop_over: false, badge: 0, since: -1.0,
+            me, handle: None, screen, origin, grab: origin, dragging: false, t: 0.0, focus: Focus::Floating,
+            menu_since: f64::NEG_INFINITY, menu_from: [0.0; 5], hovered: false, touched: 0.0, drop_over: false, badge: 0,
+            since: -1.0,
             closed_at: f64::NEG_INFINITY,
         }
     }
@@ -96,58 +103,67 @@ impl Float {
     /// 0 (small, floating) to 1 (big, still), easing over GROW_SECONDS.
     fn openness(&self) -> f32 {
         let k = ease(((self.t - self.since) / GROW_SECONDS).clamp(0.0, 1.0)) as f32;
-        if self.open { k } else { 1.0 - k }
+        if self.focus == Focus::Floating { 1.0 - k } else { k }
     }
 
-    fn set_open(&mut self, open: bool) {
-        if open == self.open {
+    /// How far out each bubble is now: 0 at the page, 1 in place.
+    fn bubbles_out(&self) -> [f32; 5] {
+        let menu = self.focus == Focus::Menu;
+        std::array::from_fn(|i| bubbles::progress(self.t - self.menu_since, i, menu, self.menu_from[i]))
+    }
+
+    /// Every change of focus goes through here. The page's grow and the bubbles' pop or fold each start from where a
+    /// half-finished one is, so a quick second click reverses smoothly instead of jumping.
+    fn focus_on(&mut self, to: Focus) {
+        if to == self.focus {
             return;
         }
-        let k = f64::from(self.openness()); // from where a half-finished change is, so it reverses smoothly
-        self.open = open;
-        self.since = self.t - GROW_SECONDS * if open { k } else { 1.0 - k };
+        if (to == Focus::Menu) != (self.focus == Focus::Menu) {
+            self.menu_from = self.bubbles_out();
+            (self.menu_since, self.touched, self.hovered) = (self.t, self.t, false);
+        }
+        let open = to != Focus::Floating;
+        if open != (self.focus != Focus::Floating) {
+            let k = f64::from(self.openness());
+            self.since = self.t - GROW_SECONDS * if open { k } else { 1.0 - k };
+        }
+        self.focus = to;
     }
 
     /// The panel closed (Esc, a click outside, a paper opened): float again.
     pub fn panel_closed(&mut self) {
-        if self.open && !self.menu {
+        if self.focus == Focus::Panel {
             self.closed_at = self.t;
         }
-        self.fold();
-        self.set_open(false);
+        self.focus_on(Focus::Floating);
     }
 
     /// A click on the page: the bubbles come out, or fold back; with the panel open it closes. A click that comes
     /// just after the panel closed is the one that closed it and does nothing.
     fn click(&mut self) -> Vec<Act> {
-        if self.menu {
-            self.fold();
-            self.set_open(false);
-            vec![]
-        } else if self.open {
-            self.set_open(false);
-            vec![Act::ClosePanel]
-        } else if self.t - self.closed_at >= REOPEN_GRACE {
-            self.set_open(true);
-            (self.menu, self.menu_since, self.touched) = (true, self.t, self.t);
-            vec![]
-        } else {
-            vec![]
+        match self.focus {
+            Focus::Menu => self.focus_on(Focus::Floating),
+            Focus::Panel => {
+                self.focus_on(Focus::Floating);
+                return vec![Act::ClosePanel];
+            }
+            Focus::Floating if self.t - self.closed_at >= REOPEN_GRACE => self.focus_on(Focus::Menu),
+            Focus::Floating => {}
         }
+        vec![]
     }
 
     /// A bubble picked: they fold and the panel opens beside the page in that mode; the page stays big and still.
     fn pick(&mut self, mode: Mode) -> Vec<Act> {
-        self.fold();
+        self.focus_on(Focus::Panel);
         vec![Act::Show { at: self.panel_at(), mode: Some(mode) }]
     }
 
     /// Files dropped on it: the panel opens beside it (if it isn't open) and takes them, PDFs or not.
     fn dropped(&mut self, event: Event) -> Vec<Act> {
         self.drop_over = false;
-        let show = (!self.open || self.menu).then(|| Act::Show { at: self.panel_at(), mode: None });
-        self.fold();
-        self.set_open(true);
+        let show = (self.focus != Focus::Panel).then(|| Act::Show { at: self.panel_at(), mode: None });
+        self.focus_on(Focus::Panel);
         show.into_iter().chain([Act::Take(event)]).collect()
     }
 
@@ -159,15 +175,8 @@ impl Float {
     /// A frame: the clock moves, and bubbles left alone for MENU_IDLE fold.
     fn tick(&mut self, now: f64) {
         self.t = now;
-        if self.menu && !self.hovered && self.t - self.touched >= MENU_IDLE {
-            self.fold();
-            self.set_open(false);
-        }
-    }
-
-    fn fold(&mut self) {
-        if self.menu {
-            (self.menu, self.menu_since, self.hovered) = (false, self.t, false);
+        if self.focus == Focus::Menu && !self.hovered && self.t - self.touched >= MENU_IDLE {
+            self.focus_on(Focus::Floating);
         }
     }
 
@@ -195,7 +204,7 @@ impl Float {
             Phase::Down => (self.grab, self.dragging) = (self.origin, false),
             Phase::Move => {
                 if self.dragging || d.dx.hypot(d.dy) >= CLICK_SLOP {
-                    self.dragging = true;
+                    (self.dragging, self.touched) = (true, self.t); // moving the page is using the bubbles
                     self.origin = on_screen((self.grab.0 + d.dx, self.grab.1 + d.dy), self.screen);
                     if let Some(handle) = &self.handle {
                         handle.set_placement(Some(place(self.origin)));
@@ -281,16 +290,6 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let halo = 46.0 + 18.0 * open;
     let glow = if dark { 0.32 + 0.16 * open } else { 0.2 + 0.12 * open };
     el().key("float").w_full().h_full()
-        .on_drop_files(|s: &mut Float, files, _: &mut Tx| {
-            let acts = s.dropped(Event::Dropped(files.to_vec()));
-            s.tell(acts);
-        })
-        .accepts_extensions(&["pdf"])
-        .on_drop_hover(|s: &mut Float, over, _: &mut Tx| s.drop_over = over)
-        .on_drop_rejected(|s: &mut Float, _, _: &mut Tx| {
-            let acts = s.dropped(Event::DropRefused);
-            s.tell(acts);
-        })
         .child(el().key("halo").absolute(cx_ - halo, cy_ - halo).size(halo * 2.0, halo * 2.0)
             .radial_gradient([halo, halo], halo, [(0.0, blue.alpha(glow)), (1.0, blue.alpha(0.0))]))
         .children(menu(s, (cx_, cy_), still, dark))
@@ -305,12 +304,14 @@ fn menu(s: &Float, centre: (f32, f32), still: bool, dark: bool) -> Vec<El> {
     let on_screen = (s.origin.0 + centre.0, s.origin.1 + centre.1);
     let spots = bubbles::spots(on_screen, s.screen);
     let home = (centre.0 - PILL.0 / 2.0, centre.1 - PILL.1 / 2.0);
+    let menu = s.focus == Focus::Menu;
+    let out = s.bubbles_out();
     MODES.into_iter().zip(spots).enumerate().filter_map(|(i, (mode, spot))| {
-        let k = if still { f32::from(u8::from(s.menu)) } else { bubbles::progress(s.t - s.menu_since, i, s.menu) };
+        let k = if still { f32::from(u8::from(menu)) } else { out[i] };
         let to = (spot.0 - s.origin.0, spot.1 - s.origin.1);
         let at = (home.0 + (to.0 - home.0) * k, home.1 + (to.1 - home.1) * k);
         let pill = bubbles::pill(i, mode, s.badge, dark, k).absolute(at.0, at.1);
-        match (s.menu, k > 0.0) {
+        match (menu, k > 0.0) {
             (true, true) => Some(pill.hit()
                 .on_press(move |s: &mut Float| {
                     let acts = s.pick(mode);
@@ -344,6 +345,17 @@ fn paper(at: (f32, f32), size: (f32, f32), bob: f32, dark: bool) -> El {
         .hit()
         .on_drag(|s: &mut Float, d: &mut Drag, _: &mut Tx| {
             let acts = s.drag(d);
+            s.tell(acts);
+        })
+        // Drops land on the page only, never on the clear overlay around it, which belongs to the app below.
+        .on_drop_files(|s: &mut Float, files, _: &mut Tx| {
+            let acts = s.dropped(Event::Dropped(files.to_vec()));
+            s.tell(acts);
+        })
+        .accepts_extensions(&["pdf"])
+        .on_drop_hover(|s: &mut Float, over, _: &mut Tx| s.drop_over = over)
+        .on_drop_rejected(|s: &mut Float, _, _: &mut Tx| {
+            let acts = s.dropped(Event::DropRefused);
             s.tell(acts);
         })
 }
@@ -408,10 +420,10 @@ mod tests {
     fn a_click_brings_the_bubbles_out_and_a_second_folds_them() {
         let mut f = paper_at(10.0);
         assert_eq!(f.click(), vec![], "no panel yet: the bubbles are the menu");
-        assert!(f.menu && f.open, "bubbles out, page big and still");
+        assert_eq!(f.focus, Focus::Menu, "bubbles out, page big and still");
         f.tick(11.0);
         assert_eq!(f.click(), vec![]);
-        assert!(!f.menu && !f.open, "folded, floating again");
+        assert_eq!(f.focus, Focus::Floating, "folded, floating again");
     }
 
     #[test]
@@ -420,7 +432,7 @@ mod tests {
         f.click();
         let acts = f.pick(Mode::Ask);
         assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Ask) }]);
-        assert!(!f.menu && f.open, "the bubbles fold; the page stays still beside its panel");
+        assert_eq!(f.focus, Focus::Panel, "the bubbles fold; the page stays still beside its panel");
         assert_eq!(f.click(), vec![Act::ClosePanel], "a click on the page closes the panel");
     }
 
@@ -431,10 +443,10 @@ mod tests {
         f.pick(Mode::Find);
         f.panel_closed(); // focus left the panel for the page
         assert_eq!(f.click(), vec![]);
-        assert!(!f.menu && !f.open);
+        assert_eq!(f.focus, Focus::Floating);
         f.tick(10.5);
         f.click();
-        assert!(f.menu, "a later click does");
+        assert_eq!(f.focus, Focus::Menu, "a later click does");
     }
 
     #[test]
@@ -443,12 +455,12 @@ mod tests {
         f.click();
         f.hover(true);
         f.tick(10.0 + 3.0 * MENU_IDLE);
-        assert!(f.menu, "pointed at: they stay");
+        assert_eq!(f.focus, Focus::Menu, "pointed at: they stay");
         f.hover(false);
         f.tick(10.0 + 4.0 * MENU_IDLE - 0.1);
-        assert!(f.menu, "not yet");
+        assert_eq!(f.focus, Focus::Menu, "not yet");
         f.tick(10.0 + 4.0 * MENU_IDLE);
-        assert!(!f.menu && !f.open, "left alone: folded, floating again");
+        assert_eq!(f.focus, Focus::Floating, "left alone: folded, floating again");
     }
 
     #[test]
@@ -457,7 +469,7 @@ mod tests {
         f.click();
         let acts = f.dropped(Event::DropRefused);
         assert_eq!(acts, vec![Act::Show { at: f.panel_at(), mode: None }, Act::Take(Event::DropRefused)]);
-        assert!(!f.menu && f.open);
+        assert_eq!(f.focus, Focus::Panel);
         assert_eq!(f.dropped(Event::DropRefused), vec![Act::Take(Event::DropRefused)], "panel open: just the files");
     }
 
@@ -476,7 +488,36 @@ mod tests {
         rt.pointer_down(x, y);
         rt.pointer_up(x, y);
         rt.frame(1.0 / 60.0);
-        assert!(!rt.state.menu && rt.state.open, "picked: folded, the panel would open");
+        assert_eq!(rt.state.focus, Focus::Panel, "picked: folded, the panel would open");
+    }
+
+    #[test]
+    fn a_quick_second_click_folds_the_bubbles_from_where_they_are() {
+        let mut f = paper_at(10.0);
+        f.click();
+        f.tick(10.08); // the first bubble partly out, the last not started
+        let then = f.bubbles_out();
+        assert!(then[0] > 0.0 && then[0] < 1.0 && then[4] == 0.0, "{then:?}");
+        f.click();
+        assert_eq!(f.bubbles_out(), then, "the fold starts where the pop was: nothing jumps");
+        f.tick(10.2); // the top bubble folds last
+        assert!(f.bubbles_out()[0] < then[0] && f.bubbles_out()[4] == 0.0);
+    }
+
+    #[test]
+    fn dragging_the_page_keeps_the_bubbles_out() {
+        use rune::{Env, Runtime};
+        let mut rt = Runtime::new(paper_at(10.0), view, SIZE, Env { system_dark: false, scale: 2.0 });
+        rt.update(|s, _| { s.click(); });
+        rt.frame(0.0);
+        let (x, y) = rt.find("paper").expect("the page");
+        rt.pointer_down(x, y);
+        rt.update(|s, _| s.tick(10.0 + MENU_IDLE - 0.5));
+        rt.pointer_move(x + 40.0, y);
+        rt.frame(1.0 / 60.0);
+        rt.update(|s, _| s.tick(10.0 + MENU_IDLE + 1.0));
+        assert!(rt.state.dragging, "the drag is under way");
+        assert_eq!(rt.state.focus, Focus::Menu, "being moved isn't being left alone");
     }
 
     #[test]

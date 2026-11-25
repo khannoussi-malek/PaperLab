@@ -37,14 +37,16 @@ pub fn spots(centre: (f32, f32), screen: (f32, f32)) -> [(f32, f32); 5] {
     arc.map(|(x, y)| (x, y + shift))
 }
 
-/// How far out bubble `i` is, `since` seconds after the menu opened (`open`) or closed: 0 at the page, 1 in place. On
-/// the way out it overshoots a little and settles; the fold runs bottom first and doesn't bounce.
-pub fn progress(since: f64, i: usize, open: bool) -> f32 {
+/// How far out bubble `i` is, `since` seconds after the menu opened (`open`) or closed, starting `from` where it was
+/// then: 0 at the page, 1 in place. On the way out it overshoots a little and settles; the fold runs bottom first and
+/// doesn't bounce.
+pub fn progress(since: f64, i: usize, open: bool, from: f32) -> f32 {
     if open {
-        back_out(((since - i as f64 * STAGGER) / POP).clamp(0.0, 1.0)) as f32
+        let k = back_out(((since - i as f64 * STAGGER) / POP).clamp(0.0, 1.0)) as f32;
+        from + (1.0 - from) * k
     } else {
         let k = ((since - (4 - i) as f64 * STAGGER / 2.0) / FOLD).clamp(0.0, 1.0);
-        1.0 - (k * k * (3.0 - 2.0 * k)) as f32
+        from * (1.0 - (k * k * (3.0 - 2.0 * k)) as f32)
     }
 }
 
@@ -119,11 +121,14 @@ mod tests {
 
     #[test]
     fn the_bubbles_pop_out_in_turn_overshoot_and_fold_back() {
-        assert_eq!(progress(0.0, 0, true), 0.0);
-        assert!(progress(STAGGER, 0, true) > 0.0 && progress(STAGGER, 1, true) == 0.0, "one after another");
-        let peak = (0..30).map(|n| progress(n as f64 * 0.01, 0, true)).fold(0.0, f32::max);
+        assert_eq!(progress(0.0, 0, true, 0.0), 0.0);
+        assert!(progress(STAGGER, 0, true, 0.0) > 0.0 && progress(STAGGER, 1, true, 0.0) == 0.0, "one after another");
+        let peak = (0..30).map(|n| progress(n as f64 * 0.01, 0, true, 0.0)).fold(0.0, f32::max);
         assert!(peak > 1.02 && peak < 1.12, "a small overshoot, not a wobble: {peak}");
-        assert!((0..5).all(|i| progress(SETTLED, i, true) == 1.0), "all landed by SETTLED");
-        assert!((0..5).all(|i| progress(0.0, i, false) == 1.0 && progress(0.3, i, false) == 0.0), "the fold is quick");
+        assert!((0..5).all(|i| progress(SETTLED, i, true, 0.0) == 1.0), "all landed by SETTLED");
+        let quick = |i| progress(0.0, i, false, 1.0) == 1.0 && progress(0.3, i, false, 1.0) == 0.0;
+        assert!((0..5).all(quick), "the fold is quick");
+        assert_eq!(progress(0.0, 2, false, 0.4), 0.4, "a fold starts where the bubble is");
+        assert_eq!(progress(0.0, 2, true, 0.4), 0.4, "so does a pop");
     }
 }
