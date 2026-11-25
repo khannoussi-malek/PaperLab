@@ -320,7 +320,12 @@ fn main() {
         let app = app
             .init(move || App::new(Some(ctx)))
             .global_shortcut_named(&args.shortcut, "quick-capture", "Open PaperLab Quick Capture", |s, _| {
-                if let Some(ctx) = &s.ctx { show(&ctx.me); }
+                if let Some(ctx) = &s.ctx {
+                    if let Some(float) = &ctx.float {
+                        float.update(|f, _| f.unhide()); // hidden for an hour: the shortcut brings it back
+                    }
+                    show(&ctx.me);
+                }
             })
             .on_focus(|s, focused, _| if !focused { s.close() });
         [WindowSpec::from_app("capture", app).configured_options(WindowOptions::launcher_panel().macos(|native| native.shadow(true).corner_radius(14.0)))]
