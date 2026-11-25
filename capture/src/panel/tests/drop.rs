@@ -1,6 +1,7 @@
 //! PDFs dropped on the floating paper.
 
 use super::*;
+use crate::api::Added;
 use crate::panel::drop::NOT_A_PDF;
 
 fn ingesting(id: &str) -> Paper {
@@ -54,4 +55,40 @@ fn something_else_dropped_says_what_to_do() {
     p.step(Event::Mode(Mode::Ask));
     p.step(Event::DropRefused);
     assert_eq!((p.mode, p.phase.clone()), (Mode::Find, Phase::Failed(NOT_A_PDF.into())));
+}
+
+#[test]
+fn reopening_mid_upload_keeps_it_and_follows_its_paper() {
+    let mut p = shown_with_library();
+    let seq = drop_two(&mut p);
+    p.step(Event::Closed);
+    p.step(Event::Shown);
+    assert_eq!(p.phase, Phase::Uploading { count: 2 });
+    assert_eq!(p.step(Event::Dropped(vec!["/c.pdf".into()])), vec![], "still one at a time");
+    assert_eq!(p.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a"))] }), vec![Effect::Poll("a".into())]);
+}
+
+#[test]
+fn reopening_mid_add_keeps_it_too() {
+    let mut p = shown_with_library();
+    p.step(Event::Query("2401.12345".into()));
+    let seq = p.seq;
+    p.step(Event::Looked { seq, result: Ok(Found { results: vec![candidate("New", None)], notices: vec![] }) });
+    p.step(Event::Submit);
+    p.step(Event::Closed);
+    p.step(Event::Shown);
+    let seq = p.seq;
+    assert_eq!(p.step(Event::AddDone { seq, result: Ok(Added::Queued(ingesting("n"))) }), vec![Effect::Poll("n".into())]);
+}
+
+#[test]
+fn the_drop_note_goes_with_the_next_add_and_a_refused_drop_stops_following() {
+    let mut p = shown_with_library();
+    let seq = drop_two(&mut p);
+    p.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a")), Ok(ingesting("b"))] });
+    p.step(Event::DropRefused);
+    assert_eq!(p.step(Event::Status { id: "b".into(), result: Ok(ingesting("b")) }), vec![], "no longer followed");
+    assert_eq!(p.phase, Phase::Failed(NOT_A_PDF.into()));
+    p.step(Event::Query("graph".into()));
+    assert_eq!(p.upload_note, None);
 }

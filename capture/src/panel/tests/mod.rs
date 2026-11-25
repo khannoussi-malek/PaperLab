@@ -276,17 +276,19 @@ fn adding(p: &mut Panel, title: &str) -> Vec<Effect> {
 }
 
 #[test]
-fn a_late_add_answer_does_not_land_on_a_newer_add() {
+fn an_add_under_way_holds_through_a_reopen_and_a_wrong_seq_changes_nothing() {
     let mut p = shown_with_library();
     let first = adding(&mut p, "A");
     let [Effect::Add { seq: a, .. }] = first.as_slice() else { panic!("{first:?}") };
     let a = *a;
     p.step(Event::Closed);
     p.step(Event::Shown);
-    adding(&mut p, "B");
+    assert_eq!(adding(&mut p, "B"), vec![], "B waits for A");
     let late = Paper { id: "a".into(), ..paper("a", "A", &[], 2020, "x") };
-    assert_eq!(p.step(Event::AddDone { seq: a, result: Ok(Added::Queued(late)) }), vec![]);
-    assert!(matches!(&p.phase, Phase::Adding(c) if c.title == "B"));
+    assert_eq!(p.step(Event::AddDone { seq: a + 1, result: Ok(Added::Queued(late.clone())) }), vec![]);
+    assert!(matches!(&p.phase, Phase::Adding(c) if c.title == "A"));
+    p.step(Event::AddDone { seq: a, result: Ok(Added::Queued(late)) });
+    assert!(matches!(&p.phase, Phase::Added(x) if x.id == "a"));
 }
 
 fn cite_enter(p: &mut Panel) -> u64 {

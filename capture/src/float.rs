@@ -192,8 +192,7 @@ fn view(s: &Float, cx: &mut Cx<Float>) -> El {
     let glow = if dark { 0.32 + 0.16 * open } else { 0.2 + 0.12 * open };
     el().key("float").w_full().h_full()
         .on_drop_files(|s: &mut Float, files, _: &mut Tx| {
-            let paths = files.iter().map(|f| f.to_string_lossy().into_owned()).collect();
-            s.dropped(crate::panel::Event::Dropped(paths));
+            s.dropped(crate::panel::Event::Dropped(files.to_vec()));
         })
         .accepts_extensions(&["pdf"])
         .on_drop_hover(|s: &mut Float, over, _: &mut Tx| s.drop_over = over)

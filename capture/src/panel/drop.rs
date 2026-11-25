@@ -1,7 +1,9 @@
 //! PDFs dropped on the floating paper: uploaded one after another, then the last one followed until it's ready, as an
 //! add in Find is. Anything else dropped is turned away with what to do instead.
 
-use super::{Effect, Panel, Phase, UNREACHABLE, find};
+use std::path::PathBuf;
+
+use super::{Effect, Panel, Phase, UNREACHABLE};
 use crate::api::ApiError;
 use crate::library::Paper;
 use crate::mode::Mode;
@@ -9,7 +11,7 @@ use crate::mode::Mode;
 pub const NOT_A_PDF: &str = "Only PDFs can be dropped on the paper. For a DOI, arXiv ID or link, paste it here instead.";
 
 impl Panel {
-    pub(super) fn dropped(&mut self, paths: Vec<String>) -> Vec<Effect> {
+    pub(super) fn dropped(&mut self, paths: Vec<PathBuf>) -> Vec<Effect> {
         if paths.is_empty() || matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
             return vec![]; // one upload or add at a time; the user can drop again once it's done
         }
@@ -21,7 +23,7 @@ impl Panel {
 
     pub(super) fn drop_refused(&mut self) -> Vec<Effect> {
         if !matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
-            (self.mode, self.phase) = (Mode::Find, Phase::Failed(NOT_A_PDF.into()));
+            (self.mode, self.phase, self.polling) = (Mode::Find, Phase::Failed(NOT_A_PDF.into()), None);
         }
         vec![]
     }
@@ -45,11 +47,7 @@ impl Panel {
             return vec![];
         };
         self.upload_note = note(total, errors.len() + usize::from(first_error.is_some()), first_error);
-        let follow = !find::done(&paper) && !self.hidden;
-        self.polling = follow.then(|| paper.id.clone());
-        let fx = if follow { vec![Effect::Poll(paper.id.clone())] } else { vec![] };
-        self.phase = Phase::Added(paper);
-        fx
+        self.follow(paper)
     }
 }
 

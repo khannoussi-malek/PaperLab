@@ -160,9 +160,9 @@ fn sse_edge_cases_done_without_json_data_alone_multi_line_and_no_trailing_blank(
 
 #[test]
 fn an_upload_is_one_file_part_whose_name_cannot_break_its_header() {
-    let body = String::from_utf8(upload::multipart("my \"paper\"\r\n.pdf", b"%PDF-1.7")).unwrap();
+    let body = String::from_utf8(upload::multipart("b0undary", "my \"paper\"\r\n.pdf", b"%PDF-1.7")).unwrap();
     assert!(body.contains("filename=\"my paper.pdf\""), "{body}");
-    assert!(body.contains("content-type: application/pdf\r\n\r\n%PDF-1.7\r\n--"), "{body}");
+    assert!(body.starts_with("--b0undary\r\n") && body.contains("application/pdf\r\n\r\n%PDF-1.7\r\n--b0undary--"), "{body}");
     assert!(body.ends_with("--\r\n"));
 }
 
