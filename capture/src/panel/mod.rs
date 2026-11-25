@@ -72,6 +72,8 @@ pub enum Event {
     NextMode { forward: bool },
     /// ⌘↵: the mode's second action (Cite: BibTeX instead of APA).
     SubmitAlt,
+    /// ⌘L in Find: papers like the picked one.
+    Similar,
     /// Something reached the clipboard (`what`: "the APA reference of “…”"), or didn't.
     Copied { seq: u64, what: String, result: Result<(), ApiError> },
     /// A moment after a copy: close if "Copied …" is still what the panel shows.
@@ -115,6 +117,8 @@ pub enum Effect {
     /// Save a note on a whole paper.
     SaveNote { seq: u64, paper_id: String, body: String },
     PutInWorkspace { seq: u64, workspace_id: String, paper_id: String },
+    /// Papers like a library one; the answer comes back as a lookup's (`Event::Looked`).
+    Similar { seq: u64, paper_id: String },
     Upload { seq: u64, paths: Vec<PathBuf> },
 }
 
@@ -208,6 +212,8 @@ impl Panel {
             Event::Down => self.pick_by(1),
             Event::Submit => self.submit(false),
             Event::SubmitAlt => self.submit(true),
+            Event::Similar if self.mode == Mode::Find && !self.in_flight() => self.similar(),
+            Event::Similar => vec![],
             Event::Mode(mode) => self.set_mode(mode),
             Event::NextMode { forward } => self.set_mode(self.mode.step(forward)),
             Event::Copied { seq, what, result } => self.copied(seq, what, result),

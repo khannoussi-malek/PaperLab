@@ -142,6 +142,20 @@ impl Panel {
         }
     }
 
+    /// ⌘L: papers like the picked one (a library paper, or the one just added), as a lookup's results: Enter adds one.
+    pub(super) fn similar(&mut self) -> Vec<Effect> {
+        let paper = match (self.rows().into_iter().nth(self.picked), &self.phase) {
+            (Some(Row::Paper(i)), _) => Some((self.papers[i].id.clone(), self.papers[i].title.clone())),
+            (Some(Row::OpenAdded(_)), Phase::Added(added)) => Some((added.id.clone(), added.title.clone())),
+            _ => None,
+        };
+        let Some((paper_id, title)) = paper else { return vec![] };
+        self.seq += 1;
+        (self.picked, self.polling) = (0, None);
+        self.phase = Phase::LookingUp(format!("papers like “{title}”"));
+        vec![Effect::Similar { seq: self.seq, paper_id }]
+    }
+
     fn look_up(&mut self, query: String) -> Vec<Effect> {
         self.seq += 1;
         self.picked = 0;

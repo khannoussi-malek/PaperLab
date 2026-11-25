@@ -101,6 +101,17 @@ fn a_reference_comes_back_as_its_text_and_an_error_as_its_sentence() {
 }
 
 #[test]
+fn similar_papers_read_as_a_lookups_results_and_a_refusal_gives_paperlabs_sentence() {
+    let api = fake(|_, path, _| match path {
+        "/api/papers/p1/similar" => (200, json!([{ "title": "Graph transformers", "source": "semantic_scholar" }])),
+        _ => (409, json!({ "detail": "Semantic Scholar doesn't know this paper." })),
+    });
+    let found = api.similar("p1").expect("listed");
+    assert_eq!(found.results.iter().map(|c| c.title.as_str()).collect::<Vec<_>>(), ["Graph transformers"]);
+    assert_eq!(api.similar("p2").map(|f| f.results.len()), Err(ApiError::Said("Semantic Scholar doesn't know this paper.".into())));
+}
+
+#[test]
 fn a_paper_is_put_in_a_workspace_and_an_unknown_one_says_so() {
     let api = fake(|method, path, _| match (method, path) {
         ("PUT", "/api/workspaces/w1/papers/p1") => (204, Value::Null),

@@ -341,3 +341,26 @@ fn the_librarys_own_error_sentence_is_kept_for_the_status_line() {
     p.step(Event::Papers(Ok(vec![])));
     assert_eq!(p.library_error, None);
 }
+
+#[test]
+fn command_l_looks_up_papers_like_the_picked_one_as_candidates_to_add() {
+    let mut p = shown_with_library();
+    typed(&mut p, "graph");
+    let seq = match p.step(Event::Similar).as_slice() {
+        [Effect::Similar { seq, paper_id }] if paper_id == "b" => *seq,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(p.phase, Phase::LookingUp("papers like “Graph attention networks”".into()));
+    let found = Found { results: vec![candidate("Graph transformers", None)], notices: vec![] };
+    p.step(Event::Looked { seq, result: Ok(found) });
+    assert_eq!(p.rows(), vec![Row::Candidate(0)], "Enter adds it, as a lookup's result");
+}
+
+#[test]
+fn command_l_needs_a_paper_picked_in_find() {
+    let mut p = shown_with_library();
+    typed(&mut p, "2401.12345");
+    assert_eq!(p.step(Event::Similar), vec![], "Search online isn't a paper");
+    p.step(Event::Mode(Mode::Cite));
+    assert_eq!(p.step(Event::Similar), vec![]);
+}

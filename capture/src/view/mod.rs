@@ -86,6 +86,7 @@ fn key(s: &mut App, ev: &KeyEvent) -> bool {
         (Key::Up, _) => s.dispatch(Event::Up),
         (Key::Tab, _) => s.dispatch(Event::NextMode { forward: !ev.mods.shift }),
         (Key::Enter, _) if ev.mods.cmd => s.dispatch(Event::SubmitAlt),
+        _ if ev.is_command('l') => s.dispatch(Event::Similar),
         (Key::Escape, _) => s.close(),
         _ => return false,
     }
@@ -108,10 +109,10 @@ fn mode_bar(p: &Panel, ink: &Ink) -> El {
     bar.child(el().grow(1.0)).child(text(bar_hint(p)).font(type_::LABEL).color(ink.muted.alpha(0.7)))
 }
 
-/// The mode bar's right end: ⌘↵'s second action when a paper is picked in Find, else how to move along the bar.
+/// The mode bar's right end: what ⌘↵ and ⌘L do when a paper is picked in Find, else how to move along the bar.
 fn bar_hint(p: &Panel) -> &'static str {
     let paper = matches!(p.rows().get(p.picked), Some(Row::Paper(_) | Row::OpenAdded(_)));
-    if p.mode == Mode::Find && paper { "⌘↵ to a workspace" } else { "⇥ next" }
+    if p.mode == Mode::Find && paper { "⌘↵ workspace · ⌘L similar" } else { "⇥ next" }
 }
 
 /// A mode's pill text: Inbox shows how much waits in it.
