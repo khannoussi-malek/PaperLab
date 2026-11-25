@@ -27,6 +27,7 @@ fn line(p: &Panel, r: &Row, i: usize, on: bool, ink: &Ink) -> El {
     let fg = if on { Color::WHITE } else { ink.text };
     let mut line = row().key(format!("row-{i}")).h(48.0).px(12.0).gap(12.0).radius(8.0).center_y()
         .on_press(move |s: &mut crate::App| s.dispatch(crate::panel::Event::Click(i)))
+        .focusable(false) // the field keeps the keyboard: typing after a click still narrows
         .fill(if on { logo_blue().alpha(0.92) } else { Color::TRANSPARENT })
         .child(col().grow(1.0).shrink().gap(2.0)
             .child(text(title).font(type_::BODY).color(fg).truncate())

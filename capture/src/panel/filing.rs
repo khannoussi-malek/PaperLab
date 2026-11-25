@@ -47,7 +47,11 @@ impl Panel {
     /// The Done row, then the workspaces whose name holds what's typed, the last one used first.
     pub(super) fn filing_rows(&self) -> Vec<Row> {
         let Some(all) = &self.workspaces else {
-            return if self.reachable { vec![] } else { vec![Row::OpenPaperLab] };
+            return match (self.reachable, &self.ask_error) {
+                (false, _) => vec![Row::OpenPaperLab],
+                (true, Some(_)) => vec![Row::FilingDone], // the list failed: skipping is still a way on
+                (true, None) => vec![],
+            };
         };
         let wanted = self.query.trim().to_lowercase();
         let workspaces = self.workspace_order_all().into_iter()

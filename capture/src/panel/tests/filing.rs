@@ -139,3 +139,17 @@ fn a_put_under_way_holds_through_tab_and_a_reopen_and_its_answer_lands() {
     assert_eq!(p.step(Event::Put { seq, result: Ok(()) }), vec![Effect::CloseSoon(seq)]);
     assert!(matches!(p.phase, Phase::Filed(_)));
 }
+
+#[test]
+fn a_refresh_drops_picks_of_deleted_workspaces_and_a_failed_list_still_offers_skip() {
+    let mut p = filing_graph_attention();
+    p.step(Event::Submit); // Thesis
+    p.step(Event::Workspaces(Ok(vec![workspace("w2", "Reading group")])));
+    assert_eq!(chosen(&p), Vec::<String>::new(), "Thesis is gone: nothing invisible stays picked");
+    let mut failed = shown_with_library();
+    typed(&mut failed, "graph");
+    failed.step(Event::SubmitAlt);
+    failed.step(Event::Workspaces(Err(ApiError::Said("The database is busy.".into()))));
+    assert_eq!(failed.rows(), vec![Row::FilingDone]);
+    assert_eq!(failed.step(Event::Submit), vec![Effect::Close]);
+}
