@@ -26,11 +26,13 @@ impl Panel {
             // other modes' phases
             Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) | Phase::Answer(_) => vec![],
             Phase::Note(_) | Phase::SavingNote(_) | Phase::NoteSaved(_) => vec![],
+            Phase::Filing(_) => self.filing_rows(),
+            Phase::Filed(_) => vec![],
         }
     }
 
     pub(super) fn find_query(&mut self, q: String) -> Vec<Effect> {
-        if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
+        if self.in_flight() {
             self.query = q; // the add in flight keeps the panel: its answer must not be dropped
             return vec![];
         }

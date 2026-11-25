@@ -12,7 +12,7 @@ pub const NOT_A_PDF: &str = "Only PDFs can be dropped on the paper. For a DOI, a
 
 impl Panel {
     pub(super) fn dropped(&mut self, paths: Vec<PathBuf>) -> Vec<Effect> {
-        if paths.is_empty() || matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
+        if paths.is_empty() || self.in_flight() {
             return vec![]; // one upload or add at a time; the user can drop again once it's done
         }
         self.set_note_aside();
@@ -23,7 +23,7 @@ impl Panel {
     }
 
     pub(super) fn drop_refused(&mut self) -> Vec<Effect> {
-        if !matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
+        if !self.in_flight() {
             self.set_note_aside();
             (self.mode, self.phase, self.polling) = (Mode::Find, Phase::Failed(NOT_A_PDF.into()), None);
         }

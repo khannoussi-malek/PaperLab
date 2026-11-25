@@ -5,6 +5,7 @@
 mod ask;
 mod cite;
 mod drop;
+mod filing;
 mod find;
 mod inbox;
 mod note;
@@ -13,6 +14,7 @@ mod novelty;
 mod tests;
 
 pub use ask::{Answer, Writing};
+pub use filing::Filing;
 pub use note::Draft;
 use note::Aside;
 
@@ -48,6 +50,9 @@ pub enum Phase {
     Note(Draft),
     SavingNote(Draft),
     NoteSaved(String),
+    /// Find, ⌘↵ on a paper: picking the workspace to put it in; then the sentence saying where it went.
+    Filing(Filing),
+    Filed(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -81,6 +86,7 @@ pub enum Event {
     Uploaded { seq: u64, results: Vec<Result<Paper, ApiError>> },
     Inbox(Result<Inbox, ApiError>),
     NoteSaved { seq: u64, result: Result<(), ApiError> },
+    Put { seq: u64, workspace_id: String, result: Result<(), ApiError> },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -108,6 +114,7 @@ pub enum Effect {
     Copy { seq: u64, text: String, what: String },
     /// Save a note on a whole paper.
     SaveNote { seq: u64, paper_id: String, body: String },
+    PutInWorkspace { seq: u64, workspace_id: String, paper_id: String },
     Upload { seq: u64, paths: Vec<PathBuf> },
 }
 
@@ -193,6 +200,7 @@ impl Panel {
         match event {
             Event::Shown => self.shown(),
             Event::Closed => self.closed(),
+            Event::Query(q) if self.mode == Mode::Find && matches!(self.phase, Phase::Filing(_)) => self.filing_typed(q),
             Event::Query(q) if self.mode == Mode::Find => self.find_query(q),
             Event::Query(q) if self.mode == Mode::Note => self.note_typed(q),
             Event::Query(q) => self.typed(q),
@@ -212,6 +220,7 @@ impl Panel {
             Event::Uploaded { seq, results } => self.uploaded(seq, results),
             Event::Inbox(result) => self.inbox_arrived(result),
             Event::NoteSaved { seq, result } => self.note_saved(seq, result),
+            Event::Put { seq, workspace_id, result } => self.put_done(seq, workspace_id, result),
             Event::Papers(result) => self.papers_arrived(result),
             Event::Looked { seq, result } => self.looked(seq, result),
             Event::AddDone { seq, result } => self.add_done(seq, result),
@@ -224,7 +233,7 @@ impl Panel {
     fn shown(&mut self) -> Vec<Effect> {
         // An add or upload still under way stays on screen, so its answer is shown and followed; it keeps Find,
         // whatever mode the panel was opened in. A note waits aside unless the panel opened in Note.
-        let in_flight = matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. });
+        let in_flight = self.in_flight();
         if self.mode != Mode::Note {
             self.set_note_aside();
         }
@@ -255,6 +264,8 @@ impl Panel {
     /// Enter (or ⌘↵, `alt`): the mode's action on the picked row.
     fn submit(&mut self, alt: bool) -> Vec<Effect> {
         match self.mode {
+            Mode::Find if matches!(self.phase, Phase::Filing(_)) => self.file_submit(),
+            Mode::Find if alt => self.file_picked(),
             Mode::Find => self.find_submit(),
             Mode::Cite => self.cite_submit(if alt { Format::Bibtex } else { Format::Apa }),
             Mode::Ask => self.ask_submit(),
@@ -266,8 +277,8 @@ impl Panel {
 
     /// Another mode: what was typed stays (find a paper, then cite it); the last answer goes.
     fn set_mode(&mut self, mode: Mode) -> Vec<Effect> {
-        if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
-            return vec![]; // an add or upload in flight keeps Find until it answers
+        if self.in_flight() {
+            return vec![]; // an add, upload or put in flight keeps Find until it answers
         }
         self.set_note_aside();
         (self.mode, self.phase, self.picked, self.polling, self.aside) = (mode, Phase::Library, 0, None, None);
@@ -290,6 +301,15 @@ impl Panel {
     fn typed(&mut self, q: String) -> Vec<Effect> {
         (self.query, self.picked, self.phase, self.aside, self.upload_note) = (q, 0, Phase::Library, None, None);
         vec![]
+    }
+
+    /// An add, an upload or a put under way: its answer must find the panel where it left it, so Find stays.
+    fn in_flight(&self) -> bool {
+        match &self.phase {
+            Phase::Adding(_) | Phase::Uploading { .. } => true,
+            Phase::Filing(filing) => filing.putting.is_some(),
+            _ => false,
+        }
     }
 
     fn closed(&mut self) -> Vec<Effect> {

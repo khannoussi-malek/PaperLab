@@ -10,7 +10,7 @@ use rune::{Color, Cx, El, Key, KeyEvent, SystemMaterial, Tx, col, el, row, text,
 
 use crate::App;
 use crate::mode::{MODES, Mode};
-use crate::panel::{Event, Panel};
+use crate::panel::{Event, Panel, Row};
 
 pub const WIDTH: f32 = 600.0;
 
@@ -48,7 +48,7 @@ pub fn view(app: &App, cx: &mut Cx<App>) -> El {
     }
     if let Some(line) = status {
         panel = panel.child(row().key("status").px(18.0).py(10.0)
-            .child(text(line).font(type_::LABEL).color(ink.muted).w_full()));
+            .child(text(line).font(type_::LABEL).color(ink.muted).w_full().wrap()));
     }
     if let Some(answer) = answer::block(p, &ink) {
         panel = panel.child(answer);
@@ -105,7 +105,13 @@ fn mode_bar(p: &Panel, ink: &Ink) -> El {
             .child(text(pill_label(mode, waiting)).font(type_::LABEL).color(if on { Color::WHITE } else { ink.muted }))
             .on_press(move |s: &mut App| s.dispatch(Event::Mode(mode))));
     }
-    bar.child(el().grow(1.0)).child(text("⇥ next").font(type_::LABEL).color(ink.muted.alpha(0.7)))
+    bar.child(el().grow(1.0)).child(text(bar_hint(p)).font(type_::LABEL).color(ink.muted.alpha(0.7)))
+}
+
+/// The mode bar's right end: ⌘↵'s second action when a paper is picked in Find, else how to move along the bar.
+fn bar_hint(p: &Panel) -> &'static str {
+    let paper = matches!(p.rows().get(p.picked), Some(Row::Paper(_) | Row::OpenAdded(_)));
+    if p.mode == Mode::Find && paper { "⌘↵ to a workspace" } else { "⇥ next" }
 }
 
 /// A mode's pill text: Inbox shows how much waits in it.

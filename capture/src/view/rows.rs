@@ -88,6 +88,7 @@ fn badge(p: &Panel, r: &Row) -> Option<&'static str> {
         (Row::Candidate(i), Phase::Found(f)) => Some(if f.results[*i].paper_id.is_some() { "In your library" } else { "Add ↵" }),
         (Row::Paper(_), _) if p.mode == Mode::Cite => Some("Copy ↵"),
         (Row::Paper(_), _) if p.mode == Mode::Note => Some("Write ↵"),
+        (Row::Workspace(_), Phase::Filing(_)) => Some("Put here ↵"),
         (Row::Workspace(_), _) => Some("Ask ↵"),
         (Row::CopyAnswer, _) => Some("Copy ↵"),
         (Row::Paper(_) | Row::OpenAdded(_) | Row::Close(_) | Row::OpenAnswer | Row::Source(_) | Row::FoundPdf(_) | Row::NewHits(_), _) => {

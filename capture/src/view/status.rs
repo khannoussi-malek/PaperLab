@@ -2,7 +2,7 @@
 
 use crate::library::Paper;
 use crate::mode::Mode;
-use crate::panel::{Answer, Panel, Phase, Writing};
+use crate::panel::{Answer, Filing, Panel, Phase, Writing};
 
 pub(super) fn line(p: &Panel) -> Option<String> {
     match &p.phase {
@@ -28,7 +28,8 @@ pub(super) fn line(p: &Panel) -> Option<String> {
         Phase::Close(c) => (!c.note.is_empty()).then(|| c.note.clone()),
         Phase::Note(d) => Some(d.error.clone().unwrap_or_else(|| format!("A note on “{}”: ↵ saves it to the paper.", d.title))),
         Phase::SavingNote(d) => Some(format!("Saving your note on “{}”…", d.title)),
-        Phase::NoteSaved(sentence) => Some(sentence.clone()),
+        Phase::NoteSaved(sentence) | Phase::Filed(sentence) => Some(sentence.clone()),
+        Phase::Filing(f) => Some(filing(p, f)),
     }
 }
 
@@ -80,4 +81,42 @@ fn progress(paper: &Paper) -> String {
 
 fn join(head: &str, notices: &[String]) -> String {
     std::iter::once(head).chain(notices.iter().map(String::as_str).filter(|n| !n.is_empty())).collect::<Vec<_>>().join(" ")
+}
+
+/// Filing: what's under way, what went wrong, or what to do.
+fn filing(p: &Panel, f: &Filing) -> String {
+    match (&f.putting, &f.error, &p.workspaces) {
+        (Some((_, name)), _, _) => format!("Putting it in “{name}”…"),
+        (None, Some(error), _) => error.clone(),
+        (None, None, None) => p.ask_error.clone().unwrap_or_else(|| "Listing your workspaces…".into()),
+        (None, None, Some(all)) if all.is_empty() => "Make a workspace in PaperLab first.".into(),
+        (None, None, Some(_)) if p.rows().is_empty() => format!("No workspace’s name holds “{}”.", p.query.trim()),
+        _ => format!("Which workspace for “{}”?", f.title),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::{ApiError, Workspace};
+    use crate::panel::Event;
+
+    fn filing() -> Panel {
+        let mut p = Panel::default();
+        p.step(Event::Papers(Ok(vec![crate::library::paper("a", "Attention", &[], 2017, "2026-01")])));
+        p.step(Event::SubmitAlt);
+        assert!(matches!(p.phase, Phase::Filing(_)));
+        p
+    }
+
+    #[test]
+    fn filing_says_why_a_list_is_missing_or_empty() {
+        let mut p = filing();
+        assert_eq!(line(&p).as_deref(), Some("Listing your workspaces…"));
+        p.step(Event::Workspaces(Err(ApiError::Said("The database is busy.".into()))));
+        assert_eq!(line(&p).as_deref(), Some("The database is busy."), "not “Listing…” forever");
+        p.step(Event::Workspaces(Ok(vec![Workspace { id: "w".into(), name: "Thesis".into(), paper_count: 1 }])));
+        p.step(Event::Query("zzz".into()));
+        assert_eq!(line(&p).as_deref(), Some("No workspace’s name holds “zzz”."));
+    }
 }
