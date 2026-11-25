@@ -22,13 +22,13 @@ impl Panel {
             Phase::Added(paper) => vec![Row::OpenAdded(paper.id.clone())],
             Phase::NoFreePdf { .. } => vec![Row::SaveWithoutPdf],
             Phase::Failed(_) if !self.reachable => vec![Row::OpenPaperLab],
-            Phase::LookingUp(_) | Phase::Adding(_) | Phase::Failed(_) => vec![],
+            Phase::LookingUp(_) | Phase::Adding(_) | Phase::Uploading { .. } | Phase::Failed(_) => vec![],
             Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) | Phase::Answer(_) => vec![], // other modes' answers
         }
     }
 
     pub(super) fn find_query(&mut self, q: String) -> Vec<Effect> {
-        if matches!(self.phase, Phase::Adding(_)) {
+        if matches!(self.phase, Phase::Adding(_) | Phase::Uploading { .. }) {
             self.query = q; // the add in flight keeps the panel: its answer must not be dropped
             return vec![];
         }
@@ -144,6 +144,6 @@ impl Panel {
     }
 }
 
-fn done(paper: &Paper) -> bool {
+pub(super) fn done(paper: &Paper) -> bool {
     matches!(paper.status.as_str(), "ready" | "failed")
 }

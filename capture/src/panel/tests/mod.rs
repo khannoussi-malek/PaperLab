@@ -5,6 +5,7 @@ use crate::library::paper;
 use serde_json::json;
 
 mod ask;
+mod drop;
 
 fn shown_with_library() -> Panel {
     let mut p = Panel::default();

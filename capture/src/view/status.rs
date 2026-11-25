@@ -14,7 +14,12 @@ pub(super) fn line(p: &Panel) -> Option<String> {
         Phase::Found(f) if f.results.is_empty() => Some(join("Nothing found.", &f.notices)),
         Phase::Found(f) => (!f.notices.is_empty()).then(|| f.notices.join(" ")),
         Phase::Adding(c) => Some(format!("Adding “{}”…", c.title)),
-        Phase::Added(paper) => Some(progress(paper)),
+        Phase::Uploading { count: 1 } => Some("Uploading the PDF…".into()),
+        Phase::Uploading { count } => Some(format!("Uploading {count} PDFs…")),
+        Phase::Added(paper) => Some(match &p.upload_note {
+            Some(note) => format!("{note} {}", progress(paper)),
+            None => progress(paper),
+        }),
         Phase::NoFreePdf { message, .. } => Some(message.clone()),
         Phase::Failed(sentence) | Phase::Copied(sentence) => Some(sentence.clone()),
         Phase::Searching => Some("Looking through your library for papers close to it…".into()),

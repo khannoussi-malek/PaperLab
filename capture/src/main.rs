@@ -153,6 +153,10 @@ impl App {
                 None => open(&[&format!("paperlab://workspaces/{id}")]),
             },
             Effect::Copy { seq, text, what } => background(me, move || Event::Copied { seq, what, result: copy(&text) }),
+            Effect::Upload { seq, paths } => background(me, move || {
+                let results = paths.iter().map(|path| api.upload(std::path::Path::new(path))).collect();
+                Event::Uploaded { seq, results }
+            }),
             Effect::Novelty { seq, text } => background(me, move || Event::Novelty { seq, result: api.novelty(&text) }),
         }
     }
