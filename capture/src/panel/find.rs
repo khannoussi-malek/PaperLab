@@ -26,6 +26,8 @@ impl Panel {
             // other modes' phases
             Phase::Copying | Phase::Copied(_) | Phase::Searching | Phase::Close(_) | Phase::Answer(_) => vec![],
             Phase::Note(_) | Phase::SavingNote(_) | Phase::NoteSaved(_) => vec![],
+            Phase::Filing(_) => self.filing_rows(),
+            Phase::Filed(_) => vec![],
         }
     }
 

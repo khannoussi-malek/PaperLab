@@ -36,6 +36,7 @@ impl Panel {
     pub fn placeholder(&self) -> &'static str {
         match self.phase {
             Phase::Note(_) | Phase::SavingNote(_) => "Write your note, then ↵",
+            Phase::Filing(_) => "Type to narrow your workspaces, then ↵",
             _ => self.mode.placeholder(),
         }
     }

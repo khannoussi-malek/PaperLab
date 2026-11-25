@@ -5,6 +5,7 @@
 mod ask;
 mod cite;
 mod drop;
+mod filing;
 mod find;
 mod inbox;
 mod note;
@@ -13,6 +14,7 @@ mod novelty;
 mod tests;
 
 pub use ask::{Answer, Writing};
+pub use filing::Filing;
 pub use note::Draft;
 use note::Aside;
 
@@ -48,6 +50,9 @@ pub enum Phase {
     Note(Draft),
     SavingNote(Draft),
     NoteSaved(String),
+    /// Find, ⌘↵ on a paper: picking the workspace to put it in; then the sentence saying where it went.
+    Filing(Filing),
+    Filed(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -81,6 +86,7 @@ pub enum Event {
     Uploaded { seq: u64, results: Vec<Result<Paper, ApiError>> },
     Inbox(Result<Inbox, ApiError>),
     NoteSaved { seq: u64, result: Result<(), ApiError> },
+    Put { seq: u64, workspace_id: String, result: Result<(), ApiError> },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -108,6 +114,7 @@ pub enum Effect {
     Copy { seq: u64, text: String, what: String },
     /// Save a note on a whole paper.
     SaveNote { seq: u64, paper_id: String, body: String },
+    PutInWorkspace { seq: u64, workspace_id: String, paper_id: String },
     Upload { seq: u64, paths: Vec<PathBuf> },
 }
 
@@ -193,6 +200,7 @@ impl Panel {
         match event {
             Event::Shown => self.shown(),
             Event::Closed => self.closed(),
+            Event::Query(q) if matches!(self.phase, Phase::Filing(_)) => self.filing_typed(q),
             Event::Query(q) if self.mode == Mode::Find => self.find_query(q),
             Event::Query(q) if self.mode == Mode::Note => self.note_typed(q),
             Event::Query(q) => self.typed(q),
@@ -212,6 +220,7 @@ impl Panel {
             Event::Uploaded { seq, results } => self.uploaded(seq, results),
             Event::Inbox(result) => self.inbox_arrived(result),
             Event::NoteSaved { seq, result } => self.note_saved(seq, result),
+            Event::Put { seq, workspace_id, result } => self.put_done(seq, workspace_id, result),
             Event::Papers(result) => self.papers_arrived(result),
             Event::Looked { seq, result } => self.looked(seq, result),
             Event::AddDone { seq, result } => self.add_done(seq, result),
@@ -255,6 +264,8 @@ impl Panel {
     /// Enter (or ⌘↵, `alt`): the mode's action on the picked row.
     fn submit(&mut self, alt: bool) -> Vec<Effect> {
         match self.mode {
+            Mode::Find if matches!(self.phase, Phase::Filing(_)) => self.file_submit(),
+            Mode::Find if alt => self.file_picked(),
             Mode::Find => self.find_submit(),
             Mode::Cite => self.cite_submit(if alt { Format::Bibtex } else { Format::Apa }),
             Mode::Ask => self.ask_submit(),

@@ -6,6 +6,7 @@ use serde_json::json;
 
 mod ask;
 mod drop;
+mod filing;
 mod inbox;
 mod note;
 

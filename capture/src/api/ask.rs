@@ -39,6 +39,13 @@ impl Api {
         ok(status, body)
     }
 
+    /// Puts a library paper in a workspace (already there is fine).
+    pub fn put_in_workspace(&self, workspace_id: &str, paper_id: &str) -> Result<(), ApiError> {
+        let url = format!("{}/api/workspaces/{workspace_id}/papers/{paper_id}", self.base);
+        let (status, body) = self.send(self.agent.put(&url).send_empty())?;
+        refused(status, &body)
+    }
+
     /// Asks `question` of a workspace, calling `heard` with each step until the answer is done or fails.
     pub fn ask(&self, workspace_id: &str, question: &str, heard: impl FnMut(Said)) -> Result<(), ApiError> {
         let url = format!("{}/api/workspaces/{workspace_id}/chat", self.base);

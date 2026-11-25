@@ -154,6 +154,10 @@ impl App {
                 std::thread::sleep(CONFIRM_FOR);
                 Event::CloseNow(seq)
             }),
+            Effect::PutInWorkspace { seq, workspace_id, paper_id } => background(me, move || {
+                let result = api.put_in_workspace(&workspace_id, &paper_id);
+                Event::Put { seq, workspace_id, result }
+            }),
             Effect::SaveNote { seq, paper_id, body } => {
                 background(me, move || Event::NoteSaved { seq, result: api.note(&paper_id, &body) });
             }

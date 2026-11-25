@@ -101,6 +101,17 @@ fn a_reference_comes_back_as_its_text_and_an_error_as_its_sentence() {
 }
 
 #[test]
+fn a_paper_is_put_in_a_workspace_and_an_unknown_one_says_so() {
+    let api = fake(|method, path, _| match (method, path) {
+        ("PUT", "/api/workspaces/w1/papers/p1") => (204, Value::Null),
+        ("PUT", _) => (404, json!({ "detail": "workspace not found" })),
+        _ => (405, json!({})),
+    });
+    assert_eq!(api.put_in_workspace("w1", "p1"), Ok(()));
+    assert_eq!(api.put_in_workspace("w9", "p1"), Err(ApiError::Said("workspace not found".into())));
+}
+
+#[test]
 fn a_note_is_posted_on_its_paper_and_a_refusal_gives_paperlabs_sentence() {
     let api = fake(|method, path, body| {
         let sent: Value = serde_json::from_str(body).unwrap_or(Value::Null);

@@ -7,7 +7,7 @@ use crate::api::{ApiError, Said, Source, Workspace};
 
 /// Rows of workspaces, and of cited papers, at most (the panel stays a glance; PaperLab shows the rest).
 // ponytail: no workspace filter; the 7th workspace and on are reached through PaperLab until someone has that many.
-const MAX_WORKSPACES: usize = 6;
+pub(super) const MAX_WORKSPACES: usize = 6;
 const MAX_SOURCES: usize = 3;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -65,9 +65,14 @@ impl Panel {
 
     /// Workspace indices, the last one asked first.
     fn workspace_order(&self) -> Vec<usize> {
+        self.workspace_order_all().into_iter().take(MAX_WORKSPACES).collect()
+    }
+
+    /// Every workspace's index, the last one used first.
+    pub(super) fn workspace_order_all(&self) -> Vec<usize> {
         let Some(all) = &self.workspaces else { return vec![] };
         let last = all.iter().position(|w| Some(&w.id) == self.last_workspace.as_ref());
-        last.into_iter().chain((0..all.len()).filter(|&i| Some(i) != last)).take(MAX_WORKSPACES).collect()
+        last.into_iter().chain((0..all.len()).filter(|&i| Some(i) != last)).collect()
     }
 
     pub(super) fn ask_submit(&mut self) -> Vec<Effect> {

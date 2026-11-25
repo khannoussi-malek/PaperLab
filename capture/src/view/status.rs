@@ -2,7 +2,7 @@
 
 use crate::library::Paper;
 use crate::mode::Mode;
-use crate::panel::{Answer, Panel, Phase, Writing};
+use crate::panel::{Answer, Filing, Panel, Phase, Writing};
 
 pub(super) fn line(p: &Panel) -> Option<String> {
     match &p.phase {
@@ -28,7 +28,8 @@ pub(super) fn line(p: &Panel) -> Option<String> {
         Phase::Close(c) => (!c.note.is_empty()).then(|| c.note.clone()),
         Phase::Note(d) => Some(d.error.clone().unwrap_or_else(|| format!("A note on “{}”: ↵ saves it to the paper.", d.title))),
         Phase::SavingNote(d) => Some(format!("Saving your note on “{}”…", d.title)),
-        Phase::NoteSaved(sentence) => Some(sentence.clone()),
+        Phase::NoteSaved(sentence) | Phase::Filed(sentence) => Some(sentence.clone()),
+        Phase::Filing(f) => Some(filing(p, f)),
     }
 }
 
@@ -80,4 +81,15 @@ fn progress(paper: &Paper) -> String {
 
 fn join(head: &str, notices: &[String]) -> String {
     std::iter::once(head).chain(notices.iter().map(String::as_str).filter(|n| !n.is_empty())).collect::<Vec<_>>().join(" ")
+}
+
+/// Filing: what's under way, what went wrong, or what to do.
+fn filing(p: &Panel, f: &Filing) -> String {
+    match (&f.putting, &f.error, &p.workspaces) {
+        (Some((_, name)), _, _) => format!("Putting it in “{name}”…"),
+        (None, Some(error), _) => error.clone(),
+        (None, None, None) if p.reachable => "Listing your workspaces…".into(),
+        (None, None, Some(all)) if all.is_empty() => "Make a workspace in PaperLab first.".into(),
+        _ => format!("Which workspace for “{}”?", f.title),
+    }
 }
