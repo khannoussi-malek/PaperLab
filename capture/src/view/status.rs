@@ -17,10 +17,7 @@ pub(super) fn line(p: &Panel) -> Option<String> {
         Phase::Adding(c) => Some(format!("Adding “{}”…", c.title)),
         Phase::Uploading { count: 1 } => Some("Uploading the PDF…".into()),
         Phase::Uploading { count } => Some(format!("Uploading {count} PDFs…")),
-        Phase::Added(paper) => Some(match &p.upload_note {
-            Some(note) => format!("{note} {}", progress(paper)),
-            None => progress(paper),
-        }),
+        Phase::Added(paper) => Some(progress(paper)),
         Phase::NoFreePdf { message, .. } => Some(message.clone()),
         Phase::Failed(sentence) | Phase::Copied(sentence) => Some(sentence.clone()),
         Phase::Searching => Some("Looking through your library for papers close to it…".into()),
@@ -85,13 +82,17 @@ fn join(head: &str, notices: &[String]) -> String {
 
 /// Filing: what's under way, what went wrong, or what to do.
 fn filing(p: &Panel, f: &Filing) -> String {
-    match (&f.putting, &f.error, &p.workspaces) {
-        (Some((_, name)), _, _) => format!("Putting it in “{name}”…"),
+    let said = match (&f.putting, &f.error, &p.workspaces) {
+        (Some(_), _, _) => format!("Putting {} in {}…", f.what, p.chosen_names(f)),
         (None, Some(error), _) => error.clone(),
         (None, None, None) => p.ask_error.clone().unwrap_or_else(|| "Listing your workspaces…".into()),
-        (None, None, Some(all)) if all.is_empty() => "Make a workspace in PaperLab first.".into(),
-        (None, None, Some(_)) if p.rows().is_empty() => format!("No workspace’s name holds “{}”.", p.query.trim()),
-        _ => format!("Which workspace for “{}”?", f.title),
+        (None, None, Some(all)) if all.is_empty() => format!("{} is in your library. Workspaces are made in PaperLab.", f.what),
+        (None, None, Some(_)) if p.rows().len() == 1 => format!("No workspace’s name holds “{}”.", p.query.trim()),
+        _ => format!("Put {} in which workspaces? ↵ picks each one, then ↵ on the first row.", f.what),
+    };
+    match &f.note {
+        Some(note) if f.putting.is_none() && f.error.is_none() => format!("{note} {said}"),
+        _ => said,
     }
 }
 

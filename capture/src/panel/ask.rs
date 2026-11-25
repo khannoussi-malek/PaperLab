@@ -136,7 +136,12 @@ impl Panel {
 
     pub(super) fn workspaces_arrived(&mut self, result: Result<Vec<Workspace>, ApiError>) -> Vec<Effect> {
         match result {
-            Ok(all) => (self.workspaces, self.reachable, self.ask_error) = (Some(all), true, None),
+            Ok(all) => {
+                if let Phase::Filing(filing) = &mut self.phase {
+                    filing.chosen.retain(|id| all.iter().any(|w| w.id == *id)); // a workspace deleted meanwhile
+                }
+                (self.workspaces, self.reachable, self.ask_error) = (Some(all), true, None);
+            }
             Err(ApiError::Unreachable) => self.reachable = false,
             Err(ApiError::Said(sentence)) => self.ask_error = Some(sentence),
         }

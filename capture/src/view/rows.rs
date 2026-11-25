@@ -26,6 +26,8 @@ fn line(p: &Panel, r: &Row, i: usize, on: bool, ink: &Ink) -> El {
     let (title, detail) = row_text(p, r);
     let fg = if on { Color::WHITE } else { ink.text };
     let mut line = row().key(format!("row-{i}")).h(48.0).px(12.0).gap(12.0).radius(8.0).center_y()
+        .on_press(move |s: &mut crate::App| s.dispatch(crate::panel::Event::Click(i)))
+        .focusable(false) // the field keeps the keyboard: typing after a click still narrows
         .fill(if on { logo_blue().alpha(0.92) } else { Color::TRANSPARENT })
         .child(col().grow(1.0).shrink().gap(2.0)
             .child(text(title).font(type_::BODY).color(fg).truncate())
@@ -56,8 +58,19 @@ fn row_text(p: &Panel, r: &Row) -> (String, String) {
         Row::OpenPaperLab => ("Open PaperLab".into(), UNREACHABLE.into()),
         Row::Workspace(i) => {
             let Some(w) = p.workspaces.as_ref().and_then(|all| all.get(*i)) else { return Default::default() };
-            let last = if p.last_workspace.as_ref() == Some(&w.id) { " · asked last" } else { "" };
-            (w.name.clone(), format!("{} paper{}{last}", w.paper_count, if w.paper_count == 1 { "" } else { "s" }))
+            let last = if p.last_workspace.as_ref() == Some(&w.id) { " · used last" } else { "" };
+            let mark = if chosen(p, &w.id) { "✓ " } else { "" };
+            (format!("{mark}{}", w.name), format!("{} paper{}{last}", w.paper_count, if w.paper_count == 1 { "" } else { "s" }))
+        }
+        Row::FilingDone => {
+            let Phase::Filing(f) = &p.phase else { return Default::default() };
+            match f.chosen.len() {
+                0 => {
+                    let them = if f.paper_ids.len() == 1 { "it" } else { "them" };
+                    (format!("Done: keep {them} in the library only"), "Or pick workspaces below first".into())
+                }
+                n => (format!("Put in {n} workspace{}", if n == 1 { "" } else { "s" }), p.chosen_names(f)),
+            }
         }
         Row::CopyAnswer => ("Copy the answer".into(), "Plain text, with its [C1] markers".into()),
         Row::OpenAnswer => ("Open in PaperLab".into(), "The workspace's chat, with this answer and its passages".into()),
@@ -88,7 +101,11 @@ fn badge(p: &Panel, r: &Row) -> Option<&'static str> {
         (Row::Candidate(i), Phase::Found(f)) => Some(if f.results[*i].paper_id.is_some() { "In your library" } else { "Add ↵" }),
         (Row::Paper(_), _) if p.mode == Mode::Cite => Some("Copy ↵"),
         (Row::Paper(_), _) if p.mode == Mode::Note => Some("Write ↵"),
-        (Row::Workspace(_), Phase::Filing(_)) => Some("Put here ↵"),
+        (Row::Workspace(i), Phase::Filing(_)) => {
+            let id = p.workspaces.as_ref().and_then(|all| all.get(*i)).map(|w| w.id.as_str()).unwrap_or_default();
+            Some(if chosen(p, id) { "Picked ✓" } else { "Pick ↵" })
+        }
+        (Row::FilingDone, Phase::Filing(f)) => Some(if f.chosen.is_empty() { "Skip ↵" } else { "Put ↵" }),
         (Row::Workspace(_), _) => Some("Ask ↵"),
         (Row::CopyAnswer, _) => Some("Copy ↵"),
         (Row::Paper(_) | Row::OpenAdded(_) | Row::Close(_) | Row::OpenAnswer | Row::Source(_) | Row::FoundPdf(_) | Row::NewHits(_), _) => {
@@ -110,4 +127,9 @@ fn closeness(c: &Close) -> String {
         parts.push(format!("“{passage}”"));
     }
     parts.join(" · ")
+}
+
+/// Filing: the workspace with this id is picked.
+fn chosen(p: &Panel, id: &str) -> bool {
+    matches!(&p.phase, Phase::Filing(f) if f.chosen.iter().any(|c| c == id))
 }

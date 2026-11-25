@@ -155,9 +155,9 @@ impl App {
                 Event::CloseNow(seq)
             }),
             Effect::Similar { seq, paper_id } => background(me, move || Event::Looked { seq, result: api.similar(&paper_id) }),
-            Effect::PutInWorkspace { seq, workspace_id, paper_id } => background(me, move || {
-                let result = api.put_in_workspace(&workspace_id, &paper_id);
-                Event::Put { seq, workspace_id, result }
+            Effect::PutInWorkspaces { seq, workspace_ids, paper_ids } => background(me, move || {
+                let result = put_all(&workspace_ids, &paper_ids, |w, p| api.put_in_workspace(w, p));
+                Event::Put { seq, result }
             }),
             Effect::SaveNote { seq, paper_id, body } => {
                 background(me, move || Event::NoteSaved { seq, result: api.note(&paper_id, &body) });
@@ -217,6 +217,29 @@ fn background(me: AppHandle<App>, work: impl FnOnce() -> Event + Send + 'static)
         let event = work();
         me.update(move |s, _| s.dispatch(event));
     });
+}
+
+/// Every paper in every workspace, one request each (already there is fine, so a retry redoes nothing). An error says
+/// how many were in place before it, so a partial put isn't taken for none.
+// ponytail: sequential; a drop is a few papers and workspaces. Hundreds of pairs would want a bulk endpoint.
+fn put_all(workspaces: &[String], papers: &[String], mut put: impl FnMut(&str, &str) -> Result<(), ApiError>)
+    -> Result<(), ApiError> {
+    let total = workspaces.len() * papers.len();
+    let pairs = workspaces.iter().flat_map(|w| papers.iter().map(move |p| (w, p)));
+    for (done, (w, p)) in pairs.enumerate() {
+        match put(w, p) {
+            Ok(()) => {}
+            Err(e) if done == 0 => return Err(e),
+            Err(e) => {
+                let why = match e {
+                    ApiError::Unreachable => panel::UNREACHABLE.to_owned(),
+                    ApiError::Said(why) => why,
+                };
+                return Err(ApiError::Said(format!("{done} of {total} went in; then: {why}")));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn copy(text: &str) -> Result<(), ApiError> {
@@ -401,6 +424,22 @@ mod tests {
     fn command(rt: &mut Runtime<App>, key: Key) {
         rt.key(KeyEvent { key, mods: Mods { cmd: true, ..Mods::default() } });
         rt.frame(1.0 / 60.0);
+    }
+
+    #[test]
+    fn put_all_puts_every_pair_and_a_late_error_says_how_many_went_in() {
+        let (w, p) = (vec!["w1".to_owned(), "w2".to_owned()], vec!["a".to_owned(), "b".to_owned()]);
+        let mut sent = vec![];
+        assert_eq!(put_all(&w, &p, |w, p| { sent.push(format!("{w}/{p}")); Ok(()) }), Ok(()));
+        assert_eq!(sent, ["w1/a", "w1/b", "w2/a", "w2/b"]);
+        let mut n = 0;
+        let late = put_all(&w, &p, |_, _| {
+            n += 1;
+            if n == 3 { Err(ApiError::Said("w2 not found".into())) } else { Ok(()) }
+        });
+        assert_eq!(late, Err(ApiError::Said("2 of 4 went in; then: w2 not found".into())));
+        let none = put_all(&w, &p, |_, _| Err(ApiError::Unreachable));
+        assert_eq!(none, Err(ApiError::Unreachable), "none in: as it was");
     }
 
     #[test]

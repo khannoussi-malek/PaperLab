@@ -74,12 +74,16 @@ fn filing() -> Panel {
     let mut p = library_shown();
     p.step(Event::Query("retrieval".into()));
     p.step(Event::SubmitAlt);
-    p.step(Event::Workspaces(Ok(vec![
+    p.step(Event::Workspaces(Ok(workspaces())));
+    p
+}
+
+fn workspaces() -> Vec<Workspace> {
+    vec![
         Workspace { id: "w1".into(), name: "Thesis: long documents".into(), paper_count: 24 },
         Workspace { id: "w2".into(), name: "Reading group".into(), paper_count: 7 },
         Workspace { id: "w3".into(), name: "RAG survey".into(), paper_count: 41 },
-    ])));
-    p
+    ]
 }
 
 fn note_writing() -> Panel {
@@ -96,6 +100,9 @@ fn dropped() -> Panel {
     let seq = p.seq;
     let results = vec![Ok(paper("a", "Sparse Attention for Long Documents", "uploaded")), Ok(paper("b", "Reading Long Papers with Small Models", "extracting"))];
     p.step(Event::Uploaded { seq, results });
+    p.step(Event::Workspaces(Ok(workspaces())));
+    p.step(Event::Submit); // the first workspace picked
+    p.step(Event::Down);
     p
 }
 
