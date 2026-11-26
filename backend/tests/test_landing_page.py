@@ -85,15 +85,17 @@ async def test_a_page_is_read_up_to_its_size_cap_and_a_refusal_says_why():
 
 
 async def test_a_link_without_a_doi_is_searched_by_the_doi_its_page_gives(session, discovery_fakes):
-    discovery_fakes.pdf_host.reply("/articles/s41586-021-03819-2", 200, text=page(("citation_doi", DOI)))
+    discovery_fakes.pdf_host.reply("/science/article/pii/S0004370221000862", 200, text=page(("citation_doi", DOI)))
     discovery_fakes.openalex.route(f"/works/doi:{DOI}", httpx.Response(404, text="<!doctype html>"))
     discovery_fakes.crossref.reply(f"/works/{DOI}", 200, json={"message": {"DOI": DOI, "type": "journal-article",
         "title": [TITLE], "author": [{"given": "John", "family": "Jumper"}]}})  # fmt: skip
     discovery_fakes.s2.reply("/graph/v1/paper/batch", 200, json=[None])
 
-    [result] = (await discovery.search(session, discovery_fakes.turned_on("crossref"), NATURE)).results
+    link = "https://www.sciencedirect.com/science/article/pii/S0004370221000862"
+    [result] = (await discovery.search(session, discovery_fakes.turned_on("crossref"), link)).results
 
     assert (result.doi, result.title) == (DOI, TITLE)
+    assert len(discovery_fakes.pdf_host.requests) == 1, "its page was read"
 
 
 async def test_a_page_that_cannot_be_read_or_says_nothing_is_a_conflict_in_words(session, discovery_fakes):
@@ -103,3 +105,28 @@ async def test_a_page_that_cannot_be_read_or_says_nothing_is_a_conflict_in_words
         await discovery.search(session, discovery_fakes.providers, "https://ieeexplore.ieee.org/document/1")
     with pytest.raises(Conflict, match="doesn't say which paper"):
         await discovery.search(session, discovery_fakes.providers, "https://example.org/blank")
+
+
+def test_a_nature_link_spells_its_doi_and_other_links_dont():
+    assert landing_page.doi_from_link(NATURE) == DOI
+    assert landing_page.doi_from_link("https://www.nature.com/articles/nature14539") == "10.1038/nature14539"
+    assert landing_page.doi_from_link("https://ieeexplore.ieee.org/document/1") is None
+
+
+async def test_a_nature_link_is_searched_by_its_doi_without_reading_the_page(session, discovery_fakes):
+    discovery_fakes.openalex.route(f"/works/doi:{DOI}", httpx.Response(404, text="<!doctype html>"))
+    discovery_fakes.crossref.reply(f"/works/{DOI}", 200, json={"message": {"DOI": DOI, "type": "journal-article",
+        "title": [TITLE], "author": [{"given": "John", "family": "Jumper"}]}})  # fmt: skip
+    discovery_fakes.s2.reply("/graph/v1/paper/batch", 200, json=[None])
+
+    [result] = (await discovery.search(session, discovery_fakes.turned_on("crossref"), NATURE)).results
+
+    assert result.doi == DOI
+    assert discovery_fakes.pdf_host.requests == [], "the page wasn't read"
+
+
+async def test_a_bot_check_instead_of_the_page_says_the_site_turns_readers_away(session, discovery_fakes):
+    challenge = "<html><head><title>Client Challenge</title></head><body>Loading…</body></html>"
+    discovery_fakes.pdf_host.reply("/document/9156610", 200, text=challenge)
+    with pytest.raises(Conflict, match="turns automatic readers away"):
+        await discovery.search(session, discovery_fakes.providers, "https://ieeexplore.ieee.org/document/9156610")
