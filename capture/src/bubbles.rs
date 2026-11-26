@@ -115,16 +115,26 @@ pub(crate) fn back_out(x: f64) -> f64 {
     1.0 + (C1 + 1.0) * x * x * x + C1 * x * x
 }
 
+/// A bubble's fill, text and hover colours (the hover is drawn over the fill). A mode's text is the logo's blue on a
+/// light card and a light blue on a dark one (the logo's blue is too dark to read there); under the pointer it turns
+/// white on the logo's blue. The clipboard's paper is white on the logo's blue, a little darker under the pointer.
+fn colors(bubble: &Bubble, dark: bool) -> (Color, Color, Color) {
+    let blue = rune::color::hex("#2664ee").expect("a valid colour");
+    let light_blue = rune::color::hex("#a9c1ff").expect("a valid colour");
+    match bubble {
+        Bubble::Mode(_) | Bubble::OpenPaperLab | Bubble::Hide => {
+            (tok::theme(dark).card.alpha(0.97), if dark { light_blue } else { blue }, blue)
+        }
+        Bubble::Copied(_) => (blue, Color::WHITE, Color::BLACK.alpha(0.18)),
+    }
+}
+
 /// One bubble `k` of the way out (see `progress`), keyed `bubble-{i}`. A mode is its label in the logo's blue on the
 /// theme's card colour, turning blue with white text under the pointer; the clipboard's paper is the other way round,
 /// the suggestion that stands out.
 pub fn pill(i: usize, bubble: &Bubble, waiting: usize, dark: bool, k: f32) -> El {
     let t = tok::theme(dark);
-    let blue = rune::color::hex("#2664ee").expect("a valid colour");
-    let (fill, ink, hover) = match bubble {
-        Bubble::Mode(_) | Bubble::OpenPaperLab | Bubble::Hide => (t.card.alpha(0.97), blue, blue),
-        Bubble::Copied(_) => (blue, Color::WHITE, Color::WHITE.alpha(0.18)),
-    };
+    let (fill, ink, hover) = colors(bubble, dark);
     let label = bubble.label(waiting);
     row().key(format!("bubble-{i}")).size(PILL.0, PILL.1).radius(PILL.1 / 2.0).center()
         .fill(fill)
@@ -198,6 +208,32 @@ mod tests {
         assert!((0..MAX).all(quick), "the fold is quick");
         assert_eq!(progress(0.0, 2, MAX, false, 0.4), 0.4, "a fold starts where the bubble is");
         assert_eq!(progress(0.0, 2, MAX, true, 0.4), 0.4, "so does a pop");
+    }
+
+    /// WCAG contrast between two opaque colours (rune's colours are linear, so `luminance` is WCAG's).
+    fn contrast(a: Color, b: Color) -> f32 {
+        let (la, lb) = (a.luminance(), b.luminance());
+        (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    }
+
+    /// `top` drawn over the opaque `bottom`.
+    fn over(top: Color, bottom: Color) -> Color {
+        bottom.mix(Color { a: 1.0, ..top }, top.a)
+    }
+
+    #[test]
+    fn every_bubbles_text_reads_on_its_fill_in_light_and_dark_and_under_the_pointer() {
+        let bubbles = [Bubble::Mode(Mode::Ask), Bubble::Hide, Bubble::Copied(Input::Doi("10.1234/x".into()))];
+        for dark in [false, true] {
+            for bubble in &bubbles {
+                let (fill, ink, hover) = colors(bubble, dark);
+                let fill = fill.alpha(1.0);
+                let at_rest = contrast(ink, fill);
+                assert!(at_rest >= 4.5, "{bubble:?} dark={dark}: {at_rest:.1}");
+                let pointed = contrast(Color::WHITE, over(hover, fill)); // the text turns white under the pointer
+                assert!(pointed >= 4.5, "{bubble:?} dark={dark}, pointed at: {pointed:.1}");
+            }
+        }
     }
 
     #[test]
