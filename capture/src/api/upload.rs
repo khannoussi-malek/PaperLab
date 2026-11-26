@@ -16,7 +16,7 @@ impl Api {
     pub fn add_link(&self, link: &str) -> Result<Paper, ApiError> {
         let url = format!("{}/api/papers/from-link", self.base);
         let request = self.agent.post(&url).config().timeout_global(Some(UPLOAD_TIMEOUT)).build();
-        let (status, body) = self.send(request.send_json(&serde_json::json!({ "link": link })))?;
+        let (status, body) = self.send(request.send_json(serde_json::json!({ "link": link })))?;
         ok(status, body)
     }
 
