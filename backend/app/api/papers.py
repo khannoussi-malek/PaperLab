@@ -3,11 +3,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Form, Header, Request, Response, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core.notes.note_counts import MAX_PAPERS, note_counts
-from app.core.papers import enrichment, paper_events, papers
+from app.core.papers import enrichment, paper_events, papers, pipeline_add
 from app.core.papers.pipeline_upload import MAX_UPLOAD_PDF_BYTES
 from app.core.platform.queue import INGEST_QUEUE
 from app.core.search import discovery, free_copy
@@ -52,6 +53,30 @@ async def upload_paper(
         await workspaces.add_paper(session, workspace_id, paper.id)
     await _enqueue_ingest(request, paper.id)
     return paper
+
+
+NO_PDF_AT_LINK = "No PDF could be downloaded from that link. Download it in your browser and drop it on PaperLab."
+PRIVATE_LINK = "PaperLab only downloads from public web addresses."
+
+
+class FromLinkIn(BaseModel):
+    link: str = Field(min_length=8, max_length=2000, pattern=r"^\s*https?://\S+\s*$")  # as copied: spaces round it
+
+
+@router.post("/from-link", status_code=201)
+async def add_from_link(payload: FromLinkIn, session: SessionDep) -> PaperOut:
+    """A paper from a link to its PDF (or to a DOI or arXiv page): downloaded, stored and queued as an upload is, or
+    the library's copy when it's already there. 409 with why when no PDF could be had; 422 for a malformed link."""
+    try:
+        result = await pipeline_add.add_paper(session, payload.link.strip())
+    except InvalidInput as exc:
+        if str(exc) == "unsafe_url":
+            raise Conflict(PRIVATE_LINK) from exc
+        raise
+    if result.paper_id is None:
+        raise Conflict(NO_PDF_AT_LINK)
+    session.expire_all()  # the paper was just made in this session: read it back whole, as the API shows papers
+    return await papers.get_paper(session, result.paper_id)
 
 
 @router.get("")
