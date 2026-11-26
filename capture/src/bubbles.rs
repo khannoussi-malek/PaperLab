@@ -115,8 +115,9 @@ pub(crate) fn back_out(x: f64) -> f64 {
     1.0 + (C1 + 1.0) * x * x * x + C1 * x * x
 }
 
-/// A bubble's fill, text and hover colours. A mode's text is the logo's blue on a light card, and a light blue on a
-/// dark one (the logo's blue is too dark to read there); the clipboard's paper is white on the logo's blue.
+/// A bubble's fill, text and hover colours (the hover is drawn over the fill). A mode's text is the logo's blue on a
+/// light card and a light blue on a dark one (the logo's blue is too dark to read there); under the pointer it turns
+/// white on the logo's blue. The clipboard's paper is white on the logo's blue, a little darker under the pointer.
 fn colors(bubble: &Bubble, dark: bool) -> (Color, Color, Color) {
     let blue = rune::color::hex("#2664ee").expect("a valid colour");
     let light_blue = rune::color::hex("#a9c1ff").expect("a valid colour");
@@ -124,7 +125,7 @@ fn colors(bubble: &Bubble, dark: bool) -> (Color, Color, Color) {
         Bubble::Mode(_) | Bubble::OpenPaperLab | Bubble::Hide => {
             (tok::theme(dark).card.alpha(0.97), if dark { light_blue } else { blue }, blue)
         }
-        Bubble::Copied(_) => (blue, Color::WHITE, Color::WHITE.alpha(0.18)),
+        Bubble::Copied(_) => (blue, Color::WHITE, Color::BLACK.alpha(0.18)),
     }
 }
 
@@ -209,14 +210,15 @@ mod tests {
         assert_eq!(progress(0.0, 2, MAX, true, 0.4), 0.4, "so does a pop");
     }
 
-    /// WCAG contrast between two opaque sRGB colours.
+    /// WCAG contrast between two opaque colours (rune's colours are linear, so `luminance` is WCAG's).
     fn contrast(a: Color, b: Color) -> f32 {
-        let lum = |c: Color| {
-            let lin = |v: f32| if v <= 0.040_45 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) };
-            0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b)
-        };
-        let (hi, lo) = (lum(a).max(lum(b)), lum(a).min(lum(b)));
-        (hi + 0.05) / (lo + 0.05)
+        let (la, lb) = (a.luminance(), b.luminance());
+        (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    }
+
+    /// `top` drawn over the opaque `bottom`.
+    fn over(top: Color, bottom: Color) -> Color {
+        bottom.mix(Color { a: 1.0, ..top }, top.a)
     }
 
     #[test]
@@ -225,11 +227,11 @@ mod tests {
         for dark in [false, true] {
             for bubble in &bubbles {
                 let (fill, ink, hover) = colors(bubble, dark);
-                let ratio = contrast(ink, fill.alpha(1.0));
-                assert!(ratio >= 4.5, "{bubble:?} dark={dark}: {ratio:.1}");
-                if let Bubble::Mode(_) = bubble {
-                    assert!(contrast(Color::WHITE, hover) >= 4.5, "white on the hover blue");
-                }
+                let fill = fill.alpha(1.0);
+                let at_rest = contrast(ink, fill);
+                assert!(at_rest >= 4.5, "{bubble:?} dark={dark}: {at_rest:.1}");
+                let pointed = contrast(Color::WHITE, over(hover, fill)); // the text turns white under the pointer
+                assert!(pointed >= 4.5, "{bubble:?} dark={dark}, pointed at: {pointed:.1}");
             }
         }
     }
