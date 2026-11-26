@@ -13,6 +13,7 @@ mod api;
 mod clipboard;
 mod bubbles;
 mod displays;
+mod file_drag;
 mod float;
 mod galaxy;
 mod icon;

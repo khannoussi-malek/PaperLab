@@ -97,3 +97,35 @@ fn a_refused_drop_while_asking_replaces_the_question() {
     p.step(Event::DropRefused);
     assert_eq!(p.phase, Phase::Failed(NOT_A_PDF.into()), "the papers are in the library; ⌘↵ files them later");
 }
+
+#[test]
+fn a_drag_over_the_paper_waits_in_find_and_letting_go_elsewhere_closes_it() {
+    let mut p = shown_with_library();
+    p.step(Event::Mode(Mode::Ask));
+    p.step(Event::DropOffered);
+    assert_eq!((p.mode, &p.phase), (Mode::Find, &Phase::DropHere));
+    assert_eq!(p.rows(), vec![]);
+    let seq = p.seq;
+    assert_eq!(p.step(Event::DragEnded), vec![Effect::CloseSoon(seq)]);
+    assert_eq!(p.step(Event::CloseNow(seq)), vec![Effect::Close]);
+}
+
+#[test]
+fn a_drop_on_the_waiting_panel_uploads_and_the_drag_ending_after_does_not_close_it() {
+    let mut p = shown_with_library();
+    p.step(Event::DropOffered);
+    let offered = p.seq;
+    let seq = drop_two(&mut p);
+    assert_eq!(p.phase, Phase::Uploading { count: 2 });
+    assert_eq!(p.step(Event::DragEnded), vec![]);
+    assert_eq!(p.step(Event::CloseNow(offered)), vec![], "a late close from the drag changes nothing");
+    assert_eq!(p.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a"))] }), vec![Effect::FetchWorkspaces]);
+}
+
+#[test]
+fn no_drop_offer_while_an_upload_is_under_way() {
+    let mut p = shown_with_library();
+    drop_two(&mut p);
+    p.step(Event::DropOffered);
+    assert_eq!(p.phase, Phase::Uploading { count: 2 });
+}
