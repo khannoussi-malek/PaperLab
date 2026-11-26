@@ -21,6 +21,7 @@ TIMEOUT = httpx.Timeout(10.0)
 READ_SECONDS = 15.0
 
 COULD_NOT_READ = "Couldn't read that page ({why}). Copy the paper's DOI or title from it instead."
+TURNED_AWAY = "That site turns automatic readers away. Copy the paper's DOI or title from the page instead."
 SAYS_NOTHING = "That page doesn't say which paper it is. Copy the paper's DOI or title from it instead."
 
 _URL = re.compile(r"^https?://\S+$", re.IGNORECASE)
@@ -34,6 +35,34 @@ _DOI = re.compile(r"\b(10\.\d{4,9}/[^\s\"'<>]+)")
 _DOI_NAMES = ("citation_doi", "prism.doi", "dc.identifier", "dc.identifier.doi", "bepress_citation_doi")
 _ARXIV_NAMES = ("citation_arxiv_id",)
 _TITLE_NAMES = ("citation_title", "dc.title")
+
+
+# Publishers whose article links spell their DOI's suffix, so the page needn't be read (Nature, for one, answers an
+# automatic reader with a bot check).
+# An article ID has a digit (s41586-021-03819-2, nature14539); /articles/subjects/… and the like are no paper.
+_NATURE = re.compile(
+    r"^https?://(?:www\.)?nature\.com/articles/([a-z][a-z0-9.\-]*\d[a-z0-9.\-]*?)(?:\.pdf)?(?:[?#/]|$)", re.IGNORECASE
+)
+_DOI_IN_LINK = ((_NATURE, "10.1038/{}"),)
+# The page a bot check shows instead of the article (Cloudflare, Akamai and their like): its whole title is the
+# check's, so an article titled "Access denied: …" isn't one.
+_BOT_CHECK = re.compile(
+    r"<title>\s*(?:client challenge|just a moment|attention required|access denied|are you a robot)[\s.!?…|-]*"
+    r"(?:\|[^<]{0,40})?</title>",
+    re.IGNORECASE,
+)
+
+
+def doi_from_link(url: str) -> str | None:
+    """The DOI a publisher's article link spells, without reading the page."""
+    for pattern, doi in _DOI_IN_LINK:
+        if found := pattern.match(url.strip()):
+            return doi.format(found.group(1).rstrip("."))
+    return None
+
+
+def is_bot_check(page: str) -> bool:
+    return bool(_BOT_CHECK.search(page[:20_000]))
 
 
 class PageUnreadable(Exception):
@@ -88,6 +117,10 @@ async def read(http: httpx.AsyncClient, url: str) -> str:
 async def _fetch(http: httpx.AsyncClient, url: str) -> str:
     async with http.stream("GET", url, timeout=TIMEOUT, headers={"Accept": "text/html"}) as response:
         if response.status_code >= 400:
+            # a bot check often comes as a 403 or 503: say that, not the bare status
+            start = (await anext(response.aiter_bytes(), b""))[:20_000].decode("utf-8", errors="replace")
+            if is_bot_check(start):
+                raise PageUnreadable(TURNED_AWAY)
             raise PageUnreadable(COULD_NOT_READ.format(why=f"the site answered {response.status_code}"))
         body = bytearray()
         async for chunk in response.aiter_bytes():

@@ -160,11 +160,15 @@ async def search(session: AsyncSession, providers: Providers, query: str) -> Sea
 async def _from_page(providers: Providers, url: str) -> str:
     """What a paper's page says it is (DOI, arXiv ID or title), to search for. Conflict with why when it can't be read
     or says nothing."""
+    if doi := landing_page.doi_from_link(url):
+        return doi
     try:
         page = await landing_page.read(providers.pdf, url)
     except landing_page.PageUnreadable as exc:
         logger.info("couldn't read %s: %s", url, exc)
         raise Conflict(str(exc)) from exc
+    if landing_page.is_bot_check(page):
+        raise Conflict(landing_page.TURNED_AWAY)
     found = landing_page.identify(page)
     if found is None:
         raise Conflict(landing_page.SAYS_NOTHING)
