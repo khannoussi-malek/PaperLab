@@ -167,7 +167,7 @@ fn dragging_the_page_keeps_the_bubbles_out() {
 fn a_right_click_offers_open_paperlab_and_hide() {
     let mut f = paper_at(10.0);
     assert_eq!(f.right_click(), vec![]);
-    assert_eq!((f.focus, &f.items), (Focus::Menu, &bubbles::paper_menu()));
+    assert_eq!((f.focus, &f.items), (Focus::Menu, &bubbles::paper_menu(None)));
     assert_eq!(f.pick(Bubble::OpenPaperLab), vec![Act::OpenPaperLab]);
     assert_eq!(f.focus, Focus::Floating, "PaperLab comes forward; the paper floats again");
     f.tick(11.0);
@@ -520,4 +520,18 @@ fn a_link_let_go_just_off_the_page_isnt_taken_even_if_it_was_over_it_a_frame_ago
     f.read_pointer = || Some((200.0, 900.0 - 200.0)); // moved off and let go in the same frame
     set_sense(false, 6);
     assert_eq!(f.watch_drag(), vec![]);
+}
+
+#[test]
+fn a_right_click_offers_any_copied_web_link_first() {
+    let mut f = paper_at(10.0);
+    f.paste = || Some(" https://example.org/papers/a.pdf \n".into());
+    f.right_click();
+    assert_eq!(f.items[0], Bubble::Copied(Input::Link("https://example.org/papers/a.pdf".into())));
+    let query = Some("https://example.org/papers/a.pdf".to_owned());
+    assert_eq!(f.pick(f.items[0].clone()), vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Find), query }]);
+    let mut prose = paper_at(10.0);
+    prose.paste = || Some("some words".into());
+    prose.right_click();
+    assert_eq!(prose.items, bubbles::paper_menu(None), "no link copied: just Open PaperLab and Hide");
 }

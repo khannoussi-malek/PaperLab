@@ -54,9 +54,11 @@ impl Bubble {
     }
 }
 
-/// The right-click bubbles: the paper's own actions.
-pub fn paper_menu() -> Vec<Bubble> {
-    vec![Bubble::OpenPaperLab, Bubble::Hide]
+/// The right-click bubbles: the paper's own actions, with the clipboard's link first when there is one (any web
+/// link: a right-click is asked for, so a copied page can't be noise there).
+pub fn paper_menu(copied_link: Option<String>) -> Vec<Bubble> {
+    let link = copied_link.map(|link| Bubble::Copied(Input::Link(link)));
+    link.into_iter().chain([Bubble::OpenPaperLab, Bubble::Hide]).collect()
 }
 
 /// The most bubbles there can be: the modes and the clipboard's paper.
@@ -206,8 +208,11 @@ mod tests {
         assert_eq!((with.len(), &with[0]), (MAX, &Bubble::Copied(doi)));
         assert_eq!(with[0].pick(), Pick::Panel(Mode::Find, Some("10.1234/x".to_owned())));
         assert_eq!(with[1].pick(), Pick::Panel(Mode::Find, None));
-        assert_eq!(paper_menu().iter().map(Bubble::pick).collect::<Vec<_>>(), [Pick::OpenPaperLab, Pick::Hide]);
+        assert_eq!(paper_menu(None).iter().map(Bubble::pick).collect::<Vec<_>>(), [Pick::OpenPaperLab, Pick::Hide]);
         assert_eq!(with[0].label(0), "Add copied DOI");
+        let right = paper_menu(Some("https://example.org/a.pdf".into()));
+        assert_eq!(right[0].pick(), Pick::Panel(Mode::Find, Some("https://example.org/a.pdf".to_owned())));
+        assert_eq!(right[0].label(0), "Add copied link");
         assert_eq!(Bubble::Copied(Input::Arxiv("1706.03762".into())).label(0), "Add copied arXiv");
     }
 }

@@ -50,8 +50,7 @@ mod mac {
 pub use mac::{carries_files, link, sense};
 
 /// One http(s) URL and nothing else.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn is_web_link(text: &str) -> bool {
+pub(crate) fn is_web_link(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     (lower.starts_with("https://") || lower.starts_with("http://")) && !text.contains(char::is_whitespace)
 }

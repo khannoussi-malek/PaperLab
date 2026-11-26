@@ -283,7 +283,8 @@ impl Float {
         if self.dragging {
             return vec![]; // mid-drag: the page is being moved, not asked for anything
         }
-        self.press(bubbles::paper_menu())
+        let link = (self.paste)().map(|text| text.trim().to_owned()).filter(|text| crate::file_drag::is_web_link(text));
+        self.press(bubbles::paper_menu(link))
     }
 
     /// A press on the page: `items` come out, or the bubbles fold back; with the panel open it closes.
@@ -367,6 +368,10 @@ impl Float {
             }
             (false, Some(_)) => {
                 self.drag_start = None;
+                if let Some(carried) = &self.carried {
+                    let at = self.pointer().map(|at| self.over_page(at));
+                    eprintln!("paperlab-capture: drag let go (carried {carried:?}, on the paper: {at:?})");
+                }
                 match self.carried.take() {
                     Some(Carried::Files) => vec![Act::Take(Event::DragEnded)],
                     // let go: where the pointer is now, not where it was a frame ago
@@ -395,12 +400,14 @@ impl Float {
     /// A drag from another app has come over the page for the first time, the pointer at `at`: what does it carry?
     fn first_over_page(&mut self, at: (f32, f32)) -> Vec<Act> {
         if (self.carries_files)() {
+            eprintln!("paperlab-capture: a drag came over the paper carrying files");
             self.carried = Some(Carried::Files);
             self.focus_on(Focus::Panel);
             let at = place::drop_spot(at, place::display_of(at, &self.displays));
             return vec![Act::Show { at, mode: Some(Mode::Find), query: None }, Act::Take(Event::DropOffered)];
         }
         self.carried = Some((self.drag_link)().map_or(Carried::Nothing, |link| Carried::Link { link, over: true }));
+        eprintln!("paperlab-capture: a drag came over the paper carrying {:?}", self.carried);
         vec![]
     }
 
