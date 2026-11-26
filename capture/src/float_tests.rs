@@ -509,19 +509,19 @@ fn a_drag_with_neither_files_nor_a_link_does_nothing() {
 }
 
 #[test]
-fn a_link_let_go_just_off_the_page_isnt_taken_even_if_it_was_over_it_a_frame_ago() {
+fn a_link_let_go_while_the_page_is_lit_is_taken_even_if_the_release_is_seen_late() {
     let mut f = pointed_at();
-    (f.carries_files, f.drag_link) = (|| false, || Some("https://example.org/paper".into()));
+    (f.carries_files, f.drag_link) = (|| false, || Some("https://arxiv.org/pdf/2601.04124".into()));
     set_sense(true, 5);
     f.watch_drag();
     set_sense(true, 6);
     f.watch_drag();
-    assert!(f.link_over());
-    f.read_pointer = || Some((200.0, 900.0 - 200.0)); // moved off and let go in the same frame
+    assert!(f.link_over(), "lit");
+    f.read_pointer = || Some((200.0, 900.0 - 200.0)); // seen only after the pointer moved on
     set_sense(false, 6);
-    assert_eq!(f.watch_drag(), vec![]);
+    let query = Some("https://arxiv.org/pdf/2601.04124".to_owned());
+    assert_eq!(f.watch_drag(), vec![Act::Show { at: f.panel_at(), mode: Some(Mode::Find), query }]);
 }
-
 #[test]
 fn a_right_click_offers_any_copied_web_link_first() {
     let mut f = paper_at(10.0);

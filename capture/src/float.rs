@@ -374,8 +374,9 @@ impl Float {
                 }
                 match self.carried.take() {
                     Some(Carried::Files) => vec![Act::Take(Event::DragEnded)],
-                    // let go: where the pointer is now, not where it was a frame ago
-                    Some(Carried::Link { link, .. }) if self.pointer().is_some_and(|at| self.over_page(at)) => {
+                    // let go while the page was lit for it (the last frame the button was held): taken. The release
+                    // is seen a frame or more late (a busy Mac), by when the pointer may have moved on.
+                    Some(Carried::Link { link, over: true }) => {
                         self.focus_on(Focus::Panel);
                         vec![Act::Show { at: self.panel_at(), mode: Some(Mode::Find), query: Some(link) }]
                     }
