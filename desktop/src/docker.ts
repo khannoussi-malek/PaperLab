@@ -210,6 +210,8 @@ async function dumpTo(bin: string, args: string[], env: NodeJS.ProcessEnv, path:
 export type DockerOptions = { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; signal?: AbortSignal }
 
 const VOICE_VOLUME = 'paperlab-app_voicemodels'
+/** Docker's words for a container whose network was deleted under it. */
+const STALE_NETWORK = /network [0-9a-f]+ not found/i
 
 /** The docker commands the launch runs, each logged with its exit code. `signal` ends a running one (the window closed
  * during startup); stop() never takes it, since it runs after. */
@@ -227,13 +229,23 @@ export function makeDocker(bin: string, run: Runner, stack: StackInfo, log: Log,
     docker(['compose', '-f', file, ...(profiled ? ['--profile', 'voice'] : []), ...args], timeoutMs, onLine, abortable)
   const voiceCompose = (args: string[], timeoutMs: number | null, onLine?: (line: string) => void) =>
     compose(args, timeoutMs, onLine, true, true)
+  /** compose up, once more after removing the containers when they point at a network Docker no longer has (a
+   * `docker network prune`, a Docker reset): compose only remakes a container whose settings changed, so they'd
+   * never start again. down keeps every volume, so the library is untouched; voice comes back on its next start. */
+  const upHealing = async (args: string[]): Promise<Result> => {
+    const first = await compose(args, LIMITS.up)
+    if (first.code === 0 || first.timedOut || !STALE_NETWORK.test(first.stderr)) return first
+    log('containers point at a network Docker no longer has: removing them (volumes stay) and starting again')
+    const down = await voiceCompose(['down', '--remove-orphans'], LIMITS.up)
+    return down.code === 0 && !down.timedOut ? compose(args, LIMITS.up) : first
+  }
   return {
     info: () => docker(['info', '--format', '{{.OSType}}'], LIMITS.info),
     composeVersion: () => docker(['compose', 'version', '--short'], LIMITS.version),
     imagePresent: async () => (await docker(['image', 'inspect', `${IMAGE}:${stack.version}`], LIMITS.info)).code === 0,
     pull: (onLine: (line: string) => void) => compose(['pull'], LIMITS.pull, onLine),
-    startDatabase: () => compose(['up', '-d', '--wait', 'db'], LIMITS.up),
-    up: () => compose(['up', '-d'], LIMITS.up),
+    startDatabase: () => upHealing(['up', '-d', '--wait', 'db']),
+    up: () => upHealing(['up', '-d']),
     logs: (services: string[]) => compose(['logs', '--no-color', '--tail', '20', ...services], LIMITS.info),
     // Always names the profile: a profiled service is only stopped when its profile is active (Review focus 5).
     stop: () => compose(['stop'], LIMITS.stop, undefined, false, true),

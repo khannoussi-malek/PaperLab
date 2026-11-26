@@ -277,6 +277,33 @@ describe('makeDocker', () => {
     ])
   })
 
+  it("remakes containers left on a network Docker no longer has, keeping the volumes, then starts again", async () => {
+    const stale = 'Error response from daemon: failed to set up container networking: network 78899978df1f not found\n'
+    let ups = 0
+    const { run, calls } = recorded((args) => (args.includes('up') && ups++ % 2 === 0 ? { code: 1, stderr: stale } : {}))
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    expect((await docker.up()).code).toBe(0)
+    expect((await docker.startDatabase()).code).toBe(0)
+
+    expect(calls.map(({ args }) => args)).toEqual([
+      `compose -f ${FILE} up -d`,
+      `compose -f ${FILE} --profile voice down --remove-orphans`,
+      `compose -f ${FILE} up -d`,
+      `compose -f ${FILE} up -d --wait db`,
+      `compose -f ${FILE} --profile voice down --remove-orphans`,
+      `compose -f ${FILE} up -d --wait db`,
+    ])
+  })
+
+  it('any other failed start is returned as it is, with nothing removed', async () => {
+    const { run, calls } = recorded(() => ({ code: 1, stderr: 'Error response from daemon: no space left on device\n' }))
+    const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
+
+    expect((await docker.up()).stderr).toContain('no space left')
+    expect(calls.map(({ args }) => args)).toEqual([`compose -f ${FILE} up -d`])
+  })
+
   it('voiceStart starts only the voice service under its profile, and compose pulls its image if it is missing', async () => {
     const { run, calls } = recorded()
     const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
