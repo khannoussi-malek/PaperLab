@@ -111,6 +111,15 @@ def test_a_nature_link_spells_its_doi_and_other_links_dont():
     assert landing_page.doi_from_link(NATURE) == DOI
     assert landing_page.doi_from_link("https://www.nature.com/articles/nature14539") == "10.1038/nature14539"
     assert landing_page.doi_from_link("https://ieeexplore.ieee.org/document/1") is None
+    assert landing_page.doi_from_link("https://www.nature.com/articles/nature14539.pdf") == "10.1038/nature14539"
+    assert landing_page.doi_from_link(f"{NATURE}?error=cookies_not_supported") == DOI
+    assert landing_page.doi_from_link("https://www.nature.com/articles/subjects/biology") is None, "not an article"
+
+
+def test_a_bot_check_is_known_by_its_whole_title_not_an_article_that_mentions_one():
+    assert landing_page.is_bot_check("<title>Just a moment...</title>")
+    assert landing_page.is_bot_check("<title>Access Denied | Example</title>")
+    assert not landing_page.is_bot_check("<title>Access denied: barriers to care in rural clinics</title>")
 
 
 async def test_a_nature_link_is_searched_by_its_doi_without_reading_the_page(session, discovery_fakes):
@@ -130,3 +139,12 @@ async def test_a_bot_check_instead_of_the_page_says_the_site_turns_readers_away(
     discovery_fakes.pdf_host.reply("/document/9156610", 200, text=challenge)
     with pytest.raises(Conflict, match="turns automatic readers away"):
         await discovery.search(session, discovery_fakes.providers, "https://ieeexplore.ieee.org/document/9156610")
+
+
+async def test_a_bot_check_sent_as_a_403_says_the_site_turns_readers_away(session, discovery_fakes):
+    challenge = "<html><head><title>Just a moment...</title></head><body>Checking your browser…</body></html>"
+    discovery_fakes.pdf_host.reply("/science/article/pii/S1", 403, text=challenge)
+    with pytest.raises(Conflict, match="turns automatic readers away"):
+        await discovery.search(
+            session, discovery_fakes.providers, "https://www.sciencedirect.com/science/article/pii/S1"
+        )
