@@ -23,6 +23,7 @@ from app.core.papers import papers
 from app.core.papers.enrichment import ARXIV_DOI_PREFIX
 from app.core.papers.paper_sources import KEYED, NAMES
 from app.core.papers.provenance import sources_of
+from app.core.search import landing_page
 from app.core.search.candidates import ARXIV_ID, arxiv_from_doi, arxiv_from_url, merge, normal_title, ordered_pdf_urls
 from app.core.search.free_copy import (
     ALREADY_IN_LIBRARY,
@@ -128,6 +129,9 @@ async def mark_in_library(session: AsyncSession, candidates: list[Candidate]) ->
 
 async def search(session: AsyncSession, providers: Providers, query: str) -> SearchResult:
     kind, value = classify_query(query)
+    if kind == "title" and landing_page.is_link(query):
+        # a link with no DOI or ID in it: its page says which paper it is
+        kind, value = classify_query(await _from_page(providers, query.strip()))
     asks = {source: ask for source, ask in ASKS[kind].items() if providers.client(source) is not None}
     if not asks:
         raise Conflict(NO_SOURCE)
@@ -151,6 +155,20 @@ async def search(session: AsyncSession, providers: Providers, query: str) -> Sea
         candidates = await _add_s2_links(s2, candidates)
     candidates = await _add_unpaywall_links(providers.client("unpaywall"), candidates)
     return SearchResult(await mark_in_library(session, candidates), notices)
+
+
+async def _from_page(providers: Providers, url: str) -> str:
+    """What a paper's page says it is (DOI, arXiv ID or title), to search for. Conflict with why when it can't be read
+    or says nothing."""
+    try:
+        page = await landing_page.read(providers.pdf, url)
+    except landing_page.PageUnreadable as exc:
+        logger.info("couldn't read %s: %s", url, exc)
+        raise Conflict(str(exc)) from exc
+    found = landing_page.identify(page)
+    if found is None:
+        raise Conflict(landing_page.SAYS_NOTHING)
+    return found
 
 
 async def _add_s2_links(http: httpx.AsyncClient, candidates: list[Candidate]) -> list[Candidate]:
