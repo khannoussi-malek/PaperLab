@@ -44,6 +44,62 @@ pub fn classify(raw: &str) -> Input {
     Input::Text(s.to_owned())
 }
 
+/// Paper sites whose article links name a paper without a DOI in them (PaperLab reads the page for it): a host, and
+/// the start of its article paths, so a site's other pages (news, search, a dictionary) don't count.
+const PAPER_PAGES: [(&str, &str); 19] = [
+    ("nature.com", "/articles/"),
+    ("ieeexplore.ieee.org", "/document/"),
+    ("sciencedirect.com", "/science/article/"),
+    ("pubmed.ncbi.nlm.nih.gov", "/"),
+    ("ncbi.nlm.nih.gov", "/pmc/articles/"),
+    ("pmc.ncbi.nlm.nih.gov", "/articles/"),
+    ("openreview.net", "/forum"),
+    ("aclanthology.org", "/"),
+    ("semanticscholar.org", "/paper/"),
+    ("jstor.org", "/stable/"),
+    ("proceedings.neurips.cc", "/paper"),
+    ("papers.nips.cc", "/paper"),
+    ("proceedings.mlr.press", "/v"),
+    ("biorxiv.org", "/content/"),
+    ("medrxiv.org", "/content/"),
+    ("papers.ssrn.com", "/sol3/papers.cfm"),
+    ("frontiersin.org", "/articles/"),
+    ("academic.oup.com", "/"),
+    ("journals.plos.org", "/"),
+];
+
+/// A link straight to a PDF (its path ends in .pdf): PaperLab downloads it, as a dropped PDF is uploaded.
+pub fn is_pdf_link(link: &str) -> bool {
+    let path = link.split(['?', '#']).next().unwrap_or(link);
+    let lower = path.to_ascii_lowercase();
+    (lower.starts_with("https://") || lower.starts_with("http://")) && lower.ends_with(".pdf")
+}
+
+/// A link that names a paper: a DOI in its path (most publishers' article links), or a paper site's article page.
+pub fn names_a_paper(link: &str) -> bool {
+    let Some((scheme, rest)) = link.trim().split_once("://") else { return false };
+    if !matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") {
+        return false;
+    }
+    let rest = rest.split(['?', '#']).next().unwrap_or(rest);
+    let (authority, path) = rest.split_once('/').map_or((rest, ""), |(a, p)| (a, p));
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h); // user@host
+    let host = host.split(':').next().unwrap_or(host).trim_end_matches('.').to_ascii_lowercase(); // host:443, host.
+    let path = format!("/{path}");
+    // a DOI in the path: a "10.<4+ digit registrant>" segment, its suffix after it
+    let registrant = |part: &str| {
+        part.strip_prefix("10.").is_some_and(|r| {
+            let digits_first = r.len() >= 4 && r.bytes().take(4).all(|b| b.is_ascii_digit());
+            digits_first && r.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+        })
+    };
+    let segments: Vec<&str> = path.split('/').collect();
+    let doi_inside = segments.windows(2).any(|pair| registrant(pair[0]) && !pair[1].is_empty());
+    let on_site = |site: &str| host == site || host.ends_with(&format!(".{site}"));
+    let article = |start: &str| path.starts_with(start) && path.len() > start.len();
+    doi_inside || PAPER_PAGES.iter().any(|(site, start)| on_site(site) && article(start))
+}
+
 fn strip_prefix_ci<'a>(s: &'a str, prefixes: &[&str]) -> Option<&'a str> {
     prefixes.iter().find_map(|p| s.get(..p.len()).filter(|head| head.eq_ignore_ascii_case(p)).map(|_| &s[p.len()..]))
 }
@@ -143,5 +199,29 @@ mod tests {
         assert_eq!(classify("   "), Input::Empty);
         assert_eq!(classify("graph/1234567"), Input::Arxiv("graph/1234567".into()));
         assert_eq!(classify("and/or"), Input::Text("and/or".into()));
+    }
+}
+
+#[cfg(test)]
+mod paper_link_tests {
+    use super::*;
+
+    #[test]
+    fn a_link_names_a_paper_by_a_doi_in_it_or_its_site() {
+        assert!(names_a_paper("https://dl.acm.org/doi/10.1145/3292500.3330701"), "a DOI in the path");
+        assert!(names_a_paper("https://link.springer.com/article/10.1007/s11263-015-0816-y"));
+        assert!(names_a_paper("https://www.nature.com/articles/s41586-021-03819-2"), "Nature: no DOI, a paper site");
+        assert!(names_a_paper("https://ieeexplore.ieee.org/document/9156610"));
+        assert!(!names_a_paper("https://news.ycombinator.com/item?id=1"), "any other page: no");
+        assert!(!names_a_paper("https://evilnature.com/x"), "a look-alike host: no");
+        assert!(names_a_paper("HTTPS://WWW.Nature.com:443/articles/x"), "case and a port don't matter");
+        assert!(names_a_paper("https://www.nature.com./articles/x"), "nor a trailing dot");
+        assert!(!names_a_paper("https://www.nature.com/news/today"), "a paper site's other pages: no");
+        assert!(!names_a_paper("https://dictionary.cambridge.org/dictionary/word"));
+        assert!(!names_a_paper("https://nature.com@evil.example/articles/x"), "userinfo isn't the host");
+        assert!(!names_a_paper("https://example.com/docs/10.12.1/guide"), "a version number isn't a DOI");
+        assert!(!names_a_paper("ftp://nature.com/articles/x"));
+        assert!(is_pdf_link("https://example.org/papers/Attention.PDF?download=1"));
+        assert!(!is_pdf_link("https://example.org/papers/attention") && !is_pdf_link("file:///tmp/a.pdf"));
     }
 }

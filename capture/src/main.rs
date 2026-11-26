@@ -192,6 +192,9 @@ impl App {
                 Event::Inbox(api.inbox()) // the badge drops by one
             }),
             Effect::Copy { seq, text, what } => background(me, move || Event::Copied { seq, what, result: copy(&text) }),
+            Effect::AddLink { seq, link } => {
+                background(me, move || Event::Uploaded { seq, results: vec![api.add_link(&link)] });
+            }
             Effect::Upload { seq, paths } => background(me, move || {
                 let results = paths.iter().map(|path| api.upload(path)).collect();
                 Event::Uploaded { seq, results }

@@ -42,6 +42,10 @@ impl Panel {
         self.query = q;
         (self.picked, self.polling) = (0, None);
         match classify(&self.query).lookup() {
+            Some(link) if pasted && crate::input::is_pdf_link(link) => {
+                let link = link.to_owned();
+                self.add_pdf_link(link)
+            }
             Some(query) if pasted => {
                 let query = query.to_owned();
                 self.look_up(query)
@@ -122,6 +126,7 @@ impl Panel {
         let Some(row) = self.rows().into_iter().nth(self.picked) else { return vec![] };
         match row {
             Row::Paper(i) => vec![Effect::Open(self.papers[i].id.clone()), Effect::Close],
+            Row::SearchOnline(q) if crate::input::is_pdf_link(&q) => self.add_pdf_link(q),
             Row::SearchOnline(q) => self.look_up(q),
             Row::Candidate(i) => {
                 let Phase::Found(found) = &self.phase else { return vec![] };
@@ -161,6 +166,13 @@ impl Panel {
         (self.picked, self.polling) = (0, None);
         self.phase = Phase::LookingUp(format!("papers like “{title}”"));
         vec![Effect::Similar { seq: self.seq, paper_id }]
+    }
+
+    /// A link straight to a PDF: PaperLab downloads it, and then, as for a dropped PDF, which workspaces?
+    fn add_pdf_link(&mut self, link: String) -> Vec<Effect> {
+        self.seq += 1;
+        (self.picked, self.phase) = (0, Phase::Uploading { count: 1 });
+        vec![Effect::AddLink { seq: self.seq, link }]
     }
 
     fn look_up(&mut self, query: String) -> Vec<Effect> {

@@ -128,6 +128,8 @@ pub enum Effect {
     /// Papers like a library one; the answer comes back as a lookup's (`Event::Looked`).
     Similar { seq: u64, paper_id: String },
     Upload { seq: u64, paths: Vec<PathBuf> },
+    /// A paper from a link to its PDF; its answer comes back as an upload's (`Event::Uploaded`).
+    AddLink { seq: u64, link: String },
 }
 
 /// What Enter acts on, in display order.
