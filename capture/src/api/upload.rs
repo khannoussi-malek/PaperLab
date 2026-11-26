@@ -12,6 +12,14 @@ const MAX_BYTES: u64 = 200 << 20;
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 
 impl Api {
+    /// A paper from a link to its PDF: PaperLab downloads it (POST /api/papers/from-link), or answers with its copy.
+    pub fn add_link(&self, link: &str) -> Result<Paper, ApiError> {
+        let url = format!("{}/api/papers/from-link", self.base);
+        let request = self.agent.post(&url).config().timeout_global(Some(UPLOAD_TIMEOUT)).build();
+        let (status, body) = self.send(request.send_json(&serde_json::json!({ "link": link })))?;
+        ok(status, body)
+    }
+
     pub fn upload(&self, path: &Path) -> Result<Paper, ApiError> {
         let name = file_name(path);
         let unreadable = |e: std::io::Error| ApiError::Said(format!("Couldn't read “{name}” ({e})."));

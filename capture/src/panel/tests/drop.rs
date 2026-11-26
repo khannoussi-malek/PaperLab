@@ -129,3 +129,32 @@ fn no_drop_offer_while_an_upload_is_under_way() {
     p.step(Event::DropOffered);
     assert_eq!(p.phase, Phase::Uploading { count: 2 });
 }
+
+#[test]
+fn a_pasted_pdf_link_is_downloaded_by_paperlab_then_asks_which_workspaces() {
+    let mut p = shown_with_library();
+    let fx = p.step(Event::Query("https://example.org/papers/attention.pdf".into()));
+    let seq = match fx.as_slice() {
+        [Effect::AddLink { seq, link }] if link == "https://example.org/papers/attention.pdf" => *seq,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(p.phase, Phase::Uploading { count: 1 });
+    assert_eq!(p.step(Event::Uploaded { seq, results: vec![Ok(ingesting("a"))] }), vec![Effect::FetchWorkspaces]);
+    assert!(matches!(&p.phase, Phase::Filing(f) if f.paper_ids == ["a"]));
+}
+
+#[test]
+fn a_pdf_link_paperlab_cannot_download_says_why() {
+    let mut p = shown_with_library();
+    p.step(Event::Query("https://example.org/a.pdf".into()));
+    let seq = p.seq;
+    p.step(Event::Uploaded { seq, results: vec![Err(ApiError::Said("No PDF could be downloaded.".into()))] });
+    assert_eq!(p.phase, Phase::Failed("No PDF could be downloaded.".into()));
+}
+
+#[test]
+fn an_arxiv_pdf_link_is_still_looked_up_as_arxiv() {
+    let mut p = shown_with_library();
+    let fx = p.step(Event::Query("https://arxiv.org/pdf/2601.04124".into()));
+    assert!(matches!(fx.as_slice(), [Effect::Lookup { query, .. }] if query == "2601.04124"), "{fx:?}");
+}

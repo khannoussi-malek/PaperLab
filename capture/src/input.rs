@@ -68,6 +68,13 @@ const PAPER_PAGES: [(&str, &str); 19] = [
     ("journals.plos.org", "/"),
 ];
 
+/// A link straight to a PDF (its path ends in .pdf): PaperLab downloads it, as a dropped PDF is uploaded.
+pub fn is_pdf_link(link: &str) -> bool {
+    let path = link.split(['?', '#']).next().unwrap_or(link);
+    let lower = path.to_ascii_lowercase();
+    (lower.starts_with("https://") || lower.starts_with("http://")) && lower.ends_with(".pdf")
+}
+
 /// A link that names a paper: a DOI in its path (most publishers' article links), or a paper site's article page.
 pub fn names_a_paper(link: &str) -> bool {
     let Some((scheme, rest)) = link.trim().split_once("://") else { return false };
@@ -214,5 +221,7 @@ mod paper_link_tests {
         assert!(!names_a_paper("https://nature.com@evil.example/articles/x"), "userinfo isn't the host");
         assert!(!names_a_paper("https://example.com/docs/10.12.1/guide"), "a version number isn't a DOI");
         assert!(!names_a_paper("ftp://nature.com/articles/x"));
+        assert!(is_pdf_link("https://example.org/papers/Attention.PDF?download=1"));
+        assert!(!is_pdf_link("https://example.org/papers/attention") && !is_pdf_link("file:///tmp/a.pdf"));
     }
 }

@@ -112,6 +112,18 @@ fn similar_papers_read_as_a_lookups_results_and_a_refusal_gives_paperlabs_senten
 }
 
 #[test]
+fn a_pdf_link_is_sent_to_paperlab_to_download_and_its_refusal_says_why() {
+    let api = fake(|method, path, body| match (method, path) {
+        ("POST", "/api/papers/from-link") if body.contains("ok.pdf") => (201, paper_json("p1", "uploaded")),
+        ("POST", "/api/papers/from-link") => (409, json!({ "detail": "No PDF could be downloaded from that link." })),
+        _ => (405, json!({})),
+    });
+    assert_eq!(api.add_link("https://example.org/ok.pdf").map(|p| p.id), Ok("p1".to_owned()));
+    let refused = api.add_link("https://example.org/none.pdf").map(|p| p.id);
+    assert_eq!(refused, Err(ApiError::Said("No PDF could be downloaded from that link.".into())));
+}
+
+#[test]
 fn a_paper_is_put_in_a_workspace_and_an_unknown_one_says_so() {
     let api = fake(|method, path, _| match (method, path) {
         ("PUT", "/api/workspaces/w1/papers/p1") => (204, Value::Null),
