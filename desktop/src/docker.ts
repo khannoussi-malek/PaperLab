@@ -211,7 +211,7 @@ export type DockerOptions = { platform?: NodeJS.Platform; env?: NodeJS.ProcessEn
 
 const VOICE_VOLUME = 'paperlab-app_voicemodels'
 /** Docker's words for a container whose network was deleted under it. */
-const STALE_NETWORK = /network [0-9a-f]+ not found/i
+const STALE_NETWORK = /network \S+ not found/i
 
 /** The docker commands the launch runs, each logged with its exit code. `signal` ends a running one (the window closed
  * during startup); stop() never takes it, since it runs after. */
@@ -231,7 +231,7 @@ export function makeDocker(bin: string, run: Runner, stack: StackInfo, log: Log,
     compose(args, timeoutMs, onLine, true, true)
   /** compose up, once more after removing the containers when they point at a network Docker no longer has (a
    * `docker network prune`, a Docker reset): compose only remakes a container whose settings changed, so they'd
-   * never start again. down keeps every volume, so the library is untouched; voice comes back on its next start. */
+   * never start again. down keeps every volume, so the library is untouched; voice is started again after the launch, when on. */
   const upHealing = async (args: string[]): Promise<Result> => {
     const first = await compose(args, LIMITS.up)
     if (first.code === 0 || first.timedOut || !STALE_NETWORK.test(first.stderr)) return first

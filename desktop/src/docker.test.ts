@@ -296,6 +296,19 @@ describe('makeDocker', () => {
     ])
   })
 
+  it("when down fails, or the start timed out, the first failure is returned and it doesn't start again", async () => {
+    const stale = { code: 1, stderr: 'failed to set up container networking: network paperlab-app_default not found\n' }
+    const downFails = recorded((args) => (args.includes('down') ? { code: 1, stderr: 'denied\n' } : stale))
+    const first = await makeDocker('/usr/local/bin/docker', downFails.run, STACK, () => {}, { env: {} }).up()
+
+    expect(first.stderr).toContain('paperlab-app_default not found')
+    expect(downFails.calls.map(({ args }) => args.split(' ').at(-1))).toEqual(['-d', '--remove-orphans'])
+
+    const slow = recorded(() => ({ ...stale, timedOut: true }))
+    await makeDocker('/usr/local/bin/docker', slow.run, STACK, () => {}, { env: {} }).up()
+    expect(slow.calls).toHaveLength(1)
+  })
+
   it('any other failed start is returned as it is, with nothing removed', async () => {
     const { run, calls } = recorded(() => ({ code: 1, stderr: 'Error response from daemon: no space left on device\n' }))
     const docker = makeDocker('/usr/local/bin/docker', run, STACK, () => {}, { platform: 'darwin', env: {} })
